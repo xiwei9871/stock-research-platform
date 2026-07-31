@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -31,6 +32,7 @@ POSTGRES_ENABLED = (
 )
 _POSTGRES_FIXTURE_ROWS: dict[int, dict[str, set[str]]] = {}
 _ACTIVE_POSTGRES_FIXTURE_ROWS: dict[str, set[str]] | None = None
+_POSTGRES_TEST_SCHEMA_LOCK_KEY = 7171271448728574941
 
 
 def register_report_manifest(*args, **kwargs):
@@ -115,6 +117,7 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
 
     sql = schema.THEME_RESEARCH_REPORT_SCHEMA_SQL
 
+    assert schema.THEME_RESEARCH_REPORT_SCHEMA_VERSION == "3"
     assert "CREATE TABLE IF NOT EXISTS research.theme_research_report_version" in sql
     assert "REFERENCES research.theme_research_theme(theme_id)" in sql
     assert "\n    version text NOT NULL," in sql
@@ -132,6 +135,14 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
     assert "CREATE TABLE IF NOT EXISTS research.theme_research_report_review_event" in sql
     assert "REFERENCES identity.user_account(user_id)" in sql
     assert "actor_user_id text NOT NULL" in sql
+    assert "actor_user_id text NOT NULL\n        CONSTRAINT" not in sql
+    assert (
+        "DROP CONSTRAINT IF EXISTS fk_theme_research_report_review_event_actor"
+        in sql
+    )
+    assert "fk_theme_research_report_review_event_actor" not in (
+        schema._EXPECTED_CONSTRAINT_DEFINITIONS
+    )
     assert "idempotency_key text NOT NULL DEFAULT ''" in sql
     assert "CREATE UNIQUE INDEX IF NOT EXISTS uq_theme_research_report_review_actor_idempotency" in sql
     assert "idempotency_key <> ''" in sql
@@ -227,6 +238,96 @@ def test_apply_report_schema_rejects_existing_drift(monkeypatch) -> None:
     )
 
     with pytest.raises(schema.ThemeResearchReportSchemaDriftError, match="column:.*title"):
+        schema.apply_theme_research_report_schema(service="test_service")
+
+    assert calls == [schema.THEME_RESEARCH_REPORT_MIGRATION_LOCK_SQL]
+
+
+def test_apply_report_schema_accepts_only_the_v2_actor_fk_migration(monkeypatch) -> None:
+    from stock_research import theme_research_report_schema as schema
+
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            calls.append(sql)
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+    @contextmanager
+    def connected(service):
+        yield Connection()
+
+    inspections = iter(
+        [
+            {
+                "status": "drifted",
+                "missing": ["migration:v2_actor_fk"],
+            },
+            {"status": "current", "missing": []},
+        ]
+    )
+    monkeypatch.setattr(schema, "connect", connected)
+    monkeypatch.setattr(
+        schema,
+        "inspect_theme_research_report_schema",
+        lambda cursor: next(inspections),
+    )
+
+    schema.apply_theme_research_report_schema(service="test_service")
+
+    assert calls == [
+        schema.THEME_RESEARCH_REPORT_MIGRATION_LOCK_SQL,
+        schema.THEME_RESEARCH_REPORT_SCHEMA_SQL,
+    ]
+
+
+def test_apply_report_schema_rejects_same_named_non_v2_actor_constraint(
+    monkeypatch,
+) -> None:
+    from stock_research import theme_research_report_schema as schema
+
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            calls.append(sql)
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+    @contextmanager
+    def connected(service):
+        yield Connection()
+
+    monkeypatch.setattr(schema, "connect", connected)
+    monkeypatch.setattr(
+        schema,
+        "inspect_theme_research_report_schema",
+        lambda cursor: {
+            "status": "drifted",
+            "missing": [
+                "constraint_extra:fk_theme_research_report_review_event_actor"
+            ],
+        },
+    )
+
+    with pytest.raises(schema.ThemeResearchReportSchemaDriftError):
         schema.apply_theme_research_report_schema(service="test_service")
 
     assert calls == [schema.THEME_RESEARCH_REPORT_MIGRATION_LOCK_SQL]
@@ -342,8 +443,33 @@ def test_report_schema_cli_requires_apply() -> None:
     assert exc_info.value.code == 2
 
 
-@pytest.fixture
-def postgres_conn():
+@contextmanager
+def _exclusive_postgres_test_schema():
+    lock_connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        database_name = lock_connection.execute("SELECT current_database()").fetchone()[0]
+        if not database_name.endswith("_test"):
+            pytest.fail(f"refusing to run integration tests against {database_name}")
+        lock_connection.execute(
+            "SELECT pg_advisory_lock(%s)",
+            (_POSTGRES_TEST_SCHEMA_LOCK_KEY,),
+        )
+        lock_connection.commit()
+        try:
+            yield
+        finally:
+            released = lock_connection.execute(
+                "SELECT pg_advisory_unlock(%s)",
+                (_POSTGRES_TEST_SCHEMA_LOCK_KEY,),
+            ).fetchone()[0]
+            if released is not True:
+                raise AssertionError("PostgreSQL test schema advisory lock was not held")
+            lock_connection.commit()
+    finally:
+        lock_connection.close()
+
+
+def _postgres_conn_impl():
     global _ACTIVE_POSTGRES_FIXTURE_ROWS
 
     if not POSTGRES_ENABLED:
@@ -362,12 +488,6 @@ def postgres_conn():
             pytest.fail(f"refusing to run integration tests against {database_name}")
         bootstrap.execute(DASHBOARD_AUTH_SCHEMA_SQL)
         bootstrap.execute(THEME_RESEARCH_SCHEMA_SQL)
-        bootstrap.execute(
-            "DROP TABLE IF EXISTS research.theme_research_report_review_event CASCADE"
-        )
-        bootstrap.execute(
-            "DROP TABLE IF EXISTS research.theme_research_report_version CASCADE"
-        )
         bootstrap.commit()
     finally:
         bootstrap.close()
@@ -396,6 +516,14 @@ def postgres_conn():
         finally:
             _POSTGRES_FIXTURE_ROWS.pop(id(connection), None)
             _cleanup_postgres_fixture_rows(fixture_rows)
+
+
+@pytest.fixture
+def postgres_conn():
+    if not POSTGRES_ENABLED:
+        pytest.skip("set THEME_RESEARCH_POSTGRES_TEST=1 and a dedicated test service")
+    with _exclusive_postgres_test_schema():
+        yield from _postgres_conn_impl()
 
 
 def _cleanup_postgres_fixture_rows(fixture_rows: dict[str, set[str]]) -> None:
@@ -660,6 +788,124 @@ def test_postgres_fixture_teardown_removes_only_its_committed_rows() -> None:
     assert counts == (0, 0, 0, 0, 1, 1, 1, 1)
 
 
+def test_postgres_fixture_serializes_schema_ownership_and_preserves_sentinel() -> None:
+    if not POSTGRES_ENABLED:
+        pytest.skip("set THEME_RESEARCH_POSTGRES_TEST=1 and a dedicated test service")
+
+    run_id = uuid.uuid4().hex
+    sentinel_theme_id = f"report-fixture-lock-theme-{run_id}"
+    sentinel_user_id = f"report-fixture-lock-user-{run_id}"
+    sentinel_report_id = f"report-fixture-lock-version-{run_id}"
+    sentinel_event_id = f"report-fixture-lock-event-{run_id}"
+    first_iterator = postgres_conn.__wrapped__()
+    first_connection = next(first_iterator)
+    second_attempt_started = threading.Event()
+    second_opened = threading.Event()
+    second_holder = {}
+    blocked = False
+    counts = None
+    try:
+        sentinel = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            _insert_theme(sentinel, sentinel_theme_id)
+            _insert_user(sentinel, sentinel_user_id)
+            _insert_report(
+                sentinel,
+                sentinel_report_id,
+                sentinel_theme_id,
+                "sentinel-v1",
+            )
+            sentinel.execute(
+                """
+                INSERT INTO research.theme_research_report_review_event (
+                    event_id, report_version_id, from_status, to_status,
+                    actor_user_id, idempotency_key
+                ) VALUES (%s, %s, NULL, 'pending_review', %s, %s)
+                """,
+                (
+                    sentinel_event_id,
+                    sentinel_report_id,
+                    sentinel_user_id,
+                    f"sentinel-lock-{run_id}",
+                ),
+            )
+            sentinel.commit()
+        finally:
+            sentinel.close()
+        _insert_theme(first_connection, sentinel_theme_id)
+        first_connection.commit()
+
+        def open_second_fixture():
+            iterator = postgres_conn.__wrapped__()
+            second_attempt_started.set()
+            connection = next(iterator)
+            second_holder["iterator"] = iterator
+            second_holder["connection"] = connection
+            second_opened.set()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(open_second_fixture)
+            assert second_attempt_started.wait(timeout=10)
+            blocked = not second_opened.wait(timeout=0.25)
+            first_iterator.close()
+            future.result(timeout=10)
+            _insert_theme(second_holder["connection"], sentinel_theme_id)
+            second_holder["connection"].commit()
+            second_holder["iterator"].close()
+
+        verifier = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            counts = verifier.execute(
+                """
+                SELECT
+                    (SELECT count(*) FROM research.theme_research_report_review_event
+                     WHERE event_id = %s),
+                    (SELECT count(*) FROM research.theme_research_report_version
+                     WHERE report_version_id = %s),
+                    (SELECT count(*) FROM research.theme_research_theme
+                     WHERE theme_id = %s),
+                    (SELECT count(*) FROM identity.user_account
+                     WHERE user_id = %s)
+                """,
+                (
+                    sentinel_event_id,
+                    sentinel_report_id,
+                    sentinel_theme_id,
+                    sentinel_user_id,
+                ),
+            ).fetchone()
+        finally:
+            verifier.close()
+    finally:
+        first_iterator.close()
+        if "iterator" in second_holder:
+            second_holder["iterator"].close()
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                "DELETE FROM research.theme_research_report_review_event WHERE event_id = %s",
+                (sentinel_event_id,),
+            )
+            cleanup.execute(
+                "DELETE FROM research.theme_research_report_version WHERE report_version_id = %s",
+                (sentinel_report_id,),
+            )
+            cleanup.execute(
+                "DELETE FROM research.theme_research_theme WHERE theme_id = %s",
+                (sentinel_theme_id,),
+            )
+            cleanup.execute(
+                "DELETE FROM identity.user_account WHERE user_id = %s",
+                (sentinel_user_id,),
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+    assert blocked is True
+    assert counts == (1, 1, 1, 1)
+
+
 def _validated_manifest(
     tmp_path: Path,
     *,
@@ -716,7 +962,6 @@ def _validated_manifest(
 
 def _seed_report_store(postgres_conn, theme_id: str) -> None:
     _insert_theme(postgres_conn, theme_id)
-    _insert_user(postgres_conn, "system")
     postgres_conn.commit()
 
 
@@ -959,6 +1204,43 @@ def test_postgres_inspection_detects_unexpected_column_update_grant(postgres_con
     verified = psycopg.connect(f"service={TEST_SERVICE}")
     try:
         assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+    finally:
+        verified.close()
+
+
+def test_postgres_apply_migrates_v2_actor_fk_to_internal_system_subject(
+    postgres_conn,
+) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.execute(
+        """
+        ALTER TABLE research.theme_research_report_review_event
+        ADD CONSTRAINT fk_theme_research_report_review_event_actor
+        FOREIGN KEY (actor_user_id) REFERENCES identity.user_account(user_id)
+        """
+    )
+    postgres_conn.commit()
+
+    apply_theme_research_report_schema(service=TEST_SERVICE)
+
+    verified = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        assert inspect_theme_research_report_schema(verified.cursor()) == {
+            "status": "current",
+            "missing": [],
+        }
+        assert verified.execute(
+            """
+            SELECT count(*)
+            FROM pg_constraint
+            WHERE conname = 'fk_theme_research_report_review_event_actor'
+              AND conrelid = 'research.theme_research_report_review_event'::regclass
+            """
+        ).fetchone()[0] == 0
     finally:
         verified.close()
 
@@ -1633,6 +1915,33 @@ def test_report_error_details_are_detached_from_callers() -> None:
     assert error.details == {"fields": ["manifest_sha256"]}
 
 
+def test_register_maps_operational_errors_without_leaking_database_text(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    from stock_research import theme_research_report_store as store
+
+    manifest = _validated_manifest(tmp_path)
+    database_error = psycopg.OperationalError(
+        "secret host and database diagnostics must not escape"
+    )
+
+    @contextmanager
+    def unavailable(service):
+        raise database_error
+        yield
+
+    monkeypatch.setattr(store, "connect", unavailable)
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        store.register_report_manifest(manifest, service="unavailable")
+
+    assert exc_info.value.code == "THEME_REPORT_STORE_UNAVAILABLE"
+    assert exc_info.value.details == {}
+    assert "secret" not in str(exc_info.value).lower()
+    assert exc_info.value.__cause__ is database_error
+
+
 def test_postgres_registers_manifest_and_audits_initial_pending_review(
     postgres_conn,
     tmp_path,
@@ -1692,7 +2001,7 @@ def test_postgres_registers_manifest_and_audits_initial_pending_review(
     )
     events = postgres_conn.execute(
         """
-        SELECT report_version_id, from_status, to_status, actor_user_id,
+        SELECT event_id, report_version_id, from_status, to_status, actor_user_id,
                comment, request_id, idempotency_key
         FROM research.theme_research_report_review_event
         WHERE report_version_id = %s
@@ -1700,19 +2009,23 @@ def test_postgres_registers_manifest_and_audits_initial_pending_review(
         (expected_id,),
     ).fetchall()
     assert len(events) == 1
-    assert events[0][0:5] == (
+    expected_event_id = hashlib.sha256(
+        ("theme-research-report-index-event\0" + expected_id).encode("utf-8")
+    ).hexdigest()
+    assert events[0][0:6] == (
+        expected_event_id,
         expected_id,
         None,
         "pending_review",
         "system",
         "",
     )
-    assert events[0][5]
     assert events[0][6]
-    assert events[0][5] == hashlib.sha256(
+    assert events[0][7]
+    assert events[0][6] == hashlib.sha256(
         ("theme-research-report-index-request\0" + expected_id).encode("utf-8")
     ).hexdigest()
-    assert events[0][6] == hashlib.sha256(
+    assert events[0][7] == hashlib.sha256(
         ("theme-research-report-index-idempotency\0" + expected_id).encode("utf-8")
     ).hexdigest()
 
@@ -1995,6 +2308,10 @@ def test_postgres_concurrent_conflict_preserves_the_successful_row(
 
 
 def test_postgres_event_failure_rolls_back_report_version(postgres_conn, tmp_path) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+    )
+
     manifest = _validated_manifest(tmp_path)
     _seed_report_store(postgres_conn, manifest.theme_id)
     postgres_conn.execute(
@@ -2006,15 +2323,34 @@ def test_postgres_event_failure_rolls_back_report_version(postgres_conn, tmp_pat
     )
     postgres_conn.commit()
 
-    with pytest.raises((ThemeResearchReportError, psycopg.Error)):
-        register_report_manifest(manifest, service=TEST_SERVICE)
+    try:
+        with pytest.raises(ThemeResearchReportError) as exc_info:
+            register_report_manifest(manifest, service=TEST_SERVICE)
 
-    assert postgres_conn.execute(
-        "SELECT count(*) FROM research.theme_research_report_version"
-    ).fetchone()[0] == 0
-    assert postgres_conn.execute(
-        "SELECT count(*) FROM research.theme_research_report_review_event"
-    ).fetchone()[0] == 0
+        assert exc_info.value.code == "THEME_REPORT_STORE_UNAVAILABLE"
+        assert exc_info.value.details == {}
+        assert isinstance(exc_info.value.__cause__, psycopg.errors.CheckViolation)
+
+        assert postgres_conn.execute(
+            "SELECT count(*) FROM research.theme_research_report_version"
+        ).fetchone()[0] == 0
+        assert postgres_conn.execute(
+            "SELECT count(*) FROM research.theme_research_report_review_event"
+        ).fetchone()[0] == 0
+    finally:
+        postgres_conn.rollback()
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                """
+                ALTER TABLE research.theme_research_report_review_event
+                DROP CONSTRAINT IF EXISTS ck_theme_research_report_test_event_rejected
+                """
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+        apply_theme_research_report_schema(service=TEST_SERVICE)
 
 
 def test_postgres_runtime_service_registers_with_minimum_permissions(
@@ -2025,6 +2361,9 @@ def test_postgres_runtime_service_registers_with_minimum_permissions(
         pytest.skip("dedicated runtime test service is required")
     manifest = _validated_manifest(tmp_path)
     _seed_report_store(postgres_conn, manifest.theme_id)
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM identity.user_account WHERE user_id = 'system'"
+    ).fetchone()[0] == 0
 
     result = register_report_manifest(manifest, service=TEST_RUNTIME_SERVICE)
 
@@ -2033,3 +2372,11 @@ def test_postgres_runtime_service_registers_with_minimum_permissions(
         "SELECT count(*) FROM research.theme_research_report_version WHERE report_version_id = %s",
         (result["report_version_id"],),
     ).fetchone()[0] == 1
+    assert postgres_conn.execute(
+        """
+        SELECT actor_user_id
+        FROM research.theme_research_report_review_event
+        WHERE report_version_id = %s
+        """,
+        (result["report_version_id"],),
+    ).fetchone()[0] == "system"

@@ -7,7 +7,7 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect
 
 
-THEME_RESEARCH_REPORT_SCHEMA_VERSION = "2"
+THEME_RESEARCH_REPORT_SCHEMA_VERSION = "3"
 
 THEME_RESEARCH_REPORT_SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS research;
@@ -73,14 +73,15 @@ CREATE TABLE IF NOT EXISTS research.theme_research_report_review_event (
         CONSTRAINT ck_theme_research_report_review_to_status CHECK (
         to_status IN ('pending_review', 'published', 'rejected', 'archived')
     ),
-    actor_user_id text NOT NULL
-        CONSTRAINT fk_theme_research_report_review_event_actor
-        REFERENCES identity.user_account(user_id),
+    actor_user_id text NOT NULL,
     comment text NOT NULL DEFAULT '',
     request_id text NOT NULL DEFAULT '',
     idempotency_key text NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE research.theme_research_report_review_event
+    DROP CONSTRAINT IF EXISTS fk_theme_research_report_review_event_actor;
 
 CREATE INDEX IF NOT EXISTS idx_theme_research_report_review_version_created
     ON research.theme_research_report_review_event (report_version_id, created_at DESC);
@@ -242,9 +243,6 @@ _EXPECTED_CONSTRAINT_DEFINITIONS = {
         "CHECK (status = ANY (ARRAY['pending_review'::text, 'published'::text, "
         "'rejected'::text, 'archived'::text]))"
     ),
-    "fk_theme_research_report_review_event_actor": (
-        "FOREIGN KEY (actor_user_id) REFERENCES identity.user_account(user_id)"
-    ),
     "fk_theme_research_report_review_event_version": (
         "FOREIGN KEY (report_version_id) REFERENCES "
         "research.theme_research_report_version(report_version_id)"
@@ -262,6 +260,11 @@ _EXPECTED_CONSTRAINT_DEFINITIONS = {
     "pk_theme_research_report_version": "PRIMARY KEY (report_version_id)",
     "uq_theme_research_report_theme_version": "UNIQUE (theme_id, version)",
 }
+
+_V2_ACTOR_FK_NAME = "fk_theme_research_report_review_event_actor"
+_V2_ACTOR_FK_DEFINITION = (
+    "FOREIGN KEY (actor_user_id) REFERENCES identity.user_account(user_id)"
+)
 
 _EXPECTED_INDEX_DEFINITIONS = {
     "idx_theme_research_report_review_version_created": (
@@ -402,7 +405,13 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
         if definition != _normalized_sql(expected_definition):
             missing.append(f"constraint:{name}")
     for name in sorted(set(constraints) - set(_EXPECTED_CONSTRAINT_DEFINITIONS)):
-        missing.append(f"constraint_extra:{name}")
+        if (
+            name == _V2_ACTOR_FK_NAME
+            and constraints[name] == _normalized_sql(_V2_ACTOR_FK_DEFINITION)
+        ):
+            missing.append("migration:v2_actor_fk")
+        else:
+            missing.append(f"constraint_extra:{name}")
 
     cur.execute(
         """
@@ -739,8 +748,12 @@ def apply_theme_research_report_schema(
                 "column_privilege:",
                 "acl:",
             )
+            repairable_items = {
+                "migration:v2_actor_fk",
+            }
             if inspection["status"] == "drifted" and any(
                 not str(item).startswith(repairable_prefixes)
+                and str(item) not in repairable_items
                 for item in inspection["missing"]
             ):
                 raise ThemeResearchReportSchemaDriftError(

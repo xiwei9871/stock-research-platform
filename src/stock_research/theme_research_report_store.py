@@ -195,6 +195,11 @@ def register_report_manifest(
             "THEME_REPORT_STORE_UNAVAILABLE",
             "theme research report store is temporarily unavailable",
         ) from exc
+    except psycopg.Error as exc:
+        raise ThemeResearchReportError(
+            "THEME_REPORT_STORE_UNAVAILABLE",
+            "theme research report store is unavailable",
+        ) from exc
 
     return _safe_result(
         version_id,
