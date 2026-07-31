@@ -134,6 +134,7 @@ _ACTIVATION_BOOLEAN_FIELDS = (
 )
 _ACTIVATION_REQUIRED_COLUMNS = (
     "asset_id",
+    "eligible",
     *_ACTIVATION_NUMERIC_FIELDS,
     *_ACTIVATION_BOOLEAN_FIELDS,
     "expected_validation_date",
@@ -597,6 +598,15 @@ def score_activation_candidates(
         asset_id = frame.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
         raise ValueError(f"rows contains duplicate asset_id {asset_id}")
 
+    eligible_values: list[bool] = []
+    for value, asset_id in zip(frame["eligible"], frame["asset_id"], strict=True):
+        if not isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                f"rows asset {asset_id} field eligible must be a strict boolean"
+            )
+        eligible_values.append(bool(value))
+    frame["eligible"] = eligible_values
+
     for field in _ACTIVATION_NUMERIC_FIELDS:
         frame[field] = [
             _activation_numeric_value(value, field=field, asset_id=asset_id)
@@ -636,11 +646,12 @@ def score_activation_candidates(
         & frame["stock_character_coverage"]
         & frame["market_capacity_coverage"]
     )
-    activation_coverage = (
+    component_coverage = (
         numeric_complete
         & boolean_present.all(axis=1)
         & coverage_flags
     ).astype(bool)
+    activation_coverage = (frame["eligible"] & component_coverage).astype(bool)
 
     strong_move_score = _activation_percentile_mean(
         frame,
@@ -784,6 +795,9 @@ def score_activation_candidates(
 
     reason_values: list[str] = []
     for index in frame.index:
+        if not bool(frame.at[index, "eligible"]):
+            reason_values.append("")
+            continue
         reasons: list[str] = []
         if not bool(frame.at[index, "activation_coverage"]):
             reasons.append("activation_coverage_incomplete")

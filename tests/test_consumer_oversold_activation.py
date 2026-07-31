@@ -156,6 +156,7 @@ ACTIVATION_ADDED_FIELDS = (
 def _activation_row(asset_id: str, **overrides) -> dict[str, object]:
     row = {
         "asset_id": asset_id,
+        "eligible": True,
         "stock_code": f"{len(asset_id):06d}",
         "stock_name": f"name-{asset_id}",
         "technical_feature_coverage": True,
@@ -972,3 +973,76 @@ def test_activation_normalizes_ids_resets_index_preserves_order_and_input():
     duplicate = pd.DataFrame([_activation_row("A"), _activation_row(" A ")])
     with pytest.raises(ValueError, match=r"duplicate.*A"):
         activation.score_activation_candidates(duplicate, _config())
+
+
+def test_activation_scoring_is_isolated_from_complete_first_gate_ineligible_outlier():
+    activation = _activation()
+    rows = []
+    for asset_id, level in (("low", -10.0), ("middle", 0.0), ("target", 10.0)):
+        overrides = {field: level for field in ACTIVATION_CONTINUATION_FIELDS}
+        overrides.update({field: level for field in ACTIVATION_RESIDUAL_FIELDS})
+        overrides.update(
+            {
+                "return_10d": level,
+                "rebound_from_low_60d": 0.40 if asset_id == "target" else 0.10,
+                "log_current_float_market_cap": level,
+                "average_amount_20d": level + 20.0,
+                "average_turnover_rate_20d": level + 20.0,
+                "amount_to_float_cap_20d": level + 20.0,
+                "catalyst_verifiability_score": level + 20.0,
+            }
+        )
+        rows.append(_activation_row(asset_id, **overrides))
+    baseline = pd.DataFrame(rows)
+    outlier_overrides = {
+        field: 1_000_000.0
+        for field in (
+            *ACTIVATION_CONTINUATION_FIELDS,
+            *ACTIVATION_RESIDUAL_FIELDS,
+            *ACTIVATION_CAPITAL_FIELDS,
+        )
+    }
+    outlier = _activation_row(
+        "outlier",
+        eligible=False,
+        return_10d=1_000_000.0,
+        catalyst_verifiability_score=1_000_000.0,
+        **outlier_overrides,
+    )
+
+    expected = activation.score_activation_candidates(baseline, _config()).set_index(
+        "asset_id"
+    )
+    actual = activation.score_activation_candidates(
+        pd.concat([baseline, pd.DataFrame([outlier])], ignore_index=True), _config()
+    ).set_index("asset_id")
+
+    comparison_fields = (
+        "continuation_character_score",
+        "residual_price_space_score",
+        "capital_efficiency_score",
+        "catalyst_timing_score",
+        "activation_score",
+        "overextended",
+        "activation_eligible",
+    )
+    pd.testing.assert_frame_equal(
+        actual.loc[expected.index, list(comparison_fields)],
+        expected.loc[:, list(comparison_fields)],
+    )
+    assert expected.loc["target", "overextended"]
+    assert not actual.loc["outlier", "activation_coverage"]
+    for field in ACTIVATION_ADDED_FIELDS[:4] + ("activation_score",):
+        assert pd.isna(actual.loc["outlier", field]), field
+    assert not actual.loc["outlier", "activation_eligible"]
+    assert actual.loc["outlier", "activation_exclusion_reasons"] == ""
+
+
+@pytest.mark.parametrize("invalid", [None, pd.NA, np.nan, 1, 0, "true", "false"])
+def test_activation_requires_strict_boolean_first_gate_eligibility(invalid):
+    activation = _activation()
+
+    with pytest.raises(ValueError, match=r"eligible.*strict boolean"):
+        activation.score_activation_candidates(
+            pd.DataFrame([_activation_row("A", eligible=invalid)]), _config()
+        )
