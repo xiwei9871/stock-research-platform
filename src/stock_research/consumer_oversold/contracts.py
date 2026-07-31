@@ -161,11 +161,11 @@ class ConsumerOversoldConfig:
                 self.catalyst_liquidity_weight,
             ),
         )
-        _validate_weight_sum(
+        _validate_exact_weight_sum(
             "v2 repair and activation rank weights",
             (self.v2_repair_rank_weight, self.v2_activation_rank_weight),
         )
-        _validate_weight_sum(
+        _validate_exact_weight_sum(
             "v2 activation component weights",
             (
                 self.technical_readiness_weight,
@@ -220,4 +220,9 @@ def _validate_number(
 
 def _validate_weight_sum(group_name: str, values: tuple[float, ...]) -> None:
     if not isclose(fsum(values), 1.0, rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError(f"{group_name} must sum to 1.0")
+
+
+def _validate_exact_weight_sum(group_name: str, values: tuple[float, ...]) -> None:
+    if fsum(values) != 1.0:
         raise ValueError(f"{group_name} must sum to 1.0")

@@ -70,12 +70,59 @@ def test_v2_config_defaults_match_approved_design():
     ) == (0.30, 0.25, 0.20, 0.15, 0.10)
 
 
+def test_config_defaults_to_v1_ranking_version():
+    assert ConsumerOversoldConfig(trade_date="2026-07-27").ranking_version == "v1"
+
+
 @pytest.mark.parametrize("ranking_version", ["", "V2", "v3", None])
 def test_config_rejects_unknown_ranking_version(ranking_version):
     with pytest.raises(ValueError, match="ranking_version must be v1 or v2"):
         ConsumerOversoldConfig(
             trade_date="2026-07-27", ranking_version=ranking_version
         )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid"),
+    [
+        ("v2_min_composite_score", float("nan")),
+        ("v2_min_composite_score", -0.01),
+        ("v2_min_technical_readiness_score", float("inf")),
+        ("v2_min_technical_readiness_score", 100.01),
+    ],
+)
+def test_v2_thresholds_reject_non_finite_and_out_of_range_values(field_name, invalid):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-27", **{field_name: invalid})
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid"),
+    [
+        ("v2_repair_rank_weight", float("nan")),
+        ("v2_activation_rank_weight", float("inf")),
+        ("technical_readiness_weight", -0.01),
+        ("continuation_character_weight", 1.01),
+        ("residual_price_space_weight", float("nan")),
+        ("capital_efficiency_weight", float("inf")),
+        ("catalyst_timing_weight", -0.01),
+    ],
+)
+def test_v2_weights_reject_invalid_individual_values(field_name, invalid):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-27", **{field_name: invalid})
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"v2_repair_rank_weight": 0.5500000000005},
+        {"technical_readiness_weight": 0.3000000000005},
+    ],
+)
+def test_v2_weight_groups_require_an_exact_sum_of_one(overrides):
+    with pytest.raises(ValueError, match="must sum to 1.0"):
+        ConsumerOversoldConfig(trade_date="2026-07-27", **overrides)
 
 
 def test_repair_bucket_constants_are_stable():
