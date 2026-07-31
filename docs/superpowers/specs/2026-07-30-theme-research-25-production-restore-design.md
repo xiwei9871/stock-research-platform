@@ -135,7 +135,7 @@ Call the existing `bootstrap_package()` path through the authenticated restore g
 - the validated additive 25-theme package built from the current two-theme package plus the 23 missing checkpoint themes;
 - no `replace_theme`.
 
-The writer provides a serializable transaction, advisory locking, generation conflict protection, and change-set/import-run audit records. Identity collisions between existing objects and missing-theme objects are rejected before execution. The zero-update gate ensures only the 23 missing themes are written.
+The writer provides a serializable transaction, advisory locking, generation conflict protection, and change-set/import-run audit records. Identity collisions between existing objects and missing-theme objects are rejected before execution. Checkpoint, database, desired-package, and generation values are bound to the approved preflight. After acquiring the transaction lock and reloading the authoritative database package, the writer requires exactly 23 theme inserts and rejects every update or deactivation before any write.
 
 ## Verification
 

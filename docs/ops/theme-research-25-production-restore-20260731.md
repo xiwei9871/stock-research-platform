@@ -38,6 +38,8 @@ Date: 2026-07-31 (Asia/Shanghai)
 - Change set: `change-08ee44c2-4438-483b-8566-8bc3e1983c4b`
 - Import run: `import-c03c6568-b7ab-4d5e-bb6a-d442e5398c8f`
 - Resulting active package counts: 25 themes, 270 nodes, 268 sources, 308 claims, and 236 company mappings. These counts intentionally retain the production versions of the original two themes rather than replacing them with their newer checkpoint revisions.
+- The committed transaction returned 23 theme inserts, two unchanged themes, zero theme updates, and zero theme deactivations.
+- The committed transaction's returned semantic diff contained zero updates and zero deactivations in every normalized object family.
 
 ## Existing-theme preservation
 

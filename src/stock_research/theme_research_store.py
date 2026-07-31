@@ -177,6 +177,34 @@ def validate_bootstrap_request(
         )
 
 
+def validate_authoritative_import_diff(
+    diff: dict[str, Any],
+    *,
+    required_theme_inserts: int | None = None,
+    forbid_updates: bool = False,
+    forbid_deactivations: bool = False,
+) -> None:
+    families = diff.get("families", {})
+    violations: list[str] = []
+    if required_theme_inserts is not None:
+        insert_count = len(families.get("themes", {}).get("insert", []))
+        if insert_count != required_theme_inserts:
+            violations.append(f"theme_insert_count:{insert_count}")
+    for family, operations in sorted(families.items()):
+        update_count = len(operations.get("update", []))
+        deactivate_count = len(operations.get("deactivate", []))
+        if forbid_updates and update_count:
+            violations.append(f"updates_present:{family}:{update_count}")
+        if forbid_deactivations and deactivate_count:
+            violations.append(f"deactivations_present:{family}:{deactivate_count}")
+    if violations:
+        raise ThemeResearchDomainError(
+            "authoritative import diff rejected inside transaction",
+            code="THEME_RESEARCH_AUTHORITATIVE_DIFF_REJECTED",
+            details={"violations": violations},
+        )
+
+
 def package_for_theme(
     package: NormalizedThemeResearchPackage,
     theme_id: str,
@@ -304,6 +332,9 @@ def bootstrap_package(
     idempotency_key: str,
     replace_theme: str | None = None,
     service: str = SETTINGS.theme_research_runtime_service,
+    required_theme_inserts: int | None = None,
+    forbid_updates: bool = False,
+    forbid_deactivations: bool = False,
 ) -> dict[str, Any]:
     require_admin(actor_role)
     package = validate_package_integrity(package)
@@ -358,6 +389,12 @@ def bootstrap_package(
             else:
                 current_scope = current
             diff = semantic_diff(current_scope, desired)
+            validate_authoritative_import_diff(
+                diff,
+                required_theme_inserts=required_theme_inserts,
+                forbid_updates=forbid_updates,
+                forbid_deactivations=forbid_deactivations,
+            )
             insert_or_update_count = sum(
                 len(diff["families"][family][operation])
                 for family in diff["families"]

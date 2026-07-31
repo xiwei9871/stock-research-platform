@@ -15,6 +15,7 @@ from stock_research.theme_research_store import (
     create_snapshot,
     package_for_theme,
     rollback_theme,
+    validate_authoritative_import_diff,
     validate_bootstrap_request,
 )
 
@@ -60,6 +61,46 @@ def test_validate_bootstrap_request_requires_actor_and_idempotency_key() -> None
         )
 
     assert exc_info.value.code == "THEME_RESEARCH_IMPORT_REQUEST_INVALID"
+
+
+def test_authoritative_import_diff_rejects_updates_inside_transaction() -> None:
+    diff = {
+        "families": {
+            "themes": {"insert": ["new-theme"], "update": [], "deactivate": []},
+            "nodes": {"insert": [], "update": ["existing-node"], "deactivate": []},
+        }
+    }
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        validate_authoritative_import_diff(
+            diff,
+            required_theme_inserts=1,
+            forbid_updates=True,
+            forbid_deactivations=True,
+        )
+
+    assert exc_info.value.code == "THEME_RESEARCH_AUTHORITATIVE_DIFF_REJECTED"
+    assert exc_info.value.details["violations"] == ["updates_present:nodes:1"]
+
+
+def test_authoritative_import_diff_accepts_exact_additive_change() -> None:
+    diff = {
+        "families": {
+            "themes": {
+                "insert": ["new-theme-1", "new-theme-2"],
+                "update": [],
+                "deactivate": [],
+            },
+            "nodes": {"insert": ["new-node"], "update": [], "deactivate": []},
+        }
+    }
+
+    validate_authoritative_import_diff(
+        diff,
+        required_theme_inserts=2,
+        forbid_updates=True,
+        forbid_deactivations=True,
+    )
 
 
 def test_package_for_theme_keeps_only_owned_rows() -> None:

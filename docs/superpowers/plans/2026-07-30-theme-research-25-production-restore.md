@@ -192,6 +192,7 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - [x] Re-read and match the generation immediately before execution.
 - [x] Confirm the admin credential is available without displaying it.
 - [x] Execute the authenticated transactional import with the recorded generation and deterministic idempotency key.
+- [x] Bind checkpoint/database/desired hashes to preflight and enforce the zero-update/zero-deactivate gate again on the authoritative diff inside the locked transaction.
 - [x] Save import/change-set IDs, package SHA, generations, counts, and backup path in migration evidence.
 
 ### Task 9: Verify Production and Record Evidence

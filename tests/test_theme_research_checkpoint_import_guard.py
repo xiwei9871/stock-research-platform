@@ -4,6 +4,7 @@ from copy import deepcopy
 import importlib.util
 from pathlib import Path
 
+from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_import import NormalizedThemeResearchPackage
 
 
@@ -253,6 +254,13 @@ def test_execute_additive_restore_commits_guarded_merged_package(monkeypatch) ->
         expected_generation=4,
         idempotency_key="additive-import",
         runtime_service="runtime",
+        approved_checkpoint_sha256=checkpoint.package_sha256,
+        approved_database_sha256=current.package_sha256,
+        approved_desired_sha256=build_additive_restore_package(
+            current=current,
+            checkpoint=checkpoint,
+            expected_theme_ids=EXPECTED_THEME_IDS,
+        ).package_sha256,
     )
 
     assert result["status"] == "committed"
@@ -262,3 +270,43 @@ def test_execute_additive_restore_commits_guarded_merged_package(monkeypatch) ->
     )
     assert captured["kwargs"]["expected_generation"] == 4
     assert captured["kwargs"]["service"] == "runtime"
+    assert captured["kwargs"]["required_theme_inserts"] == 23
+    assert captured["kwargs"]["forbid_updates"] is True
+    assert captured["kwargs"]["forbid_deactivations"] is True
+
+
+def test_execute_additive_restore_rejects_checkpoint_changed_after_preflight(
+    monkeypatch,
+) -> None:
+    current = _package(
+        themes=[{"theme_id": theme_id} for theme_id in sorted(EXISTING_THEME_IDS)]
+    )
+    checkpoint = _package(
+        themes=[{"theme_id": theme_id} for theme_id in sorted(EXPECTED_THEME_IDS)]
+    )
+    monkeypatch.setattr(
+        MODULE,
+        "bootstrap_package",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("bootstrap must not run")
+        ),
+    )
+
+    try:
+        execute_additive_restore(
+            current=current,
+            checkpoint=checkpoint,
+            expected_theme_ids=EXPECTED_THEME_IDS,
+            actor_user_id="admin-id",
+            actor_role="admin",
+            expected_generation=4,
+            idempotency_key="additive-import",
+            runtime_service="runtime",
+            approved_checkpoint_sha256="different-checkpoint",
+            approved_database_sha256=current.package_sha256,
+            approved_desired_sha256="unused",
+        )
+    except ThemeResearchDomainError as exc:
+        assert exc.code == "THEME_RESEARCH_RESTORE_SNAPSHOT_MISMATCH"
+    else:
+        raise AssertionError("expected snapshot mismatch")

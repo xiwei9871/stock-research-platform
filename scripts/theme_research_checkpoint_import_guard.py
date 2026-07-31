@@ -193,12 +193,28 @@ def execute_additive_restore(
     expected_generation: int,
     idempotency_key: str,
     runtime_service: str,
+    approved_checkpoint_sha256: str,
+    approved_database_sha256: str,
+    approved_desired_sha256: str,
 ) -> dict[str, Any]:
+    mismatches: list[str] = []
+    if checkpoint.package_sha256 != approved_checkpoint_sha256:
+        mismatches.append("checkpoint_package_sha256")
+    if current.package_sha256 != approved_database_sha256:
+        mismatches.append("database_package_sha256")
     desired = build_additive_restore_package(
         current=current,
         checkpoint=checkpoint,
         expected_theme_ids=expected_theme_ids,
     )
+    if desired.package_sha256 != approved_desired_sha256:
+        mismatches.append("desired_package_sha256")
+    if mismatches:
+        raise ThemeResearchDomainError(
+            "restore inputs changed after preflight",
+            code="THEME_RESEARCH_RESTORE_SNAPSHOT_MISMATCH",
+            details={"mismatches": mismatches},
+        )
     diff = semantic_diff(current, desired)
     gate = evaluate_restore_gate(
         expected_theme_ids=expected_theme_ids,
@@ -218,6 +234,9 @@ def execute_additive_restore(
         expected_generation=expected_generation,
         idempotency_key=idempotency_key,
         service=runtime_service,
+        required_theme_inserts=23,
+        forbid_updates=True,
+        forbid_deactivations=True,
     )
 
 
@@ -335,6 +354,10 @@ def main(argv: list[str] | None = None) -> int:
         password = os.getenv(args.password_env, "")
         if not password:
             parser.error(f"password environment variable is empty: {args.password_env}")
+        if args.expected_generation != payload["generation"]:
+            parser.error(
+                "--expected-generation must match the approved preflight generation"
+            )
         user = authenticate_user(
             args.admin_username,
             password,
@@ -356,6 +379,9 @@ def main(argv: list[str] | None = None) -> int:
             expected_generation=args.expected_generation,
             idempotency_key=args.idempotency_key,
             runtime_service=args.runtime_service,
+            approved_checkpoint_sha256=payload["artifact_package_sha256"],
+            approved_database_sha256=payload["database_package_sha256"],
+            approved_desired_sha256=payload["desired_package_sha256"],
         )
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
     return 0
