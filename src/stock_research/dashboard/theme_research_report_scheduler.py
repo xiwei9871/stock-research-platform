@@ -8,8 +8,7 @@ from datetime import UTC, datetime
 from os import PathLike
 from typing import Any
 
-import anyio
-
+from stock_research.dashboard.async_cleanup import await_task_resiliently
 from stock_research.theme_research_report_index import (
     scan_theme_research_report_root,
 )
@@ -66,27 +65,11 @@ class ThemeResearchReportScheduler:
         if task is None:
             return
         self._stop_event.set()
-        caller = asyncio.current_task()
-        caller_cancelled = False
         try:
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            caller_cancelled = (
-                not task.done()
-                or caller is not None
-                and caller.cancelling() > 0
-            )
-            if caller_cancelled:
-                with anyio.CancelScope(shield=True):
-                    try:
-                        await asyncio.shield(task)
-                    except BaseException:
-                        pass
+            await await_task_resiliently(task)
         finally:
             if task.done() and self._task is task:
                 self._task = None
-        if caller_cancelled:
-            raise asyncio.CancelledError
 
     async def run_once(self) -> None:
         async with self._lock:
@@ -101,15 +84,7 @@ class ThemeResearchReportScheduler:
                         service=self._service,
                     )
                 )
-                try:
-                    result = await asyncio.shield(worker)
-                except asyncio.CancelledError:
-                    with anyio.CancelScope(shield=True):
-                        try:
-                            await asyncio.shield(worker)
-                        except BaseException:
-                            pass
-                    raise
+                result = await await_task_resiliently(worker)
                 self._last_result = _safe_scan_result(result)
                 self._fatal = False
             except asyncio.CancelledError:

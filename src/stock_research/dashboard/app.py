@@ -31,6 +31,7 @@ from stock_research.dashboard.auth_service import (
     revoke_session,
     validate_csrf,
 )
+from stock_research.dashboard.async_cleanup import await_task_resiliently
 from stock_research.dashboard.backtests import (
     list_backtest_strategies,
     run_backtest,
@@ -519,13 +520,8 @@ class _ResolvedPdfAsyncIterator(AsyncIterator[bytes]):
                 anyio.to_thread.run_sync(_next_pdf_chunk, self._iterator)
             )
             try:
-                chunk = await asyncio.shield(worker)
+                chunk = await await_task_resiliently(worker)
             except asyncio.CancelledError:
-                with anyio.CancelScope(shield=True):
-                    try:
-                        await asyncio.shield(worker)
-                    except BaseException:
-                        pass
                 self._close()
                 raise
             except BaseException:
@@ -573,8 +569,8 @@ class _ResolvedPdfStreamingResponse(StreamingResponse):
         try:
             await super().stream_response(send)
         finally:
-            with anyio.CancelScope(shield=True):
-                await self._resolved_pdf_stream.aclose()
+            cleanup = asyncio.create_task(self._resolved_pdf_stream.aclose())
+            await await_task_resiliently(cleanup)
 
 
 def _theme_report_pdf_response(
@@ -598,6 +594,33 @@ def _theme_report_pdf_response(
         else:
             resolved.close()
         raise
+
+
+async def _stop_scheduler_shielded(scheduler: Any) -> None:
+    with anyio.CancelScope(shield=True):
+        await scheduler.stop()
+
+
+async def _stop_dashboard_schedulers(
+    report_scheduler: Any,
+    public_news_scheduler: Any,
+) -> None:
+    first_error: BaseException | None = None
+    schedulers = (
+        (report_scheduler, "theme research report scheduler failed to stop"),
+        (public_news_scheduler, "public news scheduler failed to stop"),
+    )
+    for scheduler, log_message in schedulers:
+        cleanup = asyncio.create_task(_stop_scheduler_shielded(scheduler))
+        try:
+            await await_task_resiliently(cleanup)
+        except BaseException as exc:
+            if not isinstance(exc, asyncio.CancelledError):
+                logger.error(log_message)
+            if first_error is None:
+                first_error = exc
+    if first_error is not None:
+        raise first_error
 
 
 AUTH_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
@@ -637,11 +660,7 @@ def create_app() -> FastAPI:
         try:
             yield
         finally:
-            try:
-                await report_scheduler.stop()
-            except Exception:
-                logger.error("theme research report scheduler failed to stop")
-            await scheduler.stop()
+            await _stop_dashboard_schedulers(report_scheduler, scheduler)
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
     install_request_id_middleware(app)

@@ -1098,6 +1098,146 @@ def test_theme_report_scheduler_cancellation_wins_over_worker_error(tmp_path) ->
     asyncio.run(exercise())
 
 
+def test_async_cleanup_helper_waits_through_repeated_native_cancellation() -> None:
+    from stock_research.dashboard.async_cleanup import await_task_resiliently
+
+    async def exercise() -> None:
+        release = asyncio.Event()
+        worker_finished = False
+
+        async def worker() -> str:
+            nonlocal worker_finished
+            await release.wait()
+            worker_finished = True
+            return "done"
+
+        underlying = asyncio.create_task(worker())
+        waiter = asyncio.create_task(await_task_resiliently(underlying))
+        await asyncio.sleep(0)
+        waiter.cancel()
+        await asyncio.sleep(0)
+        waiter.cancel()
+        waiter.cancel()
+        await asyncio.sleep(0.01)
+        assert waiter.done() is False
+        assert worker_finished is False
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        assert worker_finished is True
+        assert underlying.done() is True
+
+    asyncio.run(exercise())
+
+
+def test_async_cleanup_helper_preserves_normal_and_underlying_outcomes() -> None:
+    from stock_research.dashboard.async_cleanup import await_task_resiliently
+
+    async def exercise() -> None:
+        async def succeed() -> str:
+            return "ok"
+
+        async def fail() -> str:
+            raise RuntimeError("worker failed")
+
+        successful = asyncio.create_task(succeed())
+        assert await await_task_resiliently(successful) == "ok"
+
+        failed = asyncio.create_task(fail())
+        with pytest.raises(RuntimeError, match="worker failed"):
+            await await_task_resiliently(failed)
+
+        cancelled = asyncio.create_task(asyncio.sleep(60))
+        cancelled.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await await_task_resiliently(cancelled)
+
+    asyncio.run(exercise())
+
+
+def test_theme_report_scheduler_run_once_waits_through_repeated_task_cancel(
+    tmp_path,
+) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+        scan_finished = threading.Event()
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            scan_finished.set()
+            return _scan_result()
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+        run = asyncio.create_task(scheduler.run_once())
+        await asyncio.to_thread(started.wait, 1)
+        run.cancel()
+        await asyncio.sleep(0)
+        run.cancel()
+        run.cancel()
+        await asyncio.sleep(0.01)
+        assert run.done() is False
+        assert scan_finished.is_set() is False
+        assert scheduler.diagnostics()["running"] is True
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+        assert scan_finished.is_set() is True
+        assert scheduler.diagnostics()["running"] is False
+
+    asyncio.run(exercise())
+
+
+def test_theme_report_scheduler_stop_waits_through_repeated_task_cancel(
+    tmp_path,
+) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+        scan_finished = threading.Event()
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            scan_finished.set()
+            return _scan_result()
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+        scheduler.start()
+        await asyncio.to_thread(started.wait, 1)
+        stopper = asyncio.create_task(scheduler.stop())
+        await asyncio.sleep(0)
+        stopper.cancel()
+        await asyncio.sleep(0)
+        stopper.cancel()
+        stopper.cancel()
+        await asyncio.sleep(0.01)
+        assert stopper.done() is False
+        assert scan_finished.is_set() is False
+        assert scheduler.diagnostics()["running"] is True
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await stopper
+        assert scan_finished.is_set() is True
+        assert scheduler.diagnostics()["running"] is False
+        assert scheduler._task is None
+
+    asyncio.run(exercise())
+
+
 def test_theme_report_scheduler_run_once_waits_under_anyio_cancellation(
     tmp_path,
 ) -> None:
@@ -1110,6 +1250,7 @@ def test_theme_report_scheduler_run_once_waits_under_anyio_cancellation(
         release = threading.Event()
         finished = anyio.Event()
         cancelled = False
+        run_task: asyncio.Task | None = None
 
         def scan(root, *, limits, service):
             started.set()
@@ -1121,7 +1262,8 @@ def test_theme_report_scheduler_run_once_waits_under_anyio_cancellation(
         )
 
         async def run_once() -> None:
-            nonlocal cancelled
+            nonlocal cancelled, run_task
+            run_task = asyncio.current_task()
             try:
                 await scheduler.run_once()
             except anyio.get_cancelled_exc_class():
@@ -1135,6 +1277,9 @@ def test_theme_report_scheduler_run_once_waits_under_anyio_cancellation(
             await anyio.to_thread.run_sync(started.wait, 1)
             task_group.cancel_scope.cancel()
             with anyio.CancelScope(shield=True):
+                assert run_task is not None
+                run_task.cancel()
+                run_task.cancel()
                 await anyio.sleep(0.02)
                 assert finished.is_set() is False
                 assert scheduler.diagnostics()["running"] is True
@@ -1638,6 +1783,74 @@ def test_theme_report_pdf_cancelled_read_waits_then_closes() -> None:
     assert resolved.closed is True
 
 
+def test_theme_report_pdf_repeated_cancel_waits_then_closes() -> None:
+    resolved = _BlockingResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def exercise() -> None:
+        read = asyncio.create_task(anext(response.body_iterator))
+        await asyncio.to_thread(resolved.iterator.entered.wait, 1)
+        read.cancel()
+        await asyncio.sleep(0)
+        read.cancel()
+        read.cancel()
+        await asyncio.sleep(0.01)
+        assert read.done() is False
+        assert resolved.iterator.closed is False
+        resolved.iterator.release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await read
+
+    asyncio.run(exercise())
+
+    assert resolved.iterator.closed is True
+    assert resolved.iterator.closed_while_executing is False
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_anyio_and_native_cancel_wait_then_close() -> None:
+    resolved = _BlockingResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def exercise() -> None:
+        finished = anyio.Event()
+        cancelled = False
+        read_task: asyncio.Task | None = None
+
+        async def read() -> None:
+            nonlocal cancelled, read_task
+            read_task = asyncio.current_task()
+            try:
+                await anext(response.body_iterator)
+            except anyio.get_cancelled_exc_class():
+                cancelled = True
+                raise
+            finally:
+                finished.set()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(read)
+            await anyio.to_thread.run_sync(resolved.iterator.entered.wait, 1)
+            task_group.cancel_scope.cancel()
+            with anyio.CancelScope(shield=True):
+                assert read_task is not None
+                read_task.cancel()
+                read_task.cancel()
+                await anyio.sleep(0.02)
+                assert finished.is_set() is False
+                assert resolved.iterator.closed is False
+                resolved.iterator.release.set()
+
+        assert cancelled is True
+        assert finished.is_set() is True
+
+    anyio.run(exercise)
+
+    assert resolved.iterator.closed is True
+    assert resolved.iterator.closed_while_executing is False
+    assert resolved.closed is True
+
+
 def test_theme_report_pdf_response_closes_when_client_send_fails() -> None:
     resolved = _FakeResolvedPdf()
     response = dashboard_app._theme_report_pdf_response(resolved)
@@ -1880,3 +2093,72 @@ def test_theme_report_scheduler_start_failure_does_not_block_app_lifespan(
     assert response.status_code == 200
     assert "secret scheduler path" not in caplog.text
     assert "theme research report scheduler failed to start" in caplog.text
+
+
+def test_dashboard_lifespan_cancellation_stops_both_schedulers(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    scan_started = threading.Event()
+    scan_release = threading.Event()
+    scan_finished = threading.Event()
+
+    def scan(root, *, limits, service):
+        scan_started.set()
+        scan_release.wait(timeout=2)
+        scan_finished.set()
+        return _scan_result()
+
+    class PublicScheduler:
+        enabled = True
+
+        def __init__(self) -> None:
+            self.started = False
+            self.stopped = False
+
+        def start(self) -> None:
+            self.started = True
+
+        async def stop(self) -> None:
+            self.stopped = True
+
+    app = dashboard_app.create_app()
+    public_scheduler = PublicScheduler()
+    report_scheduler = ThemeResearchReportScheduler(
+        tmp_path, object(), "runtime", 60, scan_fn=scan
+    )
+    app.state.public_news_scheduler = public_scheduler
+    app.state.theme_research_report_scheduler = report_scheduler
+
+    async def exercise() -> bool:
+        entered = anyio.Event()
+        cancelled = False
+
+        async def serve() -> None:
+            nonlocal cancelled
+            try:
+                async with app.router.lifespan_context(app):
+                    entered.set()
+                    await anyio.sleep_forever()
+            except anyio.get_cancelled_exc_class():
+                cancelled = True
+                raise
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(serve)
+            await entered.wait()
+            await anyio.to_thread.run_sync(scan_started.wait, 1)
+            task_group.cancel_scope.cancel()
+            with anyio.CancelScope(shield=True):
+                await anyio.sleep(0.02)
+                assert public_scheduler.stopped is False
+                assert report_scheduler.diagnostics()["running"] is True
+                scan_release.set()
+        return cancelled
+
+    assert anyio.run(exercise) is True
+    assert scan_finished.is_set() is True
+    assert report_scheduler.diagnostics()["running"] is False
+    assert public_scheduler.started is True
+    assert public_scheduler.stopped is True
