@@ -679,16 +679,10 @@ def score_activation_candidates(
         & coverage_flags
     ).astype(bool)
     activation_coverage = (frame["eligible"] & component_coverage).astype(bool)
-    technical_universe = (
-        frame["eligible"]
-        & frame["technical_feature_coverage"]
-        & frame[list(_ACTIVATION_TECHNICAL_RAW_NUMERIC_FIELDS)].notna().all(axis=1)
-        & boolean_present["new_low_20d_within_3d"]
-    ).astype(bool)
 
     technical_scored = score_technical_readiness(
         frame,
-        scoring_universe=technical_universe,
+        scoring_universe=activation_coverage,
     )
     for field in SCORE_COLUMNS:
         frame[field] = technical_scored[field]

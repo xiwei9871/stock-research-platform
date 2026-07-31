@@ -885,21 +885,6 @@ def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
         "activation_coverage_incomplete"
     )
 
-    combined_raw = {
-        "return_5d": -10.0,
-        "ma5_slope_5d": -10.0,
-        "ma10_slope_5d": -10.0,
-        "relative_return_5d": -10.0,
-        "relative_strength_improvement_5d": -10.0,
-        "amount_ratio_5d_20d": -10.0,
-        "turnover_change_5d_20d": -10.0,
-        "distance_ma5": -10.0,
-        "distance_ma10": -10.0,
-        "distance_ma20": -10.0,
-        "position_20d": -10.0,
-        "volatility_ratio_5d_20d": 3.0,
-        "new_low_20d_within_3d": True,
-    }
     combined = pd.DataFrame(
         [
             _activation_row(
@@ -908,11 +893,7 @@ def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
                 falling_knife=True,
                 market_capacity_coverage=False,
                 catalyst_verifiability_score=np.nan,
-                **combined_raw,
-            ),
-            _activation_row("combined-peer-1", return_5d=1.0, relative_return_5d=1.0),
-            _activation_row("combined-peer-2", return_5d=2.0, relative_return_5d=2.0),
-            _activation_row("combined-peer-3", return_5d=3.0, relative_return_5d=3.0),
+            )
         ]
     )
     reason = activation.score_activation_candidates(combined, _config()).set_index(
@@ -922,8 +903,6 @@ def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
         sorted(
             {
                 "activation_coverage_incomplete",
-                "technical_readiness_below_threshold",
-                "falling_knife",
                 "market_capacity_coverage_insufficient",
             }
         )
@@ -1226,3 +1205,96 @@ def test_activation_all_zero_verifiability_forces_zero_catalyst_timing():
 
     assert result["activation_coverage"].all()
     assert result["catalyst_timing_score"].tolist() == [0.0, 0.0, 0.0]
+
+
+def test_activation_incomplete_eligible_outlier_cannot_change_complete_pool_scores():
+    activation = _activation()
+    falling_candidate = _activation_row(
+        "A",
+        return_5d=-1.0,
+        ma5_slope_5d=-0.10,
+        ma10_slope_5d=-0.05,
+        relative_return_5d=-1.0,
+        relative_strength_improvement_5d=-1.0,
+        amount_ratio_5d_20d=0.5,
+        turnover_change_5d_20d=-0.5,
+        distance_ma5=-0.20,
+        distance_ma10=-0.30,
+        distance_ma20=-0.40,
+        position_20d=0.0,
+        volatility_ratio_5d_20d=3.0,
+        new_low_20d_within_3d=True,
+    )
+    peer = _activation_row(
+        "B",
+        return_5d=1.0,
+        ma5_slope_5d=1.0,
+        ma10_slope_5d=1.0,
+        relative_return_5d=1.0,
+        relative_strength_improvement_5d=1.0,
+        amount_ratio_5d_20d=2.0,
+        turnover_change_5d_20d=1.0,
+        distance_ma5=1.0,
+        distance_ma10=1.0,
+        distance_ma20=1.0,
+        position_20d=1.0,
+        volatility_ratio_5d_20d=1.0,
+    )
+    baseline = pd.DataFrame([falling_candidate, peer])
+    outlier_raw = {
+        field: 1_000_000.0
+        for field in (
+            "return_5d",
+            "ma5_slope_5d",
+            "ma10_slope_5d",
+            "relative_strength_improvement_5d",
+            "amount_ratio_5d_20d",
+            "turnover_change_5d_20d",
+            "distance_ma5",
+            "distance_ma10",
+            "distance_ma20",
+            "position_20d",
+        )
+    }
+    incomplete_outlier = _activation_row(
+        "incomplete",
+        eligible=True,
+        catalyst_verifiability_score=np.nan,
+        relative_return_5d=-1_000_000.0,
+        volatility_ratio_5d_20d=1_000_000.0,
+        new_low_20d_within_3d=True,
+        **outlier_raw,
+    )
+
+    expected = activation.score_activation_candidates(baseline, _config()).set_index(
+        "asset_id"
+    )
+    actual = activation.score_activation_candidates(
+        pd.concat([baseline, pd.DataFrame([incomplete_outlier])], ignore_index=True),
+        _config(),
+    ).set_index("asset_id")
+
+    comparison_fields = (
+        *SCORE_COLUMNS,
+        "continuation_character_score",
+        "residual_price_space_score",
+        "capital_efficiency_score",
+        "catalyst_timing_score",
+        "activation_score",
+        "overextended",
+        "activation_eligible",
+    )
+    pd.testing.assert_frame_equal(
+        actual.loc[expected.index, list(comparison_fields)],
+        expected.loc[:, list(comparison_fields)],
+    )
+    assert expected.loc["A", "falling_knife"]
+    assert not actual.loc["incomplete", "activation_coverage"]
+    for field in (
+        *SCORE_COLUMNS[:-1],
+        *ACTIVATION_ADDED_FIELDS[:4],
+        "activation_score",
+    ):
+        assert pd.isna(actual.loc["incomplete", field]), field
+    assert not actual.loc["incomplete", "falling_knife"]
+    assert not actual.loc["incomplete", "activation_eligible"]
