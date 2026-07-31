@@ -546,6 +546,62 @@ def test_derive_missing_turnover_uses_share_capacity_as_of_each_bar_date():
     assert result["turnover_rate"].tolist() == pytest.approx([1.0, 100_000_000 / 220_000_000])
 
 
+def test_derive_missing_turnover_ties_use_source_ascending_like_loader():
+    bars = pd.DataFrame(
+        [{
+            "asset_id": "A",
+            "trade_date": "2026-07-25",
+            "close": 10.0,
+            "raw_close": 10.0,
+            "amount": 1_000_000.0,
+            "turnover_rate": None,
+            "pct_chg": 0.0,
+            "is_st": False,
+            "trade_status": "normal",
+        }],
+        columns=loaders.MARKET_COLUMNS,
+    )
+    bars.attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [{
+        "asset_id": "A",
+        "trade_date": "2026-07-25",
+        "volume": 10_000,
+        "source": "derived:tushare",
+    }]
+    shares = pd.DataFrame(
+        [{
+            "asset_id": "A",
+            "total_share": 100_000_000,
+            "float_share": 100_000_000,
+            "free_float_share": 100_000_000,
+        }],
+        columns=loaders.SHARE_CAPACITY_COLUMNS,
+    )
+    shares.attrs[loaders.SHARE_CAPACITY_HISTORY_ATTR] = [
+        {
+            "asset_id": "A",
+            "event_date": "2026-07-01",
+            "announcement_date": "2026-07-01",
+            "float_share": 200_000_000,
+            "source": "z-source",
+        },
+        {
+            "asset_id": "A",
+            "event_date": "2026-07-01",
+            "announcement_date": "2026-07-01",
+            "float_share": 100_000_000,
+            "source": "a-source",
+        },
+    ]
+
+    result = loaders.derive_consumer_market_turnover_history(
+        bars,
+        shares,
+        trade_date="2026-07-27",
+    )
+
+    assert result.loc[0, "turnover_rate"] == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize(
     ("float_share", "volume", "source"),
     [

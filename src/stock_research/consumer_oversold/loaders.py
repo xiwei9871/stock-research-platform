@@ -279,10 +279,12 @@ def derive_consumer_market_turnover_history(
                 visible_events.append(event)
             if visible_events:
                 visible_events.sort(
+                    key=lambda event: str(event.get("source") or "")
+                )
+                visible_events.sort(
                     key=lambda event: (
                         event["event_date"],
                         "" if pd.isna(event["announcement_date"]) else event["announcement_date"],
-                        str(event.get("source") or ""),
                     ),
                     reverse=True,
                 )

@@ -591,7 +591,8 @@ def _v1_v2_performance_comparison(
                     horizon_detail["evaluation_status"].eq("completed")
                 ]
                 complete = bool(
-                    len(horizon_detail) == len(members)
+                    len(members) > 0
+                    and len(horizon_detail) == len(members)
                     and horizon_detail["evaluation_status"].eq("completed").all()
                 )
                 returns = completed["forward_return"] if complete else pd.Series(dtype=float)
@@ -618,7 +619,13 @@ def _v1_v2_performance_comparison(
                         "median_return": _safe_median(returns) if complete else math.nan,
                         "mean_return_delta_vs_v1": math.nan,
                         "rising_ratio_delta_vs_v1": math.nan,
-                        "comparison_status": "complete" if complete else "partial",
+                        "comparison_status": (
+                            "complete"
+                            if complete
+                            else "unavailable"
+                            if len(members) == 0
+                            else "partial"
+                        ),
                     }
                 )
     result = pd.DataFrame(rows, columns=_V1_V2_COMPARISON_COLUMNS)
@@ -1136,6 +1143,14 @@ def evaluate_v2_snapshot(
         warnings.append("selected_daily_incomplete")
     if not qualified_pool_daily_complete:
         warnings.append("qualified_pool_daily_incomplete")
+    if (
+        not v1_v2_comparison.empty
+        and v1_v2_comparison.loc[
+            v1_v2_comparison["ranking_version"].eq("v1"),
+            "comparison_status",
+        ].eq("unavailable").any()
+    ):
+        warnings.append("v1_membership_unavailable")
     coverage: dict[str, object] = {
         "snapshot_trade_date": snapshot_trade_date,
         "horizons": list(horizon_values),

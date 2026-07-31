@@ -210,6 +210,31 @@ def test_v1_v2_comparison_reports_membership_overlap_and_performance_delta():
     )
 
 
+def test_v1_v2_comparison_marks_missing_v1_membership_unavailable():
+    snapshot = _ranked_snapshot(2)
+    rank_comparison = pd.DataFrame(
+        {
+            "asset_id": snapshot["asset_id"],
+            "v1_rank": [np.nan, np.nan],
+            "v2_rank": snapshot["final_rank"],
+        }
+    )
+
+    result = evaluate_v2_snapshot(
+        snapshot=snapshot,
+        qualified_pool=_qualified_pool_snapshot(2),
+        daily_bars=_daily_bars(2),
+        minute_bars=pd.DataFrame(),
+        horizons=(3,),
+        rank_comparison=rank_comparison,
+    )
+
+    comparison = result["v1_v2_comparison"].set_index(["cohort", "horizon"])
+    assert comparison.loc[("v1_top20", 3), "comparison_status"] == "unavailable"
+    assert comparison.loc[("v1_top20", 3), "member_count"] == 0
+    assert "v1_membership_unavailable" in result["coverage"]["warnings"]
+
+
 def test_ambiguous_observed_bar_calendar_is_rejected():
     bars = _daily_bars(1)
     bars.attrs.clear()
