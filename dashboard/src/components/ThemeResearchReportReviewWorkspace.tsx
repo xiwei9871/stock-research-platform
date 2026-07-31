@@ -13,6 +13,10 @@ import type {
 } from '../api/types';
 
 type MutationKind = 'publish' | 'reject';
+type MutationFeedback = {
+  text: string;
+  tone: 'success' | 'error' | 'conflict';
+};
 
 function displayTimestamp(value: string) {
   const timestamp = new Date(value);
@@ -53,7 +57,7 @@ export function ThemeResearchReportReviewWorkspace() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectionValidation, setRejectionValidation] = useState('');
   const [mutationKind, setMutationKind] = useState<MutationKind | null>(null);
-  const [mutationMessage, setMutationMessage] = useState('');
+  const [mutationFeedback, setMutationFeedback] = useState<MutationFeedback | null>(null);
   const mountedRef = useRef(false);
   const queueRequestRef = useRef(0);
 
@@ -90,6 +94,11 @@ export function ThemeResearchReportReviewWorkspace() {
     void loadQueue();
   }, [loadQueue]);
 
+  const selectedReport = useMemo(
+    () => queue?.find((item) => item.report_version_id === selectedId) ?? null,
+    [queue, selectedId]
+  );
+
   useEffect(() => {
     if (!selectedId) {
       setPreview(null);
@@ -106,7 +115,10 @@ export function ThemeResearchReportReviewWorkspace() {
     fetchAdminThemeResearchReport(requestedId)
       .then((nextPreview) => {
         if (cancelled) return;
-        if (nextPreview.report_version_id !== requestedId) {
+        if (
+          nextPreview.report_version_id !== requestedId ||
+          (selectedReport && nextPreview.theme_id !== selectedReport.theme_id)
+        ) {
           setPreviewError('报告预览身份校验失败');
           return;
         }
@@ -122,26 +134,35 @@ export function ThemeResearchReportReviewWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, previewRetryVersion]);
+  }, [selectedId, selectedReport?.theme_id, previewRetryVersion]);
 
-  const selectedReport = useMemo(
-    () => queue?.find((item) => item.report_version_id === selectedId) ?? null,
-    [queue, selectedId]
-  );
-  const currentPreview = preview?.report_version_id === selectedId ? preview : null;
+  const currentPreview =
+    preview &&
+    selectedReport &&
+    preview.report_version_id === selectedReport.report_version_id &&
+    preview.theme_id === selectedReport.theme_id
+      ? preview
+      : null;
   const mutationPending = mutationKind !== null;
+  const canReview = Boolean(
+    selectedReport?.status === 'pending_review' &&
+      currentPreview?.status === 'pending_review' &&
+      !previewLoading &&
+      !previewError &&
+      !mutationPending
+  );
 
   function selectReport(reportVersionId: string) {
     if (mutationPending || reportVersionId === selectedId) return;
     setSelectedId(reportVersionId);
-    setMutationMessage('');
+    setMutationFeedback(null);
     setRejectionValidation('');
     setComment('');
     setRejectionReason('');
   }
 
   async function mutate(kind: MutationKind) {
-    if (!selectedReport || mutationPending) return;
+    if (!selectedReport || !canReview) return;
     const trimmedReason = rejectionReason.trim();
     if (kind === 'reject' && !trimmedReason) {
       setRejectionValidation('请填写驳回原因');
@@ -149,7 +170,7 @@ export function ThemeResearchReportReviewWorkspace() {
     }
 
     setRejectionValidation('');
-    setMutationMessage('');
+    setMutationFeedback(null);
     setMutationKind(kind);
     try {
       const idempotencyKey = crypto.randomUUID();
@@ -168,18 +189,24 @@ export function ThemeResearchReportReviewWorkspace() {
         });
       }
       if (!mountedRef.current) return;
-      setMutationMessage(kind === 'publish' ? '报告已批准发布' : '报告已驳回');
+      setMutationFeedback({
+        text: kind === 'publish' ? '报告已批准发布' : '报告已驳回',
+        tone: 'success'
+      });
       setComment('');
       setRejectionReason('');
       await loadQueue();
     } catch (error: unknown) {
       if (!mountedRef.current) return;
       if (isStatus(error, 409)) {
-        setMutationMessage('报告状态已被其他管理员更新，请刷新后重试');
+        setMutationFeedback({
+          text: '报告状态已被其他管理员更新，请刷新后重试',
+          tone: 'conflict'
+        });
         setPreviewRetryVersion((value) => value + 1);
         await loadQueue();
       } else {
-        setMutationMessage(mutationErrorMessage(error));
+        setMutationFeedback({ text: mutationErrorMessage(error), tone: 'error' });
       }
     } finally {
       if (mountedRef.current) setMutationKind(null);
@@ -198,9 +225,12 @@ export function ThemeResearchReportReviewWorkspace() {
         </button>
       </header>
 
-      {mutationMessage ? (
-        <div className="theme-report-review-message theme-report-review-workspace-message" role="alert">
-          {mutationMessage}
+      {mutationFeedback ? (
+        <div
+          className={`theme-report-review-message theme-report-review-workspace-message is-${mutationFeedback.tone}`}
+          role={mutationFeedback.tone === 'success' ? 'status' : 'alert'}
+        >
+          {mutationFeedback.text}
         </div>
       ) : null}
 
@@ -291,7 +321,7 @@ export function ThemeResearchReportReviewWorkspace() {
               <div className="theme-report-review-controls">
                 <label>
                   <span>审核备注（可选）</span>
-                  <textarea value={comment} onChange={(event) => setComment(event.target.value)} disabled={mutationPending} />
+                  <textarea value={comment} onChange={(event) => setComment(event.target.value)} disabled={!canReview} />
                 </label>
                 <label>
                   <span>驳回原因</span>
@@ -301,15 +331,20 @@ export function ThemeResearchReportReviewWorkspace() {
                       setRejectionReason(event.target.value);
                       if (event.target.value.trim()) setRejectionValidation('');
                     }}
-                    disabled={mutationPending}
+                    disabled={!canReview}
                   />
                 </label>
                 {rejectionValidation ? <span className="theme-report-review-validation" role="alert">{rejectionValidation}</span> : null}
+                {!canReview && !mutationPending ? (
+                  <span className="theme-report-review-gate" role="status">
+                    {previewLoading ? '安全预览加载完成后才能审核' : '请先成功加载安全预览后再审核'}
+                  </span>
+                ) : null}
                 <div className="theme-report-review-actions">
-                  <button className="theme-report-review-publish" type="button" onClick={() => void mutate('publish')} disabled={mutationPending}>
+                  <button className="theme-report-review-publish" type="button" onClick={() => void mutate('publish')} disabled={!canReview}>
                     <Check size={16} aria-hidden="true" /> {mutationKind === 'publish' ? '批准中…' : '批准发布'}
                   </button>
-                  <button className="theme-report-review-reject" type="button" onClick={() => void mutate('reject')} disabled={mutationPending}>
+                  <button className="theme-report-review-reject" type="button" onClick={() => void mutate('reject')} disabled={!canReview}>
                     <X size={16} aria-hidden="true" /> {mutationKind === 'reject' ? '驳回中…' : '驳回'}
                   </button>
                 </div>

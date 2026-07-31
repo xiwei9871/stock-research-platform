@@ -6452,9 +6452,14 @@ table.data-table td {
 }
 
 .theme-report-review-validation,
-.theme-report-review-message {
+.theme-report-review-message,
+.theme-report-review-gate {
   grid-column: 1 / -1;
   color: #9f2d24;
+}
+
+.theme-report-review-gate {
+  color: #815500;
 }
 
 .theme-report-review-workspace-message {
@@ -6462,6 +6467,12 @@ table.data-table td {
   border-radius: 5px;
   background: #fff1f0;
   padding: 9px 12px;
+}
+
+.theme-report-review-workspace-message.is-success {
+  border-color: #9cc9b4;
+  background: #eef8f2;
+  color: #17603a;
 }
 
 .theme-report-review-actions {

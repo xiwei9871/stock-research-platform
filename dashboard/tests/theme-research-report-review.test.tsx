@@ -177,6 +177,41 @@ describe('ThemeResearchReportReviewWorkspace', () => {
     expect(apiMocks.publishThemeResearchReport).toHaveBeenCalledTimes(1);
   });
 
+  it('allows review only after the matching safe preview loads successfully', async () => {
+    const pendingPreview = deferred<AdminThemeResearchReportDocument>();
+    apiMocks.fetchAdminThemeResearchReport.mockReturnValueOnce(pendingPreview.promise);
+    render(<ThemeResearchReportReviewWorkspace />);
+    await screen.findByRole('heading', { name: 'AI 电力主题分析报告' });
+
+    expect(screen.getByRole('button', { name: '批准发布' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '驳回' })).toBeDisabled();
+    expect(await screen.findByText('安全预览加载完成后才能审核')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '批准发布' }));
+    fireEvent.click(screen.getByRole('button', { name: '驳回' }));
+    expect(apiMocks.publishThemeResearchReport).not.toHaveBeenCalled();
+    expect(apiMocks.rejectThemeResearchReport).not.toHaveBeenCalled();
+
+    pendingPreview.resolve(document());
+    expect(await screen.findByRole('heading', { name: '安全预览' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '批准发布' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '驳回' })).toBeEnabled();
+  });
+
+  it.each([
+    ['preview error', () => Promise.reject(new Error('GET failed with 404'))],
+    ['preview identity mismatch', () => Promise.resolve(document({ report_version_id: 'wrong-report' }))],
+    ['preview theme mismatch', () => Promise.resolve(document({ theme_id: 'wrong-theme' }))]
+  ])('keeps review disabled after %s', async (_scenario, previewResult) => {
+    apiMocks.fetchAdminThemeResearchReport.mockImplementationOnce(() => previewResult());
+    render(<ThemeResearchReportReviewWorkspace />);
+
+    expect(await screen.findByText('请先成功加载安全预览后再审核')).toBeVisible();
+    expect(screen.getByRole('button', { name: '批准发布' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '驳回' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '批准发布' }));
+    expect(apiMocks.publishThemeResearchReport).not.toHaveBeenCalled();
+  });
+
   it('reports a 409 conflict exactly and refreshes the queue and selected preview', async () => {
     apiMocks.publishThemeResearchReport.mockRejectedValueOnce(new Error('POST failed with 409: conflict'));
     apiMocks.fetchAdminThemeResearchReports
@@ -223,6 +258,21 @@ describe('ThemeResearchReportReviewWorkspace', () => {
     expect(await screen.findByText('待审核报告加载失败')).toBeVisible();
     expect(screen.getByText('报告状态已被其他管理员更新，请刷新后重试')).toBeVisible();
     expect(screen.getByRole('button', { name: '重试加载队列' })).toBeEnabled();
+  });
+
+  it('announces successful review with success semantics instead of an error alert', async () => {
+    apiMocks.fetchAdminThemeResearchReports
+      .mockResolvedValueOnce({ total: 1, items: [report()] })
+      .mockResolvedValueOnce({ total: 0, items: [] });
+    render(<ThemeResearchReportReviewWorkspace />);
+    await screen.findByRole('heading', { name: '安全预览' });
+
+    fireEvent.click(screen.getByRole('button', { name: '批准发布' }));
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('报告已批准发布');
+    expect(status).toHaveClass('is-success');
+    expect(screen.queryByRole('alert', { name: '报告已批准发布' })).not.toBeInTheDocument();
   });
 
   it('keeps preview errors retryable without blanking the workspace', async () => {
