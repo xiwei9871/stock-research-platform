@@ -2069,13 +2069,33 @@ def run_consumer_oversold_weekly(
     output_dir: str | Path,
     service: str = SETTINGS.research_service,
     preaudit_only: bool = False,
+    ranking_version: str = "v1",
+    evidence_reconstruction_mode: str | None = None,
+    evidence_information_cutoff: str | None = None,
 ) -> dict[str, Any]:
     """Load point-in-time database inputs and publish the weekly pipeline."""
-    config = ConsumerOversoldConfig(trade_date=trade_date)
+    config = ConsumerOversoldConfig(
+        trade_date=trade_date, ranking_version=ranking_version
+    )
+    reconstruction_requested = (
+        evidence_reconstruction_mode is not None
+        or evidence_information_cutoff is not None
+    )
+    if reconstruction_requested:
+        if evidence_reconstruction_mode != "retrospective_point_in_time":
+            raise ValueError(
+                "evidence_reconstruction_mode must be retrospective_point_in_time"
+            )
+        cutoff = validate_trade_date(evidence_information_cutoff)
+        if cutoff != trade_date:
+            raise ValueError("evidence_information_cutoff must equal trade_date")
     evidence_file = Path(evidence_path).expanduser()
     if not evidence_file.is_file():
         raise FileNotFoundError(f"evidence path does not exist: {evidence_file}")
     evidence = pd.read_csv(evidence_file, dtype={"stock_code": "string"})
+    if reconstruction_requested:
+        evidence = evidence.copy(deep=True)
+        evidence["evidence_as_of_date"] = evidence_information_cutoff
     industry_rules = pd.read_csv(INDUSTRY_RULES_PATH)
     asset_overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
 
@@ -2139,10 +2159,18 @@ def run_consumer_oversold_weekly(
         "current_valuation": current_valuation,
         "valuation_history": valuation_history,
     }
-    return build_consumer_oversold_weekly_from_frames(
+    payload = build_consumer_oversold_weekly_from_frames(
         frames=frames,
         evidence=evidence,
         config=config,
-        output_dir=output_dir,
+        output_dir=None if reconstruction_requested else output_dir,
         preaudit_only=preaudit_only,
     )
+    if not reconstruction_requested:
+        return payload
+    payload["coverage"] = {
+        **payload["coverage"],
+        "evidence_reconstruction_mode": evidence_reconstruction_mode,
+        "evidence_information_cutoff": evidence_information_cutoff,
+    }
+    return write_consumer_oversold_artifacts(payload, output_dir=output_dir)

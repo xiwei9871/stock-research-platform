@@ -1,8 +1,11 @@
 import argparse
 import datetime as dt
+import fcntl
+import hashlib
 import json
 import math
 import os
+import stat
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -1520,6 +1523,25 @@ _CONSUMER_OVERSOLD_PATH_KEYS = (
     "preaudit",
     "comparison",
 )
+_CONSUMER_OVERSOLD_V2_PATH_KEYS = (
+    *_CONSUMER_OVERSOLD_PATH_KEYS,
+    "top30",
+    "ranked_pool",
+)
+_CONSUMER_OVERSOLD_RETROSPECTIVE_DATE = "2026-07-27"
+_CONSUMER_OVERSOLD_EVIDENCE_PUBLICATION_FIELDS = (
+    "source_publish_date",
+    "audit_review_source_publish_date",
+    "pledge_debt_review_source_publish_date",
+    "permanent_impairment_source_publish_date",
+)
+_CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES = {
+    "detail": "consumer_oversold_v2_evaluation_detail.csv",
+    "summary": "consumer_oversold_v2_evaluation_summary.csv",
+    "minute_detail": "consumer_oversold_v2_evaluation_minute_detail.csv",
+    "coverage": "consumer_oversold_v2_evaluation_coverage.json",
+    "report": "consumer_oversold_v2_evaluation_report.md",
+}
 
 
 def _run_consumer_oversold_weekly(**kwargs):
@@ -1548,6 +1570,382 @@ def _run_consumer_oversold_evaluation(**kwargs):
     return run_consumer_oversold_evaluation(**kwargs)
 
 
+def _validate_consumer_oversold_retrospective_evidence(
+    *, evidence_path: str, information_cutoff: str
+) -> dict[str, str]:
+    cutoff = _validate_consumer_oversold_trade_date(information_cutoff)
+    path = Path(evidence_path).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"evidence path does not exist: {path}")
+    evidence = pd.read_csv(path, dtype=str, keep_default_na=False)
+    missing = [
+        field
+        for field in _CONSUMER_OVERSOLD_EVIDENCE_PUBLICATION_FIELDS
+        if field not in evidence.columns
+    ]
+    if missing:
+        raise ValueError(
+            "retrospective evidence missing publication fields: "
+            + ", ".join(missing)
+        )
+    for row_number, row in enumerate(evidence.to_dict(orient="records"), start=2):
+        asset_id = str(row.get("asset_id", "")).strip() or f"row {row_number}"
+        for field in _CONSUMER_OVERSOLD_EVIDENCE_PUBLICATION_FIELDS:
+            value = str(row.get(field, "")).strip()
+            try:
+                published = _validate_consumer_oversold_trade_date(value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"retrospective evidence {field} must use YYYY-MM-DD for {asset_id}"
+                ) from exc
+            if published > cutoff:
+                raise ValueError(
+                    "future evidence publication "
+                    f"for {asset_id}: {field}={published} exceeds {cutoff}"
+                )
+    return {
+        "evidence_reconstruction_mode": "retrospective_point_in_time",
+        "evidence_information_cutoff": cutoff,
+    }
+
+
+def _consumer_oversold_output_dir(value: str, ranking_version: str) -> str:
+    if ranking_version == "v1":
+        return value
+    path = Path(value)
+    if path.name == "v2":
+        return str(path)
+    if path.name == "v1":
+        return str(path.parent / "v2")
+    return str(path / "v2")
+
+
+def _verified_consumer_oversold_v2_release(snapshot_dir: str) -> Path:
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    invalid = ValueError(
+        "snapshot_dir must reference a verified sealed V2 snapshot current release"
+    )
+    current = Path(snapshot_dir).expanduser()
+    try:
+        metadata = current.lstat()
+        if not stat.S_ISLNK(metadata.st_mode) or current.name != "current":
+            raise invalid
+        target_text = os.readlink(current)
+        target = Path(target_text)
+        if (
+            target.is_absolute()
+            or len(target.parts) != 2
+            or target.parts[0] != ".releases"
+            or not target.parts[1].startswith("consumer-oversold-")
+            or target.parts[1] == "consumer-oversold-"
+            or ".." in target.parts
+        ):
+            raise invalid
+        releases_dir = (current.parent / ".releases").resolve(strict=True)
+        release = (current.parent / target).resolve(strict=True)
+        release_metadata = release.lstat()
+        if (
+            release.parent != releases_dir
+            or stat.S_ISLNK(release_metadata.st_mode)
+            or not stat.S_ISDIR(release_metadata.st_mode)
+            or release_metadata.st_mode & 0o222
+        ):
+            raise invalid
+        manifest = release / ".manifest.sha256"
+        manifest_metadata = manifest.lstat()
+        if (
+            not stat.S_ISREG(manifest_metadata.st_mode)
+            or manifest_metadata.st_mode & 0o222
+        ):
+            raise invalid
+        entries: dict[str, str] = {}
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            digest, filename = line.split("  ", 1)
+            if (
+                filename in entries
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+            ):
+                raise invalid
+            entries[filename] = digest
+        expected = set(V2_OUTPUT_FILENAMES.values())
+        if set(entries) != expected:
+            raise invalid
+        if {path.name for path in release.iterdir()} != {".manifest.sha256", *expected}:
+            raise invalid
+        for filename in expected:
+            artifact = release / filename
+            artifact_metadata = artifact.lstat()
+            if (
+                not stat.S_ISREG(artifact_metadata.st_mode)
+                or artifact_metadata.st_mode & 0o222
+                or hashlib.sha256(artifact.read_bytes()).hexdigest()
+                != entries[filename]
+            ):
+                raise invalid
+        return release
+    except (OSError, ValueError) as exc:
+        if exc is invalid:
+            raise
+        raise invalid from exc
+
+
+def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    release = _verified_consumer_oversold_v2_release(snapshot_dir)
+    coverage_path = release / V2_OUTPUT_FILENAMES["coverage"]
+    try:
+        coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("sealed V2 snapshot coverage is invalid") from exc
+    if not isinstance(coverage, dict) or coverage.get("ranking_version") != "v2":
+        raise ValueError("sealed snapshot must declare ranking_version v2")
+    trade_date = _validate_consumer_oversold_trade_date(coverage.get("trade_date"))
+    if trade_date == _CONSUMER_OVERSOLD_RETROSPECTIVE_DATE and (
+        coverage.get("evidence_reconstruction_mode")
+        != "retrospective_point_in_time"
+        or coverage.get("evidence_information_cutoff") != trade_date
+    ):
+        raise ValueError(
+            "sealed 2026-07-27 V2 snapshot must include retrospective evidence provenance"
+        )
+    frames = {
+        key: pd.read_csv(release / V2_OUTPUT_FILENAMES[key], dtype={"asset_id": str})
+        for key in ("top20", "top30", "ranked_pool")
+    }
+    for key, frame in frames.items():
+        missing = [column for column in ("asset_id", "final_rank") if column not in frame]
+        if missing:
+            raise ValueError(
+                f"sealed V2 snapshot {key} missing required columns: {', '.join(missing)}"
+            )
+    top20_pairs = list(
+        frames["top20"][["asset_id", "final_rank"]].itertuples(
+            index=False, name=None
+        )
+    )
+    top30_prefix = list(
+        frames["top30"]
+        .iloc[: len(frames["top20"])][["asset_id", "final_rank"]]
+        .itertuples(index=False, name=None)
+    )
+    ranked_prefix = list(
+        frames["ranked_pool"]
+        .iloc[: len(frames["top30"])][["asset_id", "final_rank"]]
+        .itertuples(index=False, name=None)
+    )
+    top30_pairs = list(
+        frames["top30"][["asset_id", "final_rank"]].itertuples(index=False, name=None)
+    )
+    if top20_pairs != top30_prefix or top30_pairs != ranked_prefix:
+        raise ValueError("sealed V2 snapshot ranking frames are inconsistent")
+    return {
+        "release": release,
+        "trade_date": trade_date,
+        "coverage": coverage,
+        **frames,
+        "manifest_sha256": hashlib.sha256(
+            (release / ".manifest.sha256").read_bytes()
+        ).hexdigest(),
+    }
+
+
+def _load_consumer_v2_outcome_calendar(**kwargs):
+    from stock_research.consumer_oversold.loaders import (
+        load_consumer_v2_outcome_calendar,
+    )
+
+    return load_consumer_v2_outcome_calendar(**kwargs)
+
+
+def _load_consumer_v2_hfq_daily_closes(**kwargs):
+    from stock_research.consumer_oversold.loaders import (
+        load_consumer_v2_hfq_daily_closes,
+    )
+
+    return load_consumer_v2_hfq_daily_closes(**kwargs)
+
+
+def _load_consumer_v2_raw_daily_bars(**kwargs):
+    from stock_research.consumer_oversold.loaders import load_consumer_v2_raw_daily_bars
+
+    return load_consumer_v2_raw_daily_bars(**kwargs)
+
+
+def _load_consumer_v2_minute_outcome_bars(**kwargs):
+    from stock_research.consumer_oversold.loaders import (
+        load_consumer_v2_minute_outcome_bars,
+    )
+
+    return load_consumer_v2_minute_outcome_bars(**kwargs)
+
+
+def _evaluate_consumer_oversold_v2_snapshot(**kwargs):
+    from stock_research.consumer_oversold.v2_evaluation import evaluate_v2_snapshot
+
+    return evaluate_v2_snapshot(**kwargs)
+
+
+def _render_consumer_oversold_v2_evaluation_report(
+    coverage: dict[str, object], summary: pd.DataFrame
+) -> str:
+    lines = [
+        "# 消费超跌 V2 前向评估",
+        "",
+        f"- 冻结日：{coverage['snapshot_trade_date']}",
+        f"- 评估截止日：{coverage['end_date']}",
+        f"- 评估状态：{coverage['evaluation_status']}",
+        f"- Top30/合格池：{coverage['selected_asset_count']}/{coverage['qualified_pool_count']}",
+        "- 选股成员与分数均来自 sealed snapshot；本命令不重算候选资格或排名。",
+        "",
+    ]
+    if not summary.empty:
+        lines.extend(["## 分组结果", "", "```csv", summary.to_csv(index=False).rstrip(), "```", ""])
+    return "\n".join(lines)
+
+
+def _publish_consumer_oversold_v2_evaluation(
+    *, output_dir: str, evaluated: dict[str, object], report: str
+) -> dict[str, str]:
+    from stock_research.consumer_oversold.reporting import (
+        _open_publish_lock,
+        _publish_release,
+    )
+
+    destination = Path(output_dir).expanduser().resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    frames: dict[str, pd.DataFrame] = {}
+    for key in ("detail", "summary", "minute_detail"):
+        frame = evaluated[key]
+        if not isinstance(frame, pd.DataFrame):
+            raise TypeError(f"{key} must be a pandas DataFrame")
+        frames[key] = frame.copy(deep=True)
+    coverage = evaluated["coverage"]
+    if not isinstance(coverage, dict):
+        raise TypeError("coverage must be a dict")
+    lock_handle = _open_publish_lock(destination / ".publish.lock")
+    try:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        _publish_release(
+            destination,
+            frames,
+            coverage,
+            report,
+            filenames=_CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES,
+        )
+    finally:
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_handle.close()
+    return {
+        key: str(destination / "current" / filename)
+        for key, filename in _CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES.items()
+    }
+
+
+def _run_consumer_oversold_v2_evaluation(
+    *, snapshot_dir: str, end_date: str, output_dir: str, service: str
+) -> dict[str, object]:
+    cutoff = _validate_consumer_oversold_trade_date(end_date)
+    snapshot = _load_consumer_oversold_v2_snapshot(snapshot_dir)
+    snapshot_trade_date = str(snapshot["trade_date"])
+    if cutoff <= snapshot_trade_date:
+        raise ValueError("end_date must be after snapshot_trade_date")
+    destination = Path(output_dir).expanduser().resolve()
+    release = Path(snapshot["release"]).resolve()
+    snapshot_root = Path(snapshot_dir).expanduser().parent.resolve()
+    if (
+        destination == snapshot_root
+        or destination in snapshot_root.parents
+        or snapshot_root in destination.parents
+    ):
+        raise ValueError("snapshot_dir and output_dir must not overlap")
+    calendar_start = (
+        dt.date.fromisoformat(snapshot_trade_date) + dt.timedelta(days=1)
+    ).isoformat()
+    outcome_dates = tuple(
+        _load_consumer_v2_outcome_calendar(
+            start_date=calendar_start, end_date=cutoff, service=service
+        )
+    )
+    if (
+        list(outcome_dates) != sorted(set(outcome_dates))
+        or any(date <= snapshot_trade_date or date > cutoff for date in outcome_dates)
+    ):
+        raise ValueError(
+            "outcome date window must be strictly after snapshot and on or before end_date"
+        )
+    ranked_pool = snapshot["ranked_pool"]
+    top30 = snapshot["top30"]
+    if not isinstance(ranked_pool, pd.DataFrame) or not isinstance(top30, pd.DataFrame):
+        raise TypeError("sealed V2 ranking artifacts must be pandas DataFrames")
+    asset_ids = sorted(set(ranked_pool["asset_id"].astype(str)))
+    hfq = _load_consumer_v2_hfq_daily_closes(
+        asset_ids=asset_ids,
+        start_date=snapshot_trade_date,
+        end_date=cutoff,
+        service=service,
+    )
+    raw = _load_consumer_v2_raw_daily_bars(
+        asset_ids=asset_ids,
+        start_date=snapshot_trade_date,
+        end_date=cutoff,
+        service=service,
+    )
+    daily = hfq.merge(
+        raw,
+        on=["asset_id", "trade_date"],
+        how="outer",
+        sort=True,
+        validate="one_to_one",
+    )
+    minute_assets = sorted(set(top30["asset_id"].astype(str)))
+    minute = _load_consumer_v2_minute_outcome_bars(
+        asset_ids=minute_assets,
+        start_date=calendar_start,
+        end_date=cutoff,
+        service=service,
+    )
+    evaluated = _evaluate_consumer_oversold_v2_snapshot(
+        snapshot=top30.copy(deep=True),
+        qualified_pool=ranked_pool.copy(deep=True),
+        daily_bars=daily,
+        minute_bars=minute,
+        outcome_dates=outcome_dates,
+    )
+    coverage = dict(evaluated["coverage"])
+    snapshot_coverage = snapshot["coverage"]
+    if not isinstance(snapshot_coverage, dict):
+        raise TypeError("sealed V2 snapshot coverage must be a dict")
+    coverage.update(
+        {
+            "end_date": cutoff,
+            "service": service,
+            "snapshot_release": str(release),
+            "snapshot_manifest_sha256": snapshot["manifest_sha256"],
+            "outcome_window_start": calendar_start,
+            "outcome_window_end": cutoff,
+            "evidence_reconstruction_mode": snapshot_coverage.get(
+                "evidence_reconstruction_mode", ""
+            ),
+            "evidence_information_cutoff": snapshot_coverage.get(
+                "evidence_information_cutoff", ""
+            ),
+        }
+    )
+    evaluated = {**evaluated, "coverage": coverage}
+    report = _render_consumer_oversold_v2_evaluation_report(
+        coverage, evaluated["summary"]
+    )
+    paths = _publish_consumer_oversold_v2_evaluation(
+        output_dir=output_dir, evaluated=evaluated, report=report
+    )
+    return {"paths": paths, **evaluated, "report": report}
+
+
 def _validate_consumer_oversold_machine_path(value, name: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{name} must be a string")
@@ -1558,16 +1956,21 @@ def _validate_consumer_oversold_machine_path(value, name: str) -> str:
     return value
 
 
-def _consumer_oversold_machine_lines(result) -> list[str]:
+def _consumer_oversold_machine_lines(result, *, ranking_version: str = "v1") -> list[str]:
     paths = result["paths"]
     if not isinstance(paths, dict):
         raise ValueError("consumer oversold result paths must be a dict")
-    required_keys = set(_CONSUMER_OVERSOLD_PATH_KEYS)
+    path_keys = (
+        _CONSUMER_OVERSOLD_V2_PATH_KEYS
+        if ranking_version == "v2"
+        else _CONSUMER_OVERSOLD_PATH_KEYS
+    )
+    required_keys = set(path_keys)
     missing_keys = required_keys - set(paths)
     if missing_keys:
         raise KeyError(
             "consumer oversold result paths missing required keys: "
-            + ", ".join(key for key in _CONSUMER_OVERSOLD_PATH_KEYS if key in missing_keys)
+            + ", ".join(key for key in path_keys if key in missing_keys)
         )
     extra_keys = set(paths) - required_keys
     if extra_keys:
@@ -1579,7 +1982,7 @@ def _consumer_oversold_machine_lines(result) -> list[str]:
         key: _validate_consumer_oversold_machine_path(
             paths[key], f"consumer oversold result path {key}"
         )
-        for key in _CONSUMER_OVERSOLD_PATH_KEYS
+        for key in path_keys
     }
     top20_rows = len(result["top20"])
     reserve_rows = len(result["reserve"])
@@ -1594,7 +1997,7 @@ def _consumer_oversold_machine_lines(result) -> list[str]:
     return [
         *(
             f"consumer_oversold|{key}|{validated_paths[key]}"
-            for key in _CONSUMER_OVERSOLD_PATH_KEYS
+            for key in path_keys
         ),
         f"consumer_oversold|top20_rows|{top20_rows}",
         f"consumer_oversold|reserve_rows|{reserve_rows}",
@@ -1620,6 +2023,24 @@ def _consumer_oversold_evaluation_machine_lines(result) -> list[str]:
     }
     return [
         f"consumer_oversold_evaluation|{key}|{validated[key]}" for key in keys
+    ]
+
+
+def _consumer_oversold_v2_evaluation_machine_lines(result) -> list[str]:
+    keys = tuple(_CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES)
+    paths = result["paths"]
+    if not isinstance(paths, dict) or set(paths) != set(keys):
+        raise ValueError(
+            "consumer oversold V2 evaluation paths must contain " + ", ".join(keys)
+        )
+    validated = {
+        key: _validate_consumer_oversold_machine_path(
+            paths[key], f"consumer oversold V2 evaluation path {key}"
+        )
+        for key in keys
+    }
+    return [
+        f"consumer_oversold_v2_evaluation|{key}|{validated[key]}" for key in keys
     ]
 
 
@@ -4001,6 +4422,9 @@ def build_parser() -> argparse.ArgumentParser:
     consumer_oversold_weekly.add_argument("--evidence-path", required=True)
     consumer_oversold_weekly.add_argument("--output-dir", required=True)
     consumer_oversold_weekly.add_argument("--preaudit-only", action="store_true")
+    consumer_oversold_weekly.add_argument(
+        "--ranking-version", choices=("v1", "v2"), default="v1"
+    )
     consumer_oversold_weekly.add_argument("--service", default=SETTINGS.research_service)
 
     consumer_oversold_evaluate = subparsers.add_parser("consumer-oversold-evaluate")
@@ -4008,6 +4432,16 @@ def build_parser() -> argparse.ArgumentParser:
     consumer_oversold_evaluate.add_argument("--end-date", required=True)
     consumer_oversold_evaluate.add_argument("--output-dir", required=True)
     consumer_oversold_evaluate.add_argument("--service", default=SETTINGS.research_service)
+
+    consumer_oversold_v2_evaluate = subparsers.add_parser(
+        "consumer-oversold-v2-evaluate"
+    )
+    consumer_oversold_v2_evaluate.add_argument("--snapshot-dir", required=True)
+    consumer_oversold_v2_evaluate.add_argument("--end-date", required=True)
+    consumer_oversold_v2_evaluate.add_argument("--output-dir", required=True)
+    consumer_oversold_v2_evaluate.add_argument(
+        "--service", default=SETTINGS.research_service
+    )
 
     mid_trend_round2 = subparsers.add_parser("mid-trend-round2-optimize")
     mid_trend_round2.add_argument("--start-date", required=True)
@@ -7735,12 +8169,26 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         else:
             trade_date = _validate_consumer_oversold_trade_date(args.trade_date)
             date_mode = "explicit_backtest"
+        output_dir = _consumer_oversold_output_dir(
+            output_dir, args.ranking_version
+        )
+        reconstruction = {}
+        if (
+            args.ranking_version == "v2"
+            and trade_date == _CONSUMER_OVERSOLD_RETROSPECTIVE_DATE
+        ):
+            reconstruction = _validate_consumer_oversold_retrospective_evidence(
+                evidence_path=evidence_path,
+                information_cutoff=trade_date,
+            )
         result = _run_consumer_oversold_weekly(
             trade_date=trade_date,
             evidence_path=evidence_path,
             output_dir=output_dir,
             service=args.service,
             preaudit_only=args.preaudit_only,
+            ranking_version=args.ranking_version,
+            **reconstruction,
         )
         if not isinstance(result.get("coverage"), dict):
             raise ValueError("consumer oversold result coverage must be a dict")
@@ -7750,7 +8198,9 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             "date_mode": date_mode,
             "publication_status": result["coverage"]["publication_status"],
         }
-        lines = _consumer_oversold_machine_lines(result)
+        lines = _consumer_oversold_machine_lines(
+            result, ranking_version=args.ranking_version
+        )
         for line in lines:
             print(line)
     elif args.command == "consumer-oversold-evaluate":
@@ -7767,6 +8217,21 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             service=args.service,
         )
         for line in _consumer_oversold_evaluation_machine_lines(result):
+            print(line)
+    elif args.command == "consumer-oversold-v2-evaluate":
+        snapshot_dir = _validate_consumer_oversold_machine_path(
+            args.snapshot_dir, "--snapshot-dir"
+        )
+        output_dir = _validate_consumer_oversold_machine_path(
+            args.output_dir, "--output-dir"
+        )
+        result = _run_consumer_oversold_v2_evaluation(
+            snapshot_dir=snapshot_dir,
+            end_date=args.end_date,
+            output_dir=output_dir,
+            service=args.service,
+        )
+        for line in _consumer_oversold_v2_evaluation_machine_lines(result):
             print(line)
     elif args.command == "mid-trend-round2-optimize":
         from stock_research.mid_trend_round2_optimization import run_mid_trend_round2_optimization
