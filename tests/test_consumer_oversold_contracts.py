@@ -54,6 +54,30 @@ def test_elasticity_ranking_defaults_match_approved_design():
     assert config.reserve_top_n == 20
 
 
+def test_v2_config_defaults_match_approved_design():
+    config = ConsumerOversoldConfig(trade_date="2026-07-27", ranking_version="v2")
+
+    assert config.v2_min_composite_score == 30.0
+    assert config.v2_min_technical_readiness_score == 35.0
+    assert config.v2_repair_rank_weight == 0.55
+    assert config.v2_activation_rank_weight == 0.45
+    assert (
+        config.technical_readiness_weight,
+        config.continuation_character_weight,
+        config.residual_price_space_weight,
+        config.capital_efficiency_weight,
+        config.catalyst_timing_weight,
+    ) == (0.30, 0.25, 0.20, 0.15, 0.10)
+
+
+@pytest.mark.parametrize("ranking_version", ["", "V2", "v3", None])
+def test_config_rejects_unknown_ranking_version(ranking_version):
+    with pytest.raises(ValueError, match="ranking_version must be v1 or v2"):
+        ConsumerOversoldConfig(
+            trade_date="2026-07-27", ranking_version=ranking_version
+        )
+
+
 def test_repair_bucket_constants_are_stable():
     assert EXPECTED_REPAIR == "expected_repair"
     assert EARLY_VALIDATION == "early_validation"

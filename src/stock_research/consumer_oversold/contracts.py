@@ -46,6 +46,7 @@ def validate_trade_date(value: str) -> str:
 @dataclass(frozen=True)
 class ConsumerOversoldConfig:
     trade_date: str
+    ranking_version: str = "v1"
     lookback_6m_bars: int = 126
     lookback_12m_bars: int = 252
     valuation_lookback_years: int = 5
@@ -64,6 +65,15 @@ class ConsumerOversoldConfig:
     stock_character_weight: float = 0.25
     market_capacity_weight: float = 0.20
     catalyst_liquidity_weight: float = 0.20
+    v2_min_composite_score: float = 30.0
+    v2_min_technical_readiness_score: float = 35.0
+    v2_repair_rank_weight: float = 0.55
+    v2_activation_rank_weight: float = 0.45
+    technical_readiness_weight: float = 0.30
+    continuation_character_weight: float = 0.25
+    residual_price_space_weight: float = 0.20
+    capital_efficiency_weight: float = 0.15
+    catalyst_timing_weight: float = 0.10
     preaudit_size: int = 60
     minimum_evidence_complete: int = 40
     final_top_n: int = 20
@@ -71,6 +81,8 @@ class ConsumerOversoldConfig:
 
     def __post_init__(self) -> None:
         validate_trade_date(self.trade_date)
+        if self.ranking_version not in ("v1", "v2"):
+            raise ValueError("ranking_version must be v1 or v2")
 
         positive_integer_fields = (
             "lookback_6m_bars",
@@ -105,6 +117,18 @@ class ConsumerOversoldConfig:
             minimum=0.0,
             maximum=100.0,
         )
+        _validate_number(
+            "v2_min_composite_score",
+            self.v2_min_composite_score,
+            minimum=0.0,
+            maximum=100.0,
+        )
+        _validate_number(
+            "v2_min_technical_readiness_score",
+            self.v2_min_technical_readiness_score,
+            minimum=0.0,
+            maximum=100.0,
+        )
 
         rank_weight_fields = (
             "repair_rank_weight",
@@ -113,6 +137,13 @@ class ConsumerOversoldConfig:
             "stock_character_weight",
             "market_capacity_weight",
             "catalyst_liquidity_weight",
+            "v2_repair_rank_weight",
+            "v2_activation_rank_weight",
+            "technical_readiness_weight",
+            "continuation_character_weight",
+            "residual_price_space_weight",
+            "capital_efficiency_weight",
+            "catalyst_timing_weight",
         )
         for field_name in rank_weight_fields:
             _validate_number(field_name, getattr(self, field_name), minimum=0.0, maximum=1.0)
@@ -128,6 +159,20 @@ class ConsumerOversoldConfig:
                 self.stock_character_weight,
                 self.market_capacity_weight,
                 self.catalyst_liquidity_weight,
+            ),
+        )
+        _validate_weight_sum(
+            "v2 repair and activation rank weights",
+            (self.v2_repair_rank_weight, self.v2_activation_rank_weight),
+        )
+        _validate_weight_sum(
+            "v2 activation component weights",
+            (
+                self.technical_readiness_weight,
+                self.continuation_character_weight,
+                self.residual_price_space_weight,
+                self.capital_efficiency_weight,
+                self.catalyst_timing_weight,
             ),
         )
 
