@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import replace
+from pathlib import Path
 
 import psycopg
 import pytest
 
 from stock_research.config import Settings
+from stock_research.theme_research_report_manifest import (
+    ReportManifestLimits,
+    load_report_manifest,
+)
+from stock_research.theme_research_report_store import (
+    ThemeResearchReportError,
+    register_report_manifest,
+    report_version_id,
+)
 
 
 TEST_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE", "")
@@ -413,6 +426,66 @@ def _insert_report(postgres_conn, report_id: str, theme_id: str, version: str, *
         """,
         values,
     )
+
+
+def _validated_manifest(
+    tmp_path: Path,
+    *,
+    theme_id: str = "report-store-theme",
+    version: str = "2026-07-31-v1",
+    pdf: bytes | None = b"%PDF-1.7\nreport\n%%EOF\n",
+):
+    report_root = tmp_path / "reports" / "theme-research"
+    version_dir = report_root / theme_id / version
+    version_dir.mkdir(parents=True)
+    markdown = b"# Theme report\n"
+    (version_dir / "report.md").write_bytes(markdown)
+    artifacts = {
+        "markdown": {
+            "path": "report.md",
+            "sha256": hashlib.sha256(markdown).hexdigest(),
+        }
+    }
+    if pdf is not None:
+        (version_dir / "report.pdf").write_bytes(pdf)
+        artifacts["pdf"] = {
+            "path": "report.pdf",
+            "sha256": hashlib.sha256(pdf).hexdigest(),
+        }
+    manifest_path = version_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "theme_research_report_manifest_v1",
+                "theme_id": theme_id,
+                "version": version,
+                "title": "Production Theme Report",
+                "summary": "Immutable production report.",
+                "generated_at": "2026-07-31T08:30:00+08:00",
+                "generator": {"name": "theme-worker", "version": "2.4.1"},
+                "artifacts": artifacts,
+                "metadata": {
+                    "source": {"kind": "production", "tags": ["primary"]}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return load_report_manifest(
+        manifest_path,
+        report_root=report_root,
+        limits=ReportManifestLimits(
+            max_manifest_bytes=16_384,
+            max_markdown_bytes=16_384,
+            max_pdf_bytes=16_384,
+        ),
+    )
+
+
+def _seed_report_store(postgres_conn, theme_id: str) -> None:
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, "system")
+    postgres_conn.commit()
 
 
 def test_postgres_apply_creates_report_tables(postgres_conn) -> None:
@@ -1302,3 +1375,426 @@ def test_postgres_enforces_report_version_and_review_event_idempotency(postgres_
             """,
             event[1:],
         )
+
+
+def test_report_version_id_is_stable_and_rejects_empty_identity() -> None:
+    expected = report_version_id("ai-power", "2026-07-31-v1")
+
+    assert expected == report_version_id("ai-power", "2026-07-31-v1")
+    assert len(expected) == 64
+    assert expected != report_version_id("ai-power", "2026-07-31-v2")
+    assert expected != report_version_id("grid-power", "2026-07-31-v1")
+    with pytest.raises(ThemeResearchReportError) as theme_error:
+        report_version_id("", "v1")
+    with pytest.raises(ThemeResearchReportError) as version_error:
+        report_version_id("theme", "")
+    assert theme_error.value.code == "THEME_REPORT_IDENTITY_INVALID"
+    assert version_error.value.code == "THEME_REPORT_IDENTITY_INVALID"
+
+
+def test_report_error_details_are_detached_from_callers() -> None:
+    details = {"fields": ["manifest_sha256"]}
+
+    error = ThemeResearchReportError("CODE", "message", details)
+    details["fields"].append("markdown_sha256")
+
+    assert error.details == {"fields": ["manifest_sha256"]}
+
+
+def test_postgres_registers_manifest_and_audits_initial_pending_review(
+    postgres_conn,
+    tmp_path,
+) -> None:
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+
+    result = register_report_manifest(manifest, service=TEST_SERVICE)
+
+    expected_id = report_version_id(manifest.theme_id, manifest.version)
+    assert result == {
+        "report_version_id": expected_id,
+        "theme_id": manifest.theme_id,
+        "version": manifest.version,
+        "status": "pending_review",
+        "result": "indexed",
+    }
+    row = postgres_conn.execute(
+        """
+        SELECT report_version_id, theme_id, version, title, summary, status,
+               markdown_relative_path, markdown_sha256,
+               pdf_relative_path, pdf_sha256,
+               manifest_relative_path, manifest_sha256,
+               generator_name, generator_version, generator_metadata,
+               generated_at, metadata, row_version,
+               published_at, published_by_user_id, rejected_at,
+               rejected_by_user_id, rejection_reason
+        FROM research.theme_research_report_version
+        WHERE report_version_id = %s
+        """,
+        (expected_id,),
+    ).fetchone()
+    assert row == (
+        expected_id,
+        manifest.theme_id,
+        manifest.version,
+        manifest.title,
+        manifest.summary,
+        "pending_review",
+        manifest.markdown.relative_path,
+        manifest.markdown.sha256,
+        manifest.pdf.relative_path,
+        manifest.pdf.sha256,
+        manifest.manifest_relative_path,
+        manifest.manifest_sha256,
+        manifest.generator_name,
+        manifest.generator_version,
+        {},
+        manifest.generated_at,
+        {"source": {"kind": "production", "tags": ["primary"]}},
+        1,
+        None,
+        None,
+        None,
+        None,
+        "",
+    )
+    events = postgres_conn.execute(
+        """
+        SELECT report_version_id, from_status, to_status, actor_user_id,
+               comment, request_id, idempotency_key
+        FROM research.theme_research_report_review_event
+        WHERE report_version_id = %s
+        """,
+        (expected_id,),
+    ).fetchall()
+    assert len(events) == 1
+    assert events[0][0:5] == (
+        expected_id,
+        None,
+        "pending_review",
+        "system",
+        "",
+    )
+    assert events[0][5]
+    assert events[0][6]
+    assert events[0][5] == hashlib.sha256(
+        ("theme-research-report-index-request\0" + expected_id).encode("utf-8")
+    ).hexdigest()
+    assert events[0][6] == hashlib.sha256(
+        ("theme-research-report-index-idempotency\0" + expected_id).encode("utf-8")
+    ).hexdigest()
+
+
+def test_postgres_repeated_registration_is_strictly_unchanged(
+    postgres_conn,
+    tmp_path,
+) -> None:
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+    first = register_report_manifest(manifest, service=TEST_SERVICE)
+    before = postgres_conn.execute(
+        """
+        SELECT status, row_version, indexed_at, updated_at,
+               published_at, rejected_at
+        FROM research.theme_research_report_version
+        WHERE report_version_id = %s
+        """,
+        (first["report_version_id"],),
+    ).fetchone()
+    event_before = postgres_conn.execute(
+        """
+        SELECT event_id, request_id, idempotency_key, created_at
+        FROM research.theme_research_report_review_event
+        WHERE report_version_id = %s
+        """,
+        (first["report_version_id"],),
+    ).fetchall()
+
+    second = register_report_manifest(manifest, service=TEST_SERVICE)
+
+    assert second == {**first, "result": "unchanged"}
+    after = postgres_conn.execute(
+        """
+        SELECT status, row_version, indexed_at, updated_at,
+               published_at, rejected_at
+        FROM research.theme_research_report_version
+        WHERE report_version_id = %s
+        """,
+        (first["report_version_id"],),
+    ).fetchone()
+    event_after = postgres_conn.execute(
+        """
+        SELECT event_id, request_id, idempotency_key, created_at
+        FROM research.theme_research_report_review_event
+        WHERE report_version_id = %s
+        """,
+        (first["report_version_id"],),
+    ).fetchall()
+    assert after == before
+    assert event_after == event_before
+
+
+def test_postgres_rejects_noncanonical_existing_report_version_id(
+    postgres_conn,
+    tmp_path,
+) -> None:
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+    postgres_conn.execute(
+        """
+        INSERT INTO research.theme_research_report_version (
+            report_version_id, theme_id, version, title, summary, status,
+            markdown_relative_path, markdown_sha256,
+            pdf_relative_path, pdf_sha256,
+            manifest_relative_path, manifest_sha256,
+            generator_name, generator_version, generator_metadata,
+            generated_at, metadata, row_version
+        ) VALUES (
+            'noncanonical-report-id', %s, %s, %s, %s, 'pending_review',
+            %s, %s, %s, %s, %s, %s, %s, %s, '{}'::jsonb, %s, %s, 1
+        )
+        """,
+        (
+            manifest.theme_id,
+            manifest.version,
+            manifest.title,
+            manifest.summary,
+            manifest.markdown.relative_path,
+            manifest.markdown.sha256,
+            manifest.pdf.relative_path,
+            manifest.pdf.sha256,
+            manifest.manifest_relative_path,
+            manifest.manifest_sha256,
+            manifest.generator_name,
+            manifest.generator_version,
+            manifest.generated_at,
+            json.dumps({"source": {"kind": "production", "tags": ["primary"]}}),
+        ),
+    )
+    postgres_conn.commit()
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        register_report_manifest(manifest, service=TEST_SERVICE)
+
+    assert exc_info.value.code == "THEME_REPORT_VERSION_CONTENT_CONFLICT"
+    assert exc_info.value.details == {"fields": ["report_version_id"]}
+    assert postgres_conn.execute(
+        "SELECT report_version_id FROM research.theme_research_report_version"
+    ).fetchall() == [("noncanonical-report-id",)]
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event"
+    ).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("field_name", "mutate"),
+    [
+        ("manifest_sha256", lambda manifest: replace(manifest, manifest_sha256="f" * 64)),
+        (
+            "manifest_relative_path",
+            lambda manifest: replace(
+                manifest,
+                manifest_relative_path=f"{manifest.theme_id}/{manifest.version}/alternate.json",
+            ),
+        ),
+        (
+            "markdown_relative_path",
+            lambda manifest: replace(
+                manifest,
+                markdown=replace(manifest.markdown, relative_path="alternate.md"),
+            ),
+        ),
+        (
+            "markdown_sha256",
+            lambda manifest: replace(
+                manifest,
+                markdown=replace(manifest.markdown, sha256="e" * 64),
+            ),
+        ),
+        (
+            "pdf_relative_path",
+            lambda manifest: replace(
+                manifest,
+                pdf=replace(manifest.pdf, relative_path="alternate.pdf"),
+            ),
+        ),
+        (
+            "pdf_sha256",
+            lambda manifest: replace(
+                manifest,
+                pdf=replace(manifest.pdf, sha256="d" * 64),
+            ),
+        ),
+        ("title", lambda manifest: replace(manifest, title="Changed title")),
+        ("summary", lambda manifest: replace(manifest, summary="Changed summary")),
+        (
+            "generator_name",
+            lambda manifest: replace(manifest, generator_name="different-worker"),
+        ),
+        (
+            "generator_version",
+            lambda manifest: replace(manifest, generator_version="different"),
+        ),
+        (
+            "metadata",
+            lambda manifest: replace(manifest, metadata={"source": {"kind": "changed"}}),
+        ),
+    ],
+)
+def test_postgres_rejects_conflicting_immutable_report_identity(
+    postgres_conn,
+    tmp_path,
+    field_name,
+    mutate,
+) -> None:
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+    first = register_report_manifest(manifest, service=TEST_SERVICE)
+    before = postgres_conn.execute(
+        "SELECT * FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (first["report_version_id"],),
+    ).fetchone()
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        register_report_manifest(mutate(manifest), service=TEST_SERVICE)
+
+    assert exc_info.value.code == "THEME_REPORT_VERSION_CONTENT_CONFLICT"
+    assert exc_info.value.details == {"fields": [field_name]}
+    after = postgres_conn.execute(
+        "SELECT * FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (first["report_version_id"],),
+    ).fetchone()
+    assert after == before
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event WHERE report_version_id = %s",
+        (first["report_version_id"],),
+    ).fetchone()[0] == 1
+
+
+def test_postgres_rejects_unknown_theme_without_partial_rows(postgres_conn, tmp_path) -> None:
+    manifest = _validated_manifest(tmp_path, theme_id="missing-report-theme")
+    _insert_user(postgres_conn, "system")
+    postgres_conn.commit()
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        register_report_manifest(manifest, service=TEST_SERVICE)
+
+    assert exc_info.value.code == "THEME_REPORT_THEME_NOT_FOUND"
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_version"
+    ).fetchone()[0] == 0
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event"
+    ).fetchone()[0] == 0
+
+
+def test_postgres_stores_absent_pdf_as_null_pair(postgres_conn, tmp_path) -> None:
+    manifest = _validated_manifest(tmp_path, pdf=None)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+
+    result = register_report_manifest(manifest, service=TEST_SERVICE)
+
+    assert postgres_conn.execute(
+        """
+        SELECT pdf_relative_path, pdf_sha256
+        FROM research.theme_research_report_version
+        WHERE report_version_id = %s
+        """,
+        (result["report_version_id"],),
+    ).fetchone() == (None, None)
+
+
+def test_postgres_concurrent_identical_registration_creates_one_row_and_event(
+    postgres_conn,
+    tmp_path,
+) -> None:
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda _: register_report_manifest(manifest, service=TEST_SERVICE),
+                range(2),
+            )
+        )
+
+    assert sorted(result["result"] for result in results) == ["indexed", "unchanged"]
+    assert len({result["report_version_id"] for result in results}) == 1
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_version"
+    ).fetchone()[0] == 1
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event"
+    ).fetchone()[0] == 1
+
+
+def test_postgres_concurrent_conflict_preserves_the_successful_row(
+    postgres_conn,
+    tmp_path,
+) -> None:
+    manifest = _validated_manifest(tmp_path)
+    conflict = replace(manifest, manifest_sha256="c" * 64)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+
+    def register(candidate):
+        try:
+            return register_report_manifest(candidate, service=TEST_SERVICE)
+        except ThemeResearchReportError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(register, (manifest, conflict)))
+
+    errors = [outcome for outcome in outcomes if isinstance(outcome, ThemeResearchReportError)]
+    successes = [outcome for outcome in outcomes if isinstance(outcome, dict)]
+    assert len(errors) == len(successes) == 1
+    assert errors[0].code == "THEME_REPORT_VERSION_CONTENT_CONFLICT"
+    stored_sha = postgres_conn.execute(
+        "SELECT manifest_sha256 FROM research.theme_research_report_version"
+    ).fetchone()[0]
+    assert stored_sha in {manifest.manifest_sha256, conflict.manifest_sha256}
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event"
+    ).fetchone()[0] == 1
+
+
+def test_postgres_event_failure_rolls_back_report_version(postgres_conn, tmp_path) -> None:
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+    postgres_conn.execute(
+        """
+        ALTER TABLE research.theme_research_report_review_event
+        ADD CONSTRAINT ck_theme_research_report_test_event_rejected
+        CHECK (actor_user_id <> 'system')
+        """
+    )
+    postgres_conn.commit()
+
+    with pytest.raises((ThemeResearchReportError, psycopg.Error)):
+        register_report_manifest(manifest, service=TEST_SERVICE)
+
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_version"
+    ).fetchone()[0] == 0
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event"
+    ).fetchone()[0] == 0
+
+
+def test_postgres_runtime_service_registers_with_minimum_permissions(
+    postgres_conn,
+    tmp_path,
+) -> None:
+    if not TEST_RUNTIME_SERVICE:
+        pytest.skip("dedicated runtime test service is required")
+    manifest = _validated_manifest(tmp_path)
+    _seed_report_store(postgres_conn, manifest.theme_id)
+
+    result = register_report_manifest(manifest, service=TEST_RUNTIME_SERVICE)
+
+    assert result["result"] == "indexed"
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (result["report_version_id"],),
+    ).fetchone()[0] == 1
