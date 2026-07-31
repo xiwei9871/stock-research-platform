@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 
 import {
   buildPlaywrightApiServerCommand,
+  buildPlaywrightDashboardServerCommand,
   ensureThemeReportFixtureToken
 } from './playwright.runtime';
 
@@ -14,10 +15,11 @@ if (themeReportRealE2E) {
 }
 const reuseExistingServer =
   themeReportRealE2E || process.env.PLAYWRIGHT_REUSE_EXISTING === 'false' ? false : !process.env.CI;
-const dashboardCommand =
-  process.env.PLAYWRIGHT_USE_PREVIEW === 'true'
-    ? `pnpm exec vite preview --host 127.0.0.1 --port ${dashboardPort}`
-    : `VITE_API_PROXY_TARGET=http://127.0.0.1:${apiPort} pnpm exec vite --host 127.0.0.1 --port ${dashboardPort}`;
+const dashboardCommand = buildPlaywrightDashboardServerCommand({
+  port: dashboardPort,
+  apiPort,
+  preview: process.env.PLAYWRIGHT_USE_PREVIEW === 'true'
+});
 
 export default defineConfig({
   testDir: './tests',

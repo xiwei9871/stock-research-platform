@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildPlaywrightDashboardServerCommand,
   buildPlaywrightApiServerCommand,
   ensureThemeReportFixtureToken,
 } from '../playwright.runtime';
@@ -22,5 +23,13 @@ describe('Playwright runtime command', () => {
     expect(command).toBe('node scripts/run-playwright-api-server.mjs --port 8766');
     expect(command).not.toContain('env ');
     expect(command).not.toContain("'");
+  });
+
+  it('uses a fixed Node launcher for the frontend without inline proxy env', () => {
+    const command = buildPlaywrightDashboardServerCommand({ port: 5174, apiPort: 8766, preview: true });
+
+    expect(command).toBe('node scripts/run-playwright-dashboard-server.mjs --port 5174 --api-port 8766 --preview');
+    expect(command).not.toContain('VITE_API_PROXY_TARGET=');
+    expect(command).not.toContain('pnpm');
   });
 });
