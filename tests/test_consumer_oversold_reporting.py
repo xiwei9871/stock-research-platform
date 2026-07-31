@@ -272,6 +272,32 @@ def _v2_payload(pool_size: int = 35) -> dict[str, object]:
             }
         ]
     )
+    comparison = pd.concat(
+        [
+            comparison,
+            pd.DataFrame(
+                [
+                    {
+                        "asset_id": "999999.SZ",
+                        "stock_code": "999999",
+                        "stock_name": "第二门槛样本",
+                        "v1_rank": np.nan,
+                        "v2_rank": np.nan,
+                        "rank_change": np.nan,
+                        "v1_final_rank_score": np.nan,
+                        "v1_repair_score": np.nan,
+                        "v1_elasticity_score": np.nan,
+                        "v2_repair_score": np.nan,
+                        "v2_activation_score": np.nan,
+                        "v2_final_rank_score": np.nan,
+                        "v1_exclusion_reasons": "",
+                        "v2_exclusion_reasons": "falling_knife|overextended",
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
     payload.update(
         scores=pd.concat([ranked_pool, excluded], ignore_index=True, sort=False),
         exclusions=excluded,
@@ -647,6 +673,25 @@ def test_v2_rejects_final_rank_score_formula_corruption(tmp_path):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
+def test_v2_rejects_rank_percentile_outside_zero_to_hundred(tmp_path):
+    payload = _v2_payload()
+    _mutate_v2_activation_field(payload, "repair_rank_percentile", 200.0)
+
+    with pytest.raises(
+        ValueError,
+        match="ranked_pool repair_rank_percentile must be between 0 and 100",
+    ):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_requires_evidence_complete_for_selected_rows(tmp_path):
+    payload = _v2_payload()
+    _mutate_v2_activation_field(payload, "evidence_complete", False)
+
+    with pytest.raises(ValueError, match="ranked_pool evidence_complete must be true"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
 def test_v2_rejects_missing_activation_weights_before_row_validation(tmp_path):
     payload = _v2_payload()
     payload["coverage"].pop("v2_activation_weights")
@@ -664,12 +709,14 @@ def test_v2_rejects_funnel_coverage_below_ranked_pool(field, tmp_path):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
-def test_v2_rejects_required_evidence_threshold_below_ranked_pool(tmp_path):
+def test_v2_allows_configured_evidence_threshold_below_ranked_pool(tmp_path):
     payload = _v2_payload(pool_size=45)
     payload["coverage"]["minimum_evidence_complete"] = 40
 
-    with pytest.raises(ValueError, match="minimum_evidence_complete must cover ranked_pool"):
-        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    assert result["coverage"]["minimum_evidence_complete"] == 40
+    assert result["coverage"]["unified_funnel"]["evidence_complete"] == 45
 
 
 @pytest.mark.parametrize(
@@ -705,6 +752,43 @@ def test_v2_rejects_comparison_missing_rank_for_ranked_pool_asset(tmp_path):
         ValueError,
         match="comparison v2_rank must be present for every ranked_pool asset",
     ):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        (
+            "v2_rank",
+            "comparison v2_rank must be present for every ranked_pool asset",
+        ),
+        (
+            "rank_change",
+            "comparison rank_change must equal v1_rank - v2_rank",
+        ),
+        (
+            "v2_repair_score",
+            "comparison v2_repair_score must match ranked_pool",
+        ),
+        (
+            "v2_final_rank_score",
+            "comparison v2_final_rank_score must match ranked_pool",
+        ),
+    ],
+)
+def test_v2_rejects_nan_required_comparison_fields(field, message, tmp_path):
+    payload = _v2_payload()
+    payload["comparison"].loc[0, field] = np.nan
+
+    with pytest.raises(ValueError, match=message):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_comparison_must_cover_scores_exactly(tmp_path):
+    payload = _v2_payload()
+    payload["comparison"] = payload["comparison"].iloc[:-1].copy()
+
+    with pytest.raises(ValueError, match="comparison must exactly cover scores asset set"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 

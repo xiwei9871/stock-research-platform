@@ -128,12 +128,14 @@ _V2_SELECTED_REQUIRED_COLUMNS = (
     "final_rank_score_v2",
     "repair_rank_percentile",
     "activation_rank_percentile",
+    "composite_score",
     "activation_score",
     "technical_readiness_score",
     "continuation_character_score",
     "residual_price_space_score",
     "capital_efficiency_score",
     "catalyst_timing_score",
+    "evidence_complete",
     "eligible",
     "activation_coverage",
     "activation_eligible",
@@ -231,6 +233,16 @@ def _finite_score(value: Any) -> bool:
         and isinstance(value, Real)
         and math.isfinite(float(value))
     )
+
+
+def _is_missing_scalar(value: Any) -> bool:
+    if value is None or value is pd.NA:
+        return True
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(missing, (bool, np.bool_)) and bool(missing)
 
 
 def _validate_v2_weight_maps(coverage: dict[str, Any]) -> dict[str, dict[str, float]]:
@@ -388,11 +400,21 @@ def _validate_v2_rank_frame(
         repair_percentile = row["repair_rank_percentile"]
         activation_percentile = row["activation_rank_percentile"]
         final_score = row["final_rank_score_v2"]
-        if not all(
-            _finite_score(value)
-            for value in (repair_percentile, activation_percentile, final_score)
+        for field, value in (
+            ("repair_rank_percentile", repair_percentile),
+            ("activation_rank_percentile", activation_percentile),
+            ("final_rank_score_v2", final_score),
         ):
-            raise ValueError(f"{name} rank score fields must be finite")
+            if not _finite_score(value):
+                raise ValueError(f"{name} {field} must be finite")
+        for field, value in (
+            ("repair_rank_percentile", repair_percentile),
+            ("activation_rank_percentile", activation_percentile),
+        ):
+            if not 0.0 <= float(value) <= 100.0:
+                raise ValueError(f"{name} {field} must be between 0 and 100")
+        if not _finite_score(row["composite_score"]):
+            raise ValueError(f"{name} composite_score must be finite")
         expected_score = (
             rank_weights["repair"] * float(repair_percentile)
             + rank_weights["activation"] * float(activation_percentile)
@@ -403,7 +425,12 @@ def _validate_v2_rank_frame(
             raise ValueError(
                 f"{name} final_rank_score_v2 must equal weighted rank components"
             )
-    for field in ("eligible", "activation_coverage", "activation_eligible"):
+    for field in (
+        "evidence_complete",
+        "eligible",
+        "activation_coverage",
+        "activation_eligible",
+    ):
         valid = frame[field].map(
             lambda value: isinstance(value, (bool, np.bool_)) and bool(value)
         )
@@ -432,68 +459,118 @@ def _validate_v2_selection_values(
 def _validate_v2_comparison_truth(
     comparison: pd.DataFrame,
     ranked_pool: pd.DataFrame,
+    scores: pd.DataFrame,
 ) -> None:
     _, ranked_ids = _validate_assets(ranked_pool, "ranked_pool")
     _, comparison_ids = _validate_assets(comparison, "comparison")
+    _, score_ids = _validate_assets(scores, "scores")
     if not ranked_ids.issubset(comparison_ids):
         raise ValueError("comparison must cover every ranked_pool asset")
+    if not ranked_ids.issubset(score_ids):
+        raise ValueError("ranked_pool must be covered by scores")
+    if comparison_ids != score_ids:
+        raise ValueError("comparison must exactly cover scores asset set")
     ranked_by_asset = ranked_pool.assign(
         _normalized_asset_id=ranked_pool["asset_id"].astype(str).str.strip()
+    ).set_index("_normalized_asset_id", drop=False)
+    scores_by_asset = scores.assign(
+        _normalized_asset_id=scores["asset_id"].astype(str).str.strip()
     ).set_index("_normalized_asset_id", drop=False)
     comparison_by_asset = comparison.assign(
         _normalized_asset_id=comparison["asset_id"].astype(str).str.strip()
     ).set_index("_normalized_asset_id", drop=False)
+    numeric_fields = (
+        "v1_rank",
+        "v2_rank",
+        "rank_change",
+        "v1_final_rank_score",
+        "v1_repair_score",
+        "v1_elasticity_score",
+        "v2_repair_score",
+        "v2_activation_score",
+        "v2_final_rank_score",
+    )
+    for _, row in comparison.iterrows():
+        for field in numeric_fields:
+            value = row[field]
+            if not _is_missing_scalar(value) and not _finite_score(value):
+                raise ValueError(f"comparison {field} must be finite")
     for asset_id in ranked_ids:
-        if comparison_by_asset.loc[asset_id, "v2_rank"] is None or pd.isna(
-            comparison_by_asset.loc[asset_id, "v2_rank"]
-        ):
+        if _is_missing_scalar(comparison_by_asset.loc[asset_id, "v2_rank"]):
             raise ValueError(
                 "comparison v2_rank must be present for every ranked_pool asset"
             )
     for _, row in comparison.iterrows():
-        v2_rank = row["v2_rank"]
-        if v2_rank is None or pd.isna(v2_rank):
-            continue
         asset_id = str(row["asset_id"]).strip()
-        if asset_id not in ranked_by_asset.index:
-            raise ValueError(
-                "comparison v2_rank asset must be present in ranked_pool"
-            )
-        ranked_row = ranked_by_asset.loc[asset_id]
-        if not _finite_score(v2_rank) or not float(v2_rank).is_integer():
-            raise ValueError("comparison v2_rank must contain strict integers")
-        if int(v2_rank) != int(ranked_row["final_rank"]):
-            raise ValueError("comparison v2_rank must match ranked_pool")
-        v1_rank = row["v1_rank"]
-        rank_change = row["rank_change"]
-        if v1_rank is None or pd.isna(v1_rank):
-            if rank_change is not None and not pd.isna(rank_change):
-                raise ValueError(
-                    "comparison rank_change must equal v1_rank - v2_rank"
-                )
-        else:
-            if not _finite_score(v1_rank) or not float(v1_rank).is_integer():
-                raise ValueError("comparison v1_rank must contain strict integers")
-            expected_change = float(v1_rank) - float(v2_rank)
-            if not _finite_score(rank_change) or not math.isclose(
-                float(rank_change), expected_change, rel_tol=0.0, abs_tol=1e-8
-            ):
-                raise ValueError(
-                    "comparison rank_change must equal v1_rank - v2_rank"
-                )
-        for field, ranked_field in (
+        v2_rank = row["v2_rank"]
+        ranked = asset_id in ranked_by_asset.index
+        ranked_row = ranked_by_asset.loc[asset_id] if ranked else None
+        scores_row = scores_by_asset.loc[asset_id]
+
+        for field, score_field in (
             ("v2_repair_score", "composite_score"),
             ("v2_activation_score", "activation_score"),
-            ("v2_final_rank_score", "final_rank_score_v2"),
         ):
             value = row[field]
-            expected = ranked_row[ranked_field]
-            if not _finite_score(value) or not _finite_score(expected):
-                raise ValueError(f"comparison {field} must be finite")
-            if not math.isclose(
+            expected = scores_row[score_field]
+            if _is_missing_scalar(expected):
+                if not _is_missing_scalar(value):
+                    raise ValueError(f"comparison {field} must match scores")
+            elif not _finite_score(expected):
+                raise ValueError(f"scores {score_field} must be finite")
+            elif _is_missing_scalar(value) or not math.isclose(
                 float(value), float(expected), rel_tol=0.0, abs_tol=1e-8
             ):
-                raise ValueError(f"comparison {field} must match ranked_pool")
+                target = "ranked_pool" if ranked else "scores"
+                raise ValueError(f"comparison {field} must match {target}")
+
+        if ranked:
+            if not _finite_score(v2_rank) or not float(v2_rank).is_integer():
+                raise ValueError("comparison v2_rank must contain strict integers")
+            if int(v2_rank) != int(ranked_row["final_rank"]):
+                raise ValueError("comparison v2_rank must match ranked_pool")
+            for field, ranked_field in (
+                ("v2_repair_score", "composite_score"),
+                ("v2_activation_score", "activation_score"),
+                ("v2_final_rank_score", "final_rank_score_v2"),
+            ):
+                value = row[field]
+                expected = ranked_row[ranked_field]
+                if not _finite_score(expected) or _is_missing_scalar(value) or not math.isclose(
+                    float(value), float(expected), rel_tol=0.0, abs_tol=1e-8
+                ):
+                    raise ValueError(f"comparison {field} must match ranked_pool")
+        else:
+            if not _is_missing_scalar(v2_rank):
+                raise ValueError("comparison v2_rank asset must be present in ranked_pool")
+            if not _is_missing_scalar(row["v2_final_rank_score"]):
+                raise ValueError(
+                    "comparison v2_final_rank_score must be missing for non-ranked asset"
+                )
+            if not _is_missing_scalar(row["rank_change"]):
+                raise ValueError(
+                    "comparison rank_change must be missing for non-ranked asset"
+                )
+        v1_rank = row["v1_rank"]
+        rank_change = row["rank_change"]
+        if not _is_missing_scalar(v1_rank) and (
+            not _finite_score(v1_rank) or not float(v1_rank).is_integer()
+        ):
+            raise ValueError("comparison v1_rank must contain strict integers")
+        if ranked:
+            if _is_missing_scalar(v1_rank):
+                if not _is_missing_scalar(rank_change):
+                    raise ValueError(
+                        "comparison rank_change must equal v1_rank - v2_rank"
+                    )
+            else:
+                expected_change = float(v1_rank) - float(v2_rank)
+                if not _finite_score(rank_change) or not math.isclose(
+                    float(rank_change), expected_change, rel_tol=0.0, abs_tol=1e-8
+                ):
+                    raise ValueError(
+                        "comparison rank_change must equal v1_rank - v2_rank"
+                    )
 
 
 def _validate_v2_frames(
@@ -501,6 +578,15 @@ def _validate_v2_frames(
     coverage: dict[str, Any],
 ) -> dict[str, int]:
     _validate_v2_weight_maps(coverage)
+    missing_score_columns = [
+        column
+        for column in ("asset_id", "composite_score", "activation_score")
+        if column not in frames["scores"].columns
+    ]
+    if missing_score_columns:
+        raise ValueError(
+            "scores missing required columns: " + ", ".join(missing_score_columns)
+        )
     missing_comparison = [
         column
         for column in _V2_COMPARISON_REQUIRED_COLUMNS
@@ -588,7 +674,9 @@ def _validate_v2_frames(
         ranked_pool.iloc[final_top_n : final_top_n + expected_reserve_count],
         "reserve",
     )
-    _validate_v2_comparison_truth(frames["comparison"], ranked_pool)
+    _validate_v2_comparison_truth(
+        frames["comparison"], ranked_pool, frames["scores"]
+    )
     preaudit_ids = _validate_assets(frames["preaudit"], "preaudit")[1]
     selected_ids = set(top20_ids) | set(top30_ids) | set(reserve_ids)
     if not selected_ids.issubset(preaudit_ids):
@@ -1035,8 +1123,6 @@ def _normalize_v2_coverage(
         raise ValueError(
             "coverage minimum_evidence_complete must not exceed preaudit_size"
         )
-    if minimum_evidence_complete < ranked_count:
-        raise ValueError("minimum_evidence_complete must cover ranked_pool")
     if "full_pool_evidence_complete" in coverage and _coverage_count(
         coverage, "full_pool_evidence_complete", "coverage"
     ) < ranked_count:

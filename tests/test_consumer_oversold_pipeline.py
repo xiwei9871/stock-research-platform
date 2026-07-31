@@ -11,6 +11,7 @@ import pytest
 from stock_research.consumer_oversold.contracts import (
     ConsumerOversoldConfig,
     UNIFIED_OUTPUT_FILENAMES,
+    V2_OUTPUT_FILENAMES,
 )
 from stock_research.consumer_oversold.evidence import EVIDENCE_COLUMNS, OUTPUT_COLUMNS
 from stock_research.consumer_oversold.pipeline import (
@@ -1369,6 +1370,37 @@ def test_v2_output_dir_publishes_actual_core_frames_for_partial_ranked_pools(
     assert "技术启动 30%" in report
     assert "历史延续 25%" in report
     assert "修复潜力 70% + 反弹弹性 30%" not in report
+
+
+def test_v2_output_dir_publishes_sealed_v2_release_for_real_pipeline(tmp_path):
+    frames, evidence, config = _many_frames(60, 60)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+        output_dir=tmp_path,
+    )
+
+    assert set(result["paths"]) == set(V2_OUTPUT_FILENAMES)
+    assert not ({"expected", "early"} & set(result["paths"]))
+    release = Path(result["paths"]["report"]).parent
+    assert set(path.name for path in release.iterdir()) == {
+        *V2_OUTPUT_FILENAMES.values(),
+        ".manifest.sha256",
+    }
+    manifest = (release / ".manifest.sha256").read_text(encoding="utf-8")
+    assert all(filename in manifest for filename in V2_OUTPUT_FILENAMES.values())
+    assert Path(result["paths"]["top30"]).name == "consumer_oversold_v2_top30.csv"
+    assert Path(result["paths"]["ranked_pool"]).name == (
+        "consumer_oversold_v2_ranked_pool.csv"
+    )
+    assert Path(result["paths"]["comparison"]).name == (
+        "consumer_oversold_v1_v2_comparison.csv"
+    )
+    assert "排名版本：v2" in Path(result["paths"]["report"]).read_text(
+        encoding="utf-8"
+    )
 
 
 def test_v2_preaudit_discovers_unevidenced_candidates_without_v1_oversold_gate():

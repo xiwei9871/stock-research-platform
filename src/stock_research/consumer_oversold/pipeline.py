@@ -1372,7 +1372,7 @@ def _build_v2_result(
         "ranked_pool": ranked_pool,
     }
     if output_dir is not None:
-        published = _publish_v2_compatible_artifacts(
+        published = write_consumer_oversold_artifacts(
             payload,
             output_dir=output_dir,
         )
