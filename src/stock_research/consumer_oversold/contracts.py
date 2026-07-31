@@ -46,7 +46,6 @@ def validate_trade_date(value: str) -> str:
 @dataclass(frozen=True)
 class ConsumerOversoldConfig:
     trade_date: str
-    ranking_version: str = "v1"
     lookback_6m_bars: int = 126
     lookback_12m_bars: int = 252
     valuation_lookback_years: int = 5
@@ -65,6 +64,11 @@ class ConsumerOversoldConfig:
     stock_character_weight: float = 0.25
     market_capacity_weight: float = 0.20
     catalyst_liquidity_weight: float = 0.20
+    preaudit_size: int = 60
+    minimum_evidence_complete: int = 40
+    final_top_n: int = 20
+    reserve_top_n: int = 20
+    ranking_version: str = "v1"
     v2_min_composite_score: float = 30.0
     v2_min_technical_readiness_score: float = 35.0
     v2_repair_rank_weight: float = 0.55
@@ -74,10 +78,6 @@ class ConsumerOversoldConfig:
     residual_price_space_weight: float = 0.20
     capital_efficiency_weight: float = 0.15
     catalyst_timing_weight: float = 0.10
-    preaudit_size: int = 60
-    minimum_evidence_complete: int = 40
-    final_top_n: int = 20
-    reserve_top_n: int = 20
 
     def __post_init__(self) -> None:
         validate_trade_date(self.trade_date)

@@ -1,4 +1,4 @@
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, fields
 
 import pytest
 
@@ -37,6 +37,38 @@ def test_default_config_matches_approved_design():
     assert config.min_base_upside == 0.25
     assert config.max_per_bucket == 20
     assert config.max_priced_in_penalty == 20.0
+
+
+def test_config_preserves_v1_positional_field_order():
+    v1_field_names = (
+        "trade_date",
+        "lookback_6m_bars",
+        "lookback_12m_bars",
+        "valuation_lookback_years",
+        "min_listed_days",
+        "min_avg_turnover_amount",
+        "min_6m_return",
+        "min_12m_drawdown",
+        "min_relative_return",
+        "min_oversold_score",
+        "min_base_upside",
+        "max_per_bucket",
+        "max_priced_in_penalty",
+        "repair_rank_weight",
+        "elasticity_rank_weight",
+        "residual_deviation_weight",
+        "stock_character_weight",
+        "market_capacity_weight",
+        "catalyst_liquidity_weight",
+        "preaudit_size",
+        "minimum_evidence_complete",
+        "final_top_n",
+        "reserve_top_n",
+    )
+
+    field_names = tuple(field.name for field in fields(ConsumerOversoldConfig))
+    assert field_names[: len(v1_field_names)] == v1_field_names
+    assert ConsumerOversoldConfig("2026-07-29", 126).lookback_6m_bars == 126
 
 
 def test_elasticity_ranking_defaults_match_approved_design():
