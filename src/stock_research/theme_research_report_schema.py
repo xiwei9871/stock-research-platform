@@ -93,6 +93,10 @@ REVOKE ALL ON TABLE research.theme_research_report_version FROM PUBLIC;
 REVOKE ALL ON TABLE research.theme_research_report_review_event FROM PUBLIC;
 
 DO $$
+DECLARE
+    relation_name text;
+    column_name text;
+    grantee_name text;
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_owner') THEN
         EXECUTE 'ALTER TABLE research.theme_research_report_version OWNER TO theme_research_owner';
@@ -116,6 +120,59 @@ BEGIN
         ) ON research.theme_research_report_version TO theme_research_runtime';
         EXECUTE 'GRANT SELECT, INSERT ON research.theme_research_report_review_event TO theme_research_runtime';
     END IF;
+
+    FOR relation_name IN
+        SELECT unnest(ARRAY[
+            'theme_research_report_version',
+            'theme_research_report_review_event'
+        ])
+    LOOP
+        FOR grantee_name IN
+            SELECT DISTINCT role.rolname
+            FROM pg_class relation
+            JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+            CROSS JOIN LATERAL aclexplode(
+                COALESCE(relation.relacl, acldefault('r', relation.relowner))
+            ) privilege
+            JOIN pg_roles role ON role.oid = privilege.grantee
+            WHERE namespace.nspname = 'research'
+              AND relation.relname = relation_name
+              AND role.rolname NOT IN (
+                  pg_get_userbyid(relation.relowner),
+                  'theme_research_runtime'
+              )
+        LOOP
+            EXECUTE format(
+                'REVOKE ALL PRIVILEGES ON TABLE research.%I FROM %I',
+                relation_name,
+                grantee_name
+            );
+        END LOOP;
+
+        FOR column_name, grantee_name IN
+            SELECT DISTINCT attribute.attname, role.rolname
+            FROM pg_class relation
+            JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+            JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
+            CROSS JOIN LATERAL aclexplode(attribute.attacl) privilege
+            JOIN pg_roles role ON role.oid = privilege.grantee
+            WHERE namespace.nspname = 'research'
+              AND relation.relname = relation_name
+              AND attribute.attnum > 0
+              AND NOT attribute.attisdropped
+              AND role.rolname NOT IN (
+                  pg_get_userbyid(relation.relowner),
+                  'theme_research_runtime'
+              )
+        LOOP
+            EXECUTE format(
+                'REVOKE ALL PRIVILEGES (%I) ON TABLE research.%I FROM %I',
+                column_name,
+                relation_name,
+                grantee_name
+            );
+        END LOOP;
+    END LOOP;
 END;
 $$;
 """
@@ -229,6 +286,17 @@ _EXPECTED_INDEX_DEFINITIONS = {
     ),
 }
 
+_ALLOWED_RUNTIME_UPDATE_COLUMNS = {
+    "status",
+    "published_at",
+    "published_by_user_id",
+    "rejected_at",
+    "rejected_by_user_id",
+    "rejection_reason",
+    "row_version",
+    "updated_at",
+}
+
 
 class ThemeResearchReportSchemaDriftError(RuntimeError):
     pass
@@ -326,26 +394,89 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
         definition = constraints.get(name, "")
         if definition != _normalized_sql(expected_definition):
             missing.append(f"constraint:{name}")
+    for name in sorted(set(constraints) - set(_EXPECTED_CONSTRAINT_DEFINITIONS)):
+        missing.append(f"constraint_extra:{name}")
 
     cur.execute(
         """
-        SELECT indexname, indexdef
-        FROM pg_indexes
-        WHERE schemaname = 'research'
-          AND tablename = ANY(%s)
+        SELECT
+            index_relation.relname AS indexname,
+            pg_get_indexdef(index_relation.oid) AS indexdef,
+            index.indisunique AS is_unique,
+            index.indisexclusion AS is_exclusion,
+            constraint_record.oid IS NOT NULL AS is_constraint_backed
+        FROM pg_index index
+        JOIN pg_class index_relation ON index_relation.oid = index.indexrelid
+        JOIN pg_class table_relation ON table_relation.oid = index.indrelid
+        JOIN pg_namespace namespace ON namespace.oid = table_relation.relnamespace
+        LEFT JOIN pg_constraint constraint_record
+            ON constraint_record.conindid = index.indexrelid
+        WHERE namespace.nspname = 'research'
+          AND table_relation.relname = ANY(%s)
         """,
         (list(table_names),),
     )
+    index_rows = cur.fetchall()
     indexes = {
         str(_row_value(row, "indexname", 0)): _normalized_sql(
             _row_value(row, "indexdef", 1)
         )
-        for row in cur.fetchall()
+        for row in index_rows
     }
     for name, expected_definition in _EXPECTED_INDEX_DEFINITIONS.items():
         definition = indexes.get(name, "")
         if definition != _normalized_sql(expected_definition):
             missing.append(f"index:{name}")
+    for row in index_rows:
+        name = str(_row_value(row, "indexname", 0))
+        if name in _EXPECTED_INDEX_DEFINITIONS:
+            continue
+        if bool(_row_value(row, "is_constraint_backed", 4)):
+            continue
+        if bool(_row_value(row, "is_unique", 2)) or bool(
+            _row_value(row, "is_exclusion", 3)
+        ):
+            missing.append(f"index_extra:{name}")
+
+    cur.execute(
+        """
+        SELECT trigger.tgname
+        FROM pg_trigger trigger
+        JOIN pg_class relation ON relation.oid = trigger.tgrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'research'
+          AND relation.relname = ANY(%s)
+          AND NOT trigger.tgisinternal
+        """,
+        (list(table_names),),
+    )
+    for row in cur.fetchall():
+        missing.append(f"trigger:{_row_value(row, 'tgname')}")
+
+    cur.execute(
+        """
+        SELECT
+            relation.relname AS table_name,
+            relation.relrowsecurity AS rls_enabled,
+            relation.relforcerowsecurity AS rls_forced,
+            policy.polname AS policy_name
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        LEFT JOIN pg_policy policy ON policy.polrelid = relation.oid
+        WHERE namespace.nspname = 'research'
+          AND relation.relname = ANY(%s)
+        """,
+        (list(table_names),),
+    )
+    for row in cur.fetchall():
+        table_name = str(_row_value(row, "table_name", 0))
+        if bool(_row_value(row, "rls_enabled", 1)) or bool(
+            _row_value(row, "rls_forced", 2)
+        ):
+            missing.append(f"rls:{table_name}")
+        policy_name = _row_value(row, "policy_name", 3)
+        if policy_name:
+            missing.append(f"policy:{table_name}.{policy_name}")
 
     cur.execute(
         """
@@ -381,6 +512,94 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             missing.append(f"public_privilege:{table_name}")
         if "theme_research_owner" in roles and owner_name != "theme_research_owner":
             missing.append(f"owner:{table_name}")
+
+    cur.execute(
+        """
+        SELECT
+            relation.relname AS table_name,
+            pg_get_userbyid(relation.relowner) AS owner_name,
+            privilege.grantee,
+            role.rolname AS grantee_name,
+            privilege.privilege_type,
+            privilege.is_grantable
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        CROSS JOIN LATERAL aclexplode(
+            COALESCE(relation.relacl, acldefault('r', relation.relowner))
+        ) privilege
+        LEFT JOIN pg_roles role ON role.oid = privilege.grantee
+        WHERE namespace.nspname = 'research'
+          AND relation.relname = ANY(%s)
+        """,
+        (list(table_names),),
+    )
+    for row in cur.fetchall():
+        table_name = str(_row_value(row, "table_name", 0))
+        owner_name = str(_row_value(row, "owner_name", 1))
+        grantee_oid = int(_row_value(row, "grantee", 2))
+        grantee_name = str(_row_value(row, "grantee_name", 3) or "PUBLIC")
+        privilege_type = str(_row_value(row, "privilege_type", 4))
+        is_grantable = bool(_row_value(row, "is_grantable", 5))
+        if grantee_oid == 0:
+            missing.append(f"public_privilege:{table_name}")
+            continue
+        if grantee_name == owner_name:
+            continue
+        if grantee_name == "theme_research_runtime":
+            allowed = {
+                "theme_research_report_version": {"SELECT", "INSERT"},
+                "theme_research_report_review_event": {"SELECT", "INSERT"},
+            }[table_name]
+            if privilege_type in allowed and not is_grantable:
+                continue
+        missing.append(f"acl:{table_name}.{grantee_name}.{privilege_type}")
+
+    cur.execute(
+        """
+        SELECT
+            relation.relname AS table_name,
+            attribute.attname AS column_name,
+            pg_get_userbyid(relation.relowner) AS owner_name,
+            privilege.grantee,
+            role.rolname AS grantee_name,
+            privilege.privilege_type,
+            privilege.is_grantable
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
+        CROSS JOIN LATERAL aclexplode(attribute.attacl) privilege
+        LEFT JOIN pg_roles role ON role.oid = privilege.grantee
+        WHERE namespace.nspname = 'research'
+          AND relation.relname = ANY(%s)
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+        """,
+        (list(table_names),),
+    )
+    for row in cur.fetchall():
+        table_name = str(_row_value(row, "table_name", 0))
+        column_name = str(_row_value(row, "column_name", 1))
+        owner_name = str(_row_value(row, "owner_name", 2))
+        grantee_oid = int(_row_value(row, "grantee", 3))
+        grantee_name = str(_row_value(row, "grantee_name", 4) or "PUBLIC")
+        privilege_type = str(_row_value(row, "privilege_type", 5))
+        is_grantable = bool(_row_value(row, "is_grantable", 6))
+        if grantee_oid == 0:
+            missing.append(f"public_privilege:{table_name}.{column_name}")
+            continue
+        if grantee_name == owner_name:
+            continue
+        if (
+            grantee_name == "theme_research_runtime"
+            and table_name == "theme_research_report_version"
+            and column_name in _ALLOWED_RUNTIME_UPDATE_COLUMNS
+            and privilege_type == "UPDATE"
+            and not is_grantable
+        ):
+            continue
+        missing.append(
+            f"acl:{table_name}.{column_name}.{grantee_name}.{privilege_type}"
+        )
 
     structural_drift = any(
         item.startswith(
@@ -463,20 +682,10 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
                 list(_EXPECTED_COLUMNS["theme_research_report_version"]),
             ),
         )
-        allowed_updates = {
-            "status",
-            "published_at",
-            "published_by_user_id",
-            "rejected_at",
-            "rejected_by_user_id",
-            "rejection_reason",
-            "row_version",
-            "updated_at",
-        }
         for row in cur.fetchall():
             column_name = str(_row_value(row, "column_name", 1))
             can_update = bool(_row_value(row, "can_update", 0))
-            if can_update != (column_name in allowed_updates):
+            if can_update != (column_name in _ALLOWED_RUNTIME_UPDATE_COLUMNS):
                 missing.append(
                     f"column_privilege:theme_research_report_version.{column_name}"
                 )
@@ -516,6 +725,7 @@ def apply_theme_research_report_schema(
                 "privilege:",
                 "public_privilege:",
                 "column_privilege:",
+                "acl:",
             )
             if inspection["status"] == "drifted" and any(
                 not str(item).startswith(repairable_prefixes)

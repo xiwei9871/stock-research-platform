@@ -219,7 +219,7 @@ def test_report_schema_inspection_requires_owner_and_runtime_roles() -> None:
         def fetchall(self):
             if "c.relkind IN ('r', 'p')" in self.sql and "a.attname" not in self.sql:
                 return [{"table_name": table_name} for table_name in schema._EXPECTED_COLUMNS]
-            if "JOIN pg_attribute" in self.sql:
+            if "JOIN pg_attribute" in self.sql and "format_type" in self.sql:
                 return [
                     {
                         "table_name": table_name,
@@ -236,12 +236,34 @@ def test_report_schema_inspection_requires_owner_and_runtime_roles() -> None:
                     {"conname": name, "definition": definition}
                     for name, definition in schema._EXPECTED_CONSTRAINT_DEFINITIONS.items()
                 ]
-            if "FROM pg_indexes" in self.sql:
+            if "FROM pg_index index" in self.sql:
                 return [
-                    {"indexname": name, "indexdef": definition}
+                    {
+                        "indexname": name,
+                        "indexdef": definition,
+                        "is_unique": name.startswith("uq_"),
+                        "is_exclusion": False,
+                        "is_constraint_backed": False,
+                    }
                     for name, definition in schema._EXPECTED_INDEX_DEFINITIONS.items()
                 ]
+            if "FROM pg_trigger trigger" in self.sql:
+                return []
+            if "LEFT JOIN pg_policy" in self.sql:
+                return [
+                    {
+                        "table_name": table_name,
+                        "rls_enabled": False,
+                        "rls_forced": False,
+                        "policy_name": None,
+                    }
+                    for table_name in schema._EXPECTED_COLUMNS
+                ]
             if "SELECT rolname FROM pg_roles" in self.sql:
+                return []
+            if "relation.relacl" in self.sql and "privilege.grantee" in self.sql:
+                return []
+            if "attribute.attacl" in self.sql and "privilege.grantee" in self.sql:
                 return []
             if "pg_get_userbyid" in self.sql:
                 return [
@@ -776,6 +798,350 @@ def test_postgres_apply_rejects_weakened_same_name_constraint(postgres_conn) -> 
         finally:
             cleanup.close()
         apply_theme_research_report_schema(service=TEST_SERVICE)
+
+
+def test_postgres_apply_rejects_extra_check_constraint(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        ThemeResearchReportSchemaDriftError,
+        apply_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            ALTER TABLE research.theme_research_report_version
+            ADD CONSTRAINT ck_theme_research_report_extra_title CHECK (title <> '')
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    try:
+        with pytest.raises(ThemeResearchReportSchemaDriftError, match="constraint_extra:.*extra_title"):
+            apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                """
+                ALTER TABLE research.theme_research_report_version
+                DROP CONSTRAINT IF EXISTS ck_theme_research_report_extra_title
+                """
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_postgres_apply_rejects_user_trigger(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        ThemeResearchReportSchemaDriftError,
+        apply_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            CREATE OR REPLACE FUNCTION research.theme_research_report_test_trigger()
+            RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                RETURN NEW;
+            END;
+            $$
+            """
+        )
+        connection.execute(
+            """
+            CREATE TRIGGER trg_theme_research_report_extra_before
+            BEFORE INSERT ON research.theme_research_report_version
+            FOR EACH ROW EXECUTE FUNCTION research.theme_research_report_test_trigger()
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    try:
+        with pytest.raises(ThemeResearchReportSchemaDriftError, match="trigger:.*extra_before"):
+            apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                "DROP TRIGGER IF EXISTS trg_theme_research_report_extra_before "
+                "ON research.theme_research_report_version"
+            )
+            cleanup.execute(
+                "DROP FUNCTION IF EXISTS research.theme_research_report_test_trigger()"
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_postgres_apply_rejects_rls_and_policy(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        ThemeResearchReportSchemaDriftError,
+        apply_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            "ALTER TABLE research.theme_research_report_version ENABLE ROW LEVEL SECURITY"
+        )
+        connection.execute(
+            """
+            CREATE POLICY theme_research_report_extra_policy
+            ON research.theme_research_report_version
+            FOR SELECT USING (true)
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    try:
+        with pytest.raises(ThemeResearchReportSchemaDriftError, match="rls:|policy:"):
+            apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                "DROP POLICY IF EXISTS theme_research_report_extra_policy "
+                "ON research.theme_research_report_version"
+            )
+            cleanup.execute(
+                "ALTER TABLE research.theme_research_report_version DISABLE ROW LEVEL SECURITY"
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_postgres_allows_extra_nonunique_performance_index(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            CREATE INDEX idx_theme_research_report_extra_title
+            ON research.theme_research_report_version (title)
+            """
+        )
+        connection.commit()
+        assert inspect_theme_research_report_schema(connection.cursor())["status"] == "current"
+    finally:
+        connection.close()
+
+    try:
+        apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                "DROP INDEX IF EXISTS research.idx_theme_research_report_extra_title"
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_postgres_rejects_extra_unique_index(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        ThemeResearchReportSchemaDriftError,
+        apply_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX uq_theme_research_report_extra_title
+            ON research.theme_research_report_version (title)
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    try:
+        with pytest.raises(ThemeResearchReportSchemaDriftError, match="index_extra:.*extra_title"):
+            apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                "DROP INDEX IF EXISTS research.uq_theme_research_report_extra_title"
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_postgres_apply_revokes_unknown_grantee_privileges(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    role_name = "theme_research_report_acl_test"
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        database_name = connection.execute("SELECT current_database()").fetchone()[0]
+        if not database_name.endswith("_test"):
+            pytest.fail(f"refusing to run integration tests against {database_name}")
+        connection.execute(f"DROP ROLE IF EXISTS {role_name}")
+        connection.execute(f"CREATE ROLE {role_name} NOLOGIN")
+        connection.execute(
+            f"""
+            GRANT DELETE, TRUNCATE ON research.theme_research_report_version
+            TO {role_name}
+            """
+        )
+        connection.execute(
+            f"""
+            GRANT UPDATE (title) ON research.theme_research_report_version
+            TO {role_name}
+            """
+        )
+        connection.execute(
+            """
+            GRANT UPDATE (summary) ON research.theme_research_report_version
+            TO PUBLIC
+            """
+        )
+        connection.commit()
+        inspection = inspect_theme_research_report_schema(connection.cursor())
+        assert inspection["status"] == "drifted"
+        assert any(item.startswith("acl:") for item in inspection["missing"])
+        assert (
+            "public_privilege:theme_research_report_version.summary"
+            in inspection["missing"]
+        )
+    finally:
+        connection.close()
+
+    try:
+        apply_theme_research_report_schema(service=TEST_SERVICE)
+        verified = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            privileges = verified.execute(
+                """
+                SELECT
+                    has_table_privilege(%s, 'research.theme_research_report_version', 'DELETE'),
+                    has_table_privilege(%s, 'research.theme_research_report_version', 'TRUNCATE'),
+                    has_column_privilege(
+                        %s, 'research.theme_research_report_version', 'title', 'UPDATE'
+                    ),
+                    EXISTS (
+                        SELECT 1
+                        FROM pg_attribute attribute
+                        CROSS JOIN LATERAL aclexplode(attribute.attacl) privilege
+                        WHERE attribute.attrelid =
+                            'research.theme_research_report_version'::regclass
+                          AND attribute.attname = 'summary'
+                          AND privilege.grantee = 0
+                          AND privilege.privilege_type = 'UPDATE'
+                    )
+                """,
+                (role_name, role_name, role_name),
+            ).fetchone()
+            assert privileges == (False, False, False, False)
+            assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+        finally:
+            verified.close()
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                "REVOKE ALL PRIVILEGES ON TABLE "
+                "research.theme_research_report_version FROM PUBLIC"
+            )
+            cleanup.execute(
+                "REVOKE ALL PRIVILEGES (summary) ON TABLE "
+                "research.theme_research_report_version FROM PUBLIC"
+            )
+            cleanup.execute(
+                f"REVOKE ALL PRIVILEGES ON TABLE "
+                f"research.theme_research_report_version FROM {role_name}"
+            )
+            cleanup.execute(
+                f"REVOKE ALL PRIVILEGES (title) ON TABLE "
+                f"research.theme_research_report_version FROM {role_name}"
+            )
+            cleanup.execute(f"DROP ROLE IF EXISTS {role_name}")
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_postgres_apply_removes_runtime_grant_options_and_column_references(
+    postgres_conn,
+) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            GRANT SELECT ON research.theme_research_report_version
+            TO theme_research_runtime WITH GRANT OPTION
+            """
+        )
+        connection.execute(
+            """
+            GRANT REFERENCES (theme_id) ON research.theme_research_report_version
+            TO theme_research_runtime
+            """
+        )
+        connection.commit()
+        inspection = inspect_theme_research_report_schema(connection.cursor())
+        assert inspection["status"] == "drifted"
+        assert any(item.startswith("acl:") for item in inspection["missing"])
+    finally:
+        connection.close()
+
+    apply_theme_research_report_schema(service=TEST_SERVICE)
+    verified = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+        grants = verified.execute(
+            """
+            SELECT
+                has_table_privilege(
+                    'theme_research_runtime',
+                    'research.theme_research_report_version',
+                    'SELECT WITH GRANT OPTION'
+                ),
+                has_column_privilege(
+                    'theme_research_runtime',
+                    'research.theme_research_report_version',
+                    'theme_id',
+                    'REFERENCES'
+                )
+            """
+        ).fetchone()
+        assert grants == (False, False)
+    finally:
+        verified.close()
 
 
 def test_postgres_enforces_report_status_pdf_pair_and_one_published_version(postgres_conn) -> None:
