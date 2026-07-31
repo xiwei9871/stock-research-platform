@@ -160,6 +160,24 @@ def _activation_row(asset_id: str, **overrides) -> dict[str, object]:
         "stock_code": f"{len(asset_id):06d}",
         "stock_name": f"name-{asset_id}",
         "technical_feature_coverage": True,
+        "return_5d": 0.01,
+        "ma5_slope_5d": 0.01,
+        "ma10_slope_5d": 0.01,
+        "relative_return_5d": 0.01,
+        "relative_strength_improvement_5d": 0.01,
+        "amount_ratio_5d_20d": 1.10,
+        "turnover_change_5d_20d": 0.10,
+        "distance_ma5": 0.01,
+        "distance_ma10": 0.01,
+        "distance_ma20": 0.01,
+        "position_20d": 0.50,
+        "volatility_ratio_5d_20d": 1.0,
+        "new_low_20d_within_3d": False,
+        "trend_turn_score": 50.0,
+        "relative_strength_improvement_score": 50.0,
+        "volume_turnover_confirmation_score": 50.0,
+        "moving_average_location_score": 50.0,
+        "volatility_transition_score": 50.0,
         "technical_readiness_score": 60.0,
         "falling_knife": False,
         "return_10d": 0.05,
@@ -809,10 +827,39 @@ def test_activation_overextension_requires_all_three_conditions():
 
 def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
     activation = _activation()
+    technical_raw = {
+        "return_5d": -10.0,
+        "ma5_slope_5d": -10.0,
+        "ma10_slope_5d": -10.0,
+        "relative_return_5d": 0.0,
+        "relative_strength_improvement_5d": -10.0,
+        "amount_ratio_5d_20d": -10.0,
+        "turnover_change_5d_20d": -10.0,
+        "distance_ma5": -10.0,
+        "distance_ma10": -10.0,
+        "distance_ma20": -10.0,
+        "position_20d": -10.0,
+        "volatility_ratio_5d_20d": 3.0,
+    }
+    knife_raw = {
+        "return_5d": 10.0,
+        "ma5_slope_5d": -1.0,
+        "ma10_slope_5d": 10.0,
+        "relative_return_5d": -5.0,
+        "relative_strength_improvement_5d": 10.0,
+        "amount_ratio_5d_20d": 10.0,
+        "turnover_change_5d_20d": 10.0,
+        "distance_ma5": -0.20,
+        "distance_ma10": -0.30,
+        "distance_ma20": 10.0,
+        "position_20d": 10.0,
+        "volatility_ratio_5d_20d": 1.0,
+        "new_low_20d_within_3d": True,
+    }
     rows = [
         _activation_row("pass"),
-        _activation_row("technical", technical_readiness_score=34.99),
-        _activation_row("knife", falling_knife=True),
+        _activation_row("technical", technical_readiness_score=34.99, **technical_raw),
+        _activation_row("knife", falling_knife=True, **knife_raw),
         _activation_row("capacity", market_capacity_coverage=False),
         _activation_row("coverage", catalyst_verifiability_score=np.nan),
     ]
@@ -838,6 +885,21 @@ def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
         "activation_coverage_incomplete"
     )
 
+    combined_raw = {
+        "return_5d": -10.0,
+        "ma5_slope_5d": -10.0,
+        "ma10_slope_5d": -10.0,
+        "relative_return_5d": -10.0,
+        "relative_strength_improvement_5d": -10.0,
+        "amount_ratio_5d_20d": -10.0,
+        "turnover_change_5d_20d": -10.0,
+        "distance_ma5": -10.0,
+        "distance_ma10": -10.0,
+        "distance_ma20": -10.0,
+        "position_20d": -10.0,
+        "volatility_ratio_5d_20d": 3.0,
+        "new_low_20d_within_3d": True,
+    }
     combined = pd.DataFrame(
         [
             _activation_row(
@@ -846,12 +908,16 @@ def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
                 falling_knife=True,
                 market_capacity_coverage=False,
                 catalyst_verifiability_score=np.nan,
-            )
+                **combined_raw,
+            ),
+            _activation_row("combined-peer-1", return_5d=1.0, relative_return_5d=1.0),
+            _activation_row("combined-peer-2", return_5d=2.0, relative_return_5d=2.0),
+            _activation_row("combined-peer-3", return_5d=3.0, relative_return_5d=3.0),
         ]
     )
-    reason = activation.score_activation_candidates(combined, _config()).iloc[0][
-        "activation_exclusion_reasons"
-    ]
+    reason = activation.score_activation_candidates(combined, _config()).set_index(
+        "asset_id"
+    ).loc["combined", "activation_exclusion_reasons"]
     assert reason == "|".join(
         sorted(
             {
@@ -1046,3 +1112,117 @@ def test_activation_requires_strict_boolean_first_gate_eligibility(invalid):
         activation.score_activation_candidates(
             pd.DataFrame([_activation_row("A", eligible=invalid)]), _config()
         )
+
+
+def test_activation_recomputes_technical_scores_inside_first_gate_eligible_pool():
+    activation = _activation()
+    target = _activation_row(
+        "target",
+        return_5d=-1.0,
+        ma5_slope_5d=-0.10,
+        ma10_slope_5d=-0.05,
+        relative_return_5d=-5.0,
+        relative_strength_improvement_5d=-1.0,
+        amount_ratio_5d_20d=0.5,
+        turnover_change_5d_20d=-0.5,
+        distance_ma5=-0.20,
+        distance_ma10=-0.30,
+        distance_ma20=-0.40,
+        position_20d=0.0,
+        volatility_ratio_5d_20d=3.0,
+        new_low_20d_within_3d=True,
+        technical_readiness_score=99.0,
+        falling_knife=False,
+    )
+    peers = []
+    for index, level in enumerate((0.0, 1.0, 2.0)):
+        peers.append(
+            _activation_row(
+                f"peer{index}",
+                return_5d=level,
+                ma5_slope_5d=level,
+                ma10_slope_5d=level,
+                relative_return_5d=level,
+                relative_strength_improvement_5d=level,
+                amount_ratio_5d_20d=level + 1.0,
+                turnover_change_5d_20d=level,
+                distance_ma5=level,
+                distance_ma10=level,
+                distance_ma20=level,
+                position_20d=level,
+                volatility_ratio_5d_20d=1.0,
+                technical_readiness_score=99.0,
+                falling_knife=False,
+            )
+        )
+    baseline = pd.DataFrame([target, *peers])
+    raw_outlier = {
+        field: 1_000_000.0
+        for field in (
+            "return_5d",
+            "ma5_slope_5d",
+            "ma10_slope_5d",
+            "relative_strength_improvement_5d",
+            "amount_ratio_5d_20d",
+            "turnover_change_5d_20d",
+            "distance_ma5",
+            "distance_ma10",
+            "distance_ma20",
+            "position_20d",
+        )
+    }
+    outlier = _activation_row(
+        "outlier",
+        eligible=False,
+        relative_return_5d=-1_000_000.0,
+        volatility_ratio_5d_20d=1_000_000.0,
+        new_low_20d_within_3d=True,
+        technical_readiness_score=99.0,
+        falling_knife=False,
+        **raw_outlier,
+    )
+
+    expected = activation.score_activation_candidates(baseline, _config()).set_index(
+        "asset_id"
+    )
+    actual = activation.score_activation_candidates(
+        pd.concat([baseline, pd.DataFrame([outlier])], ignore_index=True), _config()
+    ).set_index("asset_id")
+
+    comparison_fields = (*SCORE_COLUMNS, "activation_score", "activation_eligible")
+    pd.testing.assert_frame_equal(
+        actual.loc[expected.index, list(comparison_fields)],
+        expected.loc[:, list(comparison_fields)],
+    )
+    assert expected.loc["target", "falling_knife"]
+    assert expected.loc["target", "technical_readiness_score"] != 99.0
+    for field in SCORE_COLUMNS[:-1]:
+        assert pd.isna(actual.loc["outlier", field]), field
+    assert not actual.loc["outlier", "falling_knife"]
+
+
+def test_activation_zero_verifiability_forces_zero_catalyst_timing_for_singleton():
+    activation = _activation()
+    result = activation.score_activation_candidates(
+        pd.DataFrame([_activation_row("zero", catalyst_verifiability_score=0.0)]),
+        _config(),
+    ).iloc[0]
+
+    assert result["activation_coverage"]
+    assert result["catalyst_timing_score"] == 0.0
+
+
+def test_activation_all_zero_verifiability_forces_zero_catalyst_timing():
+    activation = _activation()
+    rows = pd.DataFrame(
+        [
+            _activation_row("A", catalyst_verifiability_score=0.0),
+            _activation_row("B", catalyst_verifiability_score=0.0),
+            _activation_row("C", catalyst_verifiability_score=0.0),
+        ]
+    )
+
+    result = activation.score_activation_candidates(rows, _config())
+
+    assert result["activation_coverage"].all()
+    assert result["catalyst_timing_score"].tolist() == [0.0, 0.0, 0.0]

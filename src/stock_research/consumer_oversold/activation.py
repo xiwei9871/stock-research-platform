@@ -91,6 +91,20 @@ _ACTIVATION_CONTINUATION_FIELDS = (
     "max_limit_up_streak_2y",
     "strong_move_retention_5d_rate",
 )
+_ACTIVATION_TECHNICAL_RAW_NUMERIC_FIELDS = (
+    "return_5d",
+    "ma5_slope_5d",
+    "ma10_slope_5d",
+    "relative_return_5d",
+    "relative_strength_improvement_5d",
+    "amount_ratio_5d_20d",
+    "turnover_change_5d_20d",
+    "distance_ma5",
+    "distance_ma10",
+    "distance_ma20",
+    "position_20d",
+    "volatility_ratio_5d_20d",
+)
 _ACTIVATION_POST_EVENT_FIELDS = (
     "positive_after_big_up_1d_rate",
     "positive_after_big_up_3d_rate",
@@ -120,6 +134,7 @@ _ACTIVATION_CAPITAL_FIELDS = (
 _ACTIVATION_NUMERIC_FIELDS = (
     "technical_readiness_score",
     "return_10d",
+    *_ACTIVATION_TECHNICAL_RAW_NUMERIC_FIELDS,
     *_ACTIVATION_CONTINUATION_FIELDS,
     *_ACTIVATION_RESIDUAL_FIELDS,
     *_ACTIVATION_CAPITAL_FIELDS,
@@ -127,6 +142,7 @@ _ACTIVATION_NUMERIC_FIELDS = (
 )
 _ACTIVATION_BOOLEAN_FIELDS = (
     "technical_feature_coverage",
+    "new_low_20d_within_3d",
     "falling_knife",
     "residual_deviation_coverage",
     "stock_character_coverage",
@@ -414,7 +430,11 @@ def _component_score(
     ).where(coverage)
 
 
-def score_technical_readiness(features: pd.DataFrame) -> pd.DataFrame:
+def score_technical_readiness(
+    features: pd.DataFrame,
+    *,
+    scoring_universe: pd.Series | None = None,
+) -> pd.DataFrame:
     """Add direction-aware technical scores and the falling-knife guard.
 
     Volatility transition uses ``max(0, 1 - abs(ratio - 1))`` before ranking.
@@ -424,6 +444,13 @@ def score_technical_readiness(features: pd.DataFrame) -> pd.DataFrame:
     _require_columns(features, _SCORE_INPUT_COLUMNS, "features")
     frame = features.copy(deep=True).reset_index(drop=True)
     coverage = frame["technical_feature_coverage"].eq(True)
+    if scoring_universe is not None:
+        universe = pd.Series(scoring_universe).reset_index(drop=True)
+        if len(universe) != len(frame):
+            raise ValueError("scoring_universe length must match features")
+        if not universe.map(lambda value: isinstance(value, (bool, np.bool_))).all():
+            raise ValueError("scoring_universe must contain strict booleans")
+        coverage &= universe.astype(bool)
 
     frame["trend_turn_score"] = _component_score(
         frame, ("return_5d", "ma5_slope_5d", "ma10_slope_5d"), coverage
@@ -652,6 +679,19 @@ def score_activation_candidates(
         & coverage_flags
     ).astype(bool)
     activation_coverage = (frame["eligible"] & component_coverage).astype(bool)
+    technical_universe = (
+        frame["eligible"]
+        & frame["technical_feature_coverage"]
+        & frame[list(_ACTIVATION_TECHNICAL_RAW_NUMERIC_FIELDS)].notna().all(axis=1)
+        & boolean_present["new_low_20d_within_3d"]
+    ).astype(bool)
+
+    technical_scored = score_technical_readiness(
+        frame,
+        scoring_universe=technical_universe,
+    )
+    for field in SCORE_COLUMNS:
+        frame[field] = technical_scored[field]
 
     strong_move_score = _activation_percentile_mean(
         frame,
@@ -757,9 +797,13 @@ def score_activation_candidates(
     timing_window_score = pd.Series(
         timing_window_values, index=frame.index, dtype="float64"
     )
-    frame["catalyst_timing_score"] = (
+    catalyst_timing_score = (
         0.50 * verification_percentile + 0.50 * timing_window_score
     ).where(activation_coverage)
+    frame["catalyst_timing_score"] = catalyst_timing_score.mask(
+        activation_coverage & frame["catalyst_verifiability_score"].le(0.0),
+        0.0,
+    )
 
     frame["activation_coverage"] = activation_coverage
     frame["activation_score"] = (
