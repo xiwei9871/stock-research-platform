@@ -6293,6 +6293,16 @@ table.data-table td {
   font-size: 12px;
 }
 
+.theme-report-history-error,
+.theme-report-history-loading {
+  color: #667085;
+  font-size: 12px;
+}
+
+.theme-report-history-error {
+  color: #9a6700;
+}
+
 .theme-report-version-select select {
   width: 100%;
   min-width: 210px;

@@ -525,4 +525,36 @@ describe('ThemeResearchWorkspace', () => {
     expect(screen.getByLabelText('报告阅读器测试替身')).toHaveTextContent('report/v2');
     expect(api.fetchThemeResearchTheme).not.toHaveBeenCalled();
   });
+
+  it('encodes theme identifiers when opening index and tab routes', async () => {
+    const specialTheme = {
+      ...payload.themes.items[0],
+      theme_id: 'theme/a%研究',
+      theme_name: '特殊主题'
+    };
+    api.fetchThemeResearchThemes.mockResolvedValueOnce({ total: 1, items: [specialTheme] });
+    const navigate = vi.fn();
+    const { unmount } = render(
+      <ThemeResearchWorkspace pathname="/theme-research" onNavigate={navigate} onOpenStock={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开特殊主题' }));
+    expect(navigate).toHaveBeenCalledWith('/theme-research/theme%2Fa%25%E7%A0%94%E7%A9%B6');
+    unmount();
+
+    api.fetchThemeResearchTheme.mockResolvedValueOnce({
+      ...payload.detail,
+      theme: { ...payload.detail.theme, theme_id: 'theme/a%研究' }
+    });
+    render(
+      <ThemeResearchWorkspace
+        pathname="/theme-research/theme%2Fa%25%E7%A0%94%E7%A9%B6"
+        onNavigate={navigate}
+        onOpenStock={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: '产业链节点' }));
+    expect(navigate).toHaveBeenLastCalledWith('/theme-research/theme%2Fa%25%E7%A0%94%E7%A9%B6/nodes');
+  });
 });

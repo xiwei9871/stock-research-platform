@@ -103,6 +103,10 @@ describe('ThemeResearchReportReader', () => {
     expect(screen.getByText('液冷')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '报告历史版本' })).toHaveTextContent('2.0');
     expect(screen.getByRole('combobox', { name: '报告历史版本' })).toHaveTextContent('1.0');
+    expect(screen.getByRole('combobox', { name: '报告历史版本' })).toHaveTextContent('当前发布');
+    expect(screen.getByRole('combobox', { name: '报告历史版本' })).toHaveTextContent('历史归档');
+    expect(screen.getByLabelText('生成时间')).toHaveAttribute('datetime', '2026-07-30T08:00:00+08:00');
+    expect(screen.getByLabelText('发布时间')).toHaveAttribute('datetime', '2026-07-31T10:00:00+08:00');
     expect(screen.getByRole('link', { name: '下载 PDF' })).toHaveAttribute(
       'href',
       '/api/research/theme-decomposition/themes/theme-a/reports/report-v2/pdf'
@@ -114,6 +118,29 @@ describe('ThemeResearchReportReader', () => {
       target: { value: 'report-v1' }
     });
     expect(navigate).toHaveBeenCalledWith('/theme-research/theme-a/report/report-v1');
+  });
+
+  it('keeps the document readable when approved history is temporarily unavailable', async () => {
+    api.fetchThemeResearchReports.mockRejectedValueOnce(new Error('GET history failed with 503'));
+
+    render(<ThemeResearchReportReader themeId="theme-a" reportVersionId="report-v2" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'AI 供电主题研究（第二版）' })).toBeInTheDocument();
+    expect(screen.getByText('历史版本暂不可用')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '报告历史版本' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '报告服务暂不可用' })).not.toBeInTheDocument();
+  });
+
+  it('labels an archived approved report as a historical version', async () => {
+    api.fetchThemeResearchReportDocument.mockResolvedValueOnce(
+      documentFor('report-v1', 'AI 供电主题研究（第一版）')
+    );
+
+    render(<ThemeResearchReportReader themeId="theme-a" reportVersionId="report-v1" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'AI 供电主题研究（第一版）' })).toBeInTheDocument();
+    expect(screen.getByText('历史版本')).toBeInTheDocument();
+    expect(screen.queryByText('已发布')).not.toBeInTheDocument();
   });
 
   it('shows a not-found state with a route back to the theme overview', async () => {
@@ -155,5 +182,6 @@ describe('ThemeResearchReportReader', () => {
     staleDocument.resolve(documentFor('report-v2', '不应出现的旧报告'));
     await Promise.resolve();
     expect(screen.queryByRole('heading', { name: '不应出现的旧报告' })).not.toBeInTheDocument();
+    expect(api.fetchThemeResearchReports).toHaveBeenCalledTimes(1);
   });
 });

@@ -19,6 +19,16 @@ function reportPath(themeId: string, reportVersionId: string) {
   return `/theme-research/${encodeURIComponent(themeId)}/report/${encodeURIComponent(reportVersionId)}`;
 }
 
+function displayTimestamp(value: string) {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return '时间未知';
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    hour12: false
+  }).format(timestamp);
+}
+
 function errorKind(reason: unknown): ReportError {
   const message = reason instanceof Error ? reason.message : String(reason);
   if (/failed with 404(?:\D|$)/.test(message)) return 'not_found';
@@ -27,7 +37,8 @@ function errorKind(reason: unknown): ReportError {
 }
 
 export function ThemeResearchReportReader({ themeId, reportVersionId, onNavigate }: Props) {
-  const [reports, setReports] = useState<ThemeResearchReportVersion[]>([]);
+  const [reports, setReports] = useState<ThemeResearchReportVersion[] | null>(null);
+  const [historyError, setHistoryError] = useState(false);
   const [document, setDocument] = useState<ThemeResearchReportDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ReportError | null>(null);
@@ -35,19 +46,30 @@ export function ThemeResearchReportReader({ themeId, reportVersionId, onNavigate
 
   useEffect(() => {
     let cancelled = false;
+    setReports(null);
+    setHistoryError(false);
+    fetchThemeResearchReports(themeId)
+      .then((history) => {
+        if (cancelled) return;
+        setReports(history.items);
+      })
+      .catch(() => {
+        if (!cancelled) setHistoryError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [themeId]);
+
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setDocument(null);
-    setReports([]);
-
-    Promise.all([
-      fetchThemeResearchReports(themeId),
-      fetchThemeResearchReportDocument(themeId, reportVersionId)
-    ])
-      .then(([history, nextDocument]) => {
-        if (cancelled) return;
-        setReports(history.items);
-        setDocument(nextDocument);
+    fetchThemeResearchReportDocument(themeId, reportVersionId)
+      .then((nextDocument) => {
+        if (!cancelled) setDocument(nextDocument);
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(errorKind(reason));
@@ -115,25 +137,33 @@ export function ThemeResearchReportReader({ themeId, reportVersionId, onNavigate
           <ArrowLeft size={18} aria-hidden="true" />
         </button>
         <div>
-          <span className="theme-research-status is-positive">已发布</span>
+          <span className={`theme-research-status ${document.status === 'published' ? 'is-positive' : 'is-neutral'}`}>
+            {document.status === 'published' ? '已发布' : '历史版本'}
+          </span>
           <h1>{document.title}</h1>
           <p>{document.summary}</p>
         </div>
         <div className="theme-report-reader-controls">
-          <label className="theme-report-version-select">
-            <span>报告历史版本</span>
-            <select
-              aria-label="报告历史版本"
-              value={reportVersionId}
-              onChange={(event) => onNavigate(reportPath(themeId, event.target.value))}
-            >
-              {reports.map((report) => (
-                <option key={report.report_version_id} value={report.report_version_id}>
-                  {report.version} · {report.title}
-                </option>
-              ))}
-            </select>
-          </label>
+          {reports ? (
+            <label className="theme-report-version-select">
+              <span>报告历史版本</span>
+              <select
+                aria-label="报告历史版本"
+                value={reportVersionId}
+                onChange={(event) => onNavigate(reportPath(themeId, event.target.value))}
+              >
+                {reports.map((report) => (
+                  <option key={report.report_version_id} value={report.report_version_id}>
+                    {report.version} · {report.status === 'published' ? '当前发布' : '历史归档'} · {report.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : historyError ? (
+            <span className="theme-report-history-error" role="status">历史版本暂不可用</span>
+          ) : (
+            <span className="theme-report-history-loading" role="status">正在加载历史版本...</span>
+          )}
           {document.has_pdf ? (
             <a className="icon-text-button" href={themeResearchReportPdfUrl(themeId, reportVersionId)}>
               <Download size={16} aria-hidden="true" /> 下载 PDF
@@ -143,7 +173,12 @@ export function ThemeResearchReportReader({ themeId, reportVersionId, onNavigate
       </header>
       <div className="theme-report-meta">
         <span>版本 {document.version}</span>
-        <time dateTime={document.published_at}>发布于 {document.published_at}</time>
+        <time aria-label="生成时间" dateTime={document.generated_at}>
+          生成时间 {displayTimestamp(document.generated_at)}
+        </time>
+        <time aria-label="发布时间" dateTime={document.published_at}>
+          发布时间 {displayTimestamp(document.published_at)}
+        </time>
       </div>
       {/* Trust boundary: this HTML has been sanitized by the authenticated report service. */}
       <article className="theme-report-article" dangerouslySetInnerHTML={{ __html: document.html }} />

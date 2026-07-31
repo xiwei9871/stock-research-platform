@@ -115,8 +115,12 @@ function parseRoute(pathname: string): RouteState | null {
   }
 }
 
+function themePath(themeId: string) {
+  return `/theme-research/${encodeURIComponent(themeId)}`;
+}
+
 function tabPath(themeId: string, tab: ThemeResearchTab) {
-  return tab === 'overview' ? `/theme-research/${themeId}` : `/theme-research/${themeId}/${tab}`;
+  return tab === 'overview' ? themePath(themeId) : `${themePath(themeId)}/${tab}`;
 }
 
 function readableStatus(value: string) {
@@ -341,7 +345,7 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
                 {filteredThemes.map((theme) => (
                   <tr key={theme.theme_id}>
                     <td>
-                      <button className="theme-research-primary-link" type="button" onClick={() => onNavigate(`/theme-research/${theme.theme_id}`)} aria-label={`打开${theme.theme_name}`}>
+                      <button className="theme-research-primary-link" type="button" onClick={() => onNavigate(themePath(theme.theme_id))} aria-label={`打开${theme.theme_name}`}>
                         <strong>{theme.theme_name}</strong><small>{readableStatus(theme.theme_type)}</small>
                       </button>
                     </td>
