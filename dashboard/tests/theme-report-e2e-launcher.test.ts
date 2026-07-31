@@ -5,7 +5,7 @@ import { buildThemeReportE2EInvocation } from '../scripts/run-theme-report-e2e.m
 
 describe('theme report E2E standard entry point', () => {
   it('enables the isolated backend and targets only the real theme report spec', () => {
-    const invocation = buildThemeReportE2EInvocation(['--repeat-each=2'], {
+    const invocation = buildThemeReportE2EInvocation(['--', '--repeat-each=2'], {
       PLAYWRIGHT_THEME_REPORT_REAL_E2E: 'false',
       SENTINEL: 'kept'
     });
@@ -14,5 +14,6 @@ describe('theme report E2E standard entry point', () => {
     expect(invocation.env.SENTINEL).toBe('kept');
     expect(invocation.args).toContain('tests/theme-research-full-flow.spec.ts');
     expect(invocation.args).toContain('--repeat-each=2');
+    expect(invocation.args).not.toContain('--');
   });
 });

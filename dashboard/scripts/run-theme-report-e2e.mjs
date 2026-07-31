@@ -6,13 +6,15 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 
 export function buildThemeReportE2EInvocation(extraArgs = [], inheritedEnv = process.env) {
+  const forwardedArgs = [...extraArgs];
+  while (forwardedArgs[0] === '--') forwardedArgs.shift();
   return {
     executable: process.execPath,
     args: [
       require.resolve('@playwright/test/cli'),
       'test',
       'tests/theme-research-full-flow.spec.ts',
-      ...extraArgs
+      ...forwardedArgs
     ],
     env: {
       ...inheritedEnv,
