@@ -993,3 +993,331 @@ def test_publication_evidence_threshold_counts_only_preaudit_assets():
     ]
     assert len(outside_comparison) >= 5
     assert outside_comparison["new_rank"].isna().all()
+
+
+V2_OUTPUT_FIELDS = {
+    "ranking_version",
+    "final_rank_score_v2",
+    "activation_rank_percentile",
+    "activation_score",
+    "technical_readiness_score",
+    "continuation_character_score",
+    "residual_price_space_score",
+    "capital_efficiency_score",
+    "catalyst_timing_score",
+    "activation_coverage",
+    "activation_eligible",
+    "activation_exclusion_reasons",
+    "falling_knife",
+    "overextended",
+}
+
+
+def _v2_config(config: ConsumerOversoldConfig) -> ConsumerOversoldConfig:
+    return replace(
+        config,
+        ranking_version="v2",
+        v2_min_composite_score=0.0,
+        v2_min_technical_readiness_score=0.0,
+    )
+
+
+def test_v2_pipeline_returns_balanced_ranked_pool_top30_and_v1_comparison():
+    frames, evidence, config = _many_frames(45, 45)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+    )
+
+    assert result["coverage"]["ranking_version"] == "v2"
+    assert V2_OUTPUT_FIELDS.issubset(result["top20"].columns)
+    assert V2_OUTPUT_FIELDS.issubset(result["top30"].columns)
+    assert V2_OUTPUT_FIELDS.issubset(result["ranked_pool"].columns)
+    assert V2_OUTPUT_FIELDS.issubset(result["preaudit"].columns)
+    assert result["top20"]["final_rank"].tolist() == list(
+        range(1, len(result["top20"]) + 1)
+    )
+    assert result["top30"]["final_rank"].tolist() == list(
+        range(1, len(result["top30"]) + 1)
+    )
+    assert result["reserve"]["final_rank"].tolist() == list(
+        range(21, len(result["reserve"]) + 21)
+    )
+    assert len(result["top30"]) == min(30, len(result["ranked_pool"]))
+    pd.testing.assert_frame_equal(
+        result["top30"].reset_index(drop=True),
+        result["ranked_pool"].head(30).reset_index(drop=True),
+    )
+    assert set(result["comparison"]["asset_id"]) == set(result["scores"]["asset_id"])
+    assert {
+        "v1_rank",
+        "v2_rank",
+        "rank_change",
+        "v1_final_rank_score",
+        "v1_repair_score",
+        "v1_elasticity_score",
+        "v2_repair_score",
+        "v2_activation_score",
+        "v2_final_rank_score",
+        "v1_exclusion_reasons",
+        "v2_exclusion_reasons",
+    }.issubset(result["comparison"].columns)
+    comparable = result["comparison"].dropna(subset=["v1_rank", "v2_rank"])
+    assert (
+        comparable["rank_change"] == comparable["v1_rank"] - comparable["v2_rank"]
+    ).all()
+
+
+def test_v2_pipeline_keeps_actual_candidates_when_fewer_than_thirty_pass():
+    frames, evidence, config = _many_frames(25, 25)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+    )
+
+    assert 0 < len(result["ranked_pool"]) < 30
+    assert len(result["top20"]) == min(20, len(result["ranked_pool"]))
+    assert len(result["top30"]) == len(result["ranked_pool"])
+    assert len(result["reserve"]) == max(0, len(result["ranked_pool"]) - 20)
+    assert result["coverage"]["publication_status"] == "coverage_insufficient"
+    assert "v2_ranked_pool_below_30" in result["coverage"]["warnings"]
+    assert result["coverage"]["v2_ranked_pool_count"] == len(result["ranked_pool"])
+    assert result["coverage"]["v2_top30_count"] == len(result["top30"])
+
+
+def test_v2_pipeline_is_cutoff_safe_deterministic_and_does_not_mutate_inputs():
+    frames, evidence, config = _many_frames(35, 35)
+    originals = {key: value.copy(deep=True) for key, value in frames.items()}
+    evidence_original = evidence.copy(deep=True)
+    v2_config = _v2_config(config)
+
+    baseline = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    future = deepcopy(frames)
+    future_rows = future["bars"].groupby("asset_id", sort=False).tail(1).copy()
+    future_rows["trade_date"] = pd.Timestamp("2026-07-30")
+    future_rows["close"] = future_rows["close"] * 10.0
+    future_rows["raw_close"] = future_rows["raw_close"] * 10.0
+    future_rows["amount"] = future_rows["amount"] * 100.0
+    future["bars"] = pd.concat([future["bars"], future_rows], ignore_index=True)
+    cutoff_safe = build_consumer_oversold_weekly_from_frames(
+        frames=future,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    shuffled = {
+        key: frame.sample(frac=1.0, random_state=17).reset_index(drop=True)
+        for key, frame in frames.items()
+    }
+    deterministic = build_consumer_oversold_weekly_from_frames(
+        frames=shuffled,
+        evidence=evidence.sample(frac=1.0, random_state=19).reset_index(drop=True),
+        config=v2_config,
+    )
+
+    rank_columns = [
+        "asset_id",
+        "final_rank",
+        "final_rank_score_v2",
+        "activation_score",
+    ]
+    pd.testing.assert_frame_equal(
+        baseline["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+        cutoff_safe["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+    )
+    pd.testing.assert_frame_equal(
+        baseline["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+        deterministic["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+    )
+    for key, original in originals.items():
+        pd.testing.assert_frame_equal(frames[key], original)
+    pd.testing.assert_frame_equal(evidence, evidence_original)
+
+
+def test_v2_pipeline_empty_universe_has_stable_v2_schemas_and_no_name_branch():
+    frames, evidence, config = _frames()
+    named = deepcopy(frames)
+    named["assets"]["name"] = [
+        "北汽蓝谷",
+        "赛力斯",
+        "舍得酒业",
+        "江淮汽车",
+        "Auto Parts",
+    ]
+    neutral = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(
+            replace(
+                config,
+                preaudit_size=2,
+                minimum_evidence_complete=2,
+                final_top_n=1,
+                reserve_top_n=1,
+            )
+        ),
+    )
+    diagnostic_names = build_consumer_oversold_weekly_from_frames(
+        frames=named,
+        evidence=evidence,
+        config=_v2_config(
+            replace(
+                config,
+                preaudit_size=2,
+                minimum_evidence_complete=2,
+                final_top_n=1,
+                reserve_top_n=1,
+            )
+        ),
+    )
+    assert neutral["ranked_pool"]["asset_id"].tolist() == diagnostic_names[
+        "ranked_pool"
+    ]["asset_id"].tolist()
+
+    frames["industry_rules"] = frames["industry_rules"].assign(
+        action="exclude", consumer_subindustry=""
+    )
+    for key in (
+        "bars",
+        "share_capacity",
+        "finance",
+        "current_valuation",
+        "valuation_history",
+    ):
+        frames[key] = pd.DataFrame()
+    empty = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence.iloc[0:0],
+        config=_v2_config(config),
+    )
+    for key in ("top20", "top30", "reserve", "ranked_pool"):
+        assert empty[key].empty
+        assert V2_OUTPUT_FIELDS.issubset(empty[key].columns)
+    assert empty["coverage"]["ranking_version"] == "v2"
+    assert "v2_ranked_pool_below_30" in empty["coverage"]["warnings"]
+
+
+def test_v2_rank_is_not_restricted_by_the_v1_oversold_preaudit_gate():
+    frames, evidence, config = _many_frames(65, 65)
+    v2_config = replace(
+        _v2_config(config),
+        min_oversold_score=100.0,
+    )
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    comparison = result["comparison"]
+    v1_rejected = comparison["v1_exclusion_reasons"].str.contains(
+        "oversold_score_below_threshold",
+        regex=False,
+        na=False,
+    )
+    naturally_ranked_v2 = comparison["v2_rank"].notna()
+    assert (v1_rejected & naturally_ranked_v2).any()
+    assert set(comparison.loc[v1_rejected & naturally_ranked_v2, "asset_id"]).issubset(
+        set(result["ranked_pool"]["asset_id"])
+    )
+
+
+def test_explicit_v1_version_preserves_default_payload_frames_and_coverage():
+    frames, evidence, config = _many_frames(45, 40)
+
+    default = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=config,
+    )
+    explicit = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=replace(config, ranking_version="v1"),
+    )
+
+    assert default.keys() == explicit.keys()
+    for key in (
+        "evidence",
+        "expected",
+        "early",
+        "scores",
+        "exclusions",
+        "top20",
+        "reserve",
+        "preaudit",
+        "comparison",
+    ):
+        pd.testing.assert_frame_equal(default[key], explicit[key])
+    assert default["coverage"] == explicit["coverage"]
+    assert default["report"] == explicit["report"]
+
+
+def test_v2_activation_scores_ignore_an_ineligible_market_activity_outlier():
+    frames, evidence, config = _many_frames(21, 20)
+    v2_config = _v2_config(config)
+
+    baseline = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    contaminated = deepcopy(frames)
+    outlier_id = contaminated["assets"].iloc[-1]["asset_id"]
+    outlier = contaminated["bars"]["asset_id"].eq(outlier_id)
+    contaminated["bars"].loc[outlier, "amount"] = 10**15
+    contaminated["bars"].loc[outlier, "turnover_rate"] = 100.0
+    contaminated["bars"].loc[outlier, "pct_chg"] = 30.0
+    rerun = build_consumer_oversold_weekly_from_frames(
+        frames=contaminated,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    activation_columns = [
+        "asset_id",
+        "technical_readiness_score",
+        "continuation_character_score",
+        "residual_price_space_score",
+        "capital_efficiency_score",
+        "catalyst_timing_score",
+        "activation_score",
+    ]
+    baseline_scores = baseline["scores"].loc[
+        baseline["scores"]["eligible"], activation_columns
+    ].sort_values("asset_id", kind="stable").reset_index(drop=True)
+    rerun_scores = rerun["scores"].loc[
+        rerun["scores"]["eligible"], activation_columns
+    ].sort_values("asset_id", kind="stable").reset_index(drop=True)
+    pd.testing.assert_frame_equal(baseline_scores, rerun_scores)
+
+
+def test_v2_preaudit_only_has_no_released_v2_ranks():
+    frames, evidence, config = _many_frames(45, 45)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+        preaudit_only=True,
+    )
+
+    assert result["coverage"]["publication_status"] == "preaudit_only"
+    assert not result["preaudit"].empty
+    assert result["top20"].empty
+    assert result["top30"].empty
+    assert result["reserve"].empty
+    assert result["ranked_pool"].empty
+    assert result["comparison"]["v2_rank"].isna().all()
+    assert result["comparison"]["v2_final_rank_score"].isna().all()
