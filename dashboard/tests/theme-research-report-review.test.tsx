@@ -196,6 +196,35 @@ describe('ThemeResearchReportReviewWorkspace', () => {
     expect(await screen.findByText('行版本 8')).toBeVisible();
   });
 
+  it('keeps the 409 conflict visible when the refreshed queue no longer contains the report', async () => {
+    apiMocks.publishThemeResearchReport.mockRejectedValueOnce(new Error('POST failed with 409: conflict'));
+    apiMocks.fetchAdminThemeResearchReports
+      .mockResolvedValueOnce({ total: 1, items: [report()] })
+      .mockResolvedValueOnce({ total: 0, items: [] });
+    render(<ThemeResearchReportReviewWorkspace />);
+    await screen.findByRole('heading', { name: '安全预览' });
+
+    fireEvent.click(screen.getByRole('button', { name: '批准发布' }));
+
+    expect(await screen.findByText('当前没有待审核报告')).toBeVisible();
+    expect(screen.getByText('报告状态已被其他管理员更新，请刷新后重试')).toBeVisible();
+  });
+
+  it('keeps the 409 conflict visible alongside an automatic queue refresh failure', async () => {
+    apiMocks.publishThemeResearchReport.mockRejectedValueOnce(new Error('POST failed with 409: conflict'));
+    apiMocks.fetchAdminThemeResearchReports
+      .mockResolvedValueOnce({ total: 1, items: [report()] })
+      .mockRejectedValueOnce(new Error('GET failed with 503'));
+    render(<ThemeResearchReportReviewWorkspace />);
+    await screen.findByRole('heading', { name: '安全预览' });
+
+    fireEvent.click(screen.getByRole('button', { name: '批准发布' }));
+
+    expect(await screen.findByText('待审核报告加载失败')).toBeVisible();
+    expect(screen.getByText('报告状态已被其他管理员更新，请刷新后重试')).toBeVisible();
+    expect(screen.getByRole('button', { name: '重试加载队列' })).toBeEnabled();
+  });
+
   it('keeps preview errors retryable without blanking the workspace', async () => {
     apiMocks.fetchAdminThemeResearchReport
       .mockRejectedValueOnce(new Error('GET failed with 503'))

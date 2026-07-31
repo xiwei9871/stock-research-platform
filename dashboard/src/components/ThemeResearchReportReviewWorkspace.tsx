@@ -198,6 +198,12 @@ export function ThemeResearchReportReviewWorkspace() {
         </button>
       </header>
 
+      {mutationMessage ? (
+        <div className="theme-report-review-message theme-report-review-workspace-message" role="alert">
+          {mutationMessage}
+        </div>
+      ) : null}
+
       {queue === null ? (
         <section className="workspace-band theme-research-state" aria-busy="true">正在加载待审核报告...</section>
       ) : queueError ? (
@@ -299,7 +305,6 @@ export function ThemeResearchReportReviewWorkspace() {
                   />
                 </label>
                 {rejectionValidation ? <span className="theme-report-review-validation" role="alert">{rejectionValidation}</span> : null}
-                {mutationMessage ? <span className="theme-report-review-message" role="alert">{mutationMessage}</span> : null}
                 <div className="theme-report-review-actions">
                   <button className="theme-report-review-publish" type="button" onClick={() => void mutate('publish')} disabled={mutationPending}>
                     <Check size={16} aria-hidden="true" /> {mutationKind === 'publish' ? '批准中…' : '批准发布'}
