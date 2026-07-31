@@ -184,8 +184,41 @@ def test_renderer_removes_active_content_and_raw_html(monkeypatch, tmp_path) -> 
     )["html"]
 
     lowered = html.lower()
-    for forbidden in ("<script", "<img", "onerror", "<style", "<iframe", "javascript:", "data:"):
+    for forbidden in (
+        "<script",
+        "<img",
+        "<style",
+        "<iframe",
+        'href="javascript:',
+        'href="data:',
+    ):
         assert forbidden not in lowered
+
+
+def test_renderer_preserves_dangerous_words_as_inert_text(monkeypatch, tmp_path) -> None:
+    record = _record(tmp_path)
+    markdown = b"""Literal javascript:alert(1), onerror, and data:text/plain are prose.
+
+`javascript:alert(1)` and `onerror` and `data:`
+
+```text
+javascript:alert(1)
+onerror
+data:
+```
+"""
+    path = tmp_path / "theme-a" / "v1" / "report.md"
+    path.write_bytes(markdown)
+    record["markdown_sha256"] = _sha(markdown)
+    _install_store(monkeypatch, record)
+
+    html = reports.load_published_report_document(
+        "theme-a", "report-id", report_root=tmp_path
+    )["html"]
+
+    assert html.count("javascript:alert(1)") == 3
+    assert html.count("onerror") == 3
+    assert html.count("data:") == 3
 
 
 def test_renderer_scales_linearly_for_adversarial_raw_html() -> None:
@@ -525,6 +558,18 @@ def test_memory_error_propagates(monkeypatch, tmp_path) -> None:
         reports.load_published_report_document("theme-a", "report-id", report_root=tmp_path)
 
 
+def test_required_posix_open_flag_does_not_silently_fallback(monkeypatch) -> None:
+    monkeypatch.delattr(reports.os, "O_NONBLOCK")
+    with pytest.raises(RuntimeError, match="O_NONBLOCK"):
+        reports._required_os_flag("O_NONBLOCK")
+
+
+def test_required_dir_fd_support_fails_explicitly(monkeypatch) -> None:
+    monkeypatch.setattr(reports.os, "supports_dir_fd", set())
+    with pytest.raises(RuntimeError, match="dir_fd"):
+        reports._require_dir_fd_support(reports.os.open, "os.open")
+
+
 def test_pdf_absent_is_stable(monkeypatch, tmp_path) -> None:
     record = _record(tmp_path)
     _install_store(monkeypatch, record)
@@ -600,6 +645,74 @@ def test_pdf_context_manager_and_early_close_close_fd(monkeypatch, tmp_path) -> 
     with reports.resolve_admin_report_pdf("report-id", report_root=tmp_path) as second:
         assert not second.closed
     assert second.closed
+
+
+def test_pdf_stream_allows_only_one_consumer(monkeypatch, tmp_path) -> None:
+    record = _record(tmp_path, pdf=b"%PDF-single-consumer")
+    _install_store(monkeypatch, record)
+    resolved = reports.resolve_admin_report_pdf("report-id", report_root=tmp_path)
+
+    first = resolved.iter_chunks(chunk_size=4)
+    with pytest.raises(ValueError, match="already been consumed"):
+        resolved.iter_chunks(chunk_size=4)
+    resolved.close()
+    first.close()
+    assert resolved.closed
+
+
+def test_pdf_close_waits_for_read_and_cannot_read_reused_fd(
+    monkeypatch, tmp_path
+) -> None:
+    safe_path = tmp_path / "safe.pdf"
+    secret_path = tmp_path / "secret.pdf"
+    safe_path.write_bytes(b"SAFE")
+    secret_path.write_bytes(b"SECRET")
+    owned_fd = os.open(safe_path, os.O_RDONLY)
+    resolved = reports.ResolvedPdf(
+        owned_fd, filename="theme-report.pdf", content_length=4
+    )
+    entered_read = threading.Event()
+    release_read = threading.Event()
+    close_returned = threading.Event()
+    original_read = reports.os.read
+    outcome: dict[str, object] = {}
+
+    def paused_read(fd: int, size: int) -> bytes:
+        entered_read.set()
+        assert release_read.wait(timeout=2)
+        return original_read(fd, size)
+
+    monkeypatch.setattr(reports.os, "read", paused_read)
+    iterator = resolved.iter_chunks(chunk_size=64)
+
+    def consume() -> None:
+        try:
+            outcome["chunk"] = next(iterator)
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    reader = threading.Thread(target=consume)
+    reader.start()
+    assert entered_read.wait(timeout=1)
+
+    def close() -> None:
+        resolved.close()
+        close_returned.set()
+
+    closer = threading.Thread(target=close)
+    closer.start()
+    close_returned.wait(timeout=0.1)
+    secret_fd = os.open(secret_path, os.O_RDONLY)
+    try:
+        release_read.set()
+        reader.join(timeout=2)
+        closer.join(timeout=2)
+        assert outcome.get("chunk") == b"SAFE"
+        assert "error" not in outcome
+        assert close_returned.is_set()
+        assert resolved.closed
+    finally:
+        os.close(secret_fd)
 
 
 @pytest.mark.parametrize("mutation", ["checksum", "symlink", "directory", "too_large"])

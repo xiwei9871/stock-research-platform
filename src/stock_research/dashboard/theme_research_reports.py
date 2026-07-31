@@ -7,6 +7,7 @@ import os
 import re
 import stat
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
@@ -31,9 +32,34 @@ _RESOURCE_EXHAUSTION_ERRNOS = {
 _APPROVED_STATUSES = {"published", "archived"}
 _ADMIN_STATUSES = {"pending_review", "rejected", "published", "archived"}
 _SHA256_HEX_LENGTH = 64
-_OPEN_DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+_UNSAFE_FILENAME_CHARACTERS_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _required_os_flag(name: str) -> int:
+    value = getattr(os, name, None)
+    if not isinstance(value, int):
+        raise RuntimeError(f"unsupported platform: required os flag {name} is unavailable")
+    return value
+
+
+def _require_dir_fd_support(function: Any, name: str) -> None:
+    if function not in os.supports_dir_fd:
+        raise RuntimeError(f"unsupported platform: {name} lacks required dir_fd support")
+
+
+_require_dir_fd_support(os.open, "os.open")
+_require_dir_fd_support(os.stat, "os.stat")
+_OPEN_DIRECTORY_FLAGS = (
+    os.O_RDONLY
+    | _required_os_flag("O_DIRECTORY")
+    | _required_os_flag("O_NOFOLLOW")
+    | _required_os_flag("O_CLOEXEC")
+)
 _OPEN_FILE_FLAGS = (
-    os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | getattr(os, "O_NONBLOCK", 0)
+    os.O_RDONLY
+    | _required_os_flag("O_NOFOLLOW")
+    | _required_os_flag("O_CLOEXEC")
+    | _required_os_flag("O_NONBLOCK")
 )
 _ALLOWED_TAGS = {
     "a",
@@ -64,11 +90,6 @@ _ALLOWED_TAGS = {
 }
 _CLEAN_CONTENT_TAGS = {"iframe", "img", "script", "style", "svg", "math"}
 _MARKDOWN = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable("table")
-_DANGEROUS_RENDERED_SCHEME_RE = re.compile(
-    r"\b(?:javascript|data)\s*:", re.IGNORECASE
-)
-_DANGEROUS_RENDERED_ATTRIBUTE_RE = re.compile(r"\bonerror\b", re.IGNORECASE)
-_UNSAFE_FILENAME_CHARACTERS_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 class ThemeResearchReportDocumentError(Exception):
@@ -102,26 +123,36 @@ class ResolvedPdf:
         filename: str,
         content_length: int,
     ) -> None:
+        self._lock = threading.RLock()
         self._fd: int | None = fd
+        self._stream_claimed = False
         self.filename = filename
         self.media_type = "application/pdf"
         self.content_length = content_length
 
     @property
     def closed(self) -> bool:
-        return self._fd is None
+        with self._lock:
+            return self._fd is None
 
     def iter_chunks(self, *, chunk_size: int = 64 * 1024) -> Iterator[bytes]:
         if isinstance(chunk_size, bool) or not isinstance(chunk_size, int) or chunk_size <= 0:
             raise ValueError("chunk_size must be a positive integer")
+        with self._lock:
+            if self._fd is None:
+                raise ValueError("PDF stream is closed")
+            if self._stream_claimed:
+                raise ValueError("PDF stream has already been consumed")
+            self._stream_claimed = True
 
         def stream() -> Iterator[bytes]:
             try:
                 while True:
-                    fd = self._fd
-                    if fd is None:
-                        raise ValueError("PDF stream is closed")
-                    chunk = os.read(fd, chunk_size)
+                    with self._lock:
+                        fd = self._fd
+                        if fd is None:
+                            raise ValueError("PDF stream is closed")
+                        chunk = os.read(fd, chunk_size)
                     if not chunk:
                         return
                     yield chunk
@@ -131,12 +162,13 @@ class ResolvedPdf:
         return stream()
 
     def close(self) -> None:
-        fd, self._fd = self._fd, None
-        if fd is not None:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+        with self._lock:
+            fd, self._fd = self._fd, None
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
     def __enter__(self) -> ResolvedPdf:
         if self.closed:
@@ -266,7 +298,7 @@ def _render_markdown(data: bytes) -> str:
         raise _artifact_unavailable() from exc
     try:
         rendered = _MARKDOWN.render(text)
-        cleaned = nh3.clean(
+        return nh3.clean(
             rendered,
             tags=_ALLOWED_TAGS,
             clean_content_tags=_CLEAN_CONTENT_TAGS,
@@ -276,8 +308,6 @@ def _render_markdown(data: bytes) -> str:
             link_rel="noopener noreferrer",
             strip_comments=True,
         )
-        cleaned = _DANGEROUS_RENDERED_SCHEME_RE.sub("", cleaned)
-        return _DANGEROUS_RENDERED_ATTRIBUTE_RE.sub("", cleaned)
     except MemoryError:
         raise
     except Exception as exc:
