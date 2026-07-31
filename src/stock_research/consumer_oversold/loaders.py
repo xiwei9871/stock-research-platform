@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import json
 from collections.abc import Iterable
 from decimal import Decimal
 from numbers import Real
@@ -31,6 +32,7 @@ MARKET_COLUMNS = (
 )
 TURNOVER_DERIVATION_INPUTS_ATTR = "consumer_turnover_derivation_inputs"
 TURNOVER_DERIVATION_COVERAGE_ATTR = "consumer_turnover_derivation_coverage"
+SHARE_CAPACITY_HISTORY_ATTR = "consumer_share_capacity_history"
 _MARKET_QUERY_COLUMNS = (
     *MARKET_COLUMNS,
     "turnover_volume",
@@ -42,6 +44,7 @@ SHARE_CAPACITY_COLUMNS = (
     "float_share",
     "free_float_share",
 )
+_SHARE_CAPACITY_QUERY_COLUMNS = (*SHARE_CAPACITY_COLUMNS, "share_history")
 FINANCE_COLUMNS = (
     "asset_id",
     "report_period",
@@ -221,6 +224,31 @@ def derive_consumer_market_turnover_history(
             if row.asset_id and shares is not None:
                 share_by_asset[row.asset_id] = shares
 
+    raw_share_history = share_capacity.attrs.get(SHARE_CAPACITY_HISTORY_ATTR)
+    share_history_available = isinstance(raw_share_history, list)
+    share_history_by_asset: dict[str, list[dict[str, Any]]] = {}
+    if share_history_available:
+        for raw in raw_share_history:
+            if not isinstance(raw, dict):
+                continue
+            asset_id = str(raw.get("asset_id") or "").strip()
+            try:
+                event_date = _date_text(raw.get("event_date"))
+                announcement_date = _date_text(raw.get("announcement_date"))
+            except ValueError:
+                continue
+            if not asset_id or not isinstance(event_date, str) or event_date > cutoff:
+                continue
+            if pd.notna(announcement_date) and announcement_date > cutoff:
+                continue
+            share_history_by_asset.setdefault(asset_id, []).append(
+                {
+                    **raw,
+                    "event_date": event_date,
+                    "announcement_date": announcement_date,
+                }
+            )
+
     missing_rows = 0
     derived_rows = 0
     derived_by_source: dict[str, int] = {}
@@ -238,7 +266,29 @@ def derive_consumer_market_turnover_history(
         missing_rows += 1
         asset_id = str(getattr(row, "asset_id") or "").strip()
         metadata = metadata_by_key.get((asset_id, date_text))
-        shares = share_by_asset.get(asset_id)
+        shares = None
+        if share_history_available:
+            visible_events = []
+            for event in share_history_by_asset.get(asset_id, []):
+                event_date = event["event_date"]
+                announcement_date = event["announcement_date"]
+                if event_date > date_text:
+                    continue
+                if pd.notna(announcement_date) and announcement_date > date_text:
+                    continue
+                visible_events.append(event)
+            if visible_events:
+                visible_events.sort(
+                    key=lambda event: (
+                        event["event_date"],
+                        "" if pd.isna(event["announcement_date"]) else event["announcement_date"],
+                        str(event.get("source") or ""),
+                    ),
+                    reverse=True,
+                )
+                shares = _finite_positive_number(visible_events[0].get("float_share"))
+        else:
+            shares = share_by_asset.get(asset_id)
         if metadata is None or shares is None:
             continue
         volume = _finite_positive_number(metadata.get("volume"))
@@ -758,19 +808,65 @@ def load_consumer_share_capacity(
     assets = _asset_ids(asset_ids)
     cutoff = validate_trade_date(trade_date)
     if not assets:
-        return _frame([], SHARE_CAPACITY_COLUMNS)
+        result = _frame([], SHARE_CAPACITY_COLUMNS)
+        result.attrs[SHARE_CAPACITY_HISTORY_ATTR] = []
+        return result
     sql = """
-    SELECT DISTINCT ON (asset_id)
-           asset_id, total_share, float_share, free_float_share
-    FROM finance.share_capital_event
-    WHERE asset_id = ANY(%s)
-      AND event_date <= %s
-      AND (announcement_date IS NULL OR announcement_date <= %s)
-    ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST, source ASC
+    WITH visible AS (
+        SELECT asset_id, event_date, announcement_date,
+               total_share, float_share, free_float_share, source
+        FROM finance.share_capital_event
+        WHERE asset_id = ANY(%s)
+          AND event_date <= %s
+          AND (announcement_date IS NULL OR announcement_date <= %s)
+    ), latest AS (
+        SELECT DISTINCT ON (asset_id)
+               asset_id, total_share, float_share, free_float_share
+        FROM visible
+        ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST, source ASC
+    ), history AS (
+        SELECT asset_id,
+               jsonb_agg(
+                   jsonb_build_object(
+                       'asset_id', asset_id,
+                       'event_date', event_date,
+                       'announcement_date', announcement_date,
+                       'total_share', total_share,
+                       'float_share', float_share,
+                       'free_float_share', free_float_share,
+                       'source', source
+                   )
+                   ORDER BY event_date, announcement_date NULLS FIRST, source
+               ) AS share_history
+        FROM visible
+        GROUP BY asset_id
+    )
+    SELECT latest.asset_id, latest.total_share, latest.float_share,
+           latest.free_float_share, history.share_history
+    FROM latest
+    LEFT JOIN history ON history.asset_id = latest.asset_id
+    ORDER BY latest.asset_id
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [assets, cutoff, cutoff])
-    return _sort(_frame(rows, SHARE_CAPACITY_COLUMNS), ["asset_id"])
+    internal = _sort(
+        _frame(rows, _SHARE_CAPACITY_QUERY_COLUMNS),
+        ["asset_id"],
+    )
+    raw_history: list[dict[str, Any]] = []
+    for value in internal["share_history"].tolist():
+        if value is None or _missing_scalar(value):
+            continue
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (TypeError, ValueError):
+                continue
+        if isinstance(value, list):
+            raw_history.extend(item for item in value if isinstance(item, dict))
+    result = internal.loc[:, SHARE_CAPACITY_COLUMNS].copy()
+    result.attrs[SHARE_CAPACITY_HISTORY_ATTR] = raw_history
+    return result
 
 
 def _disclosed_rows(rows: list[dict[str, Any]], cutoff: str) -> list[dict[str, Any]]:

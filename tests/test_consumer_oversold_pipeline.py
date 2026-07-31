@@ -557,7 +557,7 @@ def test_in_memory_report_exactly_matches_published_report(tmp_path):
 
 
 def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_path):
-    from stock_research.consumer_oversold import pipeline
+    from stock_research.consumer_oversold import loaders, pipeline
 
     frames, evidence, _ = _frames()
     evidence_path = tmp_path / "evidence.csv"
@@ -576,18 +576,35 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
     market_calls = []
     market = frames["bars"].copy()
     market["raw_close"] = market["close"]
-    market.loc[market["asset_id"].eq("A") & market["trade_date"].eq(market.loc[market["asset_id"].eq("A"), "trade_date"].max()), ["close", "raw_close"]] = [200.0, 20.0]
+    latest_a = market.loc[market["asset_id"].eq("A"), "trade_date"].max()
+    latest_a_index = market.index[
+        market["asset_id"].eq("A") & market["trade_date"].eq(latest_a)
+    ][0]
+    market.loc[latest_a_index, ["close", "raw_close", "turnover_rate"]] = [
+        200.0,
+        20.0,
+        np.nan,
+    ]
+    market.attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": "A",
+            "trade_date": pd.Timestamp(latest_a).date().isoformat(),
+            "volume": 20_000,
+            "source": "derived:tushare",
+        }
+    ]
     monkeypatch.setattr(
         pipeline,
         "load_consumer_market_history",
         lambda trade_date, service, asset_ids=None: market_calls.append(asset_ids) or market,
     )
     share_calls = []
+    shares = frames["share_capacity"].copy(deep=True)
+    shares.loc[shares["asset_id"].eq("A"), "float_share"] = 100_000_000
     monkeypatch.setattr(
         pipeline,
         "load_consumer_share_capacity",
-        lambda ids, trade_date, service: share_calls.append(ids)
-        or frames["share_capacity"],
+        lambda ids, trade_date, service: share_calls.append(ids) or shares,
     )
     finance = frames["finance"].copy()
     finance["total_share"] = finance["asset_id"].map({"A": 10, "B": 20, "C": np.nan, "D": 40})
@@ -622,8 +639,10 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
     assert result == {"ok": True}
     assert market_calls == [["A", "B", "C", "D"]]
     assert share_calls == [["A", "B", "C", "D"]]
+    assert "activation_bars" not in captured["frames"]
+    assert pd.isna(captured["frames"]["bars"].loc[latest_a_index, "turnover_rate"])
     pd.testing.assert_frame_equal(
-        captured["frames"]["share_capacity"], frames["share_capacity"]
+        captured["frames"]["share_capacity"], shares
     )
     assert "earnings" not in captured["frames"]
     current = captured["frames"]["current_valuation"].set_index("asset_id")
@@ -699,6 +718,7 @@ def test_runner_derives_missing_turnover_at_market_loading_boundary(
 
     def fake_build(*, frames, evidence, config, output_dir, preaudit_only):
         captured["bars"] = frames["bars"]
+        captured["activation_bars"] = frames["activation_bars"]
         return {"ok": True}
 
     monkeypatch.setattr(
@@ -714,8 +734,9 @@ def test_runner_derives_missing_turnover_at_market_loading_boundary(
     )
 
     assert result == {"ok": True}
-    assert captured["bars"].loc[target, "turnover_rate"] == pytest.approx(2.0)
-    assert captured["bars"].attrs[
+    assert pd.isna(captured["bars"].loc[target, "turnover_rate"])
+    assert captured["activation_bars"].loc[target, "turnover_rate"] == pytest.approx(2.0)
+    assert captured["activation_bars"].attrs[
         loaders.TURNOVER_DERIVATION_COVERAGE_ATTR
     ]["derived_rows"] == 1
     assert pd.isna(market.loc[target, "turnover_rate"])

@@ -1263,6 +1263,7 @@ def _build_v2_result(
     included: pd.DataFrame,
     membership: pd.DataFrame,
     bars: pd.DataFrame,
+    activation_bars: pd.DataFrame,
     finance: pd.DataFrame,
     valuation_history: pd.DataFrame,
     validated_evidence: pd.DataFrame,
@@ -1276,7 +1277,7 @@ def _build_v2_result(
     automatically_gated = _apply_automatic_gates(gated, config)
     elasticity_scored = score_rebound_elasticity(automatically_gated, config)
     technical_bars = _drop_invalid_technical_histories(
-        bars,
+        activation_bars,
         trade_date=config.trade_date,
     )
     technical = compute_technical_readiness_features(
@@ -1422,7 +1423,7 @@ def _build_v2_result(
         config=config,
         warnings=[*warnings, *publication_warnings],
     )
-    turnover_derivation = bars.attrs.get(TURNOVER_DERIVATION_COVERAGE_ATTR)
+    turnover_derivation = activation_bars.attrs.get(TURNOVER_DERIVATION_COVERAGE_ATTR)
     if isinstance(turnover_derivation, dict):
         coverage["turnover_derivation"] = copy.deepcopy(turnover_derivation)
         derived_rows = int(turnover_derivation.get("derived_rows", 0))
@@ -1777,6 +1778,11 @@ def build_consumer_oversold_weekly_from_frames(
 
     included_ids = set(included["asset_id"])
     bars = copied["bars"].loc[copied["bars"]["asset_id"].astype(str).isin(included_ids)].copy()
+    activation_bars_source = copied.get("activation_bars", copied["bars"])
+    activation_bars = activation_bars_source.loc[
+        activation_bars_source["asset_id"].astype(str).isin(included_ids)
+    ].copy()
+    activation_bars.attrs = copy.deepcopy(activation_bars_source.attrs)
     share_capacity = copied["share_capacity"].loc[
         copied["share_capacity"]["asset_id"].astype(str).isin(included_ids)
     ].copy()
@@ -1928,6 +1934,7 @@ def build_consumer_oversold_weekly_from_frames(
             included=included,
             membership=membership,
             bars=bars,
+            activation_bars=activation_bars,
             finance=finance,
             valuation_history=valuation_history,
             validated_evidence=validated_evidence,
@@ -2263,11 +2270,13 @@ def run_consumer_oversold_weekly(
         asset_ids, trade_date, service=service
     )
     bars = load_consumer_market_history(trade_date, service=service, asset_ids=asset_ids)
-    bars = derive_consumer_market_turnover_history(
-        bars,
-        share_capacity,
-        trade_date=trade_date,
-    )
+    activation_bars = bars
+    if ranking_version == "v2":
+        activation_bars = derive_consumer_market_turnover_history(
+            bars,
+            share_capacity,
+            trade_date=trade_date,
+        )
     finance_with_shares = load_consumer_finance_history(asset_ids, trade_date, service=service)
     valuation_raw = load_consumer_valuation_history(asset_ids, trade_date, service=service)
     if "total_share" in share_capacity.columns:
@@ -2315,6 +2324,8 @@ def run_consumer_oversold_weekly(
         "current_valuation": current_valuation,
         "valuation_history": valuation_history,
     }
+    if ranking_version == "v2":
+        frames["activation_bars"] = activation_bars
     payload = build_consumer_oversold_weekly_from_frames(
         frames=frames,
         evidence=evidence,
