@@ -556,6 +556,42 @@ def test_fake_midnight_or_missing_limit_price_minute_bars_degrade():
     assert result["coverage"]["evaluation_status"] == "daily_complete_minute_degraded"
 
 
+def test_nan_frozen_entry_raw_close_degrades_minute_diagnostics():
+    daily = _daily_bars(1)
+    daily.loc[
+        daily["trade_date"].eq(SNAPSHOT_DATE), "raw_close"
+    ] = np.nan
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=daily,
+        minute_bars=_minute_bars(["A01"], ("2026-07-30",)),
+        horizons=(3,),
+    )
+
+    assert result["coverage"]["minute_complete"] is False
+    assert result["coverage"]["evaluation_status"] == "daily_incomplete"
+    assert result["minute_detail"].empty
+
+
+def test_inconsistent_limit_up_price_across_a_session_degrades_minute_diagnostics():
+    minute = _minute_bars(["A01"], ("2026-07-30",))
+    minute.loc[minute.index[0], "limit_up_price"] = 104.6
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=_daily_bars(1),
+        minute_bars=minute,
+        horizons=(3,),
+    )
+
+    assert result["coverage"]["minute_complete"] is False
+    assert result["coverage"]["evaluation_status"] == "daily_complete_minute_degraded"
+    assert result["minute_detail"].empty
+
+
 @pytest.mark.parametrize(
     ("mutator", "match"),
     [

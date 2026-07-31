@@ -704,6 +704,17 @@ def _minute_diagnostics(
             if frozenset(bars["trade_time"].dt.time) != _CANONICAL_MINUTE_TIMES:
                 complete = False
                 continue
+            entry_value = entry_raw.loc[member["asset_id"]]
+            if (
+                pd.isna(entry_value)
+                or not math.isfinite(float(entry_value))
+                or float(entry_value) <= 0.0
+            ):
+                complete = False
+                continue
+            if bars["limit_up_price"].nunique(dropna=False) != 1:
+                complete = False
+                continue
             prices = bars[["open", "high", "low", "close"]]
             if (
                 not np.isfinite(prices.to_numpy(dtype=float)).all()
@@ -716,7 +727,7 @@ def _minute_diagnostics(
             ):
                 complete = False
                 continue
-            entry = float(entry_raw.loc[member["asset_id"]])
+            entry = float(entry_value)
             day_high = float(bars["high"].max())
             first_high = bars.loc[bars["high"].eq(day_high), "trade_time"].iloc[0]
             morning = bars.loc[bars["trade_time"].dt.time <= pd.Timestamp("11:30").time()]
