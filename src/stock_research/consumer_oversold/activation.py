@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import math
+from datetime import date
 from decimal import Decimal
 
 import numpy as np
 import pandas as pd
+
+from .contracts import ConsumerOversoldConfig
 
 
 BAR_COLUMNS = ("asset_id", "trade_date", "close", "amount", "turnover_rate")
@@ -74,6 +77,77 @@ _SCORE_INPUT_COLUMNS = (
     "volatility_ratio_5d_20d",
     "new_low_20d_within_3d",
     "technical_feature_coverage",
+)
+_ACTIVATION_CONTINUATION_FIELDS = (
+    "limit_up_count_2y",
+    "up_7pct_count_2y",
+    "up_5pct_count_2y",
+    "upside_tail_volatility_2y",
+    "positive_after_big_up_1d_rate",
+    "positive_after_big_up_3d_rate",
+    "positive_after_big_up_5d_rate",
+    "median_return_after_big_up_3d",
+    "median_return_after_big_up_5d",
+    "max_limit_up_streak_2y",
+    "strong_move_retention_5d_rate",
+)
+_ACTIVATION_POST_EVENT_FIELDS = (
+    "positive_after_big_up_1d_rate",
+    "positive_after_big_up_3d_rate",
+    "positive_after_big_up_5d_rate",
+    "median_return_after_big_up_3d",
+    "median_return_after_big_up_5d",
+    "strong_move_retention_5d_rate",
+)
+_ACTIVATION_RESIDUAL_FIELDS = (
+    "drawdown_from_high_1y",
+    "drawdown_from_high_2y",
+    "price_position_1y",
+    "price_position_2y",
+    "distance_hfq_ma120",
+    "distance_hfq_ma250",
+    "rebound_from_low_60d",
+    "rebound_from_low_120d",
+    "relative_return_6m",
+    "valuation_percentile",
+)
+_ACTIVATION_CAPITAL_FIELDS = (
+    "log_current_float_market_cap",
+    "average_amount_20d",
+    "average_turnover_rate_20d",
+    "amount_to_float_cap_20d",
+)
+_ACTIVATION_NUMERIC_FIELDS = (
+    "technical_readiness_score",
+    "return_10d",
+    *_ACTIVATION_CONTINUATION_FIELDS,
+    *_ACTIVATION_RESIDUAL_FIELDS,
+    *_ACTIVATION_CAPITAL_FIELDS,
+    "catalyst_verifiability_score",
+)
+_ACTIVATION_BOOLEAN_FIELDS = (
+    "technical_feature_coverage",
+    "falling_knife",
+    "residual_deviation_coverage",
+    "stock_character_coverage",
+    "market_capacity_coverage",
+)
+_ACTIVATION_REQUIRED_COLUMNS = (
+    "asset_id",
+    *_ACTIVATION_NUMERIC_FIELDS,
+    *_ACTIVATION_BOOLEAN_FIELDS,
+    "expected_validation_date",
+)
+_ACTIVATION_ADDED_COLUMNS = (
+    "continuation_character_score",
+    "residual_price_space_score",
+    "capital_efficiency_score",
+    "catalyst_timing_score",
+    "activation_coverage",
+    "activation_score",
+    "overextended",
+    "activation_eligible",
+    "activation_exclusion_reasons",
 )
 
 
@@ -392,6 +466,344 @@ def score_technical_readiness(features: pd.DataFrame) -> pd.DataFrame:
         & frame["new_low_20d_within_3d"].eq(True)
     ).astype(bool)
     return frame
+
+
+def _is_missing_scalar(value: object) -> bool:
+    if value is None or value is pd.NA:
+        return True
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(missing) if isinstance(missing, (bool, np.bool_)) else False
+
+
+def _activation_numeric_value(value: object, *, field: str, asset_id: str) -> float:
+    if _is_missing_scalar(value):
+        return math.nan
+    if isinstance(value, (bool, np.bool_)) or not isinstance(
+        value, _STRICT_NUMERIC_TYPES
+    ):
+        raise ValueError(f"rows asset {asset_id} field {field} must be finite numeric")
+    try:
+        number = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"rows asset {asset_id} field {field} must be finite numeric"
+        ) from exc
+    if not math.isfinite(number):
+        if math.isnan(number):
+            return math.nan
+        raise ValueError(f"rows asset {asset_id} field {field} must be finite numeric")
+    return number
+
+
+def _activation_boolean_value(
+    value: object, *, field: str, asset_id: str
+) -> tuple[bool, bool]:
+    if _is_missing_scalar(value):
+        return False, False
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"rows asset {asset_id} field {field} must be a strict boolean")
+    return bool(value), True
+
+
+def _activation_expected_date(value: object, *, asset_id: str) -> date | None:
+    if _is_missing_scalar(value) or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str):
+        raise ValueError(
+            f"expected_validation_date for asset {asset_id} must use YYYY-MM-DD"
+        )
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"expected_validation_date for asset {asset_id} must use YYYY-MM-DD"
+        ) from exc
+    if parsed.isoformat() != value:
+        raise ValueError(
+            f"expected_validation_date for asset {asset_id} must use YYYY-MM-DD"
+        )
+    return parsed
+
+
+def _activation_percentile(
+    values: pd.Series,
+    coverage: pd.Series,
+    *,
+    favorable_low: bool = False,
+    winsorize: bool = False,
+) -> pd.Series:
+    selected = values.where(coverage)
+    valid = selected.dropna()
+    result = pd.Series(math.nan, index=values.index, dtype="float64")
+    if valid.empty:
+        return result
+    if winsorize:
+        valid = valid.clip(
+            lower=float(valid.quantile(0.05)),
+            upper=float(valid.quantile(0.95)),
+        )
+    if len(valid) == 1 or valid.nunique(dropna=True) == 1:
+        result.loc[valid.index] = 50.0
+        return result
+    ranks = valid.rank(method="average", ascending=not favorable_low)
+    result.loc[valid.index] = (ranks - 1.0) / (len(valid) - 1.0) * 100.0
+    return result
+
+
+def _activation_percentile_mean(
+    frame: pd.DataFrame,
+    fields: tuple[str, ...],
+    coverage: pd.Series,
+    *,
+    favorable_low: bool = False,
+    winsorize_fields: tuple[str, ...] = (),
+) -> pd.Series:
+    percentiles = {
+        field: _activation_percentile(
+            frame[field],
+            coverage,
+            favorable_low=favorable_low,
+            winsorize=field in winsorize_fields,
+        )
+        for field in fields
+    }
+    return pd.DataFrame(percentiles, index=frame.index).mean(
+        axis=1, skipna=False
+    ).where(coverage)
+
+
+def score_activation_candidates(
+    rows: pd.DataFrame,
+    config: ConsumerOversoldConfig,
+) -> pd.DataFrame:
+    """Score the fully covered V2 activation cross-section and apply its gate.
+
+    The first V2 implementation deliberately uses upside-tail volatility alone
+    for the 15% upside-tail/asymmetry group. No stable asymmetry input exists in
+    the current candidate contract, so its absence must not reduce coverage.
+    """
+    _require_columns(rows, _ACTIVATION_REQUIRED_COLUMNS, "rows")
+    frame = rows.copy(deep=True).reset_index(drop=True)
+    frame = frame.drop(
+        columns=[column for column in _ACTIVATION_ADDED_COLUMNS if column in frame]
+    )
+    _validate_asset_ids(frame, "rows")
+    frame["asset_id"] = frame["asset_id"].astype(str).str.strip()
+    duplicate = frame["asset_id"].duplicated(keep=False)
+    if duplicate.any():
+        asset_id = frame.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
+        raise ValueError(f"rows contains duplicate asset_id {asset_id}")
+
+    for field in _ACTIVATION_NUMERIC_FIELDS:
+        frame[field] = [
+            _activation_numeric_value(value, field=field, asset_id=asset_id)
+            for value, asset_id in zip(
+                frame[field], frame["asset_id"], strict=True
+            )
+        ]
+
+    boolean_present = pd.DataFrame(index=frame.index)
+    for field in _ACTIVATION_BOOLEAN_FIELDS:
+        parsed = [
+            _activation_boolean_value(value, field=field, asset_id=asset_id)
+            for value, asset_id in zip(
+                frame[field], frame["asset_id"], strict=True
+            )
+        ]
+        frame[field] = [value for value, _ in parsed]
+        boolean_present[field] = [present for _, present in parsed]
+
+    expected_dates = [
+        _activation_expected_date(value, asset_id=asset_id)
+        for value, asset_id in zip(
+            frame["expected_validation_date"], frame["asset_id"], strict=True
+        )
+    ]
+
+    no_big_up_history = (
+        frame["stock_character_coverage"] & frame["up_7pct_count_2y"].eq(0.0)
+    )
+    for field in _ACTIVATION_POST_EVENT_FIELDS:
+        frame.loc[no_big_up_history & frame[field].isna(), field] = 0.0
+
+    numeric_complete = frame[list(_ACTIVATION_NUMERIC_FIELDS)].notna().all(axis=1)
+    coverage_flags = (
+        frame["technical_feature_coverage"]
+        & frame["residual_deviation_coverage"]
+        & frame["stock_character_coverage"]
+        & frame["market_capacity_coverage"]
+    )
+    activation_coverage = (
+        numeric_complete
+        & boolean_present.all(axis=1)
+        & coverage_flags
+    ).astype(bool)
+
+    strong_move_score = _activation_percentile_mean(
+        frame,
+        ("limit_up_count_2y", "up_7pct_count_2y", "up_5pct_count_2y"),
+        activation_coverage,
+        winsorize_fields=(
+            "limit_up_count_2y",
+            "up_7pct_count_2y",
+            "up_5pct_count_2y",
+        ),
+    )
+    upside_tail_score = _activation_percentile_mean(
+        frame,
+        ("upside_tail_volatility_2y",),
+        activation_coverage,
+    )
+    positive_rate_score = _activation_percentile_mean(
+        frame,
+        (
+            "positive_after_big_up_1d_rate",
+            "positive_after_big_up_3d_rate",
+            "positive_after_big_up_5d_rate",
+        ),
+        activation_coverage,
+    )
+    cumulative_return_score = _activation_percentile_mean(
+        frame,
+        ("median_return_after_big_up_3d", "median_return_after_big_up_5d"),
+        activation_coverage,
+    )
+    streak_retention_score = _activation_percentile_mean(
+        frame,
+        ("max_limit_up_streak_2y", "strong_move_retention_5d_rate"),
+        activation_coverage,
+    )
+    frame["continuation_character_score"] = (
+        0.20 * strong_move_score
+        + 0.15 * upside_tail_score
+        + 0.35 * positive_rate_score
+        + 0.20 * cumulative_return_score
+        + 0.10 * streak_retention_score
+    ).where(activation_coverage)
+
+    frame["residual_price_space_score"] = _activation_percentile_mean(
+        frame,
+        _ACTIVATION_RESIDUAL_FIELDS,
+        activation_coverage,
+        favorable_low=True,
+    )
+
+    float_cap_percentile = _activation_percentile(
+        frame["log_current_float_market_cap"], activation_coverage
+    )
+    sweet_base = pd.Series(
+        np.select(
+            [float_cap_percentile.lt(15.0), float_cap_percentile.le(65.0)],
+            [
+                35.0 + 4.0 * float_cap_percentile,
+                95.0,
+            ],
+            default=95.0 - (60.0 / 35.0) * (float_cap_percentile - 65.0),
+        ),
+        index=frame.index,
+        dtype="float64",
+    ).clip(lower=35.0, upper=95.0).where(activation_coverage)
+    liquidity_percentiles = pd.DataFrame(
+        {
+            field: _activation_percentile(frame[field], activation_coverage)
+            for field in (
+                "average_amount_20d",
+                "average_turnover_rate_20d",
+                "amount_to_float_cap_20d",
+            )
+        },
+        index=frame.index,
+    )
+    frame["capital_efficiency_score"] = pd.concat(
+        [sweet_base.rename("sweet_base"), liquidity_percentiles], axis=1
+    ).mean(axis=1, skipna=False).where(activation_coverage)
+
+    verification_percentile = _activation_percentile(
+        frame["catalyst_verifiability_score"], activation_coverage
+    )
+    trade_date = date.fromisoformat(config.trade_date)
+    timing_window_values: list[float] = []
+    for verifiability, expected_date in zip(
+        frame["catalyst_verifiability_score"], expected_dates, strict=True
+    ):
+        if not math.isfinite(verifiability):
+            timing_window_values.append(math.nan)
+        elif verifiability <= 0.0:
+            timing_window_values.append(0.0)
+        elif expected_date is None:
+            timing_window_values.append(20.0)
+        else:
+            future_days = (expected_date - trade_date).days
+            if 0 < future_days <= 28:
+                timing_window_values.append(100.0)
+            elif future_days <= 84 and future_days > 0:
+                timing_window_values.append(60.0)
+            else:
+                timing_window_values.append(20.0)
+    timing_window_score = pd.Series(
+        timing_window_values, index=frame.index, dtype="float64"
+    )
+    frame["catalyst_timing_score"] = (
+        0.50 * verification_percentile + 0.50 * timing_window_score
+    ).where(activation_coverage)
+
+    frame["activation_coverage"] = activation_coverage
+    frame["activation_score"] = (
+        config.technical_readiness_weight * frame["technical_readiness_score"]
+        + config.continuation_character_weight
+        * frame["continuation_character_score"]
+        + config.residual_price_space_weight * frame["residual_price_space_score"]
+        + config.capital_efficiency_weight * frame["capital_efficiency_score"]
+        + config.catalyst_timing_weight * frame["catalyst_timing_score"]
+    ).where(activation_coverage)
+
+    covered_returns = frame["return_10d"].where(activation_coverage).dropna()
+    return_90th = (
+        float(covered_returns.quantile(0.90))
+        if not covered_returns.empty
+        else math.nan
+    )
+    frame["overextended"] = (
+        activation_coverage
+        & frame["return_10d"].ge(return_90th)
+        & frame["rebound_from_low_60d"].ge(0.30)
+        & frame["residual_price_space_score"].lt(25.0)
+    ).astype(bool)
+    frame["activation_eligible"] = (
+        activation_coverage
+        & frame["technical_readiness_score"].ge(
+            config.v2_min_technical_readiness_score
+        )
+        & ~frame["falling_knife"]
+        & ~frame["overextended"]
+        & frame["market_capacity_coverage"]
+    ).astype(bool)
+
+    reason_values: list[str] = []
+    for index in frame.index:
+        reasons: list[str] = []
+        if not bool(frame.at[index, "activation_coverage"]):
+            reasons.append("activation_coverage_incomplete")
+        technical_score = frame.at[index, "technical_readiness_score"]
+        if math.isfinite(technical_score) and (
+            technical_score < config.v2_min_technical_readiness_score
+        ):
+            reasons.append("technical_readiness_below_threshold")
+        if bool(frame.at[index, "falling_knife"]):
+            reasons.append("falling_knife")
+        if bool(frame.at[index, "overextended"]):
+            reasons.append("overextended")
+        if (
+            bool(boolean_present.at[index, "market_capacity_coverage"])
+            and not bool(frame.at[index, "market_capacity_coverage"])
+        ):
+            reasons.append("market_capacity_coverage_insufficient")
+        reason_values.append("|".join(sorted(reasons)))
+    frame["activation_exclusion_reasons"] = reason_values
+    return frame.reset_index(drop=True)
 
 
 def compute_technical_readiness_features(

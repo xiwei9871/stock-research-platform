@@ -104,6 +104,99 @@ def _score_row(asset_id: str, level: float, *, volatility_ratio: float = 1.0) ->
     }
 
 
+def _config():
+    contracts = importlib.import_module("stock_research.consumer_oversold.contracts")
+    return contracts.ConsumerOversoldConfig(trade_date=TRADE_DATE, ranking_version="v2")
+
+
+ACTIVATION_CONTINUATION_FIELDS = (
+    "limit_up_count_2y",
+    "up_7pct_count_2y",
+    "up_5pct_count_2y",
+    "upside_tail_volatility_2y",
+    "positive_after_big_up_1d_rate",
+    "positive_after_big_up_3d_rate",
+    "positive_after_big_up_5d_rate",
+    "median_return_after_big_up_3d",
+    "median_return_after_big_up_5d",
+    "max_limit_up_streak_2y",
+    "strong_move_retention_5d_rate",
+)
+ACTIVATION_RESIDUAL_FIELDS = (
+    "drawdown_from_high_1y",
+    "drawdown_from_high_2y",
+    "price_position_1y",
+    "price_position_2y",
+    "distance_hfq_ma120",
+    "distance_hfq_ma250",
+    "rebound_from_low_60d",
+    "rebound_from_low_120d",
+    "relative_return_6m",
+    "valuation_percentile",
+)
+ACTIVATION_CAPITAL_FIELDS = (
+    "log_current_float_market_cap",
+    "average_amount_20d",
+    "average_turnover_rate_20d",
+    "amount_to_float_cap_20d",
+)
+ACTIVATION_ADDED_FIELDS = (
+    "continuation_character_score",
+    "residual_price_space_score",
+    "capital_efficiency_score",
+    "catalyst_timing_score",
+    "activation_coverage",
+    "activation_score",
+    "overextended",
+    "activation_eligible",
+    "activation_exclusion_reasons",
+)
+
+
+def _activation_row(asset_id: str, **overrides) -> dict[str, object]:
+    row = {
+        "asset_id": asset_id,
+        "stock_code": f"{len(asset_id):06d}",
+        "stock_name": f"name-{asset_id}",
+        "technical_feature_coverage": True,
+        "technical_readiness_score": 60.0,
+        "falling_knife": False,
+        "return_10d": 0.05,
+        "residual_deviation_coverage": True,
+        "drawdown_from_high_1y": -0.40,
+        "drawdown_from_high_2y": -0.50,
+        "price_position_1y": 0.20,
+        "price_position_2y": 0.25,
+        "distance_hfq_ma120": -0.10,
+        "distance_hfq_ma250": -0.15,
+        "rebound_from_low_60d": 0.10,
+        "rebound_from_low_120d": 0.15,
+        "relative_return_6m": -0.20,
+        "valuation_percentile": 0.20,
+        "stock_character_coverage": True,
+        "limit_up_count_2y": 2.0,
+        "up_7pct_count_2y": 3.0,
+        "up_5pct_count_2y": 5.0,
+        "upside_tail_volatility_2y": 0.03,
+        "positive_after_big_up_1d_rate": 0.50,
+        "positive_after_big_up_3d_rate": 0.45,
+        "positive_after_big_up_5d_rate": 0.40,
+        "median_return_after_big_up_3d": 0.08,
+        "median_return_after_big_up_5d": 0.12,
+        "max_limit_up_streak_2y": 2.0,
+        "strong_move_retention_5d_rate": 0.40,
+        "log_current_float_market_cap": 20.0,
+        "average_amount_20d": 200_000_000.0,
+        "average_turnover_rate_20d": 2.0,
+        "amount_to_float_cap_20d": 0.02,
+        "market_capacity_coverage": True,
+        "catalyst_verifiability_score": 70.0,
+        "expected_validation_date": "",
+    }
+    row.update(overrides)
+    return row
+
+
 def test_features_use_daily_point_in_time_windows_and_preserve_inputs():
     activation = _activation()
     bars = _complete_bars()
@@ -543,3 +636,339 @@ def test_falling_knife_requires_every_condition():
         assert not activation.score_technical_readiness(changed).set_index("asset_id").loc[
             "target", "falling_knife"
         ], field
+
+
+def test_activation_capital_sweet_spot_boundaries_and_ties_are_deterministic():
+    activation = _activation()
+    rows = []
+    for percentile in range(101):
+        rows.append(
+            _activation_row(
+                f"A{percentile:03d}",
+                log_current_float_market_cap=float(percentile),
+            )
+        )
+
+    result = activation.score_activation_candidates(
+        pd.DataFrame(rows), _config()
+    ).set_index("asset_id")
+
+    assert result.loc["A015", "capital_efficiency_score"] == pytest.approx(61.25)
+    assert result.loc["A065", "capital_efficiency_score"] == pytest.approx(61.25)
+    assert result.loc["A014", "capital_efficiency_score"] == pytest.approx(60.25)
+    assert result.loc["A066", "capital_efficiency_score"] == pytest.approx(
+        (95.0 - 60.0 / 35.0 + 150.0) / 4.0
+    )
+    assert result.loc["A015", "capital_efficiency_score"] > result.loc[
+        "A000", "capital_efficiency_score"
+    ]
+    assert result.loc["A065", "capital_efficiency_score"] > result.loc[
+        "A100", "capital_efficiency_score"
+    ]
+
+    tied = pd.DataFrame(
+        [_activation_row("T1"), _activation_row("T2"), _activation_row("T3")]
+    )
+    tied_result = activation.score_activation_candidates(tied, _config())
+    assert tied_result["capital_efficiency_score"].tolist() == [61.25, 61.25, 61.25]
+
+
+def test_activation_continuation_uses_documented_v2_groups_and_no_asymmetry_field():
+    activation = _activation()
+    rows = []
+    for asset_id, level in (("low", 1.0), ("middle", 2.0), ("high", 3.0)):
+        overrides = {field: level for field in ACTIVATION_CONTINUATION_FIELDS}
+        rows.append(_activation_row(asset_id, **overrides))
+
+    result = activation.score_activation_candidates(
+        pd.DataFrame(rows), _config()
+    ).set_index("asset_id")
+
+    assert result.loc[["low", "middle", "high"], "continuation_character_score"].tolist() == [
+        0.0,
+        50.0,
+        100.0,
+    ]
+    assert not any("asymmetry" in column for column in pd.DataFrame(rows).columns)
+
+
+def test_activation_no_big_up_history_zero_fills_only_covered_post_event_metrics():
+    activation = _activation()
+    post_event_fields = (
+        "positive_after_big_up_1d_rate",
+        "positive_after_big_up_3d_rate",
+        "positive_after_big_up_5d_rate",
+        "median_return_after_big_up_3d",
+        "median_return_after_big_up_5d",
+        "strong_move_retention_5d_rate",
+    )
+    no_history = _activation_row("none", up_7pct_count_2y=0.0)
+    missing_history = _activation_row("missing", up_7pct_count_2y=1.0)
+    for field in post_event_fields:
+        no_history[field] = np.nan
+        missing_history[field] = np.nan
+
+    result = activation.score_activation_candidates(
+        pd.DataFrame([no_history, missing_history]), _config()
+    ).set_index("asset_id")
+
+    assert result.loc["none", "activation_coverage"]
+    assert np.isfinite(result.loc["none", "continuation_character_score"])
+    assert not result.loc["missing", "activation_coverage"]
+    assert pd.isna(result.loc["missing", "continuation_character_score"])
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    (
+        "technical_readiness_score",
+        "return_10d",
+        *ACTIVATION_CONTINUATION_FIELDS,
+        *ACTIVATION_RESIDUAL_FIELDS,
+        *ACTIVATION_CAPITAL_FIELDS,
+        "catalyst_verifiability_score",
+    ),
+)
+def test_activation_missing_required_value_never_fabricates_a_score(missing_field):
+    activation = _activation()
+    row = _activation_row("missing")
+    row[missing_field] = np.nan
+
+    result = activation.score_activation_candidates(
+        pd.DataFrame([row]), _config()
+    ).iloc[0]
+
+    assert not result["activation_coverage"]
+    for field in ACTIVATION_ADDED_FIELDS[:4] + ("activation_score",):
+        assert pd.isna(result[field]), field
+    assert not result["activation_eligible"]
+    assert result["activation_exclusion_reasons"] == "activation_coverage_incomplete"
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    (
+        "technical_feature_coverage",
+        "falling_knife",
+        "residual_deviation_coverage",
+        "stock_character_coverage",
+        "market_capacity_coverage",
+    ),
+)
+def test_activation_missing_required_boolean_is_coverage_incomplete_only(missing_field):
+    activation = _activation()
+    row = _activation_row("missing")
+    row[missing_field] = pd.NA
+
+    result = activation.score_activation_candidates(
+        pd.DataFrame([row]), _config()
+    ).iloc[0]
+
+    assert not result["activation_coverage"]
+    assert pd.isna(result["activation_score"])
+    assert result["activation_exclusion_reasons"] == "activation_coverage_incomplete"
+
+
+def test_activation_overextension_requires_all_three_conditions():
+    activation = _activation()
+    peers = []
+    for index in range(10):
+        residual = {field: -10.0 for field in ACTIVATION_RESIDUAL_FIELDS}
+        residual["rebound_from_low_60d"] = 0.10
+        peers.append(_activation_row(f"peer{index}", return_10d=float(index), **residual))
+    target_residual = {field: 10.0 for field in ACTIVATION_RESIDUAL_FIELDS}
+    target_residual["rebound_from_low_60d"] = 0.40
+    target = _activation_row("target", return_10d=10.0, **target_residual)
+    base = pd.DataFrame([*peers, target])
+
+    assert activation.score_activation_candidates(base, _config()).set_index(
+        "asset_id"
+    ).loc["target", "overextended"]
+
+    changed = base.copy(deep=True)
+    changed.loc[changed["asset_id"].eq("target"), "return_10d"] = -1.0
+    assert not activation.score_activation_candidates(changed, _config()).set_index(
+        "asset_id"
+    ).loc["target", "overextended"]
+
+    changed = base.copy(deep=True)
+    changed.loc[changed["asset_id"].eq("target"), "rebound_from_low_60d"] = 0.29
+    assert not activation.score_activation_candidates(changed, _config()).set_index(
+        "asset_id"
+    ).loc["target", "overextended"]
+
+    changed = base.copy(deep=True)
+    for field in ACTIVATION_RESIDUAL_FIELDS:
+        if field != "rebound_from_low_60d":
+            changed.loc[changed["asset_id"].eq("target"), field] = -20.0
+    assert not activation.score_activation_candidates(changed, _config()).set_index(
+        "asset_id"
+    ).loc["target", "overextended"]
+
+
+def test_activation_gate_reasons_are_exact_sorted_and_all_pass_is_eligible():
+    activation = _activation()
+    rows = [
+        _activation_row("pass"),
+        _activation_row("technical", technical_readiness_score=34.99),
+        _activation_row("knife", falling_knife=True),
+        _activation_row("capacity", market_capacity_coverage=False),
+        _activation_row("coverage", catalyst_verifiability_score=np.nan),
+    ]
+    result = activation.score_activation_candidates(
+        pd.DataFrame(rows), _config()
+    ).set_index("asset_id")
+
+    assert result.loc["pass", "activation_eligible"]
+    assert result.loc["pass", "activation_exclusion_reasons"] == ""
+    assert result.loc["technical", "activation_exclusion_reasons"] == (
+        "technical_readiness_below_threshold"
+    )
+    assert result.loc["knife", "activation_exclusion_reasons"] == "falling_knife"
+    assert result.loc["capacity", "activation_exclusion_reasons"] == "|".join(
+        sorted(
+            {
+                "activation_coverage_incomplete",
+                "market_capacity_coverage_insufficient",
+            }
+        )
+    )
+    assert result.loc["coverage", "activation_exclusion_reasons"] == (
+        "activation_coverage_incomplete"
+    )
+
+    combined = pd.DataFrame(
+        [
+            _activation_row(
+                "combined",
+                technical_readiness_score=0.0,
+                falling_knife=True,
+                market_capacity_coverage=False,
+                catalyst_verifiability_score=np.nan,
+            )
+        ]
+    )
+    reason = activation.score_activation_candidates(combined, _config()).iloc[0][
+        "activation_exclusion_reasons"
+    ]
+    assert reason == "|".join(
+        sorted(
+            {
+                "activation_coverage_incomplete",
+                "technical_readiness_below_threshold",
+                "falling_knife",
+                "market_capacity_coverage_insufficient",
+            }
+        )
+    )
+
+
+def test_activation_gate_marks_an_overextended_covered_row_with_exact_reason():
+    activation = _activation()
+    peers = []
+    for index in range(10):
+        residual = {field: -10.0 for field in ACTIVATION_RESIDUAL_FIELDS}
+        residual["rebound_from_low_60d"] = 0.10
+        peers.append(_activation_row(f"peer{index}", return_10d=float(index), **residual))
+    residual = {field: 10.0 for field in ACTIVATION_RESIDUAL_FIELDS}
+    residual["rebound_from_low_60d"] = 0.40
+    rows = pd.DataFrame(
+        [*peers, _activation_row("target", return_10d=10.0, **residual)]
+    )
+
+    target = activation.score_activation_candidates(rows, _config()).set_index(
+        "asset_id"
+    ).loc["target"]
+
+    assert target["activation_coverage"]
+    assert target["overextended"]
+    assert not target["activation_eligible"]
+    assert target["activation_exclusion_reasons"] == "overextended"
+
+
+def test_activation_catalyst_timing_windows_and_strict_date_validation():
+    activation = _activation()
+    rows = pd.DataFrame(
+        [
+            _activation_row("d28", expected_validation_date="2026-02-27"),
+            _activation_row("d84", expected_validation_date="2026-04-24"),
+            _activation_row("missing", expected_validation_date=""),
+            _activation_row("past", expected_validation_date="2026-01-29"),
+            _activation_row("late", expected_validation_date="2026-04-25"),
+        ]
+    )
+    result = activation.score_activation_candidates(rows, _config()).set_index(
+        "asset_id"
+    )
+
+    assert result.loc["d28", "catalyst_timing_score"] == 75.0
+    assert result.loc["d84", "catalyst_timing_score"] == 55.0
+    assert result.loc[["missing", "past", "late"], "catalyst_timing_score"].tolist() == [
+        35.0,
+        35.0,
+        35.0,
+    ]
+
+    invalid = pd.DataFrame(
+        [_activation_row("bad", expected_validation_date="2026-2-01")]
+    )
+    with pytest.raises(ValueError, match=r"expected_validation_date.*bad"):
+        activation.score_activation_candidates(invalid, _config())
+
+
+def test_activation_score_uses_configured_exact_weights():
+    activation = _activation()
+    result = activation.score_activation_candidates(
+        pd.DataFrame([_activation_row("A")]), _config()
+    ).iloc[0]
+
+    expected = (
+        0.30 * result["technical_readiness_score"]
+        + 0.25 * result["continuation_character_score"]
+        + 0.20 * result["residual_price_space_score"]
+        + 0.15 * result["capital_efficiency_score"]
+        + 0.10 * result["catalyst_timing_score"]
+    )
+    assert result["activation_score"] == pytest.approx(expected)
+
+
+def test_activation_has_no_name_or_code_specific_branches():
+    activation = _activation()
+    identities = (
+        ("A", "600733", "北汽蓝谷"),
+        ("B", "601127", "赛力斯"),
+        ("C", "600702", "舍得酒业"),
+        ("D", "600418", "江淮汽车"),
+    )
+    rows = []
+    for asset_id, stock_code, stock_name in identities:
+        rows.append(
+            _activation_row(asset_id, stock_code=stock_code, stock_name=stock_name)
+        )
+
+    result = activation.score_activation_candidates(pd.DataFrame(rows), _config())
+
+    for field in ACTIVATION_ADDED_FIELDS[:6]:
+        assert result[field].nunique(dropna=False) == 1, field
+
+
+def test_activation_normalizes_ids_resets_index_preserves_order_and_input():
+    activation = _activation()
+    rows = pd.DataFrame(
+        [_activation_row(" B "), _activation_row("A"), _activation_row(" C")],
+        index=[7, 7, 2],
+    )
+    before = rows.copy(deep=True)
+
+    result = activation.score_activation_candidates(rows, _config())
+
+    assert result.index.equals(pd.RangeIndex(3))
+    assert result["asset_id"].tolist() == ["B", "A", "C"]
+    assert result.columns[-len(ACTIVATION_ADDED_FIELDS) :].tolist() == list(
+        ACTIVATION_ADDED_FIELDS
+    )
+    pd.testing.assert_frame_equal(rows, before)
+
+    duplicate = pd.DataFrame([_activation_row("A"), _activation_row(" A ")])
+    with pytest.raises(ValueError, match=r"duplicate.*A"):
+        activation.score_activation_candidates(duplicate, _config())
