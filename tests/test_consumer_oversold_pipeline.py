@@ -1538,6 +1538,47 @@ def test_v2_pipeline_records_turnover_derivation_coverage_and_keeps_unresolved_s
     assert not bool(scores.loc[unresolved_asset, "technical_feature_coverage"])
 
 
+def test_v2_activation_capacity_uses_derived_turnover_without_changing_base_bars():
+    from stock_research.consumer_oversold import loaders
+
+    frames, evidence, config = _many_frames(4, 4)
+    target = frames["bars"].index[frames["bars"]["asset_id"].eq("A000")][-1]
+    frames["bars"].loc[target, "turnover_rate"] = np.nan
+    frames["bars"].attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": "A000",
+            "trade_date": pd.Timestamp(frames["bars"].loc[target, "trade_date"]).date().isoformat(),
+            "volume": 160.0,
+            "source": "baostock",
+        }
+    ]
+    frames["activation_bars"] = loaders.derive_consumer_market_turnover_history(
+        frames["bars"],
+        frames["share_capacity"],
+        trade_date=TRADE_DATE,
+    )
+    v2_config = _v2_config(
+        replace(
+            config,
+            preaudit_size=4,
+            minimum_evidence_complete=4,
+            final_top_n=3,
+            reserve_top_n=1,
+        )
+    )
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    scores = result["scores"].set_index("asset_id")
+    assert pd.isna(frames["bars"].loc[target, "turnover_rate"])
+    assert scores.loc["A000", "average_turnover_rate_20d"] == pytest.approx(11.9)
+    assert bool(scores.loc["A000", "activation_coverage"])
+
+
 def test_v2_pipeline_empty_universe_has_stable_v2_schemas_and_no_name_branch():
     frames, evidence, config = _frames()
     named = deepcopy(frames)

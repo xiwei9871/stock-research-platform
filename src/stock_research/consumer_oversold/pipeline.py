@@ -1264,6 +1264,7 @@ def _build_v2_result(
     membership: pd.DataFrame,
     bars: pd.DataFrame,
     activation_bars: pd.DataFrame,
+    share_capacity: pd.DataFrame,
     finance: pd.DataFrame,
     valuation_history: pd.DataFrame,
     validated_evidence: pd.DataFrame,
@@ -1289,6 +1290,24 @@ def _build_v2_result(
         elasticity_scored,
         technical,
         "technical_readiness_features",
+    )
+    activation_capacity = compute_market_capacity_features(
+        activation_bars,
+        share_capacity,
+        trade_date=config.trade_date,
+    )
+    activation_input = activation_input.drop(
+        columns=[
+            column
+            for column in activation_capacity.columns
+            if column != "asset_id"
+        ],
+        errors="ignore",
+    )
+    activation_input = _merge_one_to_one(
+        activation_input,
+        activation_capacity,
+        "activation_market_capacity_features",
     )
     activation_scored = score_activation_candidates(activation_input, config)
     activation_scored["ranking_version"] = "v2"
@@ -1935,6 +1954,7 @@ def build_consumer_oversold_weekly_from_frames(
             membership=membership,
             bars=bars,
             activation_bars=activation_bars,
+            share_capacity=share_capacity,
             finance=finance,
             valuation_history=valuation_history,
             validated_evidence=validated_evidence,
