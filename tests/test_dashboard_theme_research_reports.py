@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 import errno
 import hashlib
 import os
 import shutil
 import threading
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import theme_research_reports as reports
+from stock_research.dashboard.auth_models import CurrentUser
+from stock_research.theme_research_report_index import ReportScanResult
 from stock_research.theme_research_report_store import ThemeResearchReportError
 
 
@@ -834,3 +840,706 @@ def test_directory_aba_during_read_is_rejected(monkeypatch, tmp_path, component)
             "theme-a", "report-id", report_root=report_root
         )
     assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
+
+
+def _scan_result(*, indexed: int = 1, invalid: int = 0) -> ReportScanResult:
+    now = datetime.now(UTC)
+    return ReportScanResult(
+        discovered=indexed + invalid,
+        indexed=indexed,
+        unchanged=0,
+        invalid=invalid,
+        errors=(
+            ({"code": "MANIFEST_INVALID", "theme_id": "theme-a"},)
+            if invalid
+            else ()
+        ),
+        started_at=now,
+        completed_at=now,
+    )
+
+
+def test_theme_report_scheduler_starts_immediately_periodically_and_without_overlap(
+    tmp_path,
+) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        calls = 0
+        active = 0
+        maximum_active = 0
+        first_started = threading.Event()
+        release_first = threading.Event()
+
+        def scan(root, *, limits, service):
+            nonlocal calls, active, maximum_active
+            calls += 1
+            active += 1
+            maximum_active = max(maximum_active, active)
+            first_started.set()
+            if calls == 1:
+                release_first.wait(timeout=2)
+            time.sleep(0.01)
+            active -= 1
+            return _scan_result(indexed=calls)
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path,
+            object(),
+            "runtime",
+            0.02,
+            scan_fn=scan,
+        )
+        scheduler.start()
+        scheduler.start()
+        await asyncio.to_thread(first_started.wait, 1)
+        second_run = asyncio.create_task(scheduler.run_once())
+        await asyncio.sleep(0.01)
+        release_first.set()
+        await second_run
+        await asyncio.sleep(0.05)
+        await scheduler.stop()
+        await scheduler.stop()
+
+        assert calls >= 2
+        assert maximum_active == 1
+        diagnostics = scheduler.diagnostics()
+        assert diagnostics["status"] == "ok"
+        assert diagnostics["running"] is False
+        assert diagnostics["last_result"]["indexed"] >= 1
+        assert diagnostics["last_started_at"]
+        assert diagnostics["last_completed_at"]
+
+    asyncio.run(exercise())
+
+
+def test_theme_report_scheduler_recovers_from_safe_error_and_detaches_diagnostics(
+    tmp_path,
+) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        calls = 0
+
+        def scan(root, *, limits, service):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError(f"secret path: {root}")
+            return _scan_result(indexed=2)
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 0.01, scan_fn=scan
+        )
+        assert scheduler.diagnostics()["status"] == "never_run"
+        await scheduler.run_once()
+        failed = scheduler.diagnostics()
+        assert failed["status"] == "error"
+        assert failed["last_result"] == {
+            "error_code": "THEME_REPORT_SCAN_FAILED"
+        }
+        assert str(tmp_path) not in repr(failed)
+
+        failed["last_result"]["error_code"] = "tampered"
+        assert scheduler.diagnostics()["last_result"]["error_code"] == (
+            "THEME_REPORT_SCAN_FAILED"
+        )
+
+        await scheduler.run_once()
+        assert scheduler.diagnostics()["status"] == "ok"
+        assert calls == 2
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    "fatal_error",
+    [MemoryError(), OSError(errno.EMFILE, "secret resource")],
+)
+def test_theme_report_scheduler_stops_periodic_loop_on_fatal_resource_error(
+    tmp_path, fatal_error
+) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        calls = 0
+
+        def scan(root, *, limits, service):
+            nonlocal calls
+            calls += 1
+            raise fatal_error
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 0.01, scan_fn=scan
+        )
+        scheduler.start()
+        await asyncio.sleep(0.05)
+        await scheduler.stop()
+
+        assert calls == 1
+        assert scheduler.diagnostics()["status"] == "fatal"
+        assert scheduler.diagnostics()["last_result"] == {
+            "error_code": "THEME_REPORT_SCAN_RESOURCE_EXHAUSTED"
+        }
+
+    asyncio.run(exercise())
+
+
+def test_theme_report_scheduler_rejects_non_positive_interval(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    with pytest.raises(ValueError, match="interval_seconds"):
+        ThemeResearchReportScheduler(tmp_path, object(), "runtime", 0)
+
+
+def test_theme_report_scheduler_cancellation_waits_for_running_thread(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+        completed = threading.Event()
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            completed.set()
+            return _scan_result()
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+        scheduler.start()
+        await asyncio.to_thread(started.wait, 1)
+        task = scheduler._task
+        assert task is not None
+        task.cancel()
+        await asyncio.sleep(0.01)
+        assert task.done() is False
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert completed.is_set()
+        assert scheduler.diagnostics()["running"] is False
+        assert scheduler._task is None
+
+    asyncio.run(exercise())
+
+
+def test_theme_report_scheduler_stop_propagates_caller_cancellation(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            return _scan_result()
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+        scheduler.start()
+        await asyncio.to_thread(started.wait, 1)
+        stopper = asyncio.create_task(scheduler.stop())
+        await asyncio.sleep(0)
+        stopper.cancel()
+        await asyncio.sleep(0.01)
+        assert stopper.done() is False
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await stopper
+        assert scheduler._task is None
+
+    asyncio.run(exercise())
+
+
+def test_theme_report_scheduler_cancellation_wins_over_worker_error(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            raise RuntimeError("secret scanner failure")
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+        run = asyncio.create_task(scheduler.run_once())
+        await asyncio.to_thread(started.wait, 1)
+        run.cancel()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+        assert scheduler.diagnostics()["status"] == "never_run"
+        assert "secret" not in repr(scheduler.diagnostics())
+
+    asyncio.run(exercise())
+
+
+def _api_client(monkeypatch, *, role: str | None = "user") -> TestClient:
+    monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "false")
+    user = (
+        CurrentUser("user:1", "operator", "Operator", role, True)
+        if role is not None
+        else None
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_current_user_from_session",
+        lambda token: user if token == "session" else None,
+    )
+    return TestClient(dashboard_app.create_app())
+
+
+def _session_cookies() -> dict[str, str]:
+    return {
+        "stock_research_session": "session",
+        "stock_research_csrf": "csrf-token",
+    }
+
+
+def test_theme_report_api_requires_session_even_when_global_auth_is_disabled(
+    monkeypatch,
+) -> None:
+    client = _api_client(monkeypatch, role=None)
+
+    response = client.get("/api/research/theme-decomposition/themes/theme-a/reports")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "not_authenticated"
+
+
+def test_theme_report_api_allows_normal_reads_but_rejects_admin_for_user(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        dashboard_app.theme_research_report_store,
+        "list_approved_report_versions",
+        lambda theme_id, service: {"total": 1, "items": [{"theme_id": theme_id}]},
+    )
+    client = _api_client(monkeypatch)
+
+    normal = client.get(
+        "/api/research/theme-decomposition/themes/theme-a/reports",
+        cookies=_session_cookies(),
+    )
+    admin = client.get(
+        "/api/admin/theme-research/reports?status=pending_review",
+        cookies=_session_cookies(),
+    )
+
+    assert normal.status_code == 200
+    assert normal.json() == {"total": 1, "items": [{"theme_id": "theme-a"}]}
+    assert admin.status_code == 403
+    assert admin.json()["detail"] == "admin_required"
+
+
+def test_theme_report_admin_list_and_diagnostics_are_admin_only(monkeypatch) -> None:
+    monkeypatch.setattr(
+        dashboard_app.theme_research_report_store,
+        "list_admin_report_versions",
+        lambda status, service: {"total": 0, "items": [], "status": status},
+    )
+    client = _api_client(monkeypatch, role="admin")
+    app = client.app
+    monkeypatch.setattr(
+        app.state.theme_research_report_scheduler,
+        "diagnostics",
+        lambda: {"status": "never_run", "running": False},
+    )
+
+    listed = client.get(
+        "/api/admin/theme-research/reports?status=rejected",
+        cookies=_session_cookies(),
+    )
+    diagnostics = client.get(
+        "/api/admin/theme-research/report-index/status",
+        cookies=_session_cookies(),
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["status"] == "rejected"
+    assert diagnostics.status_code == 200
+    assert diagnostics.json() == {"status": "never_run", "running": False}
+
+
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        (
+            "/api/admin/theme-research/reports/report-id/publish",
+            {
+                "expected_row_version": 0,
+                "idempotency_key": "key",
+                "comment": "ok",
+            },
+        ),
+        (
+            "/api/admin/theme-research/reports/report-id/publish",
+            {
+                "expected_row_version": 1,
+                "idempotency_key": " key ",
+                "comment": "ok",
+            },
+        ),
+        (
+            "/api/admin/theme-research/reports/report-id/reject",
+            {
+                "expected_row_version": 1,
+                "idempotency_key": "key",
+                "reason": "   ",
+            },
+        ),
+        (
+            "/api/admin/theme-research/reports/report-id/reject",
+            {
+                "expected_row_version": 1,
+                "idempotency_key": "key",
+                "reason": "no",
+                "actor_user_id": "attacker",
+            },
+        ),
+    ],
+)
+def test_theme_report_mutation_payload_validation(monkeypatch, path, payload) -> None:
+    client = _api_client(monkeypatch, role="admin")
+
+    response = client.post(path, json=payload, cookies=_session_cookies())
+
+    assert response.status_code == 422
+
+
+def test_theme_report_publish_requires_csrf(monkeypatch) -> None:
+    def reject_csrf(**kwargs):
+        raise PermissionError("csrf_invalid")
+
+    monkeypatch.setattr(dashboard_app, "validate_csrf", reject_csrf)
+    client = _api_client(monkeypatch, role="admin")
+
+    response = client.post(
+        "/api/admin/theme-research/reports/report-id/publish",
+        json={
+            "expected_row_version": 1,
+            "idempotency_key": "key",
+            "comment": "approved",
+        },
+        cookies=_session_cookies(),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "csrf_invalid"
+
+
+@pytest.mark.parametrize(
+    "action,text_field",
+    [("publish", "comment"), ("reject", "reason")],
+)
+def test_theme_report_mutations_use_authenticated_actor_and_request_id(
+    monkeypatch, action, text_field
+) -> None:
+    calls = []
+
+    def mutate(report_version_id, **kwargs):
+        calls.append((report_version_id, kwargs))
+        return {"report_version_id": report_version_id, "status": action}
+
+    monkeypatch.setattr(
+        dashboard_app.theme_research_report_store,
+        f"{action}_report_version",
+        mutate,
+    )
+    client = _api_client(monkeypatch, role="admin")
+    payload = {
+        "expected_row_version": 2,
+        "idempotency_key": "request-key",
+        text_field: "review text",
+    }
+
+    response = client.post(
+        f"/api/admin/theme-research/reports/report-id/{action}",
+        json=payload,
+        cookies=_session_cookies(),
+        headers={"x-csrf-token": "csrf-token", "x-request-id": "req-123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "report": {"report_version_id": "report-id", "status": action}
+    }
+    assert calls == [
+        (
+            "report-id",
+            {
+                "expected_row_version": 2,
+                "actor_user_id": "user:1",
+                "actor_role": "admin",
+                text_field: "review text",
+                "request_id": "req-123",
+                "idempotency_key": "request-key",
+                "service": dashboard_app.SETTINGS.theme_research_runtime_service,
+            },
+        )
+    ]
+
+
+class _UntrustedNotFoundError(RuntimeError):
+    code = "PRIVATE_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    "error,status_code",
+    [
+        (ThemeResearchReportError("THEME_REPORT_NOT_FOUND", "db secret"), 404),
+        (ThemeResearchReportError("THEME_REPORT_THEME_NOT_FOUND", "db secret"), 404),
+        (
+            reports.ThemeResearchReportDocumentError(
+                "THEME_REPORT_DOCUMENT_NOT_FOUND", "filesystem secret"
+            ),
+            404,
+        ),
+        (ThemeResearchReportError("THEME_REPORT_READ_INVALID", "db secret"), 400),
+        (ThemeResearchReportError("THEME_REPORT_STATE_CONFLICT", "db secret"), 409),
+        (ThemeResearchReportError("THEME_REPORT_STORE_UNAVAILABLE", "db secret"), 503),
+        (_UntrustedNotFoundError("secret"), 503),
+        (MemoryError("secret"), 503),
+        (RuntimeError("secret"), 503),
+    ],
+)
+def test_theme_report_api_maps_errors_without_internal_text(
+    monkeypatch, error, status_code
+) -> None:
+    def fail(theme_id, *, service):
+        raise error
+
+    monkeypatch.setattr(
+        dashboard_app.theme_research_report_store,
+        "list_approved_report_versions",
+        fail,
+    )
+    client = _api_client(monkeypatch)
+
+    response = client.get(
+        "/api/research/theme-decomposition/themes/theme-a/reports",
+        cookies=_session_cookies(),
+    )
+
+    assert response.status_code == status_code
+    body = response.json()
+    assert body["detail"]["error_code"]
+    assert "secret" not in repr(body)
+
+
+class _FakeResolvedPdf:
+    filename = 'report\r\n"unsafe.pdf'
+    media_type = "application/pdf"
+    content_length = 8
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    def iter_chunks(self):
+        try:
+            yield b"%PDF"
+            yield b"body"
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_theme_report_pdf_streams_safe_headers_and_closes(monkeypatch) -> None:
+    resolved = _FakeResolvedPdf()
+    monkeypatch.setattr(
+        dashboard_app.theme_research_reports,
+        "resolve_published_report_pdf",
+        lambda theme_id, report_version_id, **kwargs: resolved,
+    )
+    client = _api_client(monkeypatch)
+
+    response = client.get(
+        "/api/research/theme-decomposition/themes/theme-a/reports/report-id/pdf",
+        cookies=_session_cookies(),
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"%PDFbody"
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-length"] == "8"
+    assert "\r" not in response.headers["content-disposition"]
+    assert "\n" not in response.headers["content-disposition"]
+    assert response.headers["content-disposition"].count('"') == 2
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_response_closes_on_early_iterator_close() -> None:
+    resolved = _FakeResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def consume_one_chunk() -> None:
+        assert await anext(response.body_iterator) == b"%PDF"
+        await response.body_iterator.aclose()
+
+    asyncio.run(consume_one_chunk())
+
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_response_closes_if_response_construction_fails(
+    monkeypatch,
+) -> None:
+    resolved = _FakeResolvedPdf()
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("response failure")
+
+    monkeypatch.setattr(dashboard_app, "StreamingResponse", fail)
+
+    with pytest.raises(RuntimeError, match="response failure"):
+        dashboard_app._theme_report_pdf_response(resolved)
+    assert resolved.closed is True
+
+
+def test_pending_report_document_is_hidden_normally_but_available_to_admin(
+    monkeypatch,
+) -> None:
+    def hidden(*args, **kwargs):
+        raise reports.ThemeResearchReportDocumentError(
+            "THEME_REPORT_NOT_FOUND", "filesystem secret"
+        )
+
+    monkeypatch.setattr(
+        dashboard_app.theme_research_reports,
+        "load_published_report_document",
+        hidden,
+    )
+    monkeypatch.setattr(
+        dashboard_app.theme_research_reports,
+        "load_admin_report_document",
+        lambda report_version_id, **kwargs: {
+            "report_version_id": report_version_id,
+            "status": "pending_review",
+        },
+    )
+    client = _api_client(monkeypatch, role="admin")
+
+    normal = client.get(
+        "/api/research/theme-decomposition/themes/theme-a/reports/report-id",
+        cookies=_session_cookies(),
+    )
+    admin = client.get(
+        "/api/admin/theme-research/reports/report-id",
+        cookies=_session_cookies(),
+    )
+
+    assert normal.status_code == 404
+    assert normal.json()["detail"]["error_code"] == "THEME_REPORT_NOT_FOUND"
+    assert admin.status_code == 200
+    assert admin.json()["status"] == "pending_review"
+
+
+def test_pending_report_pdf_is_hidden_normally_but_available_to_admin(
+    monkeypatch,
+) -> None:
+    admin_resolved = _FakeResolvedPdf()
+
+    def hidden(*args, **kwargs):
+        raise reports.ThemeResearchReportDocumentError(
+            "THEME_REPORT_NOT_FOUND", "filesystem secret"
+        )
+
+    monkeypatch.setattr(
+        dashboard_app.theme_research_reports,
+        "resolve_published_report_pdf",
+        hidden,
+    )
+    monkeypatch.setattr(
+        dashboard_app.theme_research_reports,
+        "resolve_admin_report_pdf",
+        lambda report_version_id, **kwargs: admin_resolved,
+    )
+    client = _api_client(monkeypatch, role="admin")
+
+    normal = client.get(
+        "/api/research/theme-decomposition/themes/theme-a/reports/report-id/pdf",
+        cookies=_session_cookies(),
+    )
+    admin = client.get(
+        "/api/admin/theme-research/reports/report-id/pdf",
+        cookies=_session_cookies(),
+    )
+
+    assert normal.status_code == 404
+    assert admin.status_code == 200
+    assert admin.content == b"%PDFbody"
+    assert admin_resolved.closed is True
+
+
+def test_theme_report_scheduler_runs_once_and_stops_with_app_lifespan(
+    monkeypatch, tmp_path
+) -> None:
+    calls = []
+
+    def scan(root, *, limits, service):
+        calls.append((root, limits, service))
+        return _scan_result()
+
+    monkeypatch.setattr(dashboard_app, "scan_theme_research_report_root", scan)
+    monkeypatch.setattr(
+        dashboard_app,
+        "SETTINGS",
+        replace(
+            dashboard_app.SETTINGS,
+            theme_research_report_root=tmp_path,
+            theme_research_report_scan_interval_seconds=60,
+        ),
+    )
+    app = dashboard_app.create_app()
+
+    with TestClient(app):
+        deadline = time.monotonic() + 1
+        while not calls and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+    assert len(calls) == 1
+    assert app.state.theme_research_report_scheduler.diagnostics()["running"] is False
+
+
+def test_theme_report_scheduler_start_failure_does_not_block_app_lifespan(
+    monkeypatch, caplog
+) -> None:
+    app = dashboard_app.create_app()
+    app.state.public_news_scheduler.enabled = False
+
+    def fail_start():
+        raise RuntimeError("secret scheduler path")
+
+    monkeypatch.setattr(app.state.theme_research_report_scheduler, "start", fail_start)
+
+    with TestClient(app) as client:
+        response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    assert "secret scheduler path" not in caplog.text
+    assert "theme research report scheduler failed to start" in caplog.text

@@ -1,14 +1,17 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from inspect import signature
+import logging
 import os
 from pathlib import Path
+from typing import Any, Callable, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from stock_research import theme_research_report_store
 from stock_research.config import SETTINGS
 from stock_research.runtime_provenance import runtime_provenance
 from stock_research.dashboard.api_guardrails import (
@@ -179,6 +182,15 @@ from stock_research.dashboard.theme_research_context import (
     list_theme_research_updates,
     load_asset_theme_context,
 )
+from stock_research.dashboard import theme_research_reports
+from stock_research.dashboard.theme_research_report_scheduler import (
+    ThemeResearchReportScheduler,
+)
+from stock_research.theme_research_report_index import (
+    limits_from_settings as theme_research_report_limits_from_settings,
+    scan_theme_research_report_root,
+)
+from stock_research.theme_research_report_store import ThemeResearchReportError
 from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_store import (
     list_review_history as list_theme_research_review_history,
@@ -237,6 +249,9 @@ except ModuleNotFoundError as exc:
         return datetime.now(ZoneInfo(timezone)).date()
 
 
+logger = logging.getLogger(__name__)
+
+
 def _resolve_dashboard_trade_date(raw_date: str | None):
     config = IntradayConfig.from_env()
     return parse_trade_date(raw_date, config.timezone)
@@ -293,6 +308,42 @@ class ThemeResearchRollbackRequest(BaseModel):
     expected_theme_version: int
     comment: str
     idempotency_key: str
+
+
+class _ThemeReportMutationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_row_version: int = Field(ge=1, strict=True)
+    idempotency_key: str = Field(min_length=1, max_length=200, strict=True)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str) -> str:
+        if "\x00" in value or value != value.strip():
+            raise ValueError("idempotency_key is invalid")
+        return value
+
+
+class ThemeResearchReportPublishRequest(_ThemeReportMutationRequest):
+    comment: str = Field(default="", max_length=2_000, strict=True)
+
+    @field_validator("comment")
+    @classmethod
+    def validate_comment(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("comment is invalid")
+        return value
+
+
+class ThemeResearchReportRejectRequest(_ThemeReportMutationRequest):
+    reason: str = Field(min_length=1, max_length=4_000, strict=True)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        if "\x00" in value or not value.strip():
+            raise ValueError("reason is invalid")
+        return value.strip()
 
 
 def _set_auth_cookies(response: JSONResponse, session_token: str, csrf_token: str) -> None:
@@ -372,6 +423,104 @@ def _theme_research_read_http_error() -> HTTPException:
     )
 
 
+def _theme_report_http_error(exc: BaseException) -> HTTPException:
+    trusted = isinstance(
+        exc,
+        (
+            ThemeResearchReportError,
+            theme_research_reports.ThemeResearchReportDocumentError,
+        ),
+    )
+    code = getattr(exc, "code", "") if trusted else ""
+    if isinstance(code, str) and code.endswith("NOT_FOUND"):
+        status_code = 404
+    elif code in {
+        "THEME_REPORT_READ_INVALID",
+        "THEME_REPORT_READ_REQUEST_INVALID",
+        "THEME_REPORT_REVIEW_REQUEST_INVALID",
+    }:
+        status_code = 400
+    elif code in {"THEME_REPORT_ADMIN_REQUIRED"}:
+        status_code = 403
+    elif code in {
+        "THEME_REPORT_IDEMPOTENCY_CONFLICT",
+        "THEME_REPORT_STATE_CONFLICT",
+        "THEME_REPORT_VERSION_CONFLICT",
+        "THEME_REPORT_VERSION_CONTENT_CONFLICT",
+    }:
+        status_code = 409
+    else:
+        status_code = 503
+    safe_code = (
+        code
+        if trusted and isinstance(code, str) and code
+        else "THEME_REPORT_SERVICE_UNAVAILABLE"
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "status": "error",
+            "error_code": safe_code,
+            "message": "Theme research report request could not be completed",
+        },
+    )
+
+
+def _theme_report_call(operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    try:
+        return operation(*args, **kwargs)
+    except BaseException as exc:
+        if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+            raise
+        raise _theme_report_http_error(exc) from exc
+
+
+def _safe_pdf_attachment(filename: str) -> str:
+    safe = "".join(
+        character
+        if character.isascii() and (character.isalnum() or character in "._-")
+        else "-"
+        for character in filename
+    ).strip(".-")
+    if safe.lower().endswith(".pdf"):
+        safe = safe[:-4]
+    safe = safe.strip(".-") or "theme-report"
+    return f"{safe[:96]}.pdf"
+
+
+def _theme_report_pdf_response(
+    resolved: theme_research_reports.ResolvedPdf,
+) -> StreamingResponse:
+    iterator = None
+    try:
+        iterator = resolved.iter_chunks()
+
+        def stream():
+            try:
+                yield from iterator
+            finally:
+                close = getattr(iterator, "close", None)
+                if callable(close):
+                    close()
+                resolved.close()
+
+        filename = _safe_pdf_attachment(resolved.filename)
+        return StreamingResponse(
+            stream(),
+            media_type=resolved.media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(resolved.content_length),
+            },
+        )
+    except BaseException:
+        close = getattr(iterator, "close", None)
+        if callable(close):
+            close()
+        resolved.close()
+        raise
+
+
 AUTH_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
 
 
@@ -399,11 +548,20 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         scheduler = app.state.public_news_scheduler
+        report_scheduler = app.state.theme_research_report_scheduler
         if scheduler.enabled:
             scheduler.start()
         try:
+            report_scheduler.start()
+        except Exception:
+            logger.error("theme research report scheduler failed to start")
+        try:
             yield
         finally:
+            try:
+                await report_scheduler.stop()
+            except Exception:
+                logger.error("theme research report scheduler failed to stop")
             await scheduler.stop()
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
@@ -417,6 +575,13 @@ def create_app() -> FastAPI:
         refresh_public_news_for_dashboard,
         interval_seconds=NEWS_SCHEDULER_INTERVAL_SECONDS,
         enabled=scheduler_enabled_from_env(),
+    )
+    app.state.theme_research_report_scheduler = ThemeResearchReportScheduler(
+        SETTINGS.theme_research_report_root,
+        theme_research_report_limits_from_settings(SETTINGS),
+        SETTINGS.theme_research_runtime_service,
+        SETTINGS.theme_research_report_scan_interval_seconds,
+        scan_fn=scan_theme_research_report_root,
     )
 
     def build_readiness(score_version: str = "manual_v1"):
@@ -628,6 +793,128 @@ def create_app() -> FastAPI:
             return list_theme_research_companies(theme_id)
         except ThemeResearchNotFoundError as exc:
             raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}/reports")
+    def theme_research_report_list(theme_id: str, request: Request):
+        _current_user_or_401(request)
+        return _theme_report_call(
+            theme_research_report_store.list_approved_report_versions,
+            theme_id,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+
+    @app.get(
+        "/api/research/theme-decomposition/themes/{theme_id}/reports/{report_version_id}"
+    )
+    def theme_research_report_document(
+        theme_id: str, report_version_id: str, request: Request
+    ):
+        _current_user_or_401(request)
+        return _theme_report_call(
+            theme_research_reports.load_published_report_document,
+            theme_id,
+            report_version_id,
+            report_root=SETTINGS.theme_research_report_root,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+
+    @app.get(
+        "/api/research/theme-decomposition/themes/{theme_id}/reports/{report_version_id}/pdf"
+    )
+    def theme_research_report_pdf(
+        theme_id: str, report_version_id: str, request: Request
+    ):
+        _current_user_or_401(request)
+        resolved = _theme_report_call(
+            theme_research_reports.resolve_published_report_pdf,
+            theme_id,
+            report_version_id,
+            report_root=SETTINGS.theme_research_report_root,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+        return _theme_report_call(_theme_report_pdf_response, resolved)
+
+    @app.get("/api/admin/theme-research/reports")
+    def admin_theme_research_report_list(
+        request: Request,
+        status: Literal["pending_review", "rejected"] = "pending_review",
+    ):
+        _admin_user_or_403(request)
+        return _theme_report_call(
+            theme_research_report_store.list_admin_report_versions,
+            status=status,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+
+    @app.get("/api/admin/theme-research/reports/{report_version_id}")
+    def admin_theme_research_report_document(
+        report_version_id: str, request: Request
+    ):
+        _admin_user_or_403(request)
+        return _theme_report_call(
+            theme_research_reports.load_admin_report_document,
+            report_version_id,
+            report_root=SETTINGS.theme_research_report_root,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+
+    @app.get("/api/admin/theme-research/reports/{report_version_id}/pdf")
+    def admin_theme_research_report_pdf(report_version_id: str, request: Request):
+        _admin_user_or_403(request)
+        resolved = _theme_report_call(
+            theme_research_reports.resolve_admin_report_pdf,
+            report_version_id,
+            report_root=SETTINGS.theme_research_report_root,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+        return _theme_report_call(_theme_report_pdf_response, resolved)
+
+    @app.post("/api/admin/theme-research/reports/{report_version_id}/publish")
+    def admin_theme_research_report_publish(
+        report_version_id: str,
+        payload: ThemeResearchReportPublishRequest,
+        request: Request,
+    ):
+        user = _admin_user_or_403(request)
+        _require_csrf(request)
+        report = _theme_report_call(
+            theme_research_report_store.publish_report_version,
+            report_version_id,
+            expected_row_version=payload.expected_row_version,
+            actor_user_id=user.user_id,
+            actor_role=user.role,
+            comment=payload.comment,
+            request_id=str(request.state.request_id),
+            idempotency_key=payload.idempotency_key,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+        return {"report": report}
+
+    @app.post("/api/admin/theme-research/reports/{report_version_id}/reject")
+    def admin_theme_research_report_reject(
+        report_version_id: str,
+        payload: ThemeResearchReportRejectRequest,
+        request: Request,
+    ):
+        user = _admin_user_or_403(request)
+        _require_csrf(request)
+        report = _theme_report_call(
+            theme_research_report_store.reject_report_version,
+            report_version_id,
+            expected_row_version=payload.expected_row_version,
+            actor_user_id=user.user_id,
+            actor_role=user.role,
+            reason=payload.reason,
+            request_id=str(request.state.request_id),
+            idempotency_key=payload.idempotency_key,
+            service=SETTINGS.theme_research_runtime_service,
+        )
+        return {"report": report}
+
+    @app.get("/api/admin/theme-research/report-index/status")
+    def admin_theme_research_report_index_status(request: Request):
+        _admin_user_or_403(request)
+        return app.state.theme_research_report_scheduler.diagnostics()
 
     @app.get("/api/assets/{asset_id}/theme-research-context")
     def asset_theme_research_context(asset_id: str):
