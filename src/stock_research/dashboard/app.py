@@ -521,10 +521,11 @@ class _ResolvedPdfAsyncIterator(AsyncIterator[bytes]):
             try:
                 chunk = await asyncio.shield(worker)
             except asyncio.CancelledError:
-                try:
-                    await worker
-                except BaseException:
-                    pass
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await asyncio.shield(worker)
+                    except BaseException:
+                        pass
                 self._close()
                 raise
             except BaseException:
@@ -572,7 +573,8 @@ class _ResolvedPdfStreamingResponse(StreamingResponse):
         try:
             await super().stream_response(send)
         finally:
-            await self._resolved_pdf_stream.aclose()
+            with anyio.CancelScope(shield=True):
+                await self._resolved_pdf_stream.aclose()
 
 
 def _theme_report_pdf_response(

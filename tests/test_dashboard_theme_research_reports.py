@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import anyio
 from fastapi.testclient import TestClient
 
 from stock_research.dashboard import app as dashboard_app
@@ -1097,6 +1098,105 @@ def test_theme_report_scheduler_cancellation_wins_over_worker_error(tmp_path) ->
     asyncio.run(exercise())
 
 
+def test_theme_report_scheduler_run_once_waits_under_anyio_cancellation(
+    tmp_path,
+) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+        finished = anyio.Event()
+        cancelled = False
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            return _scan_result()
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+
+        async def run_once() -> None:
+            nonlocal cancelled
+            try:
+                await scheduler.run_once()
+            except anyio.get_cancelled_exc_class():
+                cancelled = True
+                raise
+            finally:
+                finished.set()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(run_once)
+            await anyio.to_thread.run_sync(started.wait, 1)
+            task_group.cancel_scope.cancel()
+            with anyio.CancelScope(shield=True):
+                await anyio.sleep(0.02)
+                assert finished.is_set() is False
+                assert scheduler.diagnostics()["running"] is True
+                release.set()
+
+        assert cancelled is True
+        assert finished.is_set() is True
+        assert scheduler.diagnostics()["running"] is False
+
+    anyio.run(exercise)
+
+
+def test_theme_report_scheduler_stop_waits_under_anyio_cancellation(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        started = threading.Event()
+        release = threading.Event()
+        stop_finished = anyio.Event()
+        stop_cancelled = False
+
+        def scan(root, *, limits, service):
+            started.set()
+            release.wait(timeout=2)
+            return _scan_result()
+
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=scan
+        )
+        scheduler.start()
+        await anyio.to_thread.run_sync(started.wait, 1)
+
+        async def stop() -> None:
+            nonlocal stop_cancelled
+            try:
+                await scheduler.stop()
+            except anyio.get_cancelled_exc_class():
+                stop_cancelled = True
+                raise
+            finally:
+                stop_finished.set()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(stop)
+            await anyio.sleep(0)
+            task_group.cancel_scope.cancel()
+            with anyio.CancelScope(shield=True):
+                await anyio.sleep(0.02)
+                assert stop_finished.is_set() is False
+                assert scheduler.diagnostics()["running"] is True
+                release.set()
+
+        assert stop_cancelled is True
+        assert stop_finished.is_set() is True
+        assert scheduler.diagnostics()["running"] is False
+        assert scheduler._task is None
+
+    anyio.run(exercise)
+
+
 def _api_client(monkeypatch, *, role: str | None = "user") -> TestClient:
     monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "false")
     user = (
@@ -1552,6 +1652,94 @@ def test_theme_report_pdf_response_closes_when_client_send_fails() -> None:
 
     asyncio.run(exercise())
 
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_asgi_disconnect_waits_for_real_threaded_read(
+    monkeypatch,
+) -> None:
+    read_fd, write_fd = os.pipe()
+    resolved = reports.ResolvedPdf(
+        read_fd,
+        filename="theme-report.pdf",
+        content_length=4,
+    )
+    entered = threading.Event()
+    original_next = dashboard_app._next_pdf_chunk
+
+    def observed_next(iterator):
+        entered.set()
+        return original_next(iterator)
+
+    monkeypatch.setattr(dashboard_app, "_next_pdf_chunk", observed_next)
+    response = dashboard_app._theme_report_pdf_response(resolved)
+    timer: threading.Timer | None = None
+
+    async def exercise() -> tuple[list[BaseException], int, int]:
+        heartbeat_count = 0
+        heartbeat_at_disconnect = 0
+        done = anyio.Event()
+        errors: list[BaseException] = []
+
+        async def heartbeat() -> None:
+            nonlocal heartbeat_count
+            while not done.is_set():
+                heartbeat_count += 1
+                await anyio.sleep(0)
+
+        async def receive():
+            nonlocal heartbeat_at_disconnect, timer
+            await anyio.to_thread.run_sync(entered.wait, 1)
+            heartbeat_at_disconnect = heartbeat_count
+            timer = threading.Timer(0.1, os.write, args=(write_fd, b"%PDF"))
+            timer.start()
+            return {"type": "http.disconnect"}
+
+        async def send(message) -> None:
+            return None
+
+        async def call_response() -> None:
+            try:
+                await response(
+                    {
+                        "type": "http",
+                        "asgi": {"version": "3.0", "spec_version": "2.3"},
+                        "http_version": "1.1",
+                        "method": "GET",
+                        "scheme": "http",
+                        "path": "/report.pdf",
+                        "raw_path": b"/report.pdf",
+                        "query_string": b"",
+                        "headers": [],
+                        "client": ("test", 1),
+                        "server": ("test", 80),
+                        "root_path": "",
+                    },
+                    receive,
+                    send,
+                )
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(heartbeat)
+            task_group.start_soon(call_response)
+            await done.wait()
+            task_group.cancel_scope.cancel()
+        return errors, heartbeat_at_disconnect, heartbeat_count
+
+    try:
+        errors, heartbeat_at_disconnect, heartbeat_count = anyio.run(exercise)
+    finally:
+        if timer is not None:
+            timer.join(timeout=1)
+        os.close(write_fd)
+        resolved.close()
+
+    assert errors == []
+    assert heartbeat_count > heartbeat_at_disconnect
     assert resolved.closed is True
 
 

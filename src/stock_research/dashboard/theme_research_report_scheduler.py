@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from os import PathLike
 from typing import Any
 
+import anyio
+
 from stock_research.theme_research_report_index import (
     scan_theme_research_report_root,
 )
@@ -69,12 +71,17 @@ class ThemeResearchReportScheduler:
         try:
             await asyncio.shield(task)
         except asyncio.CancelledError:
-            caller_cancelled = caller is not None and caller.cancelling() > 0
+            caller_cancelled = (
+                not task.done()
+                or caller is not None
+                and caller.cancelling() > 0
+            )
             if caller_cancelled:
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await asyncio.shield(task)
+                    except BaseException:
+                        pass
         finally:
             if task.done() and self._task is task:
                 self._task = None
@@ -97,10 +104,11 @@ class ThemeResearchReportScheduler:
                 try:
                     result = await asyncio.shield(worker)
                 except asyncio.CancelledError:
-                    try:
-                        await worker
-                    except BaseException:
-                        pass
+                    with anyio.CancelScope(shield=True):
+                        try:
+                            await asyncio.shield(worker)
+                        except BaseException:
+                            pass
                     raise
                 self._last_result = _safe_scan_result(result)
                 self._fatal = False
