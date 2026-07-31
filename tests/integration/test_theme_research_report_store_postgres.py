@@ -2506,7 +2506,7 @@ def test_postgres_publish_archives_current_and_exposes_safe_read_models(
             actor_id,
             "superseded by " + new_id,
             "publish-request-1",
-            archive_key,
+            "",
         ),
         (
             expected_target_event,
@@ -2720,6 +2720,59 @@ def test_review_identity_rejects_whitespace_and_overlong_values_without_database
     assert exc_info.value.details == {"fields": [field_name]}
 
 
+@pytest.mark.parametrize(
+    ("action", "field_name"),
+    [
+        ("publish", "report_version_id"),
+        ("publish", "actor_user_id"),
+        ("publish", "request_id"),
+        ("publish", "idempotency_key"),
+        ("publish", "comment"),
+        ("reject", "reason"),
+    ],
+)
+def test_review_text_rejects_nul_without_database_access(
+    monkeypatch,
+    action,
+    field_name,
+) -> None:
+    report_id = "report"
+    common = {
+        "expected_row_version": 1,
+        "actor_user_id": "admin",
+        "actor_role": "admin",
+        "request_id": "request",
+        "idempotency_key": "key",
+        "service": "must-not-connect",
+    }
+    if field_name == "report_version_id":
+        report_id = "report\x00suffix"
+    elif field_name in common:
+        common[field_name] = f"{field_name}\x00suffix"
+    monkeypatch.setattr(
+        report_store,
+        "connect",
+        lambda service: pytest.fail("NUL review input must not connect"),
+    )
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        if action == "publish":
+            report_store.publish_report_version(
+                report_id,
+                comment="comment\x00suffix" if field_name == "comment" else "",
+                **common,
+            )
+        else:
+            report_store.reject_report_version(
+                report_id,
+                reason="reason\x00suffix",
+                **common,
+            )
+
+    assert exc_info.value.code == "THEME_REPORT_REVIEW_REQUEST_INVALID"
+    assert exc_info.value.details == {"fields": [field_name]}
+
+
 @pytest.mark.parametrize("reason", [" ", "x" * 4_001])
 def test_reject_review_requires_bounded_trimmed_reason(monkeypatch, reason) -> None:
     monkeypatch.setattr(
@@ -2876,6 +2929,97 @@ def test_postgres_review_idempotency_retries_and_rejects_key_reuse(postgres_conn
         "SELECT status, row_version FROM research.theme_research_report_version WHERE report_version_id = %s",
         (first_id,),
     ).fetchone() == ("archived", 3)
+
+
+def test_postgres_archive_event_does_not_consume_client_idempotency_key_space(
+    postgres_conn,
+) -> None:
+    actor_id = "report-review-archive-key-admin"
+    theme_id = "report-review-archive-key-theme"
+    collision_theme_id = "report-review-archive-key-collision-theme"
+    old_id = "report-review-archive-key-old"
+    new_id = "report-review-archive-key-new"
+    collision_id = "report-review-archive-key-collision"
+    base_key = "archive-key-base"
+    old_synthetic_key = f"{base_key}:archive:{old_id}"
+    _insert_user(postgres_conn, actor_id)
+    _insert_theme(postgres_conn, theme_id)
+    _insert_theme(postgres_conn, collision_theme_id)
+    _insert_report(postgres_conn, old_id, theme_id, "v1", status="published")
+    _insert_report(postgres_conn, new_id, theme_id, "v2")
+    _insert_report(postgres_conn, collision_id, collision_theme_id, "v1")
+    postgres_conn.commit()
+
+    report_store.reject_report_version(
+        collision_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        reason="reserved-looking client key is valid",
+        request_id="collision-request",
+        idempotency_key=old_synthetic_key,
+        service=TEST_SERVICE,
+    )
+    first = report_store.publish_report_version(
+        new_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        comment="approved",
+        request_id="archive-key-request",
+        idempotency_key=base_key,
+        service=TEST_SERVICE,
+    )
+    replay = report_store.publish_report_version(
+        new_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        comment="approved",
+        request_id="archive-key-request",
+        idempotency_key=base_key,
+        service=TEST_SERVICE,
+    )
+
+    assert replay == first
+    events = postgres_conn.execute(
+        """
+        SELECT report_version_id, from_status, to_status, request_id, idempotency_key
+        FROM research.theme_research_report_review_event
+        WHERE report_version_id IN (%s, %s, %s)
+        ORDER BY report_version_id
+        """,
+        (collision_id, new_id, old_id),
+    ).fetchall()
+    assert events == sorted(
+        [
+            (
+                collision_id,
+                "pending_review",
+                "rejected",
+                "collision-request",
+                old_synthetic_key,
+            ),
+            (
+                new_id,
+                "pending_review",
+                "published",
+                "archive-key-request",
+                base_key,
+            ),
+            (
+                old_id,
+                "published",
+                "archived",
+                "archive-key-request",
+                "",
+            ),
+        ]
+    )
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event WHERE report_version_id = %s AND to_status = 'archived'",
+        (old_id,),
+    ).fetchone()[0] == 1
 
 
 def test_postgres_concurrent_review_has_one_stale_winner_and_consistent_retry(
@@ -3072,7 +3216,7 @@ def test_postgres_admin_and_approved_read_models_validate_scope(postgres_conn) -
         ),
     ],
 )
-@pytest.mark.parametrize("invalid_value", [" value", "v" * 201])
+@pytest.mark.parametrize("invalid_value", [" value", "v" * 201, "value\x00suffix"])
 def test_read_identity_rejects_whitespace_and_overlong_values_without_database_access(
     monkeypatch,
     call,

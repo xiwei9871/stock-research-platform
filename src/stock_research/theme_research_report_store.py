@@ -542,7 +542,7 @@ def _archive_current_report(
     )
     for archived in cur.fetchall():
         archived_id = archived["report_version_id"]
-        archive_key = f"{idempotency_key}:archive:{archived_id}"
+        archive_event_key = f"{idempotency_key}:archive:{archived_id}"
         _insert_review_event(
             cur,
             action="archive",
@@ -552,7 +552,12 @@ def _archive_current_report(
             actor_user_id=actor_user_id,
             comment=f"superseded by {target['report_version_id']}",
             request_id=request_id,
-            idempotency_key=archive_key,
+            idempotency_key="",
+            event_id=_review_event_id(
+                "archive",
+                actor_user_id,
+                archive_event_key,
+            ),
         )
 
 
@@ -567,6 +572,7 @@ def _insert_review_event(
     comment: str,
     request_id: str,
     idempotency_key: str,
+    event_id: str | None = None,
 ) -> None:
     cur.execute(
         """
@@ -576,7 +582,7 @@ def _insert_review_event(
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
-            _review_event_id(action, actor_user_id, idempotency_key),
+            event_id or _review_event_id(action, actor_user_id, idempotency_key),
             report_version_id,
             from_status,
             to_status,
@@ -628,12 +634,16 @@ def _validate_review_request(
     if comment is not None:
         if not isinstance(comment, str):
             raise _review_invalid("comment", "comment must be a string")
+        if "\x00" in comment:
+            raise _review_invalid("comment", "comment must not contain NUL")
         if len(comment) > _COMMENT_MAX_LENGTH:
             raise _review_invalid("comment", "comment is too long")
         values["comment"] = comment
     if reason is not None:
         if not isinstance(reason, str) or not reason.strip():
             raise _review_invalid("reason", "reason must be a non-empty string")
+        if "\x00" in reason:
+            raise _review_invalid("reason", "reason must not contain NUL")
         normalized_reason = reason.strip()
         if len(normalized_reason) > _REASON_MAX_LENGTH:
             raise _review_invalid("reason", "reason is too long")
@@ -665,6 +675,8 @@ def _required_request_identity(
 ) -> str:
     if not isinstance(value, str) or not value:
         raise error_factory(field_name, f"{field_name} must be a non-empty string")
+    if "\x00" in value:
+        raise error_factory(field_name, f"{field_name} must not contain NUL")
     if value != value.strip():
         raise error_factory(field_name, f"{field_name} must not contain outer whitespace")
     if len(value) > _REQUEST_IDENTITY_MAX_LENGTH:
