@@ -17,8 +17,9 @@ from stock_research import theme_research_priority as priority
 def load_db_context(
     service: str | None = None,
 ) -> dict[str, Any]:
+    selected_service = service or SETTINGS.theme_research_runtime_service
     normalized = load_database_package(
-        service=service or SETTINGS.theme_research_runtime_service
+        service=selected_service
     )
     theme_package = _theme_package(normalized)
     mapping_package = _mapping_package(normalized, theme_package)
@@ -26,6 +27,7 @@ def load_db_context(
         theme_package["nodes"],
         mapping_package["company_mappings"],
     )
+    analysis_reports_by_theme = _load_published_report_summaries(selected_service)
     return {
         "policy": priority_context["policy"],
         "priority_status": priority_context["priority_status"],
@@ -35,7 +37,52 @@ def load_db_context(
         "company_priorities": priority_context["company_priorities"],
         "evidence_gap_priorities": priority_context["evidence_gap_priorities"],
         "review_queue": priority_context["review_queue"],
+        "analysis_reports_by_theme": analysis_reports_by_theme,
     }
+
+
+def _load_published_report_summaries(service: str) -> dict[str, dict[str, Any]]:
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            """
+            SELECT theme_id, report_version_id, version, published_at,
+                   (NULLIF(BTRIM(pdf_relative_path), '') IS NOT NULL) AS has_pdf
+            FROM research.theme_research_report_version
+            WHERE status = 'published'
+            ORDER BY theme_id, published_at DESC NULLS LAST, report_version_id
+            """,
+        )
+
+    summaries: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        theme_id = str(row.get("theme_id") or "").strip()
+        report_version_id = str(row.get("report_version_id") or "").strip()
+        version = str(row.get("version") or "").strip()
+        published_at = _json_safe_timestamp(row.get("published_at"))
+        if not theme_id or not report_version_id or not version or not published_at:
+            continue
+        summaries.setdefault(
+            theme_id,
+            {
+                "report_version_id": report_version_id,
+                "version": version,
+                "published_at": published_at,
+                "has_pdf": bool(row.get("has_pdf")),
+            },
+        )
+    return summaries
+
+
+def _json_safe_timestamp(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return str(isoformat())
+    return ""
 
 
 def load_asset_db_context(

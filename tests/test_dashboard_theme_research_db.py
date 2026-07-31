@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +18,11 @@ from stock_research.theme_research_import import normalize_artifact_package
 def test_db_context_matches_artifact_context_contract(monkeypatch) -> None:
     package = normalize_artifact_package()
     monkeypatch.setattr(theme_research_db, "load_database_package", lambda service: package)
+    monkeypatch.setattr(
+        theme_research_db,
+        "_load_published_report_summaries",
+        lambda service: {},
+    )
 
     artifact = theme_research.list_theme_research_themes(read_source="artifact")
     database = theme_research.list_theme_research_themes(read_source="db")
@@ -62,6 +69,11 @@ def test_db_context_survives_missing_optional_priority_support(monkeypatch) -> N
     expected_theme_package = theme_research_db._theme_package(package)
     expected_mapping_package = theme_research_db._mapping_package(package, expected_theme_package)
     monkeypatch.setattr(theme_research_db, "load_database_package", lambda service: package)
+    monkeypatch.setattr(
+        theme_research_db,
+        "_load_published_report_summaries",
+        lambda service: {},
+    )
     monkeypatch.setattr(
         theme_research_db.priority,
         "load_theme_research_priority_package",
@@ -114,6 +126,128 @@ def test_compare_mode_surfaces_semantic_mismatch(monkeypatch) -> None:
 
     assert payload["comparison"]["status"] == "mismatch"
     assert payload["comparison"]["differences"]
+
+
+def test_compare_mode_ignores_analysis_report_runtime_overlay(monkeypatch) -> None:
+    database_context = copy.deepcopy(theme_research._load_artifact_context())
+    database_context["analysis_reports_by_theme"] = {
+        "ai_power_value_capture_v1": {
+            "report_version_id": "published-report",
+            "version": "v1",
+            "published_at": "2026-08-01T01:00:00+00:00",
+            "has_pdf": True,
+        }
+    }
+    monkeypatch.setattr(
+        theme_research_db,
+        "load_db_context",
+        lambda service=None: database_context,
+    )
+
+    payload = theme_research.list_theme_research_themes(read_source="compare")
+
+    assert payload["comparison"]["status"] == "match"
+    assert payload["comparison"]["differences"] == []
+    assert (
+        payload["comparison"]["artifact_sha256"]
+        == payload["comparison"]["database_sha256"]
+    )
+
+
+def test_compare_mode_keeps_nested_stable_analysis_report_fields() -> None:
+    left = {
+        "total": 1,
+        "items": [
+            {
+                "theme_id": "theme-a",
+                "theme_name": "Theme A",
+                "node_count": 0,
+                "analysis_report": {"status": "researching"},
+                "artifact_metadata": {"analysis_report": {"schema_version": 1}},
+            }
+        ],
+    }
+    right = copy.deepcopy(left)
+    right["items"][0]["analysis_report"] = {
+        "status": "published",
+        "report_version_id": "report-a",
+        "version": "v1",
+        "published_at": "2026-08-01T00:00:00+00:00",
+        "has_pdf": False,
+    }
+    right["items"][0]["artifact_metadata"]["analysis_report"]["schema_version"] = 2
+
+    comparison = theme_research._compare_payloads(left, right)
+
+    assert comparison["status"] == "mismatch"
+    assert comparison["differences"] == [
+        "$.items[0].artifact_metadata.analysis_report.schema_version"
+    ]
+
+
+def test_db_context_loads_published_report_summaries_once_and_safely(monkeypatch) -> None:
+    package = normalize_artifact_package()
+    queries: list[tuple[str, object]] = []
+    connection = object()
+
+    @contextmanager
+    def fake_connect(service):
+        assert service == "runtime"
+        yield connection
+
+    def fake_fetch_all(conn, sql, params=None):
+        assert conn is connection
+        queries.append((sql, params))
+        return [
+            {
+                "theme_id": "ai_power_value_capture_v1",
+                "report_version_id": "published-report",
+                "version": "v2",
+                "published_at": datetime(2026, 8, 1, 1, 30, tzinfo=UTC),
+                "has_pdf": True,
+            }
+        ]
+
+    monkeypatch.setattr(theme_research_db, "load_database_package", lambda service: package)
+    monkeypatch.setattr(theme_research_db, "connect", fake_connect)
+    monkeypatch.setattr(theme_research_db, "fetch_all", fake_fetch_all)
+
+    context = theme_research_db.load_db_context(service="runtime")
+
+    assert len(queries) == 1
+    normalized_sql = " ".join(queries[0][0].split()).lower()
+    assert "from research.theme_research_report_version" in normalized_sql
+    assert "status = 'published'" in normalized_sql
+    assert "pending_review" not in normalized_sql
+    assert "rejected" not in normalized_sql
+    assert "nullif(btrim(pdf_relative_path), '') is not null" in normalized_sql
+    assert context["analysis_reports_by_theme"] == {
+        "ai_power_value_capture_v1": {
+            "report_version_id": "published-report",
+            "version": "v2",
+            "published_at": "2026-08-01T01:30:00+00:00",
+            "has_pdf": True,
+        }
+    }
+
+
+def test_published_report_summary_query_failure_is_not_hidden(monkeypatch) -> None:
+    package = normalize_artifact_package()
+
+    @contextmanager
+    def fake_connect(service):
+        yield object()
+
+    monkeypatch.setattr(theme_research_db, "load_database_package", lambda service: package)
+    monkeypatch.setattr(theme_research_db, "connect", fake_connect)
+    monkeypatch.setattr(
+        theme_research_db,
+        "fetch_all",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("db unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="db unavailable"):
+        theme_research_db.load_db_context(service="runtime")
 
 
 def test_invalid_read_source_is_rejected(monkeypatch) -> None:

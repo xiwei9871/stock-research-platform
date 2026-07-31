@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import copy
 import hashlib
 import json
 import os
@@ -73,7 +74,10 @@ def _get_theme_research_theme(
         row for row in context["review_queue"] if row["theme_id"] == theme_id
     ]
     return {
-        "theme": _with_guardrails(theme),
+        "theme": {
+            **_with_guardrails(theme),
+            "analysis_report": _analysis_report_summary(context, theme_id),
+        },
         "node_summary": {
             "total": len(nodes),
             "by_priority_class": _count_by(nodes, "priority_class"),
@@ -209,15 +213,40 @@ def _serve(builder, *, read_source: str | None) -> dict[str, Any]:
 
 
 def _compare_payloads(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
-    left_json = json.dumps(left, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    right_json = json.dumps(right, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    differences = _difference_paths(left, right)
+    comparable_left = _without_runtime_overlays(left)
+    comparable_right = _without_runtime_overlays(right)
+    left_json = json.dumps(
+        comparable_left, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    right_json = json.dumps(
+        comparable_right, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    differences = _difference_paths(comparable_left, comparable_right)
     return {
         "status": "match" if not differences else "mismatch",
         "artifact_sha256": hashlib.sha256(left_json.encode("utf-8")).hexdigest(),
         "database_sha256": hashlib.sha256(right_json.encode("utf-8")).hexdigest(),
         "differences": differences,
     }
+
+
+def _without_runtime_overlays(value: Any) -> Any:
+    result = copy.deepcopy(value)
+    if not isinstance(result, dict):
+        return result
+    items = result.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if (
+                isinstance(item, dict)
+                and "theme_id" in item
+                and "node_count" in item
+            ):
+                item.pop("analysis_report", None)
+    theme = result.get("theme")
+    if isinstance(theme, dict) and "node_summary" in result:
+        theme.pop("analysis_report", None)
+    return result
 
 
 def _difference_paths(left: Any, right: Any, path: str = "$") -> list[str]:
@@ -279,10 +308,42 @@ def _theme_index_row(
             row["priority_class"] == "deep_research_priority" for row in nodes
         ),
         "review_queue_count": len(queue),
+        "analysis_report": _analysis_report_summary(context, theme_id),
         "research_only": True,
         "used_for_signal": False,
         "used_for_admission": False,
     }
+
+
+def _analysis_report_summary(
+    context: dict[str, Any], theme_id: str
+) -> dict[str, Any]:
+    report = context.get("analysis_reports_by_theme", {}).get(theme_id)
+    if not isinstance(report, dict):
+        return {"status": "researching"}
+    report_version_id = str(report.get("report_version_id") or "").strip()
+    version = str(report.get("version") or "").strip()
+    published_at = _json_safe_timestamp(report.get("published_at"))
+    if not report_version_id or not version or not published_at:
+        return {"status": "researching"}
+    return {
+        "status": "published",
+        "report_version_id": report_version_id,
+        "version": version,
+        "published_at": published_at,
+        "has_pdf": bool(report.get("has_pdf")),
+    }
+
+
+def _json_safe_timestamp(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return str(isoformat())
+    return ""
 
 
 def _theme_node_rows(
