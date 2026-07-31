@@ -23,6 +23,7 @@ _ARCHIVED = "archived"
 _ADMIN_LIST_STATUSES = {_PENDING_REVIEW, _REJECTED}
 _COMMENT_MAX_LENGTH = 2_000
 _REASON_MAX_LENGTH = 4_000
+_REQUEST_IDENTITY_MAX_LENGTH = 200
 
 
 class ThemeResearchReportError(Exception):
@@ -279,7 +280,7 @@ def list_admin_report_versions(
     service: str = SETTINGS.theme_research_runtime_service,
 ) -> dict[str, Any]:
     if status not in _ADMIN_LIST_STATUSES:
-        raise _invalid("status", "status must be pending_review or rejected")
+        raise _read_invalid("status", "status must be pending_review or rejected")
     rows = _read_rows(
         """
         SELECT *
@@ -299,7 +300,7 @@ def get_admin_report_version(
     *,
     service: str = SETTINGS.theme_research_runtime_service,
 ) -> dict[str, Any]:
-    normalized_id = _required_review_text(report_version_id, "report_version_id")
+    normalized_id = _required_read_identity(report_version_id, "report_version_id")
     rows = _read_rows(
         """
         SELECT *
@@ -319,7 +320,7 @@ def list_approved_report_versions(
     *,
     service: str = SETTINGS.theme_research_runtime_service,
 ) -> dict[str, Any]:
-    normalized_theme_id = _required_review_text(theme_id, "theme_id")
+    normalized_theme_id = _required_read_identity(theme_id, "theme_id")
     try:
         with connect(service) as conn:
             with conn.cursor() as cur:
@@ -608,36 +609,80 @@ def _validate_review_request(
         or isinstance(expected_row_version, bool)
         or expected_row_version < 1
     ):
-        raise _invalid("expected_row_version", "expected_row_version must be at least 1")
+        raise _review_invalid(
+            "expected_row_version",
+            "expected_row_version must be at least 1",
+        )
     values = {
-        "report_version_id": _required_review_text(report_version_id, "report_version_id"),
-        "actor_user_id": _required_review_text(actor_user_id, "actor_user_id"),
-        "request_id": _required_review_text(request_id, "request_id"),
-        "idempotency_key": _required_review_text(idempotency_key, "idempotency_key"),
+        "report_version_id": _required_review_identity(
+            report_version_id,
+            "report_version_id",
+        ),
+        "actor_user_id": _required_review_identity(actor_user_id, "actor_user_id"),
+        "request_id": _required_review_identity(request_id, "request_id"),
+        "idempotency_key": _required_review_identity(
+            idempotency_key,
+            "idempotency_key",
+        ),
     }
     if comment is not None:
         if not isinstance(comment, str):
-            raise _invalid("comment", "comment must be a string")
+            raise _review_invalid("comment", "comment must be a string")
         if len(comment) > _COMMENT_MAX_LENGTH:
-            raise _invalid("comment", "comment is too long")
+            raise _review_invalid("comment", "comment is too long")
         values["comment"] = comment
     if reason is not None:
-        normalized_reason = _required_review_text(reason, "reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise _review_invalid("reason", "reason must be a non-empty string")
+        normalized_reason = reason.strip()
         if len(normalized_reason) > _REASON_MAX_LENGTH:
-            raise _invalid("reason", "reason is too long")
+            raise _review_invalid("reason", "reason is too long")
         values["reason"] = normalized_reason
     return values
 
 
-def _required_review_text(value: str, field_name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise _invalid(field_name, f"{field_name} must be a non-empty string")
-    return value.strip()
+def _required_review_identity(value: str, field_name: str) -> str:
+    return _required_request_identity(
+        value,
+        field_name,
+        error_factory=_review_invalid,
+    )
 
 
-def _invalid(field_name: str, message: str) -> ThemeResearchReportError:
+def _required_read_identity(value: str, field_name: str) -> str:
+    return _required_request_identity(
+        value,
+        field_name,
+        error_factory=_read_invalid,
+    )
+
+
+def _required_request_identity(
+    value: str,
+    field_name: str,
+    *,
+    error_factory: Any,
+) -> str:
+    if not isinstance(value, str) or not value:
+        raise error_factory(field_name, f"{field_name} must be a non-empty string")
+    if value != value.strip():
+        raise error_factory(field_name, f"{field_name} must not contain outer whitespace")
+    if len(value) > _REQUEST_IDENTITY_MAX_LENGTH:
+        raise error_factory(field_name, f"{field_name} is too long")
+    return value
+
+
+def _review_invalid(field_name: str, message: str) -> ThemeResearchReportError:
     return ThemeResearchReportError(
-        "THEME_REPORT_INPUT_INVALID",
+        "THEME_REPORT_REVIEW_REQUEST_INVALID",
+        message,
+        {"fields": [field_name]},
+    )
+
+
+def _read_invalid(field_name: str, message: str) -> ThemeResearchReportError:
+    return ThemeResearchReportError(
+        "THEME_REPORT_READ_REQUEST_INVALID",
         message,
         {"fields": [field_name]},
     )
@@ -691,8 +736,8 @@ def _get_approved_row(
     service: str,
     mapper: Any,
 ) -> dict[str, Any]:
-    normalized_theme_id = _required_review_text(theme_id, "theme_id")
-    normalized_id = _required_review_text(report_version_id, "report_version_id")
+    normalized_theme_id = _required_read_identity(theme_id, "theme_id")
+    normalized_id = _required_read_identity(report_version_id, "report_version_id")
     rows = _read_rows(
         """
         SELECT *

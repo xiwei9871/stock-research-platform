@@ -2671,7 +2671,52 @@ def test_publish_review_validates_inputs_before_database_access(
     with pytest.raises(ThemeResearchReportError) as exc_info:
         report_store.publish_report_version("report", **kwargs)
 
-    assert exc_info.value.code == "THEME_REPORT_INPUT_INVALID"
+    assert exc_info.value.code == "THEME_REPORT_REVIEW_REQUEST_INVALID"
+    assert exc_info.value.details == {"fields": [field_name]}
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("report_version_id", " report"),
+        ("report_version_id", "r" * 201),
+        ("actor_user_id", "admin "),
+        ("actor_user_id", "a" * 201),
+        ("request_id", " request"),
+        ("request_id", "r" * 201),
+        ("idempotency_key", "key "),
+        ("idempotency_key", "k" * 201),
+    ],
+)
+def test_review_identity_rejects_whitespace_and_overlong_values_without_database_access(
+    monkeypatch,
+    field_name,
+    invalid_value,
+) -> None:
+    report_id = "report"
+    kwargs = {
+        "expected_row_version": 1,
+        "actor_user_id": "admin",
+        "actor_role": "admin",
+        "comment": "",
+        "request_id": "request",
+        "idempotency_key": "key",
+        "service": "must-not-connect",
+    }
+    if field_name == "report_version_id":
+        report_id = invalid_value
+    else:
+        kwargs[field_name] = invalid_value
+    monkeypatch.setattr(
+        report_store,
+        "connect",
+        lambda service: pytest.fail("invalid review identity must not connect"),
+    )
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        report_store.publish_report_version(report_id, **kwargs)
+
+    assert exc_info.value.code == "THEME_REPORT_REVIEW_REQUEST_INVALID"
     assert exc_info.value.details == {"fields": [field_name]}
 
 
@@ -2695,7 +2740,7 @@ def test_reject_review_requires_bounded_trimmed_reason(monkeypatch, reason) -> N
             service="must-not-connect",
         )
 
-    assert exc_info.value.code == "THEME_REPORT_INPUT_INVALID"
+    assert exc_info.value.code == "THEME_REPORT_REVIEW_REQUEST_INVALID"
     assert exc_info.value.details == {"fields": ["reason"]}
 
 
@@ -2983,13 +3028,68 @@ def test_postgres_admin_and_approved_read_models_validate_scope(postgres_conn) -
     ]
     with pytest.raises(ThemeResearchReportError) as status_error:
         report_store.list_admin_report_versions(status="published", service=TEST_SERVICE)
-    assert status_error.value.code == "THEME_REPORT_INPUT_INVALID"
+    assert status_error.value.code == "THEME_REPORT_READ_REQUEST_INVALID"
     with pytest.raises(ThemeResearchReportError) as theme_error:
         report_store.list_approved_report_versions(
             "missing-report-read-theme",
             service=TEST_SERVICE,
         )
     assert theme_error.value.code == "THEME_REPORT_THEME_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("call", "field_name"),
+    [
+        (
+            lambda value: report_store.get_admin_report_version(
+                value,
+                service="must-not-connect",
+            ),
+            "report_version_id",
+        ),
+        (
+            lambda value: report_store.get_approved_report_version(
+                value,
+                "report",
+                service="must-not-connect",
+            ),
+            "theme_id",
+        ),
+        (
+            lambda value: report_store.get_approved_report_version(
+                "theme",
+                value,
+                service="must-not-connect",
+            ),
+            "report_version_id",
+        ),
+        (
+            lambda value: report_store.list_approved_report_versions(
+                value,
+                service="must-not-connect",
+            ),
+            "theme_id",
+        ),
+    ],
+)
+@pytest.mark.parametrize("invalid_value", [" value", "v" * 201])
+def test_read_identity_rejects_whitespace_and_overlong_values_without_database_access(
+    monkeypatch,
+    call,
+    field_name,
+    invalid_value,
+) -> None:
+    monkeypatch.setattr(
+        report_store,
+        "connect",
+        lambda service: pytest.fail("invalid read identity must not connect"),
+    )
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        call(invalid_value)
+
+    assert exc_info.value.code == "THEME_REPORT_READ_REQUEST_INVALID"
+    assert exc_info.value.details == {"fields": [field_name]}
 
 
 def test_postgres_safe_read_models_sanitize_nested_internal_metadata(
