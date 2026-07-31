@@ -186,6 +186,74 @@ def test_metadata_to_jsonable_returns_detached_dicts_and_lists(tmp_path: Path) -
     )
 
 
+def test_metadata_to_jsonable_copies_mutable_mappings_lists_and_tuples() -> None:
+    source = {
+        "mapping": {"items": [{"name": "first"}]},
+        "tuple": ({"name": "second"},),
+    }
+
+    jsonable = metadata_to_jsonable(source)
+
+    jsonable["mapping"]["items"][0]["name"] = "output-mutated"
+    jsonable["tuple"][0]["name"] = "output-mutated"
+    assert source == {
+        "mapping": {"items": [{"name": "first"}]},
+        "tuple": ({"name": "second"},),
+    }
+    source["mapping"]["items"][0]["name"] = "input-mutated"
+    source["tuple"][0]["name"] = "input-mutated"
+    assert jsonable == {
+        "mapping": {"items": [{"name": "output-mutated"}]},
+        "tuple": [{"name": "output-mutated"}],
+    }
+    assert json.loads(json.dumps(jsonable, allow_nan=False)) == jsonable
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {1: "non-string-key"},
+        {"unsupported": {"set-value"}},
+        {"non_finite": float("nan")},
+        {"huge_integer": 10**5000},
+    ],
+)
+def test_metadata_to_jsonable_rejects_non_json_values_with_stable_code(
+    metadata: Mapping[object, object],
+) -> None:
+    with pytest.raises(ReportManifestError) as exc_info:
+        metadata_to_jsonable(metadata)  # type: ignore[arg-type]
+
+    assert exc_info.value.code == "METADATA_NOT_JSONABLE"
+
+
+def test_metadata_to_jsonable_rejects_cycles_with_stable_code() -> None:
+    cyclic: list[object] = []
+    cyclic.append(cyclic)
+
+    with pytest.raises(ReportManifestError) as exc_info:
+        metadata_to_jsonable({"cyclic": cyclic})
+
+    assert exc_info.value.code == "METADATA_NOT_JSONABLE"
+
+
+def test_metadata_to_jsonable_translates_mapping_iteration_errors() -> None:
+    class ExplodingMapping(Mapping[str, object]):
+        def __getitem__(self, key: str) -> object:
+            raise KeyError(key)
+
+        def __iter__(self):
+            raise RuntimeError("simulated mapping iteration failure")
+
+        def __len__(self) -> int:
+            return 1
+
+    with pytest.raises(ReportManifestError) as exc_info:
+        metadata_to_jsonable(ExplodingMapping())
+
+    assert exc_info.value.code == "METADATA_NOT_JSONABLE"
+
+
 @pytest.mark.parametrize("value", [0, -1])
 def test_limits_require_positive_values(value: int) -> None:
     with pytest.raises(ValueError):
@@ -215,6 +283,53 @@ def test_rejects_malformed_json_manifest(tmp_path: Path) -> None:
     manifest_path.write_bytes(b'{"schema_version":')
 
     _assert_error(manifest_path, report_root, "MANIFEST_INVALID_JSON")
+
+
+@pytest.mark.parametrize(
+    ("location", "old", "new", "duplicate_key"),
+    [
+        (
+            "top_level",
+            '"title": "AI Power Theme"',
+            '"title": "AI Power Theme", "title": "Duplicate"',
+            "title",
+        ),
+        (
+            "generator",
+            '"generator": {"name": "theme-worker", "version": "2.4.1"}',
+            '"generator": {"name": "theme-worker", "name": "duplicate", '
+            '"version": "2.4.1"}',
+            "name",
+        ),
+        (
+            "artifact",
+            '"markdown": {"path": "report.md",',
+            '"markdown": {"path": "report.md", "path": "report.md",',
+            "path",
+        ),
+        (
+            "metadata",
+            '"metadata": {"source": {"kind": "production"}}',
+            '"metadata": {"source": {"kind": "production", "kind": "duplicate"}}',
+            "kind",
+        ),
+    ],
+)
+def test_rejects_duplicate_json_keys_at_every_object_level(
+    tmp_path: Path,
+    location: str,
+    old: str,
+    new: str,
+    duplicate_key: str,
+) -> None:
+    del location
+    report_root, manifest_path, _ = _write_package(tmp_path)
+    raw = manifest_path.read_text(encoding="utf-8")
+    assert old in raw
+    manifest_path.write_text(raw.replace(old, new, 1), encoding="utf-8")
+
+    error = _assert_error(manifest_path, report_root, "DUPLICATE_JSON_KEY")
+    assert error.details == {"key": duplicate_key}
 
 
 @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
@@ -299,6 +414,21 @@ def test_rejects_invalid_required_text_fields(tmp_path: Path, field: str, value:
 )
 def test_rejects_invalid_generator_fields(tmp_path: Path, generator: object) -> None:
     report_root, manifest_path, _ = _write_package(tmp_path, overrides={"generator": generator})
+
+    _assert_error(manifest_path, report_root, "FIELD_INVALID")
+
+
+def test_rejects_unknown_generator_fields(tmp_path: Path) -> None:
+    report_root, manifest_path, _ = _write_package(
+        tmp_path,
+        overrides={
+            "generator": {
+                "name": "theme-worker",
+                "version": "2.4.1",
+                "runtime": "unexpected",
+            }
+        },
+    )
 
     _assert_error(manifest_path, report_root, "FIELD_INVALID")
 
@@ -496,6 +626,51 @@ def test_artifact_read_error_has_stable_code(
     _assert_error(manifest_path, report_root, "ARTIFACT_FILE_INVALID")
 
 
+@pytest.mark.parametrize("target_kind", ["manifest", "artifact"])
+@pytest.mark.parametrize("mutation", ["exchange", "in_place", "grow", "shrink"])
+def test_rejects_files_changed_while_their_snapshot_is_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target_kind: str,
+    mutation: str,
+) -> None:
+    report_root, manifest_path, _ = _write_package(tmp_path)
+    target_path = (
+        manifest_path if target_kind == "manifest" else manifest_path.with_name("report.md")
+    )
+    target_inode = target_path.stat().st_ino
+    original_bytes = target_path.read_bytes()
+    original_read = manifest_module.os.read
+    mutated = False
+
+    def mutating_read(fd: int, size: int) -> bytes:
+        nonlocal mutated
+        chunk = original_read(fd, size)
+        if not mutated and chunk and os.fstat(fd).st_ino == target_inode:
+            mutated = True
+            if mutation == "exchange":
+                target_path.rename(target_path.with_name(f"{target_path.name}.original"))
+                target_path.write_bytes(b"replacement")
+            elif mutation == "in_place":
+                replacement = bytearray(original_bytes)
+                replacement[0] = replacement[0] ^ 1
+                target_path.write_bytes(replacement)
+            elif mutation == "grow":
+                with target_path.open("ab") as file_obj:
+                    file_obj.write(b"growth")
+            else:
+                target_path.write_bytes(original_bytes[:-1])
+        return chunk
+
+    monkeypatch.setattr(manifest_module.os, "read", mutating_read)
+
+    expected_code = (
+        "MANIFEST_FILE_CHANGED" if target_kind == "manifest" else "ARTIFACT_FILE_CHANGED"
+    )
+    _assert_error(manifest_path, report_root, expected_code)
+    assert mutated is True
+
+
 @pytest.mark.parametrize("symlink_level", ["theme", "version"])
 def test_rejects_symlinked_theme_or_version_directory(
     tmp_path: Path, symlink_level: str
@@ -567,6 +742,76 @@ def test_rejects_manifest_outside_report_root(tmp_path: Path) -> None:
     _, outside_manifest, _ = _write_package(tmp_path / "outside")
 
     _assert_error(outside_manifest, report_root, "MANIFEST_OUTSIDE_ROOT")
+
+
+def test_rejects_nul_in_report_root_with_stable_code(tmp_path: Path) -> None:
+    report_root, manifest_path, _ = _write_package(tmp_path)
+
+    with pytest.raises(ReportManifestError) as exc_info:
+        load_report_manifest(
+            manifest_path,
+            report_root=f"{report_root}\x00",
+            limits=DEFAULT_LIMITS,
+        )
+
+    assert exc_info.value.code == "REPORT_ROOT_INVALID"
+
+
+def test_rejects_nul_in_manifest_path_with_stable_code(tmp_path: Path) -> None:
+    report_root, manifest_path, _ = _write_package(tmp_path)
+
+    with pytest.raises(ReportManifestError) as exc_info:
+        load_report_manifest(
+            f"{manifest_path}\x00",
+            report_root=report_root,
+            limits=DEFAULT_LIMITS,
+        )
+
+    assert exc_info.value.code == "MANIFEST_INVALID"
+
+
+def test_rejects_nul_in_json_artifact_path(tmp_path: Path) -> None:
+    report_root, manifest_path, manifest = _write_package(tmp_path)
+    artifacts = manifest["artifacts"]
+    assert isinstance(artifacts, dict)
+    markdown = artifacts["markdown"]
+    assert isinstance(markdown, dict)
+    markdown["path"] = "report.md\x00"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    _assert_error(manifest_path, report_root, "ARTIFACT_PATH_INVALID")
+
+
+def test_stat_value_error_is_translated_to_stable_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report_root, manifest_path, _ = _write_package(tmp_path)
+    original_stat = manifest_module.os.stat
+
+    def failing_stat(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        if os.fspath(path) == "ai-power":
+            raise ValueError("simulated invalid stat path")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(manifest_module.os, "stat", failing_stat)
+
+    _assert_error(manifest_path, report_root, "DIRECTORY_INVALID")
+
+
+def test_open_value_error_is_translated_to_stable_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report_root, manifest_path, _ = _write_package(tmp_path)
+    original_open = manifest_module.os.open
+
+    def failing_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if os.fspath(path) == "manifest.json":
+            raise ValueError("simulated invalid open path")
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(manifest_module.os, "open", failing_open)
+
+    _assert_error(manifest_path, report_root, "MANIFEST_INVALID")
 
 
 def test_metadata_must_be_an_object(tmp_path: Path) -> None:
