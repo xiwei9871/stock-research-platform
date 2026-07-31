@@ -1406,6 +1406,155 @@ def test_theme_report_pdf_response_closes_on_early_iterator_close() -> None:
     assert resolved.closed is True
 
 
+def test_theme_report_pdf_response_closes_before_first_chunk_is_read() -> None:
+    resolved = _FakeResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    asyncio.run(response.body_iterator.aclose())
+
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_response_closes_after_normal_async_iteration() -> None:
+    resolved = _FakeResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def consume() -> list[bytes]:
+        return [chunk async for chunk in response.body_iterator]
+
+    assert asyncio.run(consume()) == [b"%PDF", b"body"]
+    assert resolved.closed is True
+
+
+class _FailingPdfIterator:
+    def __init__(self, resolved) -> None:
+        self.resolved = resolved
+        self.closed = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        raise OSError(errno.EIO, "secret read failure")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FailingResolvedPdf(_FakeResolvedPdf):
+    def __init__(self) -> None:
+        super().__init__()
+        self.iterator = _FailingPdfIterator(self)
+
+    def iter_chunks(self):
+        return self.iterator
+
+
+def test_theme_report_pdf_response_closes_on_async_read_error() -> None:
+    resolved = _FailingResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def consume() -> None:
+        with pytest.raises(OSError, match="secret read failure"):
+            await anext(response.body_iterator)
+
+    asyncio.run(consume())
+
+    assert resolved.iterator.closed is True
+    assert resolved.closed is True
+
+
+class _BlockingPdfIterator:
+    def __init__(self) -> None:
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.executing = False
+        self.closed = False
+        self.closed_while_executing = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.executing = True
+        self.entered.set()
+        self.release.wait(timeout=2)
+        self.executing = False
+        return b"chunk"
+
+    def close(self) -> None:
+        self.closed_while_executing = self.executing
+        self.closed = True
+
+
+class _BlockingResolvedPdf(_FakeResolvedPdf):
+    def __init__(self) -> None:
+        super().__init__()
+        self.iterator = _BlockingPdfIterator()
+
+    def iter_chunks(self):
+        return self.iterator
+
+
+def test_theme_report_pdf_async_close_waits_for_threaded_read() -> None:
+    resolved = _BlockingResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def exercise() -> None:
+        read = asyncio.create_task(anext(response.body_iterator))
+        await asyncio.to_thread(resolved.iterator.entered.wait, 1)
+        close = asyncio.create_task(response.body_iterator.aclose())
+        await asyncio.sleep(0.01)
+        assert close.done() is False
+        resolved.iterator.release.set()
+        assert await read == b"chunk"
+        await close
+
+    asyncio.run(exercise())
+
+    assert resolved.iterator.closed is True
+    assert resolved.iterator.closed_while_executing is False
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_cancelled_read_waits_then_closes() -> None:
+    resolved = _BlockingResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def exercise() -> None:
+        read = asyncio.create_task(anext(response.body_iterator))
+        await asyncio.to_thread(resolved.iterator.entered.wait, 1)
+        read.cancel()
+        await asyncio.sleep(0.01)
+        assert read.done() is False
+        resolved.iterator.release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await read
+
+    asyncio.run(exercise())
+
+    assert resolved.iterator.closed is True
+    assert resolved.iterator.closed_while_executing is False
+    assert resolved.closed is True
+
+
+def test_theme_report_pdf_response_closes_when_client_send_fails() -> None:
+    resolved = _FakeResolvedPdf()
+    response = dashboard_app._theme_report_pdf_response(resolved)
+
+    async def send(message) -> None:
+        if message["type"] == "http.response.body":
+            raise OSError(errno.EPIPE, "client disconnected")
+
+    async def exercise() -> None:
+        with pytest.raises(OSError, match="client disconnected"):
+            await response.stream_response(send)
+
+    asyncio.run(exercise())
+
+    assert resolved.closed is True
+
+
 def test_theme_report_pdf_response_closes_if_response_construction_fails(
     monkeypatch,
 ) -> None:
@@ -1414,7 +1563,7 @@ def test_theme_report_pdf_response_closes_if_response_construction_fails(
     def fail(*args, **kwargs):
         raise RuntimeError("response failure")
 
-    monkeypatch.setattr(dashboard_app, "StreamingResponse", fail)
+    monkeypatch.setattr(dashboard_app, "_ResolvedPdfStreamingResponse", fail)
 
     with pytest.raises(RuntimeError, match="response failure"):
         dashboard_app._theme_report_pdf_response(resolved)

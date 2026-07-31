@@ -1,3 +1,5 @@
+import asyncio
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from inspect import signature
@@ -7,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 from zoneinfo import ZoneInfo
 
+import anyio
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -488,25 +491,99 @@ def _safe_pdf_attachment(filename: str) -> str:
     return f"{safe[:96]}.pdf"
 
 
+_PDF_STREAM_END = object()
+
+
+def _next_pdf_chunk(iterator: Iterator[bytes]) -> bytes | object:
+    try:
+        return next(iterator)
+    except StopIteration:
+        return _PDF_STREAM_END
+
+
+class _ResolvedPdfAsyncIterator(AsyncIterator[bytes]):
+    def __init__(self, resolved: theme_research_reports.ResolvedPdf) -> None:
+        self._resolved = resolved
+        self._iterator = resolved.iter_chunks()
+        self._lock = asyncio.Lock()
+        self._closed = False
+
+    def __aiter__(self) -> "_ResolvedPdfAsyncIterator":
+        return self
+
+    async def __anext__(self) -> bytes:
+        async with self._lock:
+            if self._closed:
+                raise StopAsyncIteration
+            worker = asyncio.create_task(
+                anyio.to_thread.run_sync(_next_pdf_chunk, self._iterator)
+            )
+            try:
+                chunk = await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                try:
+                    await worker
+                except BaseException:
+                    pass
+                self._close()
+                raise
+            except BaseException:
+                self._close()
+                raise
+            if chunk is _PDF_STREAM_END:
+                self._close()
+                raise StopAsyncIteration
+            if not isinstance(chunk, bytes):
+                self._close()
+                raise RuntimeError("PDF stream returned a non-bytes chunk")
+            return chunk
+
+    async def aclose(self) -> None:
+        async with self._lock:
+            self._close()
+
+    def close(self) -> None:
+        self._close()
+
+    def _close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            close = getattr(self._iterator, "close", None)
+            if callable(close):
+                close()
+        finally:
+            self._resolved.close()
+
+    def __del__(self) -> None:
+        try:
+            self._close()
+        except BaseException:
+            pass
+
+
+class _ResolvedPdfStreamingResponse(StreamingResponse):
+    def __init__(self, stream: _ResolvedPdfAsyncIterator, **kwargs: Any) -> None:
+        self._resolved_pdf_stream = stream
+        super().__init__(stream, **kwargs)
+
+    async def stream_response(self, send: Callable[..., Any]) -> None:
+        try:
+            await super().stream_response(send)
+        finally:
+            await self._resolved_pdf_stream.aclose()
+
+
 def _theme_report_pdf_response(
     resolved: theme_research_reports.ResolvedPdf,
 ) -> StreamingResponse:
-    iterator = None
+    stream = None
     try:
-        iterator = resolved.iter_chunks()
-
-        def stream():
-            try:
-                yield from iterator
-            finally:
-                close = getattr(iterator, "close", None)
-                if callable(close):
-                    close()
-                resolved.close()
-
+        stream = _ResolvedPdfAsyncIterator(resolved)
         filename = _safe_pdf_attachment(resolved.filename)
-        return StreamingResponse(
-            stream(),
+        return _ResolvedPdfStreamingResponse(
+            stream,
             media_type=resolved.media_type,
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"',
@@ -514,10 +591,10 @@ def _theme_report_pdf_response(
             },
         )
     except BaseException:
-        close = getattr(iterator, "close", None)
-        if callable(close):
-            close()
-        resolved.close()
+        if stream is not None:
+            stream.close()
+        else:
+            resolved.close()
         raise
 
 
