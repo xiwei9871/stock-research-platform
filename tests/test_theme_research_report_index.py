@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import hashlib
 import json
 import os
@@ -219,14 +220,14 @@ def test_invalid_root_is_reported_stably(tmp_path: Path, kind: str) -> None:
 def test_discovery_failure_is_stable(monkeypatch, tmp_path: Path, exc: Exception) -> None:
     root = tmp_path / "reports"
     root.mkdir()
-    original = Path.iterdir
+    original = os.listdir
 
-    def broken_iterdir(path: Path):
-        if path == root:
+    def broken_listdir(path):
+        if isinstance(path, int):
             raise exc
         return original(path)
 
-    monkeypatch.setattr(Path, "iterdir", broken_iterdir)
+    monkeypatch.setattr(os, "listdir", broken_listdir)
     result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
 
     assert result.invalid == 1
@@ -256,14 +257,14 @@ def test_version_directory_disappearing_during_discovery_is_stable(tmp_path: Pat
     root = tmp_path / "reports"
     manifest = _write_report(root, "a-theme", "v1")
     version_dir = manifest.parent
-    real_lstat = Path.lstat
+    real_stat = os.stat
 
-    def lstat(path: Path):
-        if path == version_dir:
+    def stat_path(path, *args, **kwargs):
+        if path == version_dir.name and kwargs.get("dir_fd") is not None:
             raise FileNotFoundError("vanished")
-        return real_lstat(path)
+        return real_stat(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "lstat", lstat)
+    monkeypatch.setattr(os, "stat", stat_path)
     result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
 
     assert (result.discovered, result.invalid) == (0, 1)
@@ -324,14 +325,19 @@ def test_discovery_and_manifest_errors_share_global_relative_path_order(
     bad_manifest = _write_report(root, "a-theme", "v1")
     bad_manifest.write_text("{}", encoding="utf-8")
     z_manifest = _write_report(root, "z-theme", "v1")
-    real_lstat = Path.lstat
+    z_theme_inode = os.stat(z_manifest.parents[1]).st_ino
+    real_open = os.open
 
-    def lstat(path: Path):
-        if path == z_manifest.parent:
+    def open_path(path, flags, mode=0o777, *, dir_fd=None):
+        if (
+            path == "v1"
+            and dir_fd is not None
+            and os.fstat(dir_fd).st_ino == z_theme_inode
+        ):
             raise PermissionError("denied")
-        return real_lstat(path)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(Path, "lstat", lstat)
+    monkeypatch.setattr(os, "open", open_path)
     result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
 
     assert [error["manifest_path"] for error in result.errors] == [
@@ -517,3 +523,226 @@ def test_module_cli_missing_root_still_returns_empty_json_exit_zero(tmp_path: Pa
     assert payload["invalid"] == 0
     assert payload["errors"] == []
     assert completed.stderr == ""
+
+
+@pytest.mark.parametrize("swap_level", ["theme", "version"])
+def test_directory_swap_to_symlink_is_not_followed_during_discovery(
+    tmp_path: Path, monkeypatch, caplog, swap_level: str
+) -> None:
+    root = tmp_path / "reports"
+    manifest = _write_report(root, "safe-theme", "v1")
+    external = tmp_path / "absolute-secret-external"
+    if swap_level == "theme":
+        _write_report(external, "outside-theme", "outside-v")
+        target = manifest.parents[1]
+        replacement = external / "outside-theme"
+        watched_name = "safe-theme"
+    else:
+        _write_report(external, "outside-theme", "outside-v")
+        target = manifest.parent
+        replacement = external / "outside-theme" / "outside-v"
+        watched_name = "v1"
+    original = target.with_name(f"{target.name}-original")
+    real_open = os.open
+    swapped = False
+
+    def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+        if not swapped and dir_fd is not None and path == watched_name:
+            swapped = True
+            target.rename(original)
+            target.symlink_to(replacement, target_is_directory=True)
+        return descriptor
+
+    monkeypatch.setattr(os, "open", racing_open)
+    monkeypatch.setattr(
+        report_index,
+        "register_report_manifest",
+        lambda *args, **kwargs: pytest.fail("external report must not be registered"),
+    )
+
+    result = report_index.scan_theme_research_report_root(
+        root, limits=LIMITS, service="runtime"
+    )
+
+    assert swapped is True
+    assert result.discovered == 0
+    assert result.invalid == 1
+    assert str(external) not in caplog.text
+
+
+@pytest.mark.parametrize("boundary", ["loader", "store"])
+def test_memory_error_from_report_boundary_is_re_raised(
+    tmp_path: Path, monkeypatch, boundary: str
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+
+    def exhaust(*args, **kwargs):
+        raise MemoryError("out of memory")
+
+    if boundary == "loader":
+        monkeypatch.setattr(report_index, "load_report_manifest", exhaust)
+    else:
+        monkeypatch.setattr(report_index, "register_report_manifest", exhaust)
+
+    with pytest.raises(MemoryError):
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+
+def test_memory_error_while_classifying_boundary_error_is_re_raised(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+    real_import = builtins.__import__
+
+    def fail_store(*args, **kwargs):
+        raise RuntimeError("ordinary store failure")
+
+    def import_with_oom(name, *args, **kwargs):
+        if name == "stock_research.theme_research_report_store":
+            raise MemoryError("out of memory")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(report_index, "register_report_manifest", fail_store)
+    monkeypatch.setattr(builtins, "__import__", import_with_oom)
+
+    with pytest.raises(MemoryError):
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+
+def test_memory_error_during_directory_listing_is_re_raised(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "reports"
+    root.mkdir()
+    real_listdir = os.listdir
+
+    def exhaust(path):
+        if isinstance(path, int):
+            raise MemoryError("out of memory")
+        return real_listdir(path)
+
+    monkeypatch.setattr(os, "listdir", exhaust)
+
+    with pytest.raises(MemoryError):
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+
+def test_directory_fds_close_when_theme_listing_raises_memory_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "reports"
+    (root / "a-theme").mkdir(parents=True)
+    real_names = report_index._sorted_directory_names
+    real_close = report_index._safe_close
+    listing_calls = 0
+    closed: list[int] = []
+
+    def list_names(directory_fd: int):
+        nonlocal listing_calls
+        listing_calls += 1
+        if listing_calls == 2:
+            raise MemoryError("out of memory")
+        return real_names(directory_fd)
+
+    def close_fd(descriptor: int | None):
+        if descriptor is not None:
+            closed.append(descriptor)
+        real_close(descriptor)
+
+    monkeypatch.setattr(report_index, "_sorted_directory_names", list_names)
+    monkeypatch.setattr(report_index, "_safe_close", close_fd)
+
+    with pytest.raises(MemoryError):
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+    assert listing_calls == 2
+    assert len(closed) == 2
+
+
+def test_first_report_is_registered_before_later_theme_discovery(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+    _write_report(root, "z-theme", "v1")
+    events: list[str] = []
+    real_open = os.open
+
+    def ordered_open(path, flags, mode=0o777, *, dir_fd=None):
+        if dir_fd is not None and path == "z-theme":
+            events.append("discover-z")
+            raise PermissionError("denied")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    def register(manifest, *, service):
+        events.append(f"register-{manifest.theme_id}")
+        return {"result": "indexed"}
+
+    monkeypatch.setattr(os, "open", ordered_open)
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    result = report_index.scan_theme_research_report_root(
+        root, limits=LIMITS, service="runtime"
+    )
+
+    assert events[:2] == ["register-a-theme", "discover-z"]
+    assert (result.discovered, result.indexed, result.invalid) == (1, 1, 1)
+
+
+def test_default_runtime_service_is_resolved_once_per_scan(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+    _write_report(root, "b-theme", "v1")
+    settings_calls = 0
+    services: list[str] = []
+
+    def load_settings():
+        nonlocal settings_calls
+        settings_calls += 1
+        return SimpleNamespace(theme_research_runtime_service="runtime-once")
+
+    def register(manifest, *, service):
+        services.append(service)
+        return {"result": "indexed"}
+
+    monkeypatch.setattr(report_index, "_load_settings", load_settings)
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
+
+    assert result.indexed == 2
+    assert settings_calls == 1
+    assert services == ["runtime-once", "runtime-once"]
+
+
+def test_log_context_escapes_newlines_from_directory_names(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    root = tmp_path / "reports"
+    manifest = _write_report(root, "bad\ninjected", "v1")
+    manifest.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        report_index,
+        "register_report_manifest",
+        lambda *args, **kwargs: pytest.fail(),
+    )
+
+    result = report_index.scan_theme_research_report_root(
+        root, limits=LIMITS, service="runtime"
+    )
+
+    assert result.invalid == 1
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages
+    assert all(len(message.splitlines()) == 1 for message in messages)
+    assert "bad\\ninjected" in messages[0]

@@ -60,6 +60,8 @@ def register_report_manifest(*args: Any, **kwargs: Any) -> Any:
 def _is_theme_research_report_error(exc: Exception) -> bool:
     try:
         from stock_research.theme_research_report_store import ThemeResearchReportError
+    except MemoryError:
+        raise
     except Exception:
         return False
     return isinstance(exc, ThemeResearchReportError)
@@ -140,22 +142,52 @@ def _is_temporary_or_hidden(name: str) -> bool:
     return name.startswith(".") or name.endswith(".tmp")
 
 
-def _sorted_entries(directory: Path) -> list[Path]:
-    return sorted(directory.iterdir(), key=lambda path: path.name)
+def _directory_open_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
 
 
-def _is_real_directory(path: Path) -> bool:
-    mode = path.lstat().st_mode
-    return not stat.S_ISLNK(mode) and stat.S_ISDIR(mode)
+def _open_child_directory(parent_fd: int, name: str) -> int | None:
+    entry_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if stat.S_ISLNK(entry_stat.st_mode) or not stat.S_ISDIR(entry_stat.st_mode):
+        return None
+    return os.open(name, _directory_open_flags(), dir_fd=parent_fd)
+
+
+def _sorted_directory_names(directory_fd: int) -> list[str]:
+    return sorted(os.listdir(directory_fd))
+
+
+def _directory_entry_matches_fd(parent_fd: int, name: str, child_fd: int) -> bool:
+    try:
+        entry_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        opened_stat = os.fstat(child_fd)
+    except (OSError, ValueError):
+        return False
+    return (
+        stat.S_ISDIR(entry_stat.st_mode)
+        and not stat.S_ISLNK(entry_stat.st_mode)
+        and entry_stat.st_dev == opened_stat.st_dev
+        and entry_stat.st_ino == opened_stat.st_ino
+    )
+
+
+def _safe_close(descriptor: int | None) -> None:
+    if descriptor is None:
+        return
+    try:
+        os.close(descriptor)
+    except OSError:
+        pass
 
 
 def _append_error(errors: list[dict[str, str]], error: dict[str, str]) -> None:
     logger.warning(
-        "theme report scan failure code=%s manifest_path=%s theme_id=%s version=%s",
-        error.get("code", "INDEX_UNEXPECTED_ERROR"),
-        error.get("manifest_path", ""),
-        error.get("theme_id", ""),
-        error.get("version", ""),
+        "theme report scan failure %s",
+        json.dumps(error, ensure_ascii=False, sort_keys=True),
     )
     errors.append(error)
     errors.sort(key=_error_sort_key)
@@ -197,128 +229,195 @@ def scan_theme_research_report_root(
     started_at = datetime.now(timezone.utc)
     discovered = indexed = unchanged = invalid = 0
     errors: list[dict[str, str]] = []
+    selected_service = (
+        service
+        if service is not None
+        else _load_settings().theme_research_runtime_service
+    )
 
     try:
         report_root = Path(os.path.abspath(os.fspath(root)))
-        root_mode = report_root.lstat().st_mode
+        root_fd = os.open(report_root, _directory_open_flags())
     except FileNotFoundError:
         return ReportScanResult(0, 0, 0, 0, (), started_at, datetime.now(timezone.utc))
     except (OSError, TypeError, ValueError):
         _append_error(errors, {"code": "REPORT_ROOT_INVALID"})
         return ReportScanResult(0, 0, 0, 1, errors, started_at, datetime.now(timezone.utc))
 
-    if stat.S_ISLNK(root_mode) or not stat.S_ISDIR(root_mode):
-        _append_error(errors, {"code": "REPORT_ROOT_INVALID"})
-        return ReportScanResult(0, 0, 0, 1, errors, started_at, datetime.now(timezone.utc))
-
     try:
-        theme_entries = _sorted_entries(report_root)
-    except (OSError, ValueError):
-        _append_error(errors, {"code": "REPORT_DISCOVERY_ERROR"})
-        return ReportScanResult(0, 0, 0, 1, errors, started_at, datetime.now(timezone.utc))
-
-    candidates: list[tuple[str, str, str, Path]] = []
-    for theme_path in theme_entries:
-        theme_id = theme_path.name
-        if _is_temporary_or_hidden(theme_id):
-            continue
         try:
-            if not _is_real_directory(theme_path):
-                continue
-            version_entries = _sorted_entries(theme_path)
+            theme_names = _sorted_directory_names(root_fd)
         except (OSError, ValueError):
-            invalid += 1
-            _append_error(errors, {"code": "REPORT_DISCOVERY_ERROR", "theme_id": theme_id})
-            continue
-
-        for version_path in version_entries:
-            version = version_path.name
-            if _is_temporary_or_hidden(version):
-                continue
-            relative_path = f"{theme_id}/{version}/manifest.json"
-            try:
-                if not _is_real_directory(version_path):
-                    continue
-            except (OSError, ValueError):
-                invalid += 1
-                _append_error(
-                    errors,
-                    _manifest_error(
-                        "REPORT_DISCOVERY_ERROR",
-                        relative_path,
-                        theme_id=theme_id,
-                        version=version,
-                    ),
-                )
-                continue
-            manifest_path = version_path / "manifest.json"
-            try:
-                manifest_path.lstat()
-            except FileNotFoundError:
-                continue
-            except (OSError, ValueError):
-                invalid += 1
-                _append_error(
-                    errors,
-                    _manifest_error(
-                        "REPORT_DISCOVERY_ERROR",
-                        relative_path,
-                        theme_id=theme_id,
-                        version=version,
-                    ),
-                )
-                continue
-            candidates.append((relative_path, theme_id, version, manifest_path))
-
-    for relative_path, directory_theme, directory_version, manifest_path in sorted(
-        candidates, key=lambda candidate: candidate[0]
-    ):
-        discovered += 1
-        try:
-            manifest = load_report_manifest(
-                manifest_path,
-                report_root=report_root,
-                limits=limits,
-            )
-            selected_service = (
-                service
-                if service is not None
-                else _load_settings().theme_research_runtime_service
-            )
-            store_result = register_report_manifest(manifest, service=selected_service)
-            outcome = store_result.get("result") if isinstance(store_result, Mapping) else None
-            if outcome == "indexed":
-                indexed += 1
-            elif outcome == "unchanged":
-                unchanged += 1
-            else:
-                raise RuntimeError("report store returned an unsupported result")
-        except ReportManifestError as exc:
-            invalid += 1
-            safe_identity = exc.code in _IDENTITY_SAFE_MANIFEST_CODES
-            _append_error(
+            _append_error(errors, {"code": "REPORT_DISCOVERY_ERROR"})
+            return ReportScanResult(
+                0,
+                0,
+                0,
+                1,
                 errors,
-                _manifest_error(
-                    exc.code,
-                    relative_path,
-                    theme_id=directory_theme if safe_identity else None,
-                    version=directory_version if safe_identity else None,
-                ),
+                started_at,
+                datetime.now(timezone.utc),
             )
-        except Exception as exc:
-            invalid += 1
-            if _is_theme_research_report_error(exc):
-                error = _manifest_error(
-                    exc.code,
-                    relative_path,
-                    theme_id=manifest.theme_id,
-                    version=manifest.version,
+
+        for theme_id in theme_names:
+            if _is_temporary_or_hidden(theme_id):
+                continue
+            theme_fd: int | None = None
+            try:
+                theme_fd = _open_child_directory(root_fd, theme_id)
+                if theme_fd is None:
+                    continue
+                version_names = _sorted_directory_names(theme_fd)
+            except (OSError, ValueError):
+                _safe_close(theme_fd)
+                invalid += 1
+                _append_error(
+                    errors, {"code": "REPORT_DISCOVERY_ERROR", "theme_id": theme_id}
                 )
-            elif isinstance(exc, OSError):
-                error = _manifest_error("INDEX_IO_ERROR", relative_path)
-            else:
-                error = _manifest_error("INDEX_UNEXPECTED_ERROR", relative_path)
-            _append_error(errors, error)
+                continue
+            except BaseException:
+                _safe_close(theme_fd)
+                raise
+            try:
+                for version in version_names:
+                    if _is_temporary_or_hidden(version):
+                        continue
+                    if not _directory_entry_matches_fd(root_fd, theme_id, theme_fd):
+                        invalid += 1
+                        _append_error(
+                            errors,
+                            {
+                                "code": "REPORT_DISCOVERY_ERROR",
+                                "theme_id": theme_id,
+                            },
+                        )
+                        break
+                    relative_path = f"{theme_id}/{version}/manifest.json"
+                    version_fd: int | None = None
+                    try:
+                        version_fd = _open_child_directory(theme_fd, version)
+                        if version_fd is None:
+                            continue
+                    except (OSError, ValueError):
+                        invalid += 1
+                        _append_error(
+                            errors,
+                            _manifest_error(
+                                "REPORT_DISCOVERY_ERROR",
+                                relative_path,
+                                theme_id=theme_id,
+                                version=version,
+                            ),
+                        )
+                        continue
+                    try:
+                        try:
+                            os.stat(
+                                "manifest.json",
+                                dir_fd=version_fd,
+                                follow_symlinks=False,
+                            )
+                        except FileNotFoundError:
+                            continue
+                        except (OSError, ValueError):
+                            invalid += 1
+                            _append_error(
+                                errors,
+                                _manifest_error(
+                                    "REPORT_DISCOVERY_ERROR",
+                                    relative_path,
+                                    theme_id=theme_id,
+                                    version=version,
+                                ),
+                            )
+                            continue
+
+                        if (
+                            not _directory_entry_matches_fd(
+                                root_fd, theme_id, theme_fd
+                            )
+                            or not _directory_entry_matches_fd(
+                                theme_fd, version, version_fd
+                            )
+                        ):
+                            invalid += 1
+                            _append_error(
+                                errors,
+                                _manifest_error(
+                                    "REPORT_DISCOVERY_ERROR",
+                                    relative_path,
+                                    theme_id=theme_id,
+                                    version=version,
+                                ),
+                            )
+                            continue
+
+                        discovered += 1
+                        manifest_path = report_root / theme_id / version / "manifest.json"
+                        manifest = None
+                        try:
+                            manifest = load_report_manifest(
+                                manifest_path,
+                                report_root=report_root,
+                                limits=limits,
+                            )
+                            store_result = register_report_manifest(
+                                manifest, service=selected_service
+                            )
+                            outcome = (
+                                store_result.get("result")
+                                if isinstance(store_result, Mapping)
+                                else None
+                            )
+                            if outcome == "indexed":
+                                indexed += 1
+                            elif outcome == "unchanged":
+                                unchanged += 1
+                            else:
+                                raise RuntimeError(
+                                    "report store returned an unsupported result"
+                                )
+                        except MemoryError:
+                            raise
+                        except ReportManifestError as exc:
+                            invalid += 1
+                            safe_identity = exc.code in _IDENTITY_SAFE_MANIFEST_CODES
+                            _append_error(
+                                errors,
+                                _manifest_error(
+                                    exc.code,
+                                    relative_path,
+                                    theme_id=theme_id if safe_identity else None,
+                                    version=version if safe_identity else None,
+                                ),
+                            )
+                        except Exception as exc:
+                            invalid += 1
+                            if (
+                                manifest is not None
+                                and _is_theme_research_report_error(exc)
+                            ):
+                                error = _manifest_error(
+                                    exc.code,
+                                    relative_path,
+                                    theme_id=manifest.theme_id,
+                                    version=manifest.version,
+                                )
+                            elif isinstance(exc, OSError):
+                                error = _manifest_error(
+                                    "INDEX_IO_ERROR", relative_path
+                                )
+                            else:
+                                error = _manifest_error(
+                                    "INDEX_UNEXPECTED_ERROR", relative_path
+                                )
+                            _append_error(errors, error)
+                    finally:
+                        _safe_close(version_fd)
+            finally:
+                _safe_close(theme_fd)
+    finally:
+        _safe_close(root_fd)
 
     return ReportScanResult(
         discovered,
