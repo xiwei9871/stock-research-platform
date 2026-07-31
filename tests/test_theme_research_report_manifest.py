@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from stock_research.theme_research_report_manifest import (
     ReportManifestError,
     ReportManifestLimits,
     load_report_manifest,
+    metadata_to_jsonable,
 )
 
 
@@ -111,17 +113,77 @@ def test_loads_valid_markdown_and_pdf_manifest(tmp_path: Path) -> None:
     assert result.pdf.size_bytes == len(pdf)
 
 
-def test_returned_models_are_frozen_and_metadata_is_detached(tmp_path: Path) -> None:
-    report_root, manifest_path, manifest = _write_package(tmp_path)
+def test_returned_models_and_nested_metadata_are_immutable_snapshots(tmp_path: Path) -> None:
+    report_root, manifest_path, manifest = _write_package(
+        tmp_path,
+        overrides={
+            "metadata": {
+                "source": {
+                    "kind": "production",
+                    "tags": ["primary", {"name": "audited"}],
+                }
+            }
+        },
+    )
     result = load_report_manifest(manifest_path, report_root=report_root, limits=DEFAULT_LIMITS)
 
     manifest["metadata"] = {"source": {"kind": "mutated"}}
 
-    assert result.metadata == {"source": {"kind": "production"}}
+    source = result.metadata["source"]
+    assert isinstance(source, Mapping)
+    tags = source["tags"]
+    assert isinstance(tags, tuple)
+    assert isinstance(tags[1], Mapping)
+    with pytest.raises(TypeError):
+        result.metadata["new"] = "value"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        source["kind"] = "mutated"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        tags[0] = "mutated"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        tags[1]["name"] = "mutated"  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        tags.append("mutated")
+    assert result.metadata == {
+        "source": {
+            "kind": "production",
+            "tags": ("primary", {"name": "audited"}),
+        }
+    }
     with pytest.raises(FrozenInstanceError):
         result.theme_id = "other"  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         result.markdown.relative_path = "other.md"  # type: ignore[misc]
+
+
+def test_metadata_to_jsonable_returns_detached_dicts_and_lists(tmp_path: Path) -> None:
+    report_root, manifest_path, _ = _write_package(
+        tmp_path,
+        overrides={
+            "metadata": {
+                "source": {
+                    "kind": "production",
+                    "tags": ["primary", {"name": "audited"}],
+                }
+            }
+        },
+    )
+    result = load_report_manifest(manifest_path, report_root=report_root, limits=DEFAULT_LIMITS)
+
+    jsonable = metadata_to_jsonable(result.metadata)
+
+    assert type(jsonable) is dict
+    assert type(jsonable["source"]) is dict
+    assert type(jsonable["source"]["tags"]) is list
+    assert json.loads(json.dumps(jsonable)) == jsonable
+    jsonable["source"]["kind"] = "mutated"
+    jsonable["source"]["tags"].append("mutated")
+    jsonable["source"]["tags"][1]["name"] = "mutated"
+    assert result.metadata["source"]["kind"] == "production"
+    assert result.metadata["source"]["tags"] == (
+        "primary",
+        {"name": "audited"},
+    )
 
 
 @pytest.mark.parametrize("value", [0, -1])

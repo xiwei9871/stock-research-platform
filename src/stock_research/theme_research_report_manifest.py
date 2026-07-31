@@ -7,9 +7,11 @@ import json
 import os
 import re
 import stat
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 
@@ -48,7 +50,7 @@ class ThemeResearchReportManifest:
     pdf: ReportArtifact | None
     manifest_relative_path: str
     manifest_sha256: str
-    metadata: dict[str, Any]
+    metadata: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,11 @@ class ReportManifestError(Exception):
         self.code = code
         self.message = message
         self.details = copy.deepcopy(details) if details is not None else None
+
+
+def metadata_to_jsonable(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a detached dict/list snapshot suitable for JSON persistence."""
+    return {key: _metadata_value_to_jsonable(value) for key, value in metadata.items()}
 
 
 def load_report_manifest(
@@ -248,7 +255,7 @@ def _load_report_manifest_from_version_directory(
         pdf=pdf,
         manifest_relative_path=manifest_relative.as_posix(),
         manifest_sha256=manifest_sha256,
-        metadata=copy.deepcopy(metadata),
+        metadata=_freeze_json_object(metadata),
     )
 
 
@@ -273,6 +280,26 @@ def _validate_json_depth(payload: Any, *, max_depth: int = 64) -> None:
             pending.extend((child, depth + 1) for child in value.values())
         elif isinstance(value, list):
             pending.extend((child, depth + 1) for child in value)
+
+
+def _freeze_json_object(value: dict[str, Any]) -> Mapping[str, Any]:
+    return MappingProxyType({key: _freeze_json_value(child) for key, child in value.items()})
+
+
+def _freeze_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _freeze_json_object(value)
+    if isinstance(value, list):
+        return tuple(_freeze_json_value(child) for child in value)
+    return value
+
+
+def _metadata_value_to_jsonable(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _metadata_value_to_jsonable(child) for key, child in value.items()}
+    if isinstance(value, tuple):
+        return [_metadata_value_to_jsonable(child) for child in value]
+    return value
 
 
 def _open_directory(path: Path, *, code: str, label: str) -> int:
