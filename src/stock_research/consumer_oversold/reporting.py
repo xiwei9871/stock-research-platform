@@ -456,6 +456,137 @@ def _validate_v2_selection_values(
         raise ValueError(f"{name} must exactly equal ranked_pool slice") from exc
 
 
+def validate_v2_snapshot_rank_frames(
+    frames: dict[str, pd.DataFrame],
+    *,
+    coverage: dict[str, Any],
+    trade_date: str,
+) -> dict[str, int]:
+    """Validate the sealed V2 ranking frames before forward evaluation."""
+    required = ("top20", "top30", "ranked_pool")
+    missing = [name for name in required if name not in frames]
+    if missing:
+        raise ValueError(
+            "sealed V2 snapshot missing ranking frames: " + ", ".join(missing)
+        )
+    normalized_trade_date = validate_trade_date(trade_date)
+    if coverage.get("trade_date") != normalized_trade_date:
+        raise ValueError("sealed V2 snapshot coverage trade_date must match trade_date")
+    if coverage.get("ranking_version") != "v2":
+        raise ValueError("sealed V2 snapshot coverage ranking_version must be v2")
+
+    for name in required:
+        frame = frames[name]
+        if not isinstance(frame, pd.DataFrame):
+            raise TypeError(f"sealed V2 snapshot {name} must be a pandas DataFrame")
+        missing_columns = [
+            field
+            for field in ("ranking_version", "trade_date")
+            if field not in frame.columns
+        ]
+        if missing_columns:
+            raise ValueError(
+                f"sealed V2 snapshot {name} missing required columns: "
+                + ", ".join(missing_columns)
+            )
+        versions = frame["ranking_version"]
+        if versions.nunique(dropna=False) > 1:
+            raise ValueError(
+                f"sealed V2 snapshot {name} ranking_version must be single-valued"
+            )
+        if not versions.map(
+            lambda value: isinstance(value, str) and value == "v2"
+        ).all():
+            raise ValueError(f"sealed V2 snapshot {name} ranking_version must be v2")
+        dates = frame["trade_date"]
+        if dates.nunique(dropna=False) > 1:
+            raise ValueError(
+                f"sealed V2 snapshot {name} trade_date must be single-valued"
+            )
+        if not dates.map(
+            lambda value: isinstance(value, str) and value == normalized_trade_date
+        ).all():
+            raise ValueError(
+                f"sealed V2 snapshot {name} trade_date must equal coverage trade_date"
+            )
+
+    ranked_pool = frames["ranked_pool"]
+    ranked_ids = _validate_v2_rank_frame(
+        ranked_pool, "sealed V2 snapshot ranked_pool", start_rank=1, coverage=coverage
+    )
+    order_fields = (
+        "final_rank_score_v2",
+        "activation_rank_percentile",
+        "repair_rank_percentile",
+    )
+    order_values = ranked_pool.loc[:, order_fields].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    if order_values.isna().any().any() or not np.isfinite(order_values).all().all():
+        raise ValueError("sealed V2 snapshot ranked_pool score ordering fields must be finite")
+    expected_ranked_ids = (
+        ranked_pool.sort_values(
+            [*order_fields, "asset_id"],
+            ascending=[False, False, False, True],
+            kind="stable",
+        )["asset_id"]
+        .astype(str)
+        .str.strip()
+        .tolist()
+    )
+    if ranked_ids != expected_ranked_ids:
+        raise ValueError("sealed V2 snapshot ranked_pool order is invalid")
+
+    final_top_n = _positive_size(coverage, "final_top_n", _V2_FINAL_TOP_N)
+    if final_top_n != _V2_FINAL_TOP_N:
+        raise ValueError("sealed V2 snapshot coverage final_top_n must equal 20")
+    reserve_top_n = _positive_size(coverage, "reserve_top_n", _V2_RESERVE_TOP_N)
+    if reserve_top_n != _V2_RESERVE_TOP_N:
+        raise ValueError("sealed V2 snapshot coverage reserve_top_n must equal 20")
+    expected_counts = {
+        "ranked_pool": len(ranked_ids),
+        "top20": min(final_top_n, len(ranked_ids)),
+        "top30": min(30, len(ranked_ids)),
+    }
+    for name, expected_count in expected_counts.items():
+        actual_count = len(frames[name])
+        if actual_count != expected_count:
+            raise ValueError(
+                f"sealed V2 snapshot {name} length must equal ranked_pool selection size"
+            )
+        coverage_key = {
+            "ranked_pool": "v2_ranked_pool_count",
+            "top30": "v2_top30_count",
+        }.get(name)
+        if coverage_key is not None:
+            if coverage_key not in coverage:
+                raise ValueError(
+                    f"sealed V2 snapshot coverage missing {coverage_key}"
+                )
+            if _coverage_count(coverage, coverage_key, "sealed V2 snapshot coverage") != actual_count:
+                raise ValueError(
+                    f"sealed V2 snapshot coverage {coverage_key} must equal {name} length"
+                )
+
+    top20_ids = _validate_v2_rank_frame(
+        frames["top20"], "sealed V2 snapshot top20", start_rank=1, coverage=coverage
+    )
+    top30_ids = _validate_v2_rank_frame(
+        frames["top30"], "sealed V2 snapshot top30", start_rank=1, coverage=coverage
+    )
+    if top20_ids != ranked_ids[: expected_counts["top20"]]:
+        raise ValueError("sealed V2 snapshot top20 must equal ranked_pool prefix")
+    if top30_ids != ranked_ids[: expected_counts["top30"]]:
+        raise ValueError("sealed V2 snapshot top30 must equal ranked_pool prefix")
+    _validate_v2_selection_values(
+        frames["top20"], ranked_pool.iloc[: expected_counts["top20"]], "sealed V2 snapshot top20"
+    )
+    _validate_v2_selection_values(
+        frames["top30"], ranked_pool.iloc[: expected_counts["top30"]], "sealed V2 snapshot top30"
+    )
+    return expected_counts
+
+
 def _validate_v2_comparison_truth(
     comparison: pd.DataFrame,
     ranked_pool: pd.DataFrame,

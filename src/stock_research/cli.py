@@ -1686,6 +1686,9 @@ def _verified_consumer_oversold_v2_release(snapshot_dir: str) -> Path:
 
 def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
     from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+    from stock_research.consumer_oversold.reporting import (
+        validate_v2_snapshot_rank_frames,
+    )
 
     release = _verified_consumer_oversold_v2_release(snapshot_dir)
     coverage_path = release / V2_OUTPUT_FILENAMES["coverage"]
@@ -1733,32 +1736,11 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
         }
     except (OSError, UnicodeError, pd.errors.ParserError) as exc:
         raise ValueError("sealed V2 snapshot artifact content is invalid") from exc
-    for key, frame in frames.items():
-        missing = [column for column in ("asset_id", "final_rank") if column not in frame]
-        if missing:
-            raise ValueError(
-                f"sealed V2 snapshot {key} missing required columns: {', '.join(missing)}"
-            )
-    top20_pairs = list(
-        frames["top20"][["asset_id", "final_rank"]].itertuples(
-            index=False, name=None
-        )
+    validate_v2_snapshot_rank_frames(
+        frames,
+        coverage=coverage,
+        trade_date=trade_date,
     )
-    top30_prefix = list(
-        frames["top30"]
-        .iloc[: len(frames["top20"])][["asset_id", "final_rank"]]
-        .itertuples(index=False, name=None)
-    )
-    ranked_prefix = list(
-        frames["ranked_pool"]
-        .iloc[: len(frames["top30"])][["asset_id", "final_rank"]]
-        .itertuples(index=False, name=None)
-    )
-    top30_pairs = list(
-        frames["top30"][["asset_id", "final_rank"]].itertuples(index=False, name=None)
-    )
-    if top20_pairs != top30_prefix or top30_pairs != ranked_prefix:
-        raise ValueError("sealed V2 snapshot ranking frames are inconsistent")
     return {
         "release": release,
         "trade_date": trade_date,

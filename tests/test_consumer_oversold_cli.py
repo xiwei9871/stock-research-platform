@@ -710,6 +710,79 @@ def _sealed_v2_snapshot(tmp_path: Path) -> tuple[Path, Path]:
     return root / "current", release
 
 
+def _valid_v2_snapshot_rank_frames(
+    *, pool_size: int = 3, trade_date: str = "2026-07-29"
+) -> tuple[dict[str, pd.DataFrame], dict[str, object]]:
+    rows = []
+    for rank in range(1, pool_size + 1):
+        repair_percentile = 101.0 - rank
+        activation_percentile = 96.0 - rank
+        rows.append(
+            {
+                "asset_id": f"A{rank}",
+                "final_rank": rank,
+                "trade_date": trade_date,
+                "ranking_version": "v2",
+                "final_rank_score_v2": (
+                    0.55 * repair_percentile + 0.45 * activation_percentile
+                ),
+                "repair_rank_percentile": repair_percentile,
+                "activation_rank_percentile": activation_percentile,
+                "composite_score": 60.0,
+                "activation_score": 67.5,
+                "technical_readiness_score": 75.0,
+                "continuation_character_score": 70.0,
+                "residual_price_space_score": 65.0,
+                "capital_efficiency_score": 60.0,
+                "catalyst_timing_score": 55.0,
+                "evidence_complete": True,
+                "eligible": True,
+                "activation_coverage": True,
+                "activation_eligible": True,
+                "activation_exclusion_reasons": "",
+                "falling_knife": False,
+                "overextended": False,
+            }
+        )
+    ranked_pool = pd.DataFrame(rows)
+    frames = {
+        "ranked_pool": ranked_pool,
+        "top20": ranked_pool.iloc[: min(20, pool_size)].copy(deep=True),
+        "top30": ranked_pool.iloc[: min(30, pool_size)].copy(deep=True),
+    }
+    coverage = {
+        "trade_date": trade_date,
+        "ranking_version": "v2",
+        "final_top_n": 20,
+        "reserve_top_n": 20,
+        "v2_ranked_pool_count": pool_size,
+        "v2_top30_count": min(30, pool_size),
+        "v2_rank_weights": {"repair": 0.55, "activation": 0.45},
+        "v2_activation_weights": {
+            "technical_readiness": 0.30,
+            "continuation_character": 0.25,
+            "residual_price_space": 0.20,
+            "capital_efficiency": 0.15,
+            "catalyst_timing": 0.10,
+        },
+    }
+    return frames, coverage
+
+
+def _write_snapshot_rank_frames(
+    release: Path,
+    frames: dict[str, pd.DataFrame],
+    coverage: dict[str, object],
+) -> None:
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    (release / V2_OUTPUT_FILENAMES["coverage"]).write_text(
+        json.dumps(coverage), encoding="utf-8"
+    )
+    for key, frame in frames.items():
+        frame.to_csv(release / V2_OUTPUT_FILENAMES[key], index=False)
+
+
 def test_v2_snapshot_requires_verified_read_only_current_release(tmp_path):
     current, release = _sealed_v2_snapshot(tmp_path)
     try:
@@ -864,6 +937,77 @@ def test_v2_snapshot_reports_corrupt_csv_as_sealed_artifact_error(
     )
 
     with pytest.raises(ValueError, match="sealed V2 snapshot artifact content is invalid"):
+        cli._load_consumer_oversold_v2_snapshot("snapshot/current")
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [("ranking_version", "v1"), ("trade_date", "2026-07-30")],
+)
+def test_v2_snapshot_rejects_self_consistent_row_metadata_mismatch(
+    monkeypatch, tmp_path, field, bad_value
+):
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    release = tmp_path / "release"
+    release.mkdir()
+    frames, coverage = _valid_v2_snapshot_rank_frames()
+    for frame in frames.values():
+        frame.loc[0, field] = bad_value
+    _write_snapshot_rank_frames(release, frames, coverage)
+    for filename in V2_OUTPUT_FILENAMES.values():
+        path = release / filename
+        if not path.exists():
+            path.write_text("payload\n", encoding="utf-8")
+    monkeypatch.setattr(
+        cli, "_verified_consumer_oversold_v2_release", lambda snapshot_dir: release
+    )
+
+    with pytest.raises(ValueError, match="sealed V2 snapshot"):
+        cli._load_consumer_oversold_v2_snapshot("snapshot/current")
+
+
+def test_v2_snapshot_rejects_non_continuous_rank_and_cardinality(monkeypatch, tmp_path):
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    release = tmp_path / "release"
+    release.mkdir()
+    frames, coverage = _valid_v2_snapshot_rank_frames(pool_size=25)
+    frames["ranked_pool"].loc[1, "final_rank"] = 3
+    frames["top20"] = frames["ranked_pool"].iloc[:19].copy(deep=True)
+    frames["top30"] = frames["ranked_pool"].iloc[:25].copy(deep=True)
+    _write_snapshot_rank_frames(release, frames, coverage)
+    for filename in V2_OUTPUT_FILENAMES.values():
+        path = release / filename
+        if not path.exists():
+            path.write_text("payload\n", encoding="utf-8")
+    monkeypatch.setattr(
+        cli, "_verified_consumer_oversold_v2_release", lambda snapshot_dir: release
+    )
+
+    with pytest.raises(ValueError, match="sealed V2 snapshot"):
+        cli._load_consumer_oversold_v2_snapshot("snapshot/current")
+
+
+def test_v2_snapshot_rejects_selection_that_is_not_ranked_pool_slice(
+    monkeypatch, tmp_path
+):
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    release = tmp_path / "release"
+    release.mkdir()
+    frames, coverage = _valid_v2_snapshot_rank_frames(pool_size=3)
+    frames["top20"].loc[0, "composite_score"] = 61.0
+    _write_snapshot_rank_frames(release, frames, coverage)
+    for filename in V2_OUTPUT_FILENAMES.values():
+        path = release / filename
+        if not path.exists():
+            path.write_text("payload\n", encoding="utf-8")
+    monkeypatch.setattr(
+        cli, "_verified_consumer_oversold_v2_release", lambda snapshot_dir: release
+    )
+
+    with pytest.raises(ValueError, match="sealed V2 snapshot"):
         cli._load_consumer_oversold_v2_snapshot("snapshot/current")
 
 

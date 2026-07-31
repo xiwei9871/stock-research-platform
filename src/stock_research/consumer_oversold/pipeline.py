@@ -253,6 +253,7 @@ PREAUDIT_OUTPUT_COLUMNS = [
 ]
 V2_OUTPUT_COLUMNS = [
     *UNIFIED_OUTPUT_COLUMNS,
+    "trade_date",
     "ranking_version",
     "final_rank_score_v2",
     "activation_rank_percentile",
@@ -1265,6 +1266,8 @@ def _build_v2_result(
         ranked_pool["final_rank"].gt(config.final_top_n)
         & ranked_pool["final_rank"].le(reserve_limit)
     ].copy()
+    for frame in (ranked_pool, top20, top30, reserve):
+        frame["trade_date"] = config.trade_date
     ranked_pool = ranked_pool.reindex(columns=V2_OUTPUT_COLUMNS)
     top20 = top20.reindex(columns=V2_OUTPUT_COLUMNS)
     top30 = top30.reindex(columns=V2_OUTPUT_COLUMNS)
