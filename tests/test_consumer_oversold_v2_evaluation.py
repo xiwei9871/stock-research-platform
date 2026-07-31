@@ -74,7 +74,9 @@ def _daily_bars(count: int, *, include_fifth_day: bool = True) -> pd.DataFrame:
                     "raw_close": close,
                 }
             )
-    return pd.DataFrame(rows)
+    frame = pd.DataFrame(rows)
+    frame.attrs["outcome_dates"] = list(OUTCOME_DATES)
+    return frame
 
 
 def _minute_bars(asset_ids: list[str], outcome_dates: tuple[str, ...]) -> pd.DataFrame:
@@ -151,6 +153,67 @@ def test_three_and_five_day_horizons_use_explicit_trading_outcome_dates():
     assert summary.loc[("top20", 5), "overall_evaluation"] == pytest.approx(
         expected_overall
     )
+
+
+def test_ambiguous_observed_bar_calendar_is_rejected():
+    bars = _daily_bars(1)
+    bars.attrs.clear()
+
+    with pytest.raises(ValueError, match="authoritative outcome calendar"):
+        evaluate_v2_snapshot(
+            snapshot=_ranked_snapshot(1),
+            qualified_pool=_qualified_pool_snapshot(1),
+            daily_bars=bars,
+            minute_bars=pd.DataFrame(),
+            horizons=(3,),
+        )
+
+
+def test_authoritative_calendar_does_not_shift_target_when_a_market_day_is_missing():
+    bars = _daily_bars(1).loc[
+        ~_daily_bars(1)["trade_date"].eq("2026-07-29")
+    ].copy()
+    bars.attrs["outcome_dates"] = list(OUTCOME_DATES)
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=bars,
+        minute_bars=pd.DataFrame(),
+        horizons=(3,),
+    )
+
+    row = result["detail"].iloc[0]
+    assert row["horizon_trade_date"] == "2026-07-30"
+    assert row["evaluation_status"] == "missing_outcome_bar"
+    assert result["coverage"]["daily_complete"] is False
+
+
+def test_partial_selected_group_does_not_publish_comparable_scores():
+    bars = _daily_bars(3)
+    bars = bars.loc[
+        ~(
+            bars["asset_id"].eq("A02")
+            & bars["trade_date"].eq("2026-07-30")
+        )
+    ]
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(3),
+        qualified_pool=_qualified_pool_snapshot(3),
+        daily_bars=bars,
+        minute_bars=pd.DataFrame(),
+        horizons=(3,),
+    )
+
+    top20 = result["summary"].set_index("group").loc["top20"]
+    assert top20["member_count"] == 3
+    assert top20["completed_count"] == 2
+    assert top20["pending_count"] == 1
+    assert top20["group_evaluation_status"] == "partial"
+    assert pd.isna(top20["mean_return"])
+    assert pd.isna(top20["balanced_evaluation"])
+    assert pd.isna(top20["overall_evaluation"])
 
 
 def test_daily_evaluation_accepts_conventional_ohlc_aliases():
@@ -252,6 +315,7 @@ def test_bars_after_requested_horizon_cannot_change_evaluation():
         "snapshot": _ranked_snapshot(3),
         "qualified_pool": _qualified_pool_snapshot(3),
         "minute_bars": pd.DataFrame(),
+        "outcome_dates": OUTCOME_DATES,
         "horizons": (3,),
     }
 
@@ -280,6 +344,7 @@ def test_daily_detail_reports_path_drawdown_maximum_high_and_close_fade():
             "raw_close",
         ],
     )
+    bars.attrs["outcome_dates"] = list(OUTCOME_DATES)
 
     row = evaluate_v2_snapshot(
         snapshot=_ranked_snapshot(1),
@@ -314,6 +379,7 @@ def test_forward_high_metrics_exclude_the_frozen_snapshot_day_high():
             "raw_close",
         ],
     )
+    bars.attrs["outcome_dates"] = list(OUTCOME_DATES)
 
     result = evaluate_v2_snapshot(
         snapshot=_ranked_snapshot(1),
@@ -328,6 +394,37 @@ def test_forward_high_metrics_exclude_the_frozen_snapshot_day_high():
     assert row["high_to_close_fade"] == pytest.approx((101.0 - 100.5) / 101.0)
     summary = result["summary"].set_index("group").loc["top20"]
     assert summary["reached_3pct_not_retained_count"] == 0
+
+
+def test_forward_high_metrics_use_hfq_scale_when_raw_close_scale_changes():
+    bars = pd.DataFrame(
+        [
+            ["A01", "2026-07-27", 100.0, 1000.0, 1000.0, 1000.0, 1000.0],
+            ["A01", "2026-07-28", 110.0, 550.0, 605.0, 545.0, 550.0],
+            ["A01", "2026-07-29", 110.0, 550.0, 600.0, 545.0, 550.0],
+            ["A01", "2026-07-30", 110.0, 550.0, 600.0, 545.0, 550.0],
+        ],
+        columns=[
+            "asset_id",
+            "trade_date",
+            "hfq_close",
+            "raw_open",
+            "raw_high",
+            "raw_low",
+            "raw_close",
+        ],
+    )
+    bars.attrs["outcome_dates"] = list(OUTCOME_DATES)
+
+    row = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=bars,
+        minute_bars=pd.DataFrame(),
+        horizons=(3,),
+    )["detail"].iloc[0]
+
+    assert row["max_high_return"] == pytest.approx(0.21)
 
 
 def test_missing_daily_outcome_bar_marks_incomplete_without_dropping_member():
@@ -438,6 +535,23 @@ def test_forty_seven_minute_bars_degrade_while_daily_evaluation_stays_complete()
     )
 
     assert result["coverage"]["daily_complete"] is True
+    assert result["coverage"]["minute_complete"] is False
+    assert result["coverage"]["evaluation_status"] == "daily_complete_minute_degraded"
+
+
+def test_fake_midnight_or_missing_limit_price_minute_bars_degrade():
+    minute = _minute_bars(["A01"], ("2026-07-30",))
+    minute.loc[minute.index[0], "trade_time"] = "2026-07-30 00:00:00"
+    minute.loc[minute.index[1], "limit_up_price"] = np.nan
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=_daily_bars(1),
+        minute_bars=minute,
+        horizons=(3,),
+    )
+
     assert result["coverage"]["minute_complete"] is False
     assert result["coverage"]["evaluation_status"] == "daily_complete_minute_degraded"
 
@@ -642,6 +756,28 @@ def test_outcome_loaders_use_explicit_date_predicates_and_stable_schemas(monkeyp
     assert "adjust_type = 'raw'" in calls[2][0]
     assert "AS limit_up_price" in calls[2][0]
     assert "LEFT JOIN LATERAL" in calls[2][0]
+
+
+def test_outcome_calendar_loader_returns_authoritative_open_dates(monkeypatch):
+    calls = _install_db(
+        monkeypatch,
+        [[
+            {"trade_date": date(2026, 7, 28)},
+            {"trade_date": date(2026, 7, 29)},
+            {"trade_date": date(2026, 7, 30)},
+        ]],
+    )
+
+    dates = loaders.load_consumer_v2_outcome_calendar(
+        "2026-07-28", "2026-07-30", service="test"
+    )
+
+    assert dates == ["2026-07-28", "2026-07-29", "2026-07-30"]
+    sql, params = calls[0]
+    assert "FROM market.trading_calendar" in sql
+    assert "is_open = TRUE" in sql
+    assert "trade_date BETWEEN %s AND %s" in sql
+    assert params == ["2026-07-28", "2026-07-30"]
 
 
 @pytest.mark.parametrize(

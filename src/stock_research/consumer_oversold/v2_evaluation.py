@@ -35,6 +35,7 @@ _MINUTE_REQUIRED_COLUMNS = (
     "high",
     "low",
     "close",
+    "limit_up_price",
 )
 _DETAIL_COLUMNS = (
     "trade_date",
@@ -91,6 +92,7 @@ _SUMMARY_COLUMNS = (
     "repair_strength",
     "risk_and_retention",
     "balanced_evaluation",
+    "group_evaluation_status",
     "overall_evaluation",
 )
 _MINUTE_DETAIL_COLUMNS = (
@@ -111,6 +113,13 @@ _MINUTE_DETAIL_COLUMNS = (
     "first_limit_up_time",
     "limit_up_held_to_close",
 )
+_CANONICAL_MINUTE_TIMES = frozenset(
+    pd.Timestamp(value).time()
+    for value in (
+        *pd.date_range("09:35", "11:30", freq="5min").tolist(),
+        *pd.date_range("13:05", "15:00", freq="5min").tolist(),
+    )
+)
 
 
 def _required_columns(frame: pd.DataFrame, columns: Iterable[str], name: str) -> None:
@@ -126,6 +135,47 @@ def _normalized_horizons(horizons: Iterable[int]) -> tuple[int, ...]:
     if len(set(values)) != len(values):
         raise ValueError("horizons must be unique")
     return tuple(sorted(values))
+
+
+def _normalized_outcome_dates(
+    values: Iterable[str], snapshot_trade_date: str
+) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes)):
+        raise ValueError("outcome_dates must be an ordered iterable of dates")
+    try:
+        parsed = tuple(validate_trade_date(value) for value in values)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("outcome_dates must contain valid dates") from exc
+    if parsed and parsed[0] == snapshot_trade_date:
+        parsed = parsed[1:]
+    if len(set(parsed)) != len(parsed):
+        raise ValueError("outcome_dates must contain unique dates")
+    if any(value <= snapshot_trade_date for value in parsed):
+        raise ValueError("outcome_dates must be strictly after snapshot trade_date")
+    if tuple(sorted(parsed)) != parsed:
+        raise ValueError("outcome_dates must be strictly ordered")
+    return parsed
+
+
+def _resolve_outcome_dates(
+    daily_bars: pd.DataFrame,
+    snapshot_trade_date: str,
+    outcome_dates: Iterable[str] | None,
+) -> tuple[str, ...]:
+    if outcome_dates is None:
+        attrs = getattr(daily_bars, "attrs", {})
+        outcome_dates = attrs.get("outcome_dates")
+        if outcome_dates is None:
+            outcome_dates = attrs.get("outcome_calendar")
+        if isinstance(outcome_dates, pd.DataFrame):
+            if "trade_date" not in outcome_dates.columns:
+                raise ValueError("authoritative outcome calendar must contain trade_date")
+            outcome_dates = outcome_dates["trade_date"].tolist()
+        if outcome_dates is None:
+            raise ValueError(
+                "authoritative outcome calendar is required; pass outcome_dates or set daily_bars.attrs"
+            )
+    return _normalized_outcome_dates(outcome_dates, snapshot_trade_date)
 
 
 def _normalize_asset_ids(frame: pd.DataFrame, name: str) -> pd.DataFrame:
@@ -237,24 +287,15 @@ def _normalize_daily_bars(daily_bars: pd.DataFrame) -> pd.DataFrame:
 
 
 def _outcome_calendar(
-    daily_bars: pd.DataFrame,
-    qualified_assets: set[str],
     snapshot_trade_date: str,
     horizons: tuple[int, ...],
+    outcome_dates: tuple[str, ...],
 ) -> tuple[list[pd.Timestamp], dict[int, pd.Timestamp | None]]:
     cutoff = pd.Timestamp(snapshot_trade_date)
-    dates = sorted(
-        daily_bars.loc[
-            daily_bars["asset_id"].isin(qualified_assets)
-            & daily_bars["trade_date"].ge(cutoff),
-            "trade_date",
-        ].unique()
-    )
-    calendar = [pd.Timestamp(value) for value in dates]
-    if cutoff not in calendar:
-        calendar.insert(0, cutoff)
+    future_dates = [pd.Timestamp(value) for value in outcome_dates]
+    calendar = [cutoff, *future_dates]
     targets = {
-        horizon: calendar[horizon] if horizon < len(calendar) else None
+        horizon: future_dates[horizon - 1] if horizon <= len(future_dates) else None
         for horizon in horizons
     }
     return calendar, targets
@@ -322,11 +363,12 @@ def _daily_forward_detail(
             target_hfq = float(path.iloc[-1]["hfq_close"])
             hfq_path = path["hfq_close"].astype(float)
             drawdown = hfq_path / hfq_path.cummax() - 1.0
-            entry_raw = float(path.iloc[0]["raw_close"])
             outcome_path = path.loc[path.index > cutoff]
-            maximum_high = float(outcome_path["raw_high"].max())
-            target_raw = float(path.iloc[-1]["raw_close"])
-            max_high_return = maximum_high / entry_raw - 1.0
+            adjusted_high = outcome_path["raw_high"] * (
+                outcome_path["hfq_close"] / outcome_path["raw_close"]
+            )
+            maximum_high = float(adjusted_high.max())
+            max_high_return = maximum_high / entry_hfq - 1.0
             forward_return = target_hfq / entry_hfq - 1.0
             retention = (
                 float(np.clip(forward_return / max_high_return, 0.0, 1.0))
@@ -346,7 +388,7 @@ def _daily_forward_detail(
                     "forward_return": forward_return,
                     "path_max_drawdown": float(drawdown.min()),
                     "max_high_return": max_high_return,
-                    "high_to_close_fade": (maximum_high - target_raw) / maximum_high,
+                    "high_to_close_fade": (maximum_high - target_hfq) / maximum_high,
                     "retention_ratio": retention,
                 }
             )
@@ -395,6 +437,7 @@ def _summary_row(
     completed = group.loc[group["evaluation_status"].eq("completed")].copy()
     member_count = len(group)
     completed_count = len(completed)
+    group_complete = bool(member_count > 0 and completed_count == member_count)
     returns = completed["forward_return"]
     positive = returns.loc[returns.gt(0.0)]
     rising_count = int(returns.gt(0.0).sum())
@@ -421,7 +464,7 @@ def _summary_row(
     ]
     breadth_quality = (
         float(np.mean(breadth_ratios) * 100.0)
-        if completed_count
+        if group_complete
         else math.nan
     )
     strength_parts = (
@@ -430,7 +473,9 @@ def _summary_row(
         _bounded_score(positive_mean, 0.10) if not positive.empty else 0.0,
     )
     repair_strength = (
-        float(np.mean(strength_parts)) if all(math.isfinite(value) for value in strength_parts) else math.nan
+        float(np.mean(strength_parts))
+        if group_complete and all(math.isfinite(value) for value in strength_parts)
+        else math.nan
     )
     risk_parts = (
         100.0 - _bounded_score(median_drawdown, 0.10, inverse=True),
@@ -440,7 +485,9 @@ def _summary_row(
         else 0.0,
     )
     risk_and_retention = (
-        float(np.mean(risk_parts)) if all(math.isfinite(value) for value in risk_parts) else math.nan
+        float(np.mean(risk_parts))
+        if group_complete and all(math.isfinite(value) for value in risk_parts)
+        else math.nan
     )
     balanced = (
         0.40 * breadth_quality + 0.40 * repair_strength + 0.20 * risk_and_retention
@@ -464,16 +511,20 @@ def _summary_row(
         "completed_count": completed_count,
         "pending_count": member_count - completed_count,
         "rising_count": rising_count,
-        "rising_ratio": _ratio(rising_count, completed_count),
-        "mean_return": mean_return,
-        "median_return": median_return,
-        "positive_mean_return": positive_mean,
+        "rising_ratio": _ratio(rising_count, completed_count)
+        if group_complete
+        else math.nan,
+        "mean_return": mean_return if group_complete else math.nan,
+        "median_return": median_return if group_complete else math.nan,
+        "positive_mean_return": positive_mean if group_complete else math.nan,
         **{
             f"gte_{threshold}pct_count": counts[threshold]
             for threshold in thresholds
         },
         **{
             f"gte_{threshold}pct_ratio": _ratio(counts[threshold], completed_count)
+            if group_complete
+            else math.nan
             for threshold in thresholds
         },
         **{
@@ -484,15 +535,23 @@ def _summary_row(
             f"reached_{threshold}pct_not_retained_ratio": _ratio(
                 fades[threshold], completed_count
             )
+            if group_complete
+            else math.nan
             for threshold in thresholds
         },
-        "median_path_max_drawdown": median_drawdown,
-        "median_max_high_return": _safe_median(completed["max_high_return"]),
-        "median_high_to_close_fade": median_fade,
-        "median_retention_ratio": median_retention,
+        "median_path_max_drawdown": median_drawdown if group_complete else math.nan,
+        "median_max_high_return": _safe_median(completed["max_high_return"])
+        if group_complete
+        else math.nan,
+        "median_high_to_close_fade": median_fade if group_complete else math.nan,
+        "median_retention_ratio": median_retention if group_complete else math.nan,
         "extreme_loss_count": int(returns.le(-0.05).sum()),
-        "extreme_loss_ratio": _ratio(int(returns.le(-0.05).sum()), completed_count),
-        "spearman_rank_correlation": _spearman_rank_correlation(completed),
+        "extreme_loss_ratio": _ratio(int(returns.le(-0.05).sum()), completed_count)
+        if group_complete
+        else math.nan,
+        "spearman_rank_correlation": _spearman_rank_correlation(completed)
+        if group_complete
+        else math.nan,
         "qualified_pool_benchmark_status": "completed"
         if qualified_complete
         else "incomplete",
@@ -506,6 +565,11 @@ def _summary_row(
         "repair_strength": repair_strength,
         "risk_and_retention": risk_and_retention,
         "balanced_evaluation": balanced,
+        "group_evaluation_status": "complete"
+        if group_complete
+        else "partial"
+        if member_count
+        else "empty",
         "overall_evaluation": math.nan,
     }
 
@@ -542,19 +606,19 @@ def _group_summary(
     summary = pd.DataFrame(rows, columns=_SUMMARY_COLUMNS)
     for group_name in GROUPS:
         group_rows = summary.loc[summary["group"].eq(group_name)]
-        completed_scores = group_rows.loc[
-            group_rows["balanced_evaluation"].map(
-                lambda value: isinstance(value, (int, float, np.number))
-                and math.isfinite(float(value))
-            )
-        ].set_index("horizon")["balanced_evaluation"]
-        if 3 in completed_scores.index and 5 in completed_scores.index:
+        complete_rows = group_rows.loc[
+            group_rows["group_evaluation_status"].eq("complete")
+        ]
+        completed_scores = complete_rows.set_index("horizon")["balanced_evaluation"]
+        if len(completed_scores) < len(horizons):
+            overall = math.nan
+        elif 3 in completed_scores.index and 5 in completed_scores.index:
             overall = 0.30 * float(completed_scores.loc[3]) + 0.70 * float(
                 completed_scores.loc[5]
             )
-        elif len(completed_scores) == 1:
+        elif len(horizons) == 1:
             overall = float(completed_scores.iloc[0])
-        elif len(completed_scores) > 1:
+        elif len(horizons) > 1:
             overall = float(completed_scores.mean())
         else:
             overall = math.nan
@@ -587,8 +651,9 @@ def _minute_diagnostics(
     frame["trade_time"] = pd.to_datetime(frame["trade_time"], errors="coerce")
     for column in ("open", "high", "low", "close"):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
-    if "limit_up_price" in frame:
-        frame["limit_up_price"] = pd.to_numeric(frame["limit_up_price"], errors="coerce")
+    frame["limit_up_price"] = pd.to_numeric(
+        frame["limit_up_price"], errors="coerce"
+    )
     selected_assets = set(snapshot["asset_id"])
     target_dates = set(requested.values())
     frame = frame.loc[
@@ -596,9 +661,24 @@ def _minute_diagnostics(
     ].copy()
     if (
         frame.empty
-        or frame[["trade_date", "trade_time", "open", "high", "low", "close"]].isna().any().any()
+        or frame[
+            [
+                "trade_date",
+                "trade_time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "limit_up_price",
+            ]
+        ].isna().any().any()
         or frame.duplicated(["asset_id", "trade_time"]).any()
         or not frame["trade_time"].dt.normalize().eq(frame["trade_date"]).all()
+        or not frame["trade_time"].dt.time.map(
+            lambda value: value in _CANONICAL_MINUTE_TIMES
+        ).all()
+        or not np.isfinite(frame["limit_up_price"].to_numpy(dtype=float)).all()
+        or frame["limit_up_price"].le(0).any()
     ):
         return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False
     entry_raw = (
@@ -621,10 +701,15 @@ def _minute_diagnostics(
             if len(bars) != 48 or member["asset_id"] not in entry_raw.index:
                 complete = False
                 continue
+            if frozenset(bars["trade_time"].dt.time) != _CANONICAL_MINUTE_TIMES:
+                complete = False
+                continue
             prices = bars[["open", "high", "low", "close"]]
             if (
                 not np.isfinite(prices.to_numpy(dtype=float)).all()
                 or (prices <= 0).any().any()
+                or not np.isfinite(bars["limit_up_price"].to_numpy(dtype=float)).all()
+                or bars["limit_up_price"].le(0).any()
                 or (bars["low"] > bars["high"]).any()
                 or (bars[["open", "close"]].max(axis=1) > bars["high"]).any()
                 or (bars[["open", "close"]].min(axis=1) < bars["low"]).any()
@@ -699,6 +784,7 @@ def evaluate_v2_snapshot(
     qualified_pool: pd.DataFrame,
     daily_bars: pd.DataFrame,
     minute_bars: pd.DataFrame,
+    outcome_dates: Iterable[str] | None = None,
     horizons: tuple[int, ...] = (3, 5),
 ) -> dict[str, pd.DataFrame | dict[str, object]]:
     """Evaluate immutable V2 members without recomputing membership or scores."""
@@ -707,12 +793,14 @@ def evaluate_v2_snapshot(
     qualified = _validate_qualified_pool(
         qualified_pool, selected, snapshot_trade_date
     )
+    authoritative_dates = _resolve_outcome_dates(
+        daily_bars, snapshot_trade_date, outcome_dates
+    )
     market = _normalize_daily_bars(daily_bars)
     calendar, targets = _outcome_calendar(
-        market,
-        set(qualified["asset_id"]),
         snapshot_trade_date,
         horizon_values,
+        authoritative_dates,
     )
     detail = _daily_forward_detail(
         selected,
@@ -742,12 +830,15 @@ def evaluate_v2_snapshot(
         and qualified_detail["evaluation_status"].eq("completed").all()
     )
     daily_complete = selected_daily_complete and qualified_pool_daily_complete
-    warnings = (
-        [] if qualified_pool_daily_complete else ["qualified_pool_daily_incomplete"]
-    )
+    warnings: list[str] = []
+    if not selected_daily_complete:
+        warnings.append("selected_daily_incomplete")
+    if not qualified_pool_daily_complete:
+        warnings.append("qualified_pool_daily_incomplete")
     coverage: dict[str, object] = {
         "snapshot_trade_date": snapshot_trade_date,
         "horizons": list(horizon_values),
+        "authoritative_outcome_dates": list(authoritative_dates),
         "outcome_trade_dates": {
             str(horizon): target.date().isoformat() if target is not None else None
             for horizon, target in targets.items()

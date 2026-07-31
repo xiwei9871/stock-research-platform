@@ -421,6 +421,35 @@ def _outcome_date_range(start_date: str, end_date: str) -> tuple[str, str]:
     return start, end
 
 
+def load_consumer_v2_outcome_calendar(
+    start_date: str,
+    end_date: str,
+    *,
+    service: str,
+) -> list[str]:
+    start, end = _outcome_date_range(start_date, end_date)
+    sql = """
+    SELECT trade_date
+    FROM market.trading_calendar
+    WHERE is_open = TRUE
+      AND trade_date BETWEEN %s AND %s
+    ORDER BY trade_date
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [start, end])
+    dates: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"trade_date"}:
+            raise ValueError("database returned invalid outcome calendar row")
+        value = _date_text(row["trade_date"])
+        if not isinstance(value, str) or not start <= value <= end:
+            raise ValueError("database returned outcome calendar date outside requested range")
+        dates.append(value)
+    if len(set(dates)) != len(dates) or dates != sorted(dates):
+        raise ValueError("database returned duplicate or unordered outcome calendar dates")
+    return dates
+
+
 def load_consumer_v2_hfq_daily_closes(
     asset_ids: list[str],
     start_date: str,
