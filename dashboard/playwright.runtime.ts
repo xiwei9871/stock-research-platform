@@ -39,3 +39,13 @@ export function buildThemeReportServerCommand(options: {
     `--port ${options.apiPort}`
   ].join(' ');
 }
+
+export function buildStandardDashboardServerCommand(options: { python: string; apiPort: number }) {
+  return [
+    'env STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED=false STOCK_RESEARCH_NEWS_SCHEDULER_ENABLED=false',
+    shellQuote(options.python),
+    '-m uvicorn stock_research.dashboard.app:app',
+    '--host 127.0.0.1',
+    `--port ${options.apiPort}`
+  ].join(' ');
+}

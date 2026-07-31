@@ -162,6 +162,20 @@ GET /api/admin/theme-research/report-index/status
 
 ## Canary 审核与发布
 
+提交或发布前，从仓库的 `dashboard` 目录运行真实隔离后端 E2E：
+
+```bash
+pnpm test:e2e:theme-reports
+```
+
+该标准入口会自动启用专用测试 PostgreSQL、临时报告根目录和 test-only control plane，无需手工设置 `PLAYWRIGHT_THEME_REPORT_REAL_E2E`。验证 reset/重试幂等性时运行：
+
+```bash
+pnpm test:e2e:theme-reports -- --repeat-each=2
+```
+
+普通 `pnpm test:e2e` 不包含这份需要专用数据库服务的 spec；不要直接用普通 Playwright 配置运行 `theme-research-full-flow.spec.ts`。
+
 1. 选择一个内部 canary 主题，生成全新版本并执行 one-shot scan。
 2. 确认 CLI `invalid=0`、`indexed=1`，诊断 endpoint 为 `ok`。
 3. 用普通账号确认该 pending 版本在主题摘要、历史列表、文档和 PDF endpoint 均不可发现。

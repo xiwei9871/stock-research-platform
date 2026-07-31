@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildThemeReportServerCommand,
+  buildStandardDashboardServerCommand,
   ensureThemeReportFixtureToken,
   resolvePlaywrightPython
 } from '../playwright.runtime';
@@ -41,5 +42,12 @@ describe('Playwright runtime command', () => {
     expect(resolvePlaywrightPython({}, '/worktree', (path) => path === '/repo/.venv/bin/python', '/repo'))
       .toBe('/repo/.venv/bin/python');
     expect(resolvePlaywrightPython({}, '/repo', () => false)).toBe('python3');
+  });
+
+  it('starts the ordinary API through the detected interpreter', () => {
+    const command = buildStandardDashboardServerCommand({ python: '/safe/python', apiPort: 8766 });
+
+    expect(command).toContain("'/safe/python' -m uvicorn stock_research.dashboard.app:app");
+    expect(command).not.toContain('.venv/bin/uvicorn');
   });
 });

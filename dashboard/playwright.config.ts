@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   buildThemeReportServerCommand,
+  buildStandardDashboardServerCommand,
   ensureThemeReportFixtureToken,
   resolvePlaywrightPython
 } from './playwright.runtime';
@@ -38,6 +39,7 @@ const dashboardCommand =
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: themeReportRealE2E ? [] : ['**/theme-research-full-flow.spec.ts'],
   workers: themeReportRealE2E ? 1 : undefined,
   use: {
     baseURL: `http://127.0.0.1:${dashboardPort}`,
@@ -59,7 +61,7 @@ export default defineConfig({
     {
       command: themeReportRealE2E
         ? buildThemeReportServerCommand({ python: playwrightPython, apiPort })
-        : `env STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED=false STOCK_RESEARCH_NEWS_SCHEDULER_ENABLED=false .venv/bin/uvicorn stock_research.dashboard.app:app --host 127.0.0.1 --port ${apiPort}`,
+        : buildStandardDashboardServerCommand({ python: playwrightPython, apiPort }),
       cwd: '..',
       url: `http://127.0.0.1:${apiPort}/openapi.json`,
       reuseExistingServer,

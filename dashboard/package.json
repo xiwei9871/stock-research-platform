@@ -8,7 +8,8 @@
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
-    "test:e2e": "playwright test tests/*.spec.ts"
+    "test:e2e": "playwright test tests/*.spec.ts",
+    "test:e2e:theme-reports": "node scripts/run-theme-report-e2e.mjs"
   },
   "dependencies": {
     "echarts": "^6.1.0",
