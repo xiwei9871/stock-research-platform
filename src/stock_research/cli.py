@@ -1617,8 +1617,26 @@ def _verified_consumer_oversold_v2_release(snapshot_dir: str) -> Path:
             or ".." in target.parts
         ):
             raise invalid
-        releases_dir = (current.parent / ".releases").resolve(strict=True)
-        release = (current.parent / target).resolve(strict=True)
+        output_dir = current.parent
+        output_metadata = output_dir.lstat()
+        if stat.S_ISLNK(output_metadata.st_mode) or not stat.S_ISDIR(
+            output_metadata.st_mode
+        ):
+            raise invalid
+        releases_path = output_dir / ".releases"
+        releases_metadata = releases_path.lstat()
+        if stat.S_ISLNK(releases_metadata.st_mode) or not stat.S_ISDIR(
+            releases_metadata.st_mode
+        ):
+            raise invalid
+        release_path = releases_path / target.parts[1]
+        release_path_metadata = release_path.lstat()
+        if stat.S_ISLNK(release_path_metadata.st_mode) or not stat.S_ISDIR(
+            release_path_metadata.st_mode
+        ):
+            raise invalid
+        releases_dir = releases_path.resolve(strict=True)
+        release = release_path.resolve(strict=True)
         release_metadata = release.lstat()
         if (
             release.parent != releases_dir
@@ -1673,7 +1691,7 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
     coverage_path = release / V2_OUTPUT_FILENAMES["coverage"]
     try:
         coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError("sealed V2 snapshot coverage is invalid") from exc
     if not isinstance(coverage, dict) or coverage.get("ranking_version") != "v2":
         raise ValueError("sealed snapshot must declare ranking_version v2")
@@ -1691,9 +1709,14 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
             validate_retrospective_evidence_publications,
         )
 
-        sealed_evidence = pd.read_csv(
-            release / V2_OUTPUT_FILENAMES["evidence"], dtype=str
-        )
+        try:
+            sealed_evidence = pd.read_csv(
+                release / V2_OUTPUT_FILENAMES["evidence"], dtype=str
+            )
+        except (OSError, UnicodeError, pd.errors.ParserError) as exc:
+            raise ValueError(
+                "sealed V2 snapshot artifact content is invalid"
+            ) from exc
         validate_retrospective_evidence_publications(
             sealed_evidence,
             ranking_version="v2",
@@ -1701,10 +1724,15 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
             reconstruction_mode=coverage["evidence_reconstruction_mode"],
             information_cutoff=coverage["evidence_information_cutoff"],
         )
-    frames = {
-        key: pd.read_csv(release / V2_OUTPUT_FILENAMES[key], dtype={"asset_id": str})
-        for key in ("top20", "top30", "ranked_pool")
-    }
+    try:
+        frames = {
+            key: pd.read_csv(
+                release / V2_OUTPUT_FILENAMES[key], dtype={"asset_id": str}
+            )
+            for key in ("top20", "top30", "ranked_pool")
+        }
+    except (OSError, UnicodeError, pd.errors.ParserError) as exc:
+        raise ValueError("sealed V2 snapshot artifact content is invalid") from exc
     for key, frame in frames.items():
         missing = [column for column in ("asset_id", "final_rank") if column not in frame]
         if missing:
@@ -8185,6 +8213,15 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         if not isinstance(result.get("coverage"), dict):
             raise ValueError("consumer oversold result coverage must be a dict")
+        returned_version = result["coverage"].get("ranking_version")
+        if returned_version is not None and returned_version != args.ranking_version:
+            raise ValueError(
+                "consumer oversold runner ranking_version does not match CLI request"
+            )
+        if args.ranking_version == "v2" and returned_version != "v2":
+            raise ValueError(
+                "consumer oversold runner must return coverage ranking_version v2"
+            )
         result = {
             **result,
             "as_of_trade_date": trade_date,

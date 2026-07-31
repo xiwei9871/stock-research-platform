@@ -413,6 +413,28 @@ def test_consumer_oversold_weekly_does_not_hide_missing_result_keys(monkeypatch,
     assert capsys.readouterr().out == ""
 
 
+def test_consumer_oversold_weekly_rejects_runner_ranking_version_mismatch(
+    monkeypatch, capsys
+):
+    result = _result()
+    result["coverage"]["ranking_version"] = "v2"
+    monkeypatch.setattr(cli, "_run_consumer_oversold_weekly", lambda **kwargs: result)
+
+    with pytest.raises(ValueError, match="ranking_version"):
+        cli.main_for_args(
+            [
+                "consumer-oversold-weekly",
+                "--trade-date",
+                "2026-07-29",
+                "--evidence-path",
+                "evidence.csv",
+                "--output-dir",
+                "output",
+            ]
+        )
+    assert capsys.readouterr().out == ""
+
+
 @pytest.mark.parametrize(
     ("option", "unsafe_value"),
     [
@@ -718,6 +740,40 @@ def test_v2_snapshot_rejects_manifest_tampering(tmp_path):
             path.chmod(0o644)
 
 
+def test_v2_snapshot_rejects_symlinked_releases_directory(tmp_path):
+    current, release = _sealed_v2_snapshot(tmp_path)
+    releases_dir = current.parent / ".releases"
+    real_releases_dir = tmp_path / "real-releases"
+    releases_dir.rename(real_releases_dir)
+    releases_dir.symlink_to(real_releases_dir, target_is_directory=True)
+    try:
+        with pytest.raises(ValueError, match="sealed V2 snapshot"):
+            cli._verified_consumer_oversold_v2_release(str(current))
+    finally:
+        releases_dir.unlink()
+        real_releases_dir.rename(releases_dir)
+        release.chmod(0o755)
+        for path in release.iterdir():
+            path.chmod(0o644)
+
+
+def test_v2_snapshot_rejects_symlinked_release_alias(tmp_path):
+    current, release = _sealed_v2_snapshot(tmp_path)
+    real_release = tmp_path / "real-release"
+    release.chmod(0o755)
+    release.rename(real_release)
+    release.symlink_to(real_release, target_is_directory=True)
+    try:
+        with pytest.raises(ValueError, match="sealed V2 snapshot"):
+            cli._verified_consumer_oversold_v2_release(str(current))
+    finally:
+        release.unlink()
+        real_release.rename(release)
+        release.chmod(0o755)
+        for path in release.iterdir():
+            path.chmod(0o644)
+
+
 def test_v2_snapshot_requires_retrospective_provenance_for_2026_07_27(
     monkeypatch, tmp_path
 ):
@@ -781,6 +837,33 @@ def test_v2_snapshot_revalidates_underlying_evidence_not_only_provenance(
     )
 
     with pytest.raises(ValueError, match="future evidence publication"):
+        cli._load_consumer_oversold_v2_snapshot("snapshot/current")
+
+
+def test_v2_snapshot_reports_corrupt_csv_as_sealed_artifact_error(
+    monkeypatch, tmp_path
+):
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    release = tmp_path / "release"
+    release.mkdir()
+    for filename in V2_OUTPUT_FILENAMES.values():
+        (release / filename).write_text("payload\n", encoding="utf-8")
+    (release / V2_OUTPUT_FILENAMES["coverage"]).write_text(
+        json.dumps({"trade_date": "2026-07-29", "ranking_version": "v2"}),
+        encoding="utf-8",
+    )
+    valid_ranking = pd.DataFrame(
+        {"trade_date": ["2026-07-29"], "asset_id": ["A"], "final_rank": [1]}
+    )
+    for key in ("top20", "top30", "ranked_pool"):
+        valid_ranking.to_csv(release / V2_OUTPUT_FILENAMES[key], index=False)
+    (release / V2_OUTPUT_FILENAMES["top30"]).write_bytes(b"\xff\xfe")
+    monkeypatch.setattr(
+        cli, "_verified_consumer_oversold_v2_release", lambda snapshot_dir: release
+    )
+
+    with pytest.raises(ValueError, match="sealed V2 snapshot artifact content is invalid"):
         cli._load_consumer_oversold_v2_snapshot("snapshot/current")
 
 

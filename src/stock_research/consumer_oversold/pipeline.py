@@ -2154,6 +2154,18 @@ def run_consumer_oversold_weekly(
         evidence_reconstruction_mode is not None
         or evidence_information_cutoff is not None
     )
+    if (
+        ranking_version == "v2"
+        and trade_date == RETROSPECTIVE_EVIDENCE_TRADE_DATE
+        and (
+            evidence_reconstruction_mode is None
+            or evidence_information_cutoff is None
+        )
+    ):
+        raise ValueError(
+            "frozen 2026-07-27 v2 requires retrospective_point_in_time "
+            "evidence reconstruction parameters"
+        )
     evidence_file = Path(evidence_path).expanduser()
     if not evidence_file.is_file():
         raise FileNotFoundError(f"evidence path does not exist: {evidence_file}")

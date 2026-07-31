@@ -679,6 +679,16 @@ def test_runner_rejects_missing_evidence_path(tmp_path):
         )
 
 
+def test_frozen_v2_runner_requires_retrospective_pit_parameters(tmp_path):
+    with pytest.raises(ValueError, match="frozen 2026-07-27 v2 requires"):
+        run_consumer_oversold_weekly(
+            trade_date="2026-07-27",
+            evidence_path=tmp_path / "missing.csv",
+            output_dir=tmp_path / "out",
+            ranking_version="v2",
+        )
+
+
 @pytest.mark.parametrize(
     ("ranking_version", "trade_date", "match"),
     [
