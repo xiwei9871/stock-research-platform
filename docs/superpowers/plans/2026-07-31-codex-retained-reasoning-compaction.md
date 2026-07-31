@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make retained reasoning and automatic context compaction work globally in Codex by preserving the Responses conversation path and removing stale context and response-storage overrides.
+**Goal:** Make retained reasoning and automatic context compaction work globally in Codex by preserving the Responses conversation path and removing stale context, response-storage, network, and platform overrides.
 
-**Architecture:** Keep the existing global OpenAI-compatible provider, Responses wire protocol, model selection, and all unrelated Codex settings unchanged. Preserve the verified user-configuration backup, remove the two manual context limits plus the obsolete `disable_response_storage` field, then validate full strict startup, feature availability, and a persisted two-turn Responses conversation through the installed Codex CLI.
+**Architecture:** Keep the existing global OpenAI-compatible provider, Responses wire protocol, model selection, and all unrelated Codex settings unchanged. Preserve the verified user-configuration backup; remove the two manual context limits, obsolete `disable_response_storage`, legacy top-level `network_access`, and the Windows-only acknowledgement rejected by this macOS build; then validate full strict startup, feature availability, and a persisted two-turn Responses conversation through the installed Codex CLI.
 
 **Tech Stack:** Codex CLI 0.146.x, TOML user configuration, Responses API, zsh, `rtk`, `jq`
 
@@ -28,7 +28,7 @@
 Run:
 
 ```bash
-rtk rg -n '^(model_provider|model|disable_response_storage|model_context_window|model_auto_compact_token_limit) =|^\[model_providers\.OpenAI\]|^wire_api =' /Users/xiwei/.codex/config.toml
+rtk rg -n '^(model_provider|model|disable_response_storage|network_access|windows_wsl_setup_acknowledged|model_context_window|model_auto_compact_token_limit) =|^\[model_providers\.OpenAI\]|^wire_api =' /Users/xiwei/.codex/config.toml
 ```
 
 Expected output includes exactly these relevant values:
@@ -37,6 +37,8 @@ Expected output includes exactly these relevant values:
 model_provider = "OpenAI"
 model = "gpt-5.6-sol"
 disable_response_storage = false
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
 model_context_window = 500000
 model_auto_compact_token_limit = 900000
 [model_providers.OpenAI]
@@ -63,10 +65,10 @@ rtk cmp /Users/xiwei/.codex/config.toml /Users/xiwei/.codex/config.toml.bak.2026
 
 Expected: exit code 0 with no differences.
 
-### Task 2: Remove The Stale Context And Storage Overrides
+### Task 2: Remove The Five Stale Global Overrides
 
 **Files:**
-- Modify: `/Users/xiwei/.codex/config.toml:5,8-9`
+- Modify: `/Users/xiwei/.codex/config.toml:5-9`
 
 - [ ] **Step 1: Apply the minimal configuration edit**
 
@@ -77,15 +79,15 @@ Use `apply_patch` with this exact patch:
 *** Update File: /Users/xiwei/.codex/config.toml
 @@
 -disable_response_storage = false
- network_access = "enabled"
- windows_wsl_setup_acknowledged = true
+-network_access = "enabled"
+-windows_wsl_setup_acknowledged = true
 -model_context_window = 500000
 -model_auto_compact_token_limit = 900000
  approvals_reviewer = "user"
 *** End Patch
 ```
 
-Expected: only the three obsolete settings are removed.
+Expected: only the five obsolete settings are removed.
 
 - [ ] **Step 2: Compare the edited configuration with its backup**
 
@@ -99,6 +101,8 @@ Expected diff:
 
 ```diff
 -disable_response_storage = false
+-network_access = "enabled"
+-windows_wsl_setup_acknowledged = true
 -model_context_window = 500000
 -model_auto_compact_token_limit = 900000
 ```
@@ -132,7 +136,7 @@ wire_api = "responses"
 Run:
 
 ```bash
-rtk rg -n '^disable_response_storage =|^model_context_window =|^model_auto_compact_token_limit =|^model_auto_compact_token_limit_scope =' /Users/xiwei/.codex/config.toml
+rtk rg -n '^disable_response_storage =|^network_access =|^windows_wsl_setup_acknowledged =|^model_context_window =|^model_auto_compact_token_limit =|^model_auto_compact_token_limit_scope =' /Users/xiwei/.codex/config.toml
 ```
 
 Expected: exit code 1 with no matching lines. This is the expected `rg` no-match result.
@@ -266,6 +270,8 @@ Report all of the following:
 ```text
 Removed global overrides:
 - disable_response_storage = false
+- network_access = "enabled"
+- windows_wsl_setup_acknowledged = true
 - model_context_window = 500000
 - model_auto_compact_token_limit = 900000
 

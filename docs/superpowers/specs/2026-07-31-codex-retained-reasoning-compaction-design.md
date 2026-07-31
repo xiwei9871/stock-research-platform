@@ -15,6 +15,8 @@ The user-level Codex configuration is stored at
 model_provider = "OpenAI"
 model = "gpt-5.6-sol"
 disable_response_storage = false
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
 model_context_window = 500000
 model_auto_compact_token_limit = 900000
 
@@ -32,6 +34,12 @@ supported configuration schema. Non-strict startup ignores the stale field, so
 removing it makes the configuration truthful without disabling a working
 runtime capability.
 
+Strict configuration probing also rejects the legacy top-level
+`network_access` field and, on the installed macOS build, the Windows-only
+`windows_wsl_setup_acknowledged` acknowledgement field. A temporary
+`CODEX_HOME` probe confirmed that strict parsing advances to provider startup
+after all three legacy fields are absent.
+
 Codex already uses the Responses protocol. Its runtime supports response item
 IDs, encrypted reasoning items, `previous_response_id`, and automatic history
 compaction. Retained reasoning is consequently a runtime behavior of the
@@ -46,6 +54,8 @@ Remove these user overrides:
 
 ```toml
 disable_response_storage = false
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
 model_context_window = 500000
 model_auto_compact_token_limit = 900000
 ```
@@ -78,6 +88,12 @@ The same reference does not define `disable_response_storage`, and the
 installed CLI rejects it in strict execution mode. Retained reasoning remains
 available through Codex's Responses conversation path, response item IDs, and
 encrypted reasoning state; it is not controlled by this obsolete TOML field.
+
+The public reference scopes network access under sandbox or permission
+configuration rather than the removed top-level string. The Windows onboarding
+acknowledgement has no runtime purpose on this macOS installation and is
+rejected by strict execution. Removing both fields is behavior-preserving in
+the active environment.
 
 An explicit fixed threshold, such as 200,000 tokens, would repair the current
 misconfiguration but would need maintenance whenever the selected model or its
@@ -116,8 +132,8 @@ changed.
 
 Before editing, preserve the timestamped sibling backup of
 `/Users/xiwei/.codex/config.toml`. Apply a minimal edit that removes only the two
-obsolete context overrides and the obsolete response-storage field. Preserve
-all unrelated global settings and existing user customizations.
+obsolete context overrides and the three obsolete environment/runtime fields.
+Preserve all unrelated global settings and existing user customizations.
 
 The repository currently contains unrelated modified output CSV files and an
 untracked `.learnings/` entry. They are outside this task and must remain
@@ -130,9 +146,10 @@ After the configuration edit:
 1. Start a small persisted `codex exec --strict-config` task to ensure the full
    runtime accepts the resulting TOML; version-only commands are insufficient
    because they may exit before loading execution configuration.
-2. Re-read the effective configuration area and confirm both manual limits and
-   `disable_response_storage` are absent while `wire_api = "responses"`
-   remains.
+2. Re-read the effective configuration area and confirm both manual limits,
+   `disable_response_storage`, top-level `network_access`, and
+   `windows_wsl_setup_acknowledged` are absent while
+   `wire_api = "responses"` remains.
 3. Start a fresh Codex task so startup-time configuration is reloaded.
 4. Confirm the new task reports a model-derived context window rather than the
    removed 500,000-token override.
