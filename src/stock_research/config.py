@@ -41,11 +41,11 @@ def _env_int(name: str, default: int) -> int:
     return int(raw)
 
 
-def _theme_research_report_root() -> Path:
+def _theme_research_report_root_from_env() -> Path | None:
     raw = os.environ.get("THEME_RESEARCH_REPORT_ROOT", "").strip()
     if raw:
         return Path(raw)
-    return _path_from_env("STOCK_RESEARCH_REPORTS_ROOT", "reports") / "theme-research"
+    return None
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,9 @@ class Settings:
     repo_root: Path = field(default_factory=_repo_root)
     output_root: Path = field(default_factory=lambda: _path_from_env("STOCK_RESEARCH_OUTPUT_ROOT", "outputs"))
     reports_root: Path = field(default_factory=lambda: _path_from_env("STOCK_RESEARCH_REPORTS_ROOT", "reports"))
-    theme_research_report_root: Path = field(default_factory=_theme_research_report_root)
+    theme_research_report_root: Path | None = field(
+        default_factory=_theme_research_report_root_from_env
+    )
     theme_research_report_scan_interval_seconds: int = field(
         default_factory=lambda: _env_int("THEME_RESEARCH_REPORT_SCAN_INTERVAL_SECONDS", 60)
     )
@@ -95,6 +97,44 @@ class Settings:
     dashboard_session_ttl_seconds: int = field(
         default_factory=lambda: _env_int("STOCK_RESEARCH_DASHBOARD_SESSION_TTL_SECONDS", 60 * 60 * 12)
     )
+
+    def __post_init__(self) -> None:
+        if self.theme_research_report_root is None:
+            object.__setattr__(
+                self,
+                "theme_research_report_root",
+                self.reports_root / "theme-research",
+            )
+        else:
+            object.__setattr__(
+                self,
+                "theme_research_report_root",
+                Path(self.theme_research_report_root),
+            )
+
+        positive_settings = (
+            (
+                "THEME_RESEARCH_REPORT_SCAN_INTERVAL_SECONDS",
+                "theme_research_report_scan_interval_seconds",
+            ),
+            (
+                "THEME_RESEARCH_REPORT_MAX_MANIFEST_BYTES",
+                "theme_research_report_max_manifest_bytes",
+            ),
+            (
+                "THEME_RESEARCH_REPORT_MAX_MARKDOWN_BYTES",
+                "theme_research_report_max_markdown_bytes",
+            ),
+            (
+                "THEME_RESEARCH_REPORT_MAX_PDF_BYTES",
+                "theme_research_report_max_pdf_bytes",
+            ),
+        )
+        for env_name, field_name in positive_settings:
+            if getattr(self, field_name) <= 0:
+                raise ValueError(
+                    f"{env_name} ({field_name}) must be greater than zero"
+                )
 
 
 SETTINGS = Settings()
