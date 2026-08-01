@@ -919,9 +919,11 @@ def _ensure_frozen_candidate_prices(
         for row in latest.to_dict(orient="records")
         if pd.notna(row["close"]) and float(row["close"]) > 0
     }
-    raw_anchor = pd.to_numeric(result.get("anchor_close"), errors="coerce")
-    if raw_anchor is None:
+    raw_anchor_source = result.get("anchor_close")
+    if raw_anchor_source is None:
         raw_anchor = pd.Series(float("nan"), index=result.index)
+    else:
+        raw_anchor = pd.to_numeric(raw_anchor_source, errors="coerce")
     source = result.get("adjusted_close_source", pd.Series(pd.NA, index=result.index, dtype="string"))
     source = source.astype("string").str.strip().replace("", pd.NA)
     excluded = (
