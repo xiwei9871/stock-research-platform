@@ -20,7 +20,6 @@ class RecoveryState(str, Enum):
     FRESH_OVERSOLD = "fresh_oversold"
     REPAIRING = "repairing"
     REPAIRED = "repaired"
-    REPAIR_WITH_RESIDUAL_SPACE = "repair_with_residual_space"
     STRUCTURALLY_WEAK = "structurally_weak"
     UNKNOWN = "unknown"
 

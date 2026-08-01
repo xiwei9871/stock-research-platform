@@ -60,7 +60,6 @@ def test_config_normalizes_optional_system_sequences_to_immutable_tuples():
 
 def test_contract_enums_use_stable_values_and_include_all_design_states():
     assert GateStatus.CONFIRMED.value == "confirmed"
-    assert RecoveryState.REPAIR_WITH_RESIDUAL_SPACE.value == "repair_with_residual_space"
     assert StockLifecycle.INVALIDATED.value == "invalidated"
     assert {state.value for state in GateStatus} == {"confirmed", "watch", "blocked"}
     assert {state.value for state in RecoveryState} == {
@@ -69,7 +68,6 @@ def test_contract_enums_use_stable_values_and_include_all_design_states():
         "repaired",
         "structurally_weak",
         "unknown",
-        "repair_with_residual_space",
     }
     assert {state.value for state in StockLifecycle} == {
         "new_oversold",
