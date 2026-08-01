@@ -773,6 +773,33 @@ def test_finance_queries_all_sources_with_cutoff_and_computes_pit_ttm(monkeypatc
     assert share_params == [["A"], "2025-04-01", "2025-04-01"]
 
 
+def test_finance_report_period_limit_is_opt_in_and_keeps_ttm_inputs(monkeypatch):
+    income = [
+        {"asset_id": "A", "report_period": "2023-03-31", "announcement_date": "2023-04-20", "revenue": 20, "np_parent": 2, "source": "s"},
+        {"asset_id": "A", "report_period": "2023-12-31", "announcement_date": "2024-03-20", "revenue": 100, "np_parent": 10, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-04-20", "revenue": 30, "np_parent": 3, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-12-31", "announcement_date": "2025-03-20", "revenue": 150, "np_parent": 15, "source": "s"},
+        {"asset_id": "A", "report_period": "2025-03-03", "announcement_date": "2025-04-01", "revenue": 40, "np_parent": 4, "source": "s"},
+    ]
+    indicators = [
+        {"asset_id": "A", "report_period": "2025-03-03", "announcement_date": "2025-04-02", "roe": .08, "source": "s", "calc_version": "v1"},
+    ]
+    balances = [{"asset_id": "A", "report_period": "2025-03-03", "announcement_date": "2025-04-03", "total_equity": 50, "source": "s"}]
+    cash = []
+    shares = []
+    calls, _ = _install_db(monkeypatch, [income, indicators, balances, cash, shares])
+
+    result = loaders.load_consumer_finance_history(
+        ["A"], "2025-06-30", service="test", max_report_periods=4
+    )
+
+    assert not result.empty
+    for sql, params in calls[:4]:
+        assert "DENSE_RANK() OVER" in sql
+        assert "report_period_rank <= %s" in sql
+        assert params == [["A"], "2025-06-30", 4]
+
+
 def test_finance_preserves_non_null_fields_and_derives_balance_debt_ratio(monkeypatch):
     income = [
         {"asset_id": "A", "report_period": "2023-03-31", "announcement_date": "2023-04-20", "revenue": 20, "np_parent": 2, "source": "s"},

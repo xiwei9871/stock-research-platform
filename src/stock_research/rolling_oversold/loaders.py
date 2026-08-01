@@ -187,7 +187,12 @@ def load_rolling_inputs(
         }
     )
     finance = _normalize_external_frame(
-        load_consumer_finance_history(asset_ids, anchor, service=service),
+        load_consumer_finance_history(
+            asset_ids,
+            anchor,
+            service=service,
+            max_report_periods=4,
+        ),
         FINANCE_COLUMNS,
         ("report_period", "announcement_date"),
         ("asset_id", "report_period", "announcement_date"),

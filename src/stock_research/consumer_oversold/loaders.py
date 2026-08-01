@@ -1015,40 +1015,55 @@ def load_consumer_finance_history(
     trade_date: str,
     *,
     service: str,
+    max_report_periods: int | None = None,
 ) -> pd.DataFrame:
     assets = _asset_ids(asset_ids)
     cutoff = validate_trade_date(trade_date)
+    if max_report_periods is not None and (
+        type(max_report_periods) is not int or max_report_periods <= 0
+    ):
+        raise ValueError("max_report_periods must be a positive integer or None")
     if not assets:
         return _frame([], FINANCE_COLUMNS)
 
     queries = (
-        """
-        SELECT asset_id, report_period, announcement_date, revenue, np_parent, source
-        FROM finance.income_statement
-        WHERE asset_id = ANY(%s) AND announcement_date <= %s
-        ORDER BY asset_id, report_period, announcement_date DESC, source DESC
-        """,
-        """
-        SELECT asset_id, report_period, announcement_date, revenue_yoy, np_yoy,
-               gross_margin, net_margin, roe, ocf_to_np, debt_ratio, source, calc_version
-        FROM finance.indicator_quarter
-        WHERE asset_id = ANY(%s) AND announcement_date <= %s
-        ORDER BY asset_id, report_period, announcement_date DESC, source DESC, calc_version DESC
-        """,
-        """
-        SELECT asset_id, report_period, announcement_date, total_equity,
-               total_assets, total_liabilities, source
-        FROM finance.balance_sheet
-        WHERE asset_id = ANY(%s) AND announcement_date <= %s
-        ORDER BY asset_id, report_period, announcement_date DESC, source DESC
-        """,
-        """
-        SELECT asset_id, report_period, announcement_date, net_operate_cash_flow, source
-        FROM finance.cash_flow
-        WHERE asset_id = ANY(%s) AND announcement_date <= %s
-        ORDER BY asset_id, report_period, announcement_date DESC, source DESC
-        """,
+        _finance_history_query(
+            table="finance.income_statement",
+            columns="asset_id, report_period, announcement_date, revenue, np_parent, source",
+            order_by="asset_id, report_period, announcement_date DESC, source DESC",
+            max_report_periods=max_report_periods,
+        ),
+        _finance_history_query(
+            table="finance.indicator_quarter",
+            columns=(
+                "asset_id, report_period, announcement_date, revenue_yoy, np_yoy, "
+                "gross_margin, net_margin, roe, ocf_to_np, debt_ratio, source, calc_version"
+            ),
+            order_by="asset_id, report_period, announcement_date DESC, source DESC, calc_version DESC",
+            max_report_periods=max_report_periods,
+        ),
+        _finance_history_query(
+            table="finance.balance_sheet",
+            columns=(
+                "asset_id, report_period, announcement_date, total_equity, "
+                "total_assets, total_liabilities, source"
+            ),
+            order_by="asset_id, report_period, announcement_date DESC, source DESC",
+            max_report_periods=max_report_periods,
+        ),
+        _finance_history_query(
+            table="finance.cash_flow",
+            columns="asset_id, report_period, announcement_date, net_operate_cash_flow, source",
+            order_by="asset_id, report_period, announcement_date DESC, source DESC",
+            max_report_periods=max_report_periods,
+        ),
     )
+    query_params = [
+        [assets, cutoff, max_report_periods]
+        if max_report_periods is not None
+        else [assets, cutoff]
+        for _ in queries
+    ]
     share_sql = """
     SELECT DISTINCT ON (asset_id)
            asset_id, event_date, announcement_date, total_share, source
@@ -1060,7 +1075,7 @@ def load_consumer_finance_history(
     """
     with connect(service) as conn:
         raw_income, raw_indicator, raw_balance, raw_cash = [
-            fetch_all(conn, sql, [assets, cutoff]) for sql in queries
+            fetch_all(conn, sql, params) for sql, params in zip(queries, query_params, strict=True)
         ]
         raw_shares = fetch_all(conn, share_sql, [assets, cutoff, cutoff])
 
@@ -1153,6 +1168,43 @@ def load_consumer_finance_history(
             }
         )
     return _sort(_frame(output, FINANCE_COLUMNS), ["asset_id", "report_period", "announcement_date"])
+
+
+def _finance_history_query(
+    *,
+    table: str,
+    columns: str,
+    order_by: str,
+    max_report_periods: int | None,
+) -> str:
+    if max_report_periods is None:
+        return f"""
+        SELECT {columns}
+        FROM {table}
+        WHERE asset_id = ANY(%s) AND announcement_date <= %s
+        ORDER BY {order_by}
+        """
+    return f"""
+    WITH visible AS (
+        SELECT {columns}
+        FROM {table}
+        WHERE asset_id = ANY(%s) AND announcement_date <= %s
+    ), ranked_periods AS (
+        SELECT asset_id, report_period,
+               DENSE_RANK() OVER (
+                   PARTITION BY asset_id ORDER BY report_period DESC
+               ) AS report_period_rank
+        FROM visible
+        GROUP BY asset_id, report_period
+    )
+    SELECT visible.*
+    FROM visible
+    JOIN ranked_periods
+      ON ranked_periods.asset_id = visible.asset_id
+     AND ranked_periods.report_period = visible.report_period
+    WHERE ranked_periods.report_period_rank <= %s
+    ORDER BY {order_by}
+    """
 
 
 def load_consumer_valuation_history(

@@ -28,6 +28,7 @@ def _config() -> RollingOversoldConfig:
 
 def _install_db(monkeypatch):
     calls: list[tuple[str, list[object]]] = []
+    finance_limits: list[int | None] = []
 
     @contextmanager
     def fake_connect(service):
@@ -66,9 +67,12 @@ def _install_db(monkeypatch):
     monkeypatch.setattr(
         loaders,
         "load_consumer_finance_history",
-        lambda asset_ids, trade_date, *, service: pd.DataFrame(
-            {"asset_id": asset_ids, "announcement_date": [trade_date] * len(asset_ids)}
-        ),
+        lambda asset_ids, trade_date, *, service, max_report_periods=None: (
+            finance_limits.append(max_report_periods),
+            pd.DataFrame(
+                {"asset_id": asset_ids, "announcement_date": [trade_date] * len(asset_ids)}
+            ),
+        )[1],
     )
     monkeypatch.setattr(
         loaders,
@@ -77,11 +81,11 @@ def _install_db(monkeypatch):
             {"asset_id": asset_ids, "valuation_date": [trade_date] * len(asset_ids)}
         ),
     )
-    return calls
+    return calls, finance_limits
 
 
 def test_loader_uses_anchor_cutoff_and_point_in_time_membership_predicates(monkeypatch):
-    calls = _install_db(monkeypatch)
+    calls, _ = _install_db(monkeypatch)
 
     inputs = load_rolling_inputs(
         anchor_date=date(2026, 7, 29), config=_config(), service="research-test"
@@ -114,7 +118,7 @@ def test_loader_uses_anchor_cutoff_and_point_in_time_membership_predicates(monke
 
 
 def test_loader_bounds_history_frames_and_keeps_latest_status_as_of_cutoff(monkeypatch):
-    calls = _install_db(monkeypatch)
+    calls, _ = _install_db(monkeypatch)
 
     inputs = load_rolling_inputs(
         anchor_date=date(2026, 7, 29), config=_config(), service="research-test"
@@ -140,7 +144,7 @@ def test_loader_bounds_history_frames_and_keeps_latest_status_as_of_cutoff(monke
 
 
 def test_loader_uses_original_non_trading_anchor_for_pit_memberships(monkeypatch):
-    calls = _install_db(monkeypatch)
+    calls, _ = _install_db(monkeypatch)
 
     inputs = load_rolling_inputs(
         anchor_date=date(2026, 8, 1), config=_config(), service="research-test"
@@ -165,8 +169,8 @@ def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypa
     monkeypatch.setattr(
         loaders,
         "load_consumer_finance_history",
-        lambda asset_ids, trade_date, *, service: (
-            finance_dates.append(trade_date),
+        lambda asset_ids, trade_date, *, service, max_report_periods=None: (
+            finance_dates.append((trade_date, max_report_periods)),
             pd.DataFrame({"asset_id": asset_ids, "announcement_date": [trade_date] * len(asset_ids)}),
         )[1],
     )
@@ -183,7 +187,7 @@ def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypa
         anchor_date=date(2026, 8, 1), config=_config(), service="research-test"
     )
 
-    assert finance_dates == ["2026-08-01"]
+    assert finance_dates == [("2026-08-01", 4)]
     assert valuation_dates == ["2026-08-01"]
 
 

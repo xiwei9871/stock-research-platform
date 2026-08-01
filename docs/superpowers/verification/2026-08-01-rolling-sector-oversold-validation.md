@@ -140,14 +140,31 @@ rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_res
 
 ## Blocker and next run requirements
 
+After the aborted replay, the loader was tightened in commit `2215e8a0`:
+
+- index, stock, industry, and concept bars now use the 252-session
+  `history_start` through `data_cutoff_date` range;
+- asset status now returns the latest point-in-time row per asset with
+  `DISTINCT ON (asset_id)`;
+- finance and valuation transport/query semantics were intentionally left
+  unchanged in this patch.
+
+The loader/preflight suite passed 11 tests and the rolling acceptance,
+pipeline, and CLI suite passed 24 tests after this change. A direct single
+anchor load against `stock_research` was then timed; after the finance limit,
+the active database query was the five-year PIT `factor.factor_daily`
+valuation query (with parallel workers) and the load still exceeded about 90
+seconds before being interrupted. No claim is made that the 3,600-second
+replay target is met. Valuation history loading is now the next profiling
+target; finance was not changed again in this pass.
+
 1. Add a `research` entry in `~/.pg_service.conf`, or explicitly standardize
    the operational command on the existing `stock_research` service.
-2. Investigate the six-minute no-output run before claiming the 60-minute
-   target. The current loader reads a very large `market_daily_bar` history
-   frame for each anchor; the next run should add stage/anchor heartbeat output
-   and measure query timings. If the full window remains slow, run a bounded
-   diagnostic anchor first and optimize database filtering/index coverage
-   before rerunning all nine anchors.
+2. Profile and optimize the valuation PIT path without changing its
+   disclosure cutoff semantics. Add stage/anchor heartbeat output before
+   rerunning all nine anchors. If the full window remains slow, keep the
+   bounded diagnostic-anchor workflow and measure database and Python stages
+   separately.
 3. Keep strategy execution database-only. A missing dependency must produce
    the existing preflight/backfill artifacts and a separate backfill task; it
    must never trigger a network market-data fallback.
