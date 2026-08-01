@@ -9,6 +9,7 @@ from stock_research.rolling_oversold.outcomes import (
     evaluate_snapshot,
     summarize_rolling_evaluation,
 )
+from stock_research.rolling_oversold.snapshots import build_rolling_snapshot
 
 
 def _snapshot(
@@ -18,6 +19,7 @@ def _snapshot(
     sector_code: str = "I1",
     market_regime: str = "risk_off",
     recovery_state: str = "repairing",
+    gate_status: str = "confirmed",
     lifecycle: str = "expected_repair",
     rank: object = 1,
 ) -> dict[str, object]:
@@ -34,7 +36,7 @@ def _snapshot(
                     "sector_system": "sw",
                     "sector_code": sector_code,
                     "sector_name": "Industry one",
-                    "sector_gate_status": "confirmed",
+                    "sector_gate_status": gate_status,
                     "sector_recovery_state": recovery_state,
                     "stock_lifecycle": lifecycle,
                     "stock_rank": rank,
@@ -47,7 +49,7 @@ def _snapshot(
 def _bars(rows: list[tuple[str, float]]) -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"asset_id": "000001", "trade_date": trade_date, "adjusted_close": close}
+            {"asset_id": "000001", "trade_date": trade_date, "qfq_close": close}
             for trade_date, close in rows
         ]
     )
@@ -78,6 +80,46 @@ def test_evaluate_snapshot_uses_strictly_future_trading_sessions():
         "2026-07-28",
     ]
     assert result["adjusted_close_source"].tolist() == ["qfq", "qfq", "qfq"]
+
+
+def test_evaluate_snapshot_accepts_frozen_outcome_columns_from_built_snapshot():
+    stocks = _snapshot()["stock_candidates"].assign(
+        sector_oversold_score=80.0,
+        sector_repairability_score=70.0,
+        sector_direction_score=60.0,
+        stock_score=90.0,
+    )
+    sectors = pd.DataFrame(
+        [
+            {
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Industry one",
+                "sector_oversold_score": 80.0,
+                "sector_repairability_score": 70.0,
+                "sector_direction_score": 60.0,
+                "sector_recovery_state": "repairing",
+                "sector_gate_status": "confirmed",
+            }
+        ]
+    )
+    snapshot = build_rolling_snapshot(
+        anchor_date=date(2026, 7, 21),
+        data_cutoff_date=date(2026, 7, 20),
+        market_regime={"market_regime": "risk_off"},
+        sector_states=sectors,
+        stock_candidates=stocks,
+        previous_snapshot=None,
+        score_version="rolling_oversold_v1",
+    )
+
+    result = evaluate_snapshot(
+        snapshot, bars=_bars([("2026-07-22", 10.2)]), evaluation_cutoff=date(2026, 7, 22), horizons=[1]
+    )
+
+    assert snapshot["stock_candidates"].loc[0, "anchor_close"] == 10.0
+    assert snapshot["stock_candidates"].loc[0, "adjusted_close_source"] == "qfq"
+    assert result.loc[0, "forward_Nd_return"] == pytest.approx(0.02)
 
 
 def test_evaluate_snapshot_marks_unavailable_trading_horizons_pending_without_fill():
@@ -143,6 +185,43 @@ def test_evaluate_snapshot_keeps_auditable_rows_with_bad_anchor_close_and_reject
             bars=_bars([]),
             evaluation_cutoff=date(2026, 7, 22),
         )
+    with pytest.raises(ValueError, match="does not provide qfq"):
+        evaluate_snapshot(
+            _snapshot(),
+            bars=pd.DataFrame(
+                [{"asset_id": "000001", "trade_date": "2026-07-22", "hfq_close": 10.2}]
+            ),
+            evaluation_cutoff=date(2026, 7, 22),
+        )
+
+
+def test_evaluate_snapshot_excludes_blocked_and_invalidated_rows_from_calibration():
+    blocked = evaluate_snapshot(
+        _snapshot(gate_status="blocked"),
+        bars=_bars([("2026-07-22", 10.2)]),
+        evaluation_cutoff=date(2026, 7, 22),
+        horizons=[1],
+    )
+    invalidated = evaluate_snapshot(
+        _snapshot(lifecycle="invalidated"),
+        bars=_bars([("2026-07-22", 10.2)]),
+        evaluation_cutoff=date(2026, 7, 22),
+        horizons=[1],
+    )
+    eligible = evaluate_snapshot(
+        _snapshot(),
+        bars=_bars([("2026-07-22", 10.2)]),
+        evaluation_cutoff=date(2026, 7, 22),
+        horizons=[1],
+    )
+
+    assert blocked.loc[0, "evaluation_status"] == "excluded_blocked"
+    assert invalidated.loc[0, "evaluation_status"] == "excluded_invalidated"
+    assert blocked["forward_Nd_return"].isna().all()
+    assert invalidated[["hit_3pct", "hit_5pct", "hit_7pct"]].isna().all(axis=None)
+    summary = summarize_rolling_evaluation(pd.concat([eligible, blocked, invalidated]))
+    overall = summary.loc[summary["group_by"].eq("overall")].iloc[0]
+    assert overall[["total_count", "complete_count", "pending_count", "excluded_count"]].tolist() == [3, 1, 0, 2]
     with pytest.raises(ValueError, match="bars trade_date"):
         evaluate_snapshot(
             _snapshot(),

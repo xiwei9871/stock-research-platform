@@ -56,12 +56,15 @@ _STOCK_COLUMNS = (
     "stock_score",
     "stock_rank",
     "stock_lifecycle",
+    "anchor_close",
+    "adjusted_close_source",
     "previous_snapshot_id",
     "rank_delta",
     "lifecycle_delta",
     "score_status",
     "score_reason",
 )
+_OUTCOME_PRICE_SOURCES = frozenset(("raw", "qfq", "hfq"))
 _SECTOR_INPUT_COLUMNS = _STOCK_CONTEXT_COLUMNS
 _SECTOR_CONTEXT_VALUE_COLUMNS = _STOCK_CONTEXT_COLUMNS[2:]
 _SECTOR_COLUMNS = (
@@ -299,6 +302,7 @@ def _normalize_stock_rows(
     if result["asset_id"].duplicated().any():
         duplicate = result.loc[result["asset_id"].duplicated(keep=False), "asset_id"].iloc[0]
         raise ValueError(f"stock_candidates has duplicate asset_id {duplicate}")
+    _normalize_outcome_price_columns(result)
     for column in _STOCK_METADATA_COLUMNS:
         if column not in result:
             result[column] = pd.NA
@@ -307,6 +311,32 @@ def _normalize_stock_rows(
             result[column] = ""
         result[column] = result[column].fillna("").astype("string")
     return _ordered_frame(result, _STOCK_COLUMNS, sort_columns=("stock_rank", "asset_id"))
+
+
+def _normalize_outcome_price_columns(frame: pd.DataFrame) -> None:
+    """Preserve frozen outcome inputs while accepting legacy snapshots without them."""
+
+    for column in ("anchor_close", "adjusted_close_source"):
+        if column not in frame:
+            frame[column] = pd.NA
+    anchor_supplied = frame["anchor_close"].notna()
+    anchor_close = pd.to_numeric(frame["anchor_close"], errors="coerce")
+    finite_anchor = anchor_close.map(
+        lambda value: bool(pd.notna(value)) and math.isfinite(float(value)) and float(value) > 0
+    )
+    if (anchor_supplied & ~finite_anchor).any():
+        raise ValueError("stock_candidates anchor_close must be a finite positive number")
+    source = frame["adjusted_close_source"].astype("string").str.strip().replace("", pd.NA)
+    invalid_source = source.notna() & ~source.isin(_OUTCOME_PRICE_SOURCES)
+    if invalid_source.any():
+        raise ValueError("stock_candidates adjusted_close_source must be one of raw, qfq, hfq")
+    mismatched = anchor_supplied != source.notna()
+    if mismatched.any():
+        raise ValueError(
+            "stock_candidates anchor_close and adjusted_close_source must be supplied together"
+        )
+    frame["anchor_close"] = anchor_close
+    frame["adjusted_close_source"] = source
 
 
 def _normalize_sector_rows(frame: pd.DataFrame) -> pd.DataFrame:

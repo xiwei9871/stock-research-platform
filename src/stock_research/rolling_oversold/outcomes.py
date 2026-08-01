@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, datetime
 from math import isfinite
 from numbers import Real
@@ -32,6 +33,7 @@ _DETAIL_COLUMNS = (
     "hit_3pct",
     "hit_5pct",
     "hit_7pct",
+    "evaluation_status",
     "data_status",
     "data_error",
 )
@@ -42,6 +44,7 @@ _SUMMARY_COLUMNS = (
     "total_count",
     "complete_count",
     "pending_count",
+    "excluded_count",
     "data_error_count",
     "up_ratio",
     "mean_return",
@@ -62,6 +65,12 @@ _CONTEXT_COLUMNS = (
     "stock_lifecycle",
     "stock_rank",
 )
+_PRICE_SOURCE_COLUMNS = {
+    "raw": ("raw_close",),
+    "qfq": ("qfq_close",),
+    "hfq": ("hfq_close",),
+}
+_PRICE_SOURCES = frozenset(_PRICE_SOURCE_COLUMNS)
 
 
 def evaluate_snapshot(
@@ -69,7 +78,7 @@ def evaluate_snapshot(
     *,
     bars: pd.DataFrame,
     evaluation_cutoff: date,
-    horizons: tuple[int, ...] = (1, 3, 5),
+    horizons: Sequence[int] = (1, 3, 5),
 ) -> pd.DataFrame:
     """Evaluate only bars strictly after anchor_date and not after evaluation_cutoff.
 
@@ -89,16 +98,35 @@ def evaluate_snapshot(
     candidates = snapshot.get("stock_candidates")
     if not isinstance(candidates, pd.DataFrame):
         raise TypeError("snapshot stock_candidates must be a pandas DataFrame")
+    if not isinstance(bars, pd.DataFrame):
+        raise TypeError("bars must be a pandas DataFrame")
     candidate_rows = _normalize_candidates(candidates)
-    normalized_bars = _normalize_bars(bars)
+    sources = {
+        row["adjusted_close_source"]
+        for row in candidate_rows.to_dict(orient="records")
+        if _evaluation_exclusion(row) is None
+    }
+    if sources:
+        normalized_bars, available_sources = _normalize_bars(bars)
+        unavailable_sources = sorted(sources - available_sources)
+        if unavailable_sources:
+            raise ValueError(
+                "bars does not provide " + ", ".join(unavailable_sources) + " adjusted close source"
+            )
+    else:
+        normalized_bars = pd.DataFrame(
+            columns=("asset_id", "trade_date", "adjusted_close_source", "adjusted_close")
+        )
     market_regime = _snapshot_market_regime(snapshot)
 
     rows: list[dict[str, object]] = []
     for candidate in candidate_rows.to_dict(orient="records"):
         asset_id = candidate["asset_id"]
         anchor_close, anchor_status, anchor_error = _anchor_close(candidate.get("anchor_close"))
+        source = candidate["adjusted_close_source"]
         future = normalized_bars.loc[
             normalized_bars["asset_id"].eq(asset_id)
+            & normalized_bars["adjusted_close_source"].eq(source)
             & normalized_bars["trade_date"].gt(anchor)
             & normalized_bars["trade_date"].le(cutoff)
         ]
@@ -126,10 +154,19 @@ def evaluate_snapshot(
                 "hit_3pct": pd.NA,
                 "hit_5pct": pd.NA,
                 "hit_7pct": pd.NA,
+                "evaluation_status": "pending",
                 "data_status": anchor_status,
                 "data_error": anchor_error,
             }
+            exclusion = _evaluation_exclusion(candidate)
+            if exclusion is not None:
+                row["evaluation_status"] = exclusion
+                row["data_status"] = exclusion
+                row["data_error"] = ""
+                rows.append(row)
+                continue
             if anchor_status != "ok":
+                row["evaluation_status"] = "data_error"
                 rows.append(row)
                 continue
             if len(future) < horizon:
@@ -148,6 +185,7 @@ def evaluate_snapshot(
                     "hit_3pct": forward_return >= 0.03,
                     "hit_5pct": forward_return >= 0.05,
                     "hit_7pct": forward_return >= 0.07,
+                    "evaluation_status": "complete",
                     "data_status": "ok",
                 }
             )
@@ -175,6 +213,11 @@ def summarize_rolling_evaluation(detail: pd.DataFrame) -> pd.DataFrame:
     normalized["forward_Nd_return"] = pd.to_numeric(
         normalized["forward_Nd_return"], errors="coerce"
     )
+    evaluation_status = normalized.get("evaluation_status")
+    if evaluation_status is None:
+        evaluation_status = pd.Series("pending", index=normalized.index, dtype="string")
+        evaluation_status.loc[normalized["forward_Nd_status"].eq("complete")] = "complete"
+    normalized["_evaluation_status"] = evaluation_status.astype("string").fillna("data_error")
     normalized["_rank_bucket"] = normalized.get(
         "stock_rank", pd.Series(pd.NA, index=normalized.index)
     ).map(_rank_bucket)
@@ -213,9 +256,9 @@ def summarize_rolling_evaluation(detail: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def _normalize_horizons(horizons: tuple[int, ...]) -> tuple[int, ...]:
-    if not isinstance(horizons, tuple) or not horizons:
-        raise ValueError("horizons must be a non-empty tuple of positive integers")
+def _normalize_horizons(horizons: Sequence[int]) -> tuple[int, ...]:
+    if not isinstance(horizons, Sequence) or isinstance(horizons, (str, bytes)) or not horizons:
+        raise ValueError("horizons must be a non-empty sequence of positive integers")
     if any(type(value) is not int or value <= 0 for value in horizons):
         raise ValueError("horizons must contain positive integers")
     if len(set(horizons)) != len(horizons):
@@ -237,48 +280,95 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     for column in _CONTEXT_COLUMNS:
         if column not in result:
             result[column] = pd.NA
-    source = next(
-        (column for column in ("adjusted_close_source", "adjust_type", "price_adjustment") if column in result),
-        None,
+    if "adjusted_close_source" not in result:
+        result["adjusted_close_source"] = pd.NA
+    result["adjusted_close_source"] = result["adjusted_close_source"].astype("string").str.strip().replace("", pd.NA)
+    excluded = result.apply(
+        lambda row: _evaluation_exclusion(row.to_dict()) is not None, axis=1
     )
-    result["adjusted_close_source"] = (
-        result[source].astype("string").str.strip().replace("", pd.NA)
-        if source is not None
-        else "unknown"
-    )
-    result["adjusted_close_source"] = result["adjusted_close_source"].fillna("unknown")
+    invalid_source = (
+        result["adjusted_close_source"].isna() | ~result["adjusted_close_source"].isin(_PRICE_SOURCES)
+    ) & ~excluded
+    if invalid_source.any():
+        raise ValueError("snapshot adjusted_close_source must be one of raw, qfq, hfq")
     return result
 
 
-def _normalize_bars(bars: pd.DataFrame) -> pd.DataFrame:
+def _normalize_bars(bars: pd.DataFrame) -> tuple[pd.DataFrame, set[str]]:
     if not isinstance(bars, pd.DataFrame):
         raise TypeError("bars must be a pandas DataFrame")
     required = {"asset_id", "trade_date"}
     missing = required - set(bars.columns)
     if missing:
         raise ValueError(f"bars is missing columns: {', '.join(sorted(missing))}")
-    close_column = next(
-        (column for column in ("adjusted_close", "adj_close", "close") if column in bars), None
-    )
-    if close_column is None:
-        raise ValueError("bars is missing an adjusted_close, adj_close, or close column")
-    result = bars.loc[:, ["asset_id", "trade_date", close_column]].copy(deep=True)
-    result.columns = ["asset_id", "trade_date", "adjusted_close"]
-    result["asset_id"] = result["asset_id"].astype("string").str.strip()
-    if result["asset_id"].isna().any() or result["asset_id"].eq("").any():
+    identity = bars.loc[:, ["asset_id", "trade_date"]].copy(deep=True)
+    identity["asset_id"] = identity["asset_id"].astype("string").str.strip()
+    if identity["asset_id"].isna().any() or identity["asset_id"].eq("").any():
         raise ValueError("bars asset_id must be non-empty")
-    result["trade_date"] = result["trade_date"].map(
+    identity["trade_date"] = identity["trade_date"].map(
         lambda value: _normalize_date(value, "bars trade_date")
     )
-    if result.duplicated(["asset_id", "trade_date"]).any():
-        raise ValueError("bars contains duplicate bar rows for asset_id and trade_date")
+    source_column = _bar_source_column(bars)
+    frames: list[pd.DataFrame] = []
+    available_sources: set[str] = set()
+    for source, columns in _PRICE_SOURCE_COLUMNS.items():
+        present = [column for column in columns if column in bars]
+        if len(present) > 1:
+            raise ValueError(f"bars has ambiguous {source} adjusted close columns")
+        if present:
+            frames.append(_bar_price_frame(identity, bars[present[0]], source))
+            available_sources.add(source)
+    generic_column = next(
+        (column for column in ("adjusted_close", "adj_close", "close") if column in bars), None
+    )
+    if generic_column is not None:
+        if source_column is None:
+            if generic_column != "close":
+                raise ValueError("generic adjusted close bars must include adjusted_close_source or adjust_type")
+            frames.append(_bar_price_frame(identity, bars[generic_column], "raw"))
+            available_sources.add("raw")
+        else:
+            source_values = bars[source_column].astype("string").str.strip().replace("", pd.NA)
+            invalid_source = source_values.isna() | ~source_values.isin(_PRICE_SOURCES)
+            if invalid_source.any():
+                raise ValueError("bars adjusted_close_source must be one of raw, qfq, hfq")
+            for source in sorted(source_values.unique()):
+                frames.append(
+                    _bar_price_frame(identity.loc[source_values.eq(source)], bars.loc[source_values.eq(source), generic_column], source)
+                )
+                available_sources.add(source)
+    if not frames:
+        raise ValueError("bars is missing a source-specific or source-labelled adjusted close column")
+    result = pd.concat(frames, ignore_index=True)
+    if result.duplicated(["asset_id", "trade_date", "adjusted_close_source"]).any():
+        raise ValueError("bars contains duplicate bar rows for asset_id, trade_date, and adjusted close source")
     result["adjusted_close"] = pd.to_numeric(result["adjusted_close"], errors="coerce")
     finite_close = result["adjusted_close"].map(
         lambda value: isfinite(float(value)) if pd.notna(value) else False
     )
     if result["adjusted_close"].isna().any() or not finite_close.all() or (result["adjusted_close"] <= 0).any():
         raise ValueError("bars adjusted close must contain finite positive numbers")
-    return result.sort_values(["asset_id", "trade_date"], kind="mergesort").reset_index(drop=True)
+    return (
+        result.sort_values(["asset_id", "adjusted_close_source", "trade_date"], kind="mergesort").reset_index(drop=True),
+        available_sources,
+    )
+
+
+def _bar_source_column(bars: pd.DataFrame) -> str | None:
+    columns = [column for column in ("adjusted_close_source", "adjust_type") if column in bars]
+    if len(columns) == 2:
+        left = bars[columns[0]].astype("string").str.strip().replace("", pd.NA)
+        right = bars[columns[1]].astype("string").str.strip().replace("", pd.NA)
+        if not left.equals(right):
+            raise ValueError("bars adjusted_close_source and adjust_type conflict")
+    return columns[0] if columns else None
+
+
+def _bar_price_frame(identity: pd.DataFrame, close: pd.Series, source: str) -> pd.DataFrame:
+    result = identity.copy(deep=True)
+    result["adjusted_close"] = close.to_numpy(copy=True)
+    result["adjusted_close_source"] = source
+    return result
 
 
 def _snapshot_market_regime(snapshot: dict[str, object]) -> str:
@@ -319,6 +409,14 @@ def _anchor_close(value: object) -> tuple[float, str, str]:
     return normalized, "ok", ""
 
 
+def _evaluation_exclusion(candidate: dict[str, object]) -> str | None:
+    if str(candidate["sector_gate_status"]).strip().lower() == "blocked":
+        return "excluded_blocked"
+    if str(candidate["stock_lifecycle"]).strip().lower() == "invalidated":
+        return "excluded_invalidated"
+    return None
+
+
 def _rank_bucket(value: object) -> str:
     rank = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     if pd.isna(rank) or rank <= 0 or rank % 1:
@@ -341,19 +439,28 @@ def _sector_key(system: object, code: object) -> str:
 def _summarize_group(
     group_by: str, group_value: str, horizon: int, frame: pd.DataFrame
 ) -> dict[str, object]:
-    complete = frame["forward_Nd_status"].eq("complete") & frame["forward_Nd_return"].notna()
+    excluded = frame["_evaluation_status"].str.startswith("excluded_")
+    complete = (
+        frame["_evaluation_status"].eq("complete")
+        & frame["forward_Nd_status"].eq("complete")
+        & frame["forward_Nd_return"].notna()
+    )
     finite_return = frame["forward_Nd_return"].map(
         lambda value: isfinite(float(value)) if pd.notna(value) else False
     )
     returns = frame.loc[complete & finite_return, "forward_Nd_return"]
     total_count = int(len(frame))
     complete_count = int(len(returns))
-    pending_count = total_count - complete_count
+    excluded_count = int(excluded.sum())
+    pending_count = total_count - complete_count - excluded_count
     error_count = int(
-        frame.get("data_status", pd.Series("ok", index=frame.index)).ne("ok").sum()
+        (
+            frame.get("data_status", pd.Series("ok", index=frame.index)).ne("ok")
+            & ~excluded
+        ).sum()
     )
     if returns.empty:
-        metrics: dict[str, object] = {name: float("nan") for name in _SUMMARY_COLUMNS[7:]}
+        metrics: dict[str, object] = {name: float("nan") for name in _SUMMARY_COLUMNS[8:]}
     else:
         metrics = {
             "up_ratio": float((returns > 0).mean()),
@@ -373,6 +480,7 @@ def _summarize_group(
         "total_count": total_count,
         "complete_count": complete_count,
         "pending_count": pending_count,
+        "excluded_count": excluded_count,
         "data_error_count": error_count,
         **metrics,
     }
