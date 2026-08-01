@@ -42,26 +42,29 @@ DEFAULT_INDEX_IDS = (
 )
 VALID_ADJUST_TYPES = ("raw", "qfq", "hfq")
 
-REQUIRED_SNAPSHOT_COLUMNS = (
-    "snapshot_id",
-    "anchor_date",
-    "data_cutoff_date",
-    "score_version",
-    "market_regime",
-    "sector_system",
-    "sector_id",
-    "sector_name",
-    "sector_score",
-    "sector_rank",
-    "sector_recovery_state",
-    "sector_gate_status",
-    "asset_id",
-    "stock_score",
-    "stock_rank",
-    "stock_lifecycle",
-    "previous_snapshot_id",
-    "rank_delta",
-    "lifecycle_delta",
+REQUIRED_SNAPSHOT_COLUMNS = frozenset(
+    (
+        "snapshot_id",
+        "anchor_date",
+        "data_cutoff_date",
+        "score_version",
+        "market_regime",
+        "sector_system",
+        "sector_code",
+        "sector_name",
+        "sector_oversold_score",
+        "sector_repairability_score",
+        "sector_direction_score",
+        "sector_recovery_state",
+        "sector_gate_status",
+        "asset_id",
+        "stock_score",
+        "stock_rank",
+        "stock_lifecycle",
+        "previous_snapshot_id",
+        "rank_delta",
+        "lifecycle_delta",
+    )
 )
 
 
@@ -127,7 +130,7 @@ def validate_snapshot_columns(columns: Iterable[str]) -> list[str]:
     """Return required snapshot column names absent from *columns*, sorted."""
 
     present = set(columns)
-    return sorted(set(REQUIRED_SNAPSHOT_COLUMNS) - present)
+    return sorted(REQUIRED_SNAPSHOT_COLUMNS - present)
 
 
 def _validate_date(field_name: str, value: object) -> None:

@@ -81,32 +81,42 @@ def test_contract_enums_use_stable_values_and_include_all_design_states():
 
 
 def test_snapshot_column_contract_covers_identity_scores_states_and_deltas():
-    required = {
-        "snapshot_id",
-        "anchor_date",
-        "data_cutoff_date",
-        "score_version",
-        "market_regime",
-        "sector_id",
-        "sector_name",
-        "sector_score",
-        "sector_rank",
-        "sector_recovery_state",
-        "sector_gate_status",
-        "asset_id",
-        "stock_score",
-        "stock_rank",
-        "stock_lifecycle",
-        "previous_snapshot_id",
-        "rank_delta",
-        "lifecycle_delta",
-    }
+    required = frozenset(
+        (
+            "snapshot_id",
+            "anchor_date",
+            "data_cutoff_date",
+            "score_version",
+            "market_regime",
+            "sector_system",
+            "sector_code",
+            "sector_name",
+            "sector_oversold_score",
+            "sector_repairability_score",
+            "sector_direction_score",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "asset_id",
+            "stock_score",
+            "stock_rank",
+            "stock_lifecycle",
+            "previous_snapshot_id",
+            "rank_delta",
+            "lifecycle_delta",
+        )
+    )
 
-    assert required.issubset(REQUIRED_SNAPSHOT_COLUMNS)
+    assert isinstance(REQUIRED_SNAPSHOT_COLUMNS, frozenset)
+    assert REQUIRED_SNAPSHOT_COLUMNS == required
     assert validate_snapshot_columns({"anchor_date", "asset_id"}) == sorted(
         set(REQUIRED_SNAPSHOT_COLUMNS) - {"anchor_date", "asset_id"}
     )
     missing = validate_snapshot_columns({"anchor_date", "asset_id"})
     assert "data_cutoff_date" in missing
+    assert "sector_system" in missing
+    assert "sector_code" in missing
+    assert "sector_oversold_score" in missing
+    assert "sector_repairability_score" in missing
+    assert "sector_direction_score" in missing
     assert "sector_gate_status" in missing
     assert "stock_lifecycle" in missing
