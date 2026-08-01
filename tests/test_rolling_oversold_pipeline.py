@@ -305,21 +305,23 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
         output_dir,
         additional_artifacts=None,
         runtime_metadata_supplier=None,
+        runtime_publish_guard=None,
     ):
         destination = Path(output_dir) / "snapshot"
         destination.mkdir(parents=True)
         manifest = destination / "manifest.json"
-        runtime_metadata = (
+        runtime_metadata = snapshot["runtime_metadata"]
+        if runtime_metadata_supplier is not None:
             runtime_metadata_supplier()
-            if runtime_metadata_supplier is not None
-            else snapshot["runtime_metadata"]
-        )
+            runtime_metadata = runtime_metadata_supplier()
         manifest.write_text(
             json.dumps({"runtime_metadata": runtime_metadata}) + "\n",
             encoding="utf-8",
         )
         for name, contents in (additional_artifacts or {}).items():
             (destination / name).write_bytes(contents)
+        if runtime_publish_guard is not None:
+            runtime_publish_guard()
         return {"status": "created", "manifest_path": str(manifest)}
 
     monkeypatch.setattr(pipeline, "build_rolling_snapshot", fake_build, raising=False)

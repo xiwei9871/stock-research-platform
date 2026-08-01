@@ -86,13 +86,17 @@ class StrategyRuntimeBudget:
 
     def metadata(self) -> dict[str, Any]:
         started = self.start()
-        elapsed = max(0.0, monotonic() - started)
+        now = monotonic()
+        elapsed = max(0.0, now - started)
+        timings = dict(self.stage_timings_seconds)
+        for stage, stage_started in self._stage_started_at.items():
+            timings[stage] = max(0.0, now - stage_started)
         return {
             "runtime_budget_seconds": float(self.timeout_seconds),
             "runtime_seconds": elapsed,
             "stage_timings_seconds": {
                 key: float(value)
-                for key, value in sorted(self.stage_timings_seconds.items())
+                for key, value in sorted(timings.items())
             },
         }
 
