@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import csv
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
@@ -45,8 +46,20 @@ def run_rolling_preflight(
     gaps: list[DataGap] = []
     coverage: list[dict[str, Any]] = []
 
-    calendar_rows = _dated_rows(frames["trading_dates"], "trade_date", cutoff)
+    calendar_rows = _dated_rows(frames["trading_dates"], "trade_date", anchor_date)
     coverage.append(_coverage("market.trading_calendar", expected=252, actual=len(calendar_rows)))
+    if len(calendar_rows) < 252:
+        gaps.append(
+            DataGap(
+                "market.trading_calendar",
+                "__market__",
+                calendar_rows[0].isoformat() if calendar_rows else None,
+                anchor_date.isoformat(),
+                252,
+                len(calendar_rows),
+                "insufficient_history",
+            )
+        )
 
     index_frame = frames["index_bars"]
     configured_indexes = index_ids or _unique_values(index_frame, "index_id")
@@ -84,6 +97,7 @@ def run_rolling_preflight(
     coverage.append(_coverage("valuation_history", expected=len(assets), actual=valuation_actual))
 
     ordered_gaps = tuple(sorted(gaps, key=lambda gap: (gap.dataset, gap.asset_id, gap.start_date or "", gap.end_date or "", gap.reason)))
+    _write_backfill_requests_csv(output_dir, ordered_gaps)
     request_path = None
     if ordered_gaps:
         request_path = write_backfill_request(
@@ -220,6 +234,21 @@ def _write_preflight_artifact(output_dir: str | Path, result: PreflightResult) -
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
     payload = {"blocked": result.blocked, "status": result.status, "data_cutoff_date": result.data_cutoff_date.isoformat(), "checked_datasets": list(result.checked_datasets), "coverage_rows": list(result.coverage_rows), "gaps": [asdict(gap) for gap in result.gaps], "backfill_request_path": str(result.backfill_request_path) if result.backfill_request_path else None}
-    path = destination / "rolling_oversold_preflight.json"
+    path = destination / "preflight.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def _write_backfill_requests_csv(output_dir: str | Path, gaps: tuple[DataGap, ...]) -> Path:
+    destination = Path(output_dir).expanduser().resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / "backfill_requests.csv"
+    columns = (
+        "dataset", "asset_id", "start_date", "end_date", "expected_rows",
+        "actual_rows", "reason",
+    )
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(asdict(gap) for gap in gaps)
     return path

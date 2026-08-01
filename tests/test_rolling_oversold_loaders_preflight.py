@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -193,7 +194,8 @@ def test_preflight_blocks_missing_sector_bar_and_writes_backfill(monkeypatch, tm
     assert any(gap.dataset == "market.industry_daily_bar" for gap in result.gaps)
     assert requests[0][1]["strategy"] == "rolling_sector_oversold"
     assert requests[0][1]["ranking_version"] == "test-v1"
-    assert (tmp_path / "rolling_oversold_preflight.json").is_file()
+    assert (tmp_path / "preflight.json").is_file()
+    assert (tmp_path / "backfill_requests.csv").is_file()
 
 
 def test_complete_synthetic_inputs_pass_and_report_every_dataset(tmp_path):
@@ -211,7 +213,29 @@ def test_complete_synthetic_inputs_pass_and_report_every_dataset(tmp_path):
     }
     assert {row["dataset"] for row in result.coverage_rows} == set(result.checked_datasets)
     assert any(row["sector_code"] == "801010" for row in result.coverage_rows)
-    assert (tmp_path / "rolling_oversold_preflight.json").is_file()
+    assert (tmp_path / "preflight.json").is_file()
+    assert (tmp_path / "backfill_requests.csv").is_file()
+
+
+def test_preflight_blocks_short_complete_calendar_and_persists_exact_artifacts(tmp_path):
+    inputs = _inputs()
+    inputs = replace(inputs, trading_dates=inputs.trading_dates.tail(10))
+
+    result = preflight.run_rolling_preflight(
+        inputs, anchor_date=date(2026, 7, 29), output_dir=tmp_path
+    )
+
+    calendar_gap = next(
+        gap for gap in result.gaps if gap.dataset == "market.trading_calendar"
+    )
+    assert result.blocked is True
+    assert calendar_gap.asset_id == "__market__"
+    assert calendar_gap.expected_rows == 252
+    assert calendar_gap.actual_rows == 10
+    assert calendar_gap.reason == "insufficient_history"
+    assert (tmp_path / "preflight.json").is_file()
+    assert (tmp_path / "backfill_requests.csv").is_file()
+    assert (tmp_path / "consumer_oversold_backfill_request.json").is_file()
 
 
 def test_loader_module_has_no_external_ingestion_imports():
