@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 import hashlib
 import json
 import math
 import os
 from pathlib import Path
+import shutil
 import tempfile
 from typing import Any, Mapping
 
@@ -94,6 +96,7 @@ def build_rolling_snapshot(
     stock_candidates: pd.DataFrame,
     previous_snapshot: dict[str, object] | None,
     score_version: str,
+    runtime_metadata: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Build a normalized snapshot; same inputs are byte-stable."""
 
@@ -111,6 +114,10 @@ def build_rolling_snapshot(
         raise TypeError("sector_states and stock_candidates must be pandas DataFrames")
 
     regime = _normalize_mapping(market_regime)
+    embedded_runtime_metadata = regime.pop("runtime_metadata", None)
+    if runtime_metadata is None:
+        runtime_metadata = embedded_runtime_metadata
+    runtime = _normalize_runtime_metadata(runtime_metadata)
     market_state = regime.get("market_regime")
     if not isinstance(market_state, str) or not market_state.strip():
         raise ValueError("market_regime must include a non-empty market_regime value")
@@ -155,7 +162,7 @@ def build_rolling_snapshot(
         "row_counts": {"sector_states": int(len(sectors)), "stock_candidates": int(len(stocks))},
         "preflight": preflight,
         "backfill_requests": backfill_requests,
-        "runtime_metadata": {},
+        "runtime_metadata": runtime,
     }
 
 
@@ -178,6 +185,7 @@ def write_rolling_snapshot(
         "data_cutoff_date": normalized["data_cutoff_date"],
         "score_version": normalized["score_version"],
         "previous_snapshot_id": normalized["previous_snapshot_id"],
+        "runtime_metadata": normalized["runtime_metadata"],
         "row_counts": normalized["row_counts"],
         "artifact_hashes": {
             name: hashlib.sha256(contents).hexdigest() for name, contents in artifact_bytes.items()
@@ -192,18 +200,34 @@ def write_rolling_snapshot(
         raise ValueError(f"immutable rolling snapshot already exists at {destination}")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{destination.name}.", dir=destination.parent)
+    )
+    published = False
     try:
-        destination.mkdir()
-    except FileExistsError:
-        if _is_identical_existing_snapshot(destination, manifest, artifact_bytes):
+        for name in _ARTIFACT_NAMES:
+            _atomic_write_new(staging / name, artifact_bytes[name])
+        _atomic_write_new(staging / "manifest.json", manifest_bytes)
+        _fsync_directory(staging)
+        # The final path is checked immediately before publication.  A second
+        # writer that wins a race is handled below without replacing its files.
+        if destination.exists():
+            if _is_identical_existing_snapshot(destination, manifest, artifact_bytes):
+                return {"status": "already_exists_identical", "manifest_path": str(manifest_path)}
+            raise ValueError(f"immutable rolling snapshot already exists at {destination}")
+        os.replace(staging, destination)
+        published = True
+        _fsync_directory(destination.parent)
+        return {"status": "created", "manifest_path": str(manifest_path)}
+    except Exception:
+        if destination.exists() and _is_identical_existing_snapshot(destination, manifest, artifact_bytes):
             return {"status": "already_exists_identical", "manifest_path": str(manifest_path)}
-        raise ValueError(f"immutable rolling snapshot already exists at {destination}") from None
-    for name in _ARTIFACT_NAMES:
-        _atomic_write_new(destination / name, artifact_bytes[name])
-    _atomic_write_new(manifest_path, manifest_bytes)
-    # A partially written directory is deliberately retained as evidence and is
-    # never reused if an atomic artifact write raises.
-    return {"status": "created", "manifest_path": str(manifest_path)}
+        if destination.exists():
+            raise ValueError(f"immutable rolling snapshot already exists at {destination}") from None
+        raise
+    finally:
+        if not published and staging.exists():
+            shutil.rmtree(staging)
 
 
 def _previous_rows(
@@ -229,7 +253,9 @@ def _previous_rows(
     return previous_id, _normalize_stock_rows(stocks), _normalize_sector_rows(sectors)
 
 
-def _normalize_stock_rows(frame: pd.DataFrame) -> pd.DataFrame:
+def _normalize_stock_rows(
+    frame: pd.DataFrame, *, allow_revision_rows: bool = False
+) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=_STOCK_COLUMNS)
     _require_columns(frame, _STOCK_INPUT_COLUMNS, "stock_candidates")
@@ -242,18 +268,32 @@ def _normalize_stock_rows(frame: pd.DataFrame) -> pd.DataFrame:
     )
     _require_finite_numbers(
         result,
-        (
-            "stock_score",
-            "stock_rank",
-            "sector_oversold_score",
-            "sector_repairability_score",
-            "sector_direction_score",
-        ),
+        ("stock_score",),
         "stock_candidates",
     )
-    if (result["stock_rank"] <= 0).any() or (result["stock_rank"] % 1 != 0).any():
+    result["stock_rank"] = pd.to_numeric(result["stock_rank"], errors="coerce")
+    sector_score_columns = (
+        "sector_oversold_score",
+        "sector_repairability_score",
+        "sector_direction_score",
+    )
+    _require_finite_numbers(
+        result,
+        sector_score_columns,
+        "stock_candidates",
+        allow_missing=_allow_missing_sector_scores(result),
+    )
+    invalid_rank = (
+        result["stock_rank"].isna()
+        | ~result["stock_rank"].map(lambda value: math.isfinite(value) if pd.notna(value) else False)
+        | (result["stock_rank"] <= 0)
+        | (result["stock_rank"] % 1 != 0)
+    )
+    if allow_revision_rows:
+        invalid_rank &= ~result["stock_lifecycle"].eq("invalidated")
+    if invalid_rank.any():
         raise ValueError("stock_candidates stock_rank must contain positive integers")
-    result["stock_rank"] = result["stock_rank"].astype("int64")
+    result["stock_rank"] = result["stock_rank"].astype("Int64")
     if result["asset_id"].duplicated().any():
         duplicate = result.loc[result["asset_id"].duplicated(keep=False), "asset_id"].iloc[0]
         raise ValueError(f"stock_candidates has duplicate asset_id {duplicate}")
@@ -285,6 +325,7 @@ def _normalize_sector_rows(frame: pd.DataFrame) -> pd.DataFrame:
         result,
         ("sector_oversold_score", "sector_repairability_score", "sector_direction_score"),
         "sector_states",
+        allow_missing=_allow_missing_sector_scores(result),
     )
     if result.duplicated(["sector_system", "sector_code"]).any():
         duplicate = result.loc[
@@ -419,6 +460,14 @@ def _normalize_backfill(value: object) -> pd.DataFrame:
     return _ordered_frame(result, _BACKFILL_COLUMNS, sort_columns=_BACKFILL_COLUMNS)
 
 
+def _normalize_runtime_metadata(value: Mapping[str, object] | None) -> dict[str, object]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError("runtime_metadata must be a mapping when supplied")
+    return _normalize_mapping(value)
+
+
 def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, object]:
     if not isinstance(snapshot, dict):
         raise TypeError("snapshot must be a dictionary")
@@ -432,6 +481,8 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         raise ValueError(f"snapshot missing required keys: {', '.join(missing)}")
     anchor = _parse_iso_date(snapshot["anchor_date"], "anchor_date")
     cutoff = _parse_iso_date(snapshot["data_cutoff_date"], "data_cutoff_date")
+    if cutoff > anchor:
+        raise ValueError("data_cutoff_date must not follow anchor_date")
     version = snapshot["score_version"]
     if not isinstance(version, str) or not version.strip():
         raise ValueError("snapshot score_version must be a non-empty string")
@@ -448,41 +499,131 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         raise TypeError("snapshot sector_states and stock_candidates must be pandas DataFrames")
     if not isinstance(snapshot["backfill_requests"], pd.DataFrame):
         raise TypeError("snapshot backfill_requests must be a pandas DataFrame")
+    supplied_row_counts = snapshot["row_counts"]
+    if not isinstance(supplied_row_counts, Mapping):
+        raise ValueError("snapshot row_counts must be a mapping")
     missing_stock = validate_snapshot_columns(snapshot["stock_candidates"].columns)
     if missing_stock:
         raise ValueError(
             "stock snapshot rows do not satisfy the required snapshot column contract: "
             + ", ".join(missing_stock)
         )
+    missing_stock_schema = sorted(set(_STOCK_COLUMNS) - set(snapshot["stock_candidates"].columns))
+    if missing_stock_schema:
+        raise ValueError("stock snapshot rows missing canonical columns: " + ", ".join(missing_stock_schema))
     missing_sector = sorted(set(_SECTOR_INPUT_COLUMNS) - set(snapshot["sector_states"].columns))
     if missing_sector:
         raise ValueError("sector snapshot rows missing canonical columns: " + ", ".join(missing_sector))
+    missing_sector_schema = sorted(set(_SECTOR_COLUMNS) - set(snapshot["sector_states"].columns))
+    if missing_sector_schema:
+        raise ValueError("sector snapshot rows missing canonical columns: " + ", ".join(missing_sector_schema))
+    stock_rows = _validate_stock_snapshot_rows(
+        snapshot["stock_candidates"],
+        snapshot_id=expected_id,
+        anchor_date=anchor.isoformat(),
+        data_cutoff_date=cutoff.isoformat(),
+        score_version=version,
+    )
+    sector_rows = _validate_sector_snapshot_rows(snapshot["sector_states"])
+    previous_id = snapshot["previous_snapshot_id"]
+    if previous_id is not None and not isinstance(previous_id, str):
+        raise ValueError("snapshot previous_snapshot_id must be a string or null")
+    expected_row_counts = {
+        "sector_states": int(len(sector_rows)),
+        "stock_candidates": int(len(stock_rows)),
+    }
+    if dict(supplied_row_counts) != expected_row_counts:
+        raise ValueError("snapshot row_counts do not match snapshot frames")
     normalized = {
         "snapshot_id": expected_id,
         "anchor_date": anchor.isoformat(),
         "data_cutoff_date": cutoff.isoformat(),
         "score_version": version,
         "market_regime": _normalize_mapping(snapshot["market_regime"]),
-        "previous_snapshot_id": snapshot["previous_snapshot_id"],
+        "previous_snapshot_id": previous_id,
         "preflight": _normalize_preflight(snapshot["preflight"]),
         "backfill_requests": _normalize_backfill(snapshot["backfill_requests"]),
+        "runtime_metadata": _normalize_runtime_metadata(snapshot.get("runtime_metadata")),
     }
     market_state = normalized["market_regime"].get("market_regime")
     if not isinstance(market_state, str) or not market_state.strip():
         raise ValueError("snapshot market_regime must include a non-empty market_regime value")
     normalized["sector_states"] = _ordered_frame(
-        snapshot["sector_states"].copy(deep=True), _SECTOR_COLUMNS,
+        sector_rows, _SECTOR_COLUMNS,
         sort_columns=("sector_rank", "sector_system", "sector_code"),
     )
     normalized["stock_candidates"] = _ordered_frame(
-        snapshot["stock_candidates"].copy(deep=True), _STOCK_COLUMNS,
+        stock_rows, _STOCK_COLUMNS,
         sort_columns=("stock_rank", "asset_id"),
     )
     normalized["row_counts"] = {
-        "sector_states": int(len(normalized["sector_states"])),
-        "stock_candidates": int(len(normalized["stock_candidates"])),
+        "sector_states": expected_row_counts["sector_states"],
+        "stock_candidates": expected_row_counts["stock_candidates"],
     }
     return normalized
+
+
+def _validate_stock_snapshot_rows(
+    frame: pd.DataFrame,
+    *,
+    snapshot_id: str,
+    anchor_date: str,
+    data_cutoff_date: str,
+    score_version: str,
+) -> pd.DataFrame:
+    result = _normalize_stock_rows(frame, allow_revision_rows=True)
+    for column, expected in (
+        ("snapshot_id", snapshot_id),
+        ("anchor_date", anchor_date),
+        ("data_cutoff_date", data_cutoff_date),
+        ("score_version", score_version),
+    ):
+        _require_exact_column(result, column, expected, "stock_candidates")
+    return result
+
+
+def _validate_sector_snapshot_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy(deep=True)
+    if result.empty:
+        return result
+    _normalize_string_columns(
+        result,
+        ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
+    )
+    _require_nonempty_strings(
+        result,
+        ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
+        "sector_states",
+    )
+    _require_finite_numbers(
+        result,
+        ("sector_oversold_score", "sector_repairability_score", "sector_direction_score"),
+        "sector_states",
+        allow_missing=_allow_missing_sector_scores(result),
+    )
+    if result.duplicated(["sector_system", "sector_code"]).any():
+        raise ValueError("sector_states has duplicate sector identity")
+    result["sector_rank"] = pd.to_numeric(result["sector_rank"], errors="coerce")
+    revision_status = result["sector_revision_status"].fillna("current").astype("string")
+    invalid_rank = (
+        result["sector_rank"].isna()
+        | ~result["sector_rank"].map(lambda value: math.isfinite(value) if pd.notna(value) else False)
+        | (result["sector_rank"] <= 0)
+        | (result["sector_rank"] % 1 != 0)
+    )
+    invalid_rank &= ~revision_status.eq("removed")
+    if invalid_rank.any():
+        raise ValueError("sector_states sector_rank must contain positive integers")
+    result["sector_rank"] = result["sector_rank"].astype("Int64")
+    return result
+
+
+def _require_exact_column(frame: pd.DataFrame, column: str, expected: str, label: str) -> None:
+    if column not in frame:
+        raise ValueError(f"{label} missing required column {column}")
+    values = frame[column].astype("string")
+    if values.isna().any() or not values.eq(expected).all():
+        raise ValueError(f"{label} {column} does not match snapshot metadata")
 
 
 def _artifact_bytes(snapshot: dict[str, object]) -> dict[str, bytes]:
@@ -521,6 +662,14 @@ def _is_identical_existing_snapshot(
         and hashlib.sha256(path.read_bytes()).digest() == hashlib.sha256(contents).digest()
         for name, contents in artifact_bytes.items()
     )
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _atomic_write_new(path: Path, contents: bytes) -> None:
@@ -565,6 +714,8 @@ def _json_bytes(value: object) -> bytes:
 
 
 def _csv_value(value: object) -> object:
+    if isinstance(value, Decimal):
+        return _json_value(value)
     if _is_missing(value):
         return ""
     if isinstance(value, (pd.Timestamp, datetime, date)):
@@ -579,6 +730,12 @@ def _csv_value(value: object) -> object:
 
 
 def _json_value(value: object) -> object:
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            return None
+        integral = value == value.to_integral_value()
+        converted = int(value) if integral else float(value)
+        return converted if not isinstance(converted, float) or math.isfinite(converted) else None
     if _is_missing(value):
         return None
     if isinstance(value, (pd.Timestamp, datetime, date)):
@@ -629,12 +786,31 @@ def _require_nonempty_strings(frame: pd.DataFrame, columns: tuple[str, ...], lab
             raise ValueError(f"{label} has missing required value {column}")
 
 
-def _require_finite_numbers(frame: pd.DataFrame, columns: tuple[str, ...], label: str) -> None:
+def _require_finite_numbers(
+    frame: pd.DataFrame,
+    columns: tuple[str, ...],
+    label: str,
+    *,
+    allow_missing: pd.Series | None = None,
+) -> None:
+    allowed = (
+        pd.Series(False, index=frame.index)
+        if allow_missing is None
+        else allow_missing.reindex(frame.index, fill_value=False).fillna(False).astype(bool)
+    )
     for column in columns:
         numeric = pd.to_numeric(frame[column], errors="coerce")
-        if numeric.isna().any() or not numeric.map(math.isfinite).all():
+        finite = numeric.map(
+            lambda value: bool(pd.notna(value)) and math.isfinite(float(value))
+        )
+        invalid = ~finite & ~allowed
+        if invalid.any():
             raise ValueError(f"{label} has non-finite required value {column}")
         frame[column] = numeric
+
+
+def _allow_missing_sector_scores(frame: pd.DataFrame) -> pd.Series:
+    return frame["sector_gate_status"].eq("blocked") | frame["sector_recovery_state"].eq("unknown")
 
 
 def _validate_date(label: str, value: object) -> None:

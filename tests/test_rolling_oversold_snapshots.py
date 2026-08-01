@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 import hashlib
 import json
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from stock_research.rolling_oversold import snapshots as snapshots_module
 from stock_research.rolling_oversold.contracts import REQUIRED_SNAPSHOT_COLUMNS, validate_snapshot_columns
 from stock_research.rolling_oversold.snapshots import (
     build_rolling_snapshot,
@@ -98,6 +100,7 @@ def _build(
     sectors: pd.DataFrame | None = None,
     previous: dict[str, object] | None = None,
     anchor: date = ANCHOR,
+    runtime_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     return build_rolling_snapshot(
         anchor_date=anchor,
@@ -107,6 +110,7 @@ def _build(
         stock_candidates=_stocks() if stocks is None else stocks,
         previous_snapshot=previous,
         score_version=VERSION,
+        runtime_metadata=runtime_metadata,
     )
 
 
@@ -227,3 +231,70 @@ def test_empty_snapshot_uses_stable_schemas_and_required_artifact_names(tmp_path
     assert (artifact_dir / "backfill_requests.csv").read_text(encoding="utf-8") == (
         "dataset,asset_id,start_date,end_date,expected_rows,actual_rows,reason\n"
     )
+
+
+def test_blocked_unknown_sector_with_missing_scores_serializes_as_blank(tmp_path):
+    blocked = _sectors().iloc[[0]].copy()
+    blocked.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    blocked.loc[:, "sector_gate_status"] = "blocked"
+    blocked.loc[:, "sector_recovery_state"] = "unknown"
+    snapshot = _build(stocks=pd.DataFrame(), sectors=blocked)
+
+    result = write_rolling_snapshot(snapshot, output_dir=tmp_path)
+    sector_csv = Path(result["manifest_path"]).with_name("sector_states.csv").read_text(encoding="utf-8")
+    assert "Industry two" in sector_csv
+    assert ",,," in sector_csv
+
+
+def test_failed_staging_write_cleans_temp_and_allows_retry(tmp_path, monkeypatch):
+    snapshot = _build()
+    original = snapshots_module._atomic_write_new
+
+    def fail_once(path, contents):
+        if path.name == "stock_candidates.csv":
+            raise RuntimeError("injected artifact failure")
+        return original(path, contents)
+
+    monkeypatch.setattr(snapshots_module, "_atomic_write_new", fail_once)
+    with pytest.raises(RuntimeError, match="injected artifact failure"):
+        write_rolling_snapshot(snapshot, output_dir=tmp_path)
+
+    destination = tmp_path / "rolling_sector_oversold" / "anchor=2026-07-21" / f"version={VERSION}"
+    assert not destination.exists()
+    assert not list(destination.parent.glob(f".{destination.name}.*"))
+
+    monkeypatch.setattr(snapshots_module, "_atomic_write_new", original)
+    assert write_rolling_snapshot(snapshot, output_dir=tmp_path)["status"] == "created"
+
+
+def test_runtime_metadata_round_trips_and_json_normalizes_decimal_and_nonfinite_values(tmp_path):
+    snapshot = _build(
+        runtime_metadata={
+            "stage_timings": {"build_seconds": Decimal("1.25")},
+            "nan_value": float("nan"),
+            "nat_value": pd.NaT,
+        }
+    )
+    assert snapshot["runtime_metadata"] == {
+        "stage_timings": {"build_seconds": 1.25},
+        "nan_value": None,
+        "nat_value": None,
+    }
+
+    result = write_rolling_snapshot(snapshot, output_dir=tmp_path)
+    manifest = json.loads(Path(result["manifest_path"]).read_text(encoding="utf-8"))
+    assert manifest["runtime_metadata"] == snapshot["runtime_metadata"]
+
+
+def test_write_revalidates_pit_and_hand_built_frame_schema(tmp_path):
+    snapshot = _build()
+    invalid_cutoff = dict(snapshot)
+    invalid_cutoff["data_cutoff_date"] = "2026-07-22"
+    with pytest.raises(ValueError, match="data_cutoff_date"):
+        write_rolling_snapshot(invalid_cutoff, output_dir=tmp_path)
+
+    invalid_frame = dict(snapshot)
+    invalid_frame["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    invalid_frame["stock_candidates"].loc[:, "stock_score"] = "not-a-score"
+    with pytest.raises(ValueError, match="stock_candidates"):
+        write_rolling_snapshot(invalid_frame, output_dir=tmp_path)
