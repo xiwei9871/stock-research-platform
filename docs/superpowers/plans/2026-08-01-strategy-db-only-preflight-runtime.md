@@ -28,7 +28,7 @@
 - Create: `src/stock_research/strategy_data_policy.py`
 - Create: `tests/test_strategy_data_policy.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 def test_db_only_policy_rejects_external_source_attempt():
@@ -59,13 +59,13 @@ def test_runtime_budget_records_stages_and_raises_after_deadline(monkeypatch):
         budget.checkpoint("scoring")
 ```
 
-- [ ] **Step 2: Run tests and confirm the intended missing-symbol failures**
+- [x] **Step 2: Run tests and confirm the intended missing-symbol failures**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_strategy_data_policy.py -q`
 
 Expected: FAIL because the policy module and its public types do not exist.
 
-- [ ] **Step 3: Implement the minimal primitives**
+- [x] **Step 3: Implement the minimal primitives**
 
 ```python
 DB_ONLY = "db_only"
@@ -90,13 +90,13 @@ def assert_db_only_source(source: str) -> None:
 
 `StrategyRuntimeBudget` stores `started_at`, `stage_timings_seconds`, and `timeout_seconds`; `checkpoint(stage)` raises `StrategyRuntimeTimeout` when `monotonic() - started_at > timeout_seconds`. `write_backfill_request()` sorts gaps by `(dataset, asset_id, start_date, end_date, reason)`, writes `consumer_oversold_backfill_request.json` with UTF-8 JSON, and fsyncs through the existing atomic-write convention.
 
-- [ ] **Step 4: Run the shared tests**
+- [x] **Step 4: Run the shared tests**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_strategy_data_policy.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/stock_research/strategy_data_policy.py tests/test_strategy_data_policy.py
@@ -109,7 +109,7 @@ git commit -m "feat: add db-only strategy runtime contract"
 - Create: `src/stock_research/consumer_oversold/preflight.py`
 - Create: `tests/test_consumer_oversold_preflight.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 def test_complete_consumer_frames_pass_preflight():
@@ -147,13 +147,13 @@ def test_new_listing_short_history_is_not_reported_as_backfill_gap():
     assert result.status == "passed"
 ```
 
-- [ ] **Step 2: Run the preflight tests and confirm failure**
+- [x] **Step 2: Run the preflight tests and confirm failure**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_preflight.py -q`
 
 Expected: FAIL because `run_consumer_preflight` is undefined.
 
-- [ ] **Step 3: Implement coverage checks**
+- [x] **Step 3: Implement coverage checks**
 
 `run_consumer_preflight()` normalizes asset IDs and checks, per included asset:
 
@@ -164,13 +164,13 @@ Expected: FAIL because `run_consumer_preflight` is undefined.
 
 Return `PreflightResult(status, gaps, checked_assets, checked_datasets)`. A short history is acceptable only when `list_date` is recent enough to explain it; an old asset with no current bar or missing required fundamentals produces a `DataGap`.
 
-- [ ] **Step 4: Run the preflight tests**
+- [x] **Step 4: Run the preflight tests**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_preflight.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/stock_research/consumer_oversold/preflight.py tests/test_consumer_oversold_preflight.py
@@ -183,7 +183,7 @@ git commit -m "feat: preflight consumer database coverage"
 - Modify: `src/stock_research/consumer_oversold/pipeline.py`
 - Modify: `tests/test_consumer_oversold_pipeline.py`
 
-- [ ] **Step 1: Write failing integration tests**
+- [x] **Step 1: Write failing integration tests**
 
 ```python
 def test_runner_blocks_missing_market_data_and_writes_gap_request(monkeypatch, tmp_path):
@@ -220,13 +220,13 @@ def test_runner_records_db_only_policy_and_stage_timings(monkeypatch, tmp_path):
     assert result["coverage"]["stage_timings_seconds"]["preflight"] >= 0.0
 ```
 
-- [ ] **Step 2: Run the focused tests and verify red**
+- [x] **Step 2: Run the focused tests and verify red**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_pipeline.py -q -k 'gap_request or stage_timings'`
 
 Expected: FAIL because the runner currently scores empty data and does not expose runtime metadata.
 
-- [ ] **Step 3: Integrate the minimal runner changes**
+- [x] **Step 3: Integrate the minimal runner changes**
 
 In `run_consumer_oversold_weekly()`:
 
@@ -239,13 +239,13 @@ In `run_consumer_oversold_weekly()`:
 
 Normal frames and rank ordering remain untouched; only the boundary behavior and coverage metadata change.
 
-- [ ] **Step 4: Run all consumer pipeline tests**
+- [x] **Step 4: Run all consumer pipeline tests**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_pipeline.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/stock_research/consumer_oversold/pipeline.py tests/test_consumer_oversold_pipeline.py
@@ -259,7 +259,7 @@ git commit -m "feat: enforce consumer db-only preflight and runtime budget"
 - Modify: `src/stock_research/cli.py`
 - Modify: `tests/test_consumer_oversold_cli.py`
 
-- [ ] **Step 1: Write failing CLI/artifact tests**
+- [x] **Step 1: Write failing CLI/artifact tests**
 
 ```python
 def test_blocked_result_prints_only_gap_artifacts(monkeypatch, capsys):
@@ -289,13 +289,13 @@ def test_blocked_result_prints_only_gap_artifacts(monkeypatch, capsys):
     assert "blocked_missing_data" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: Run the test and confirm red**
+- [x] **Step 2: Run the test and confirm red**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_cli.py -q -k blocked`
 
 Expected: FAIL because the CLI only accepts normal publication statuses and fixed normal path keys.
 
-- [ ] **Step 3: Implement blocked artifact publication**
+- [x] **Step 3: Implement blocked artifact publication**
 
 Add `write_consumer_oversold_data_gap_artifacts()` that writes three files under a unique diagnostic directory below `output_dir`, never replacing `output_dir/current`:
 
@@ -305,13 +305,13 @@ Add `write_consumer_oversold_data_gap_artifacts()` that writes three files under
 
 Extend `_consumer_oversold_machine_lines()` with a blocked branch that validates exactly `coverage`, `backfill_request`, and `report`, accepts `blocked_missing_data` and `runtime_timeout`, and prints the status. Leave the existing normal path-key validation and statuses unchanged.
 
-- [ ] **Step 4: Run focused CLI and reporting tests**
+- [x] **Step 4: Run focused CLI and reporting tests**
 
 Run: `rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_cli.py tests/test_consumer_oversold_reporting.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/stock_research/consumer_oversold/reporting.py src/stock_research/cli.py tests/test_consumer_oversold_cli.py

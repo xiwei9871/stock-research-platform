@@ -85,3 +85,32 @@ def test_new_listing_short_history_is_not_reported_as_backfill_gap():
     frames["bars"] = _bars("NEW", 20)
     result = run_consumer_preflight(**frames, trade_date="2026-07-29")
     assert result.status == "passed"
+
+
+def test_history_requirement_uses_database_sessions_not_calendar_days():
+    dates = pd.bdate_range(end="2026-07-29", periods=10)
+    frames = _complete_frames("A")
+    frames["included"] = _included("A", list_date=dates[0].date().isoformat())
+    frames["bars"] = pd.DataFrame(
+        {
+            "asset_id": ["A"] * len(dates),
+            "trade_date": dates,
+            "close": np.linspace(10.0, 20.0, len(dates)),
+        }
+    )
+    result = run_consumer_preflight(**frames, trade_date="2026-07-29")
+    assert result.status == "passed"
+
+
+def test_preflight_does_not_rescan_full_frames_once_per_asset(monkeypatch):
+    from stock_research.consumer_oversold import preflight
+
+    def fail_asset_scan(*args, **kwargs):
+        raise AssertionError("preflight must build grouped indexes before asset loop")
+
+    monkeypatch.setattr(preflight, "_asset_rows", fail_asset_scan)
+    result = preflight.run_consumer_preflight(
+        **_complete_frames("A"),
+        trade_date="2026-07-29",
+    )
+    assert result.status == "passed"

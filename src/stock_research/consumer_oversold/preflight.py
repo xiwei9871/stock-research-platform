@@ -47,14 +47,33 @@ def run_consumer_preflight(
     included_rows = included_rows.loc[included_rows["asset_id"].ne("")]
     included_rows = included_rows.drop_duplicates("asset_id", keep="first")
 
+    available_dates = _available_market_dates(bars, cutoff)
+    market_stats = _market_stats(bars, cutoff)
+    share_stats = _share_stats(share_capacity)
+    finance_stats = _dated_record_stats(
+        finance,
+        cutoff,
+        date_column="announcement_date",
+        required_columns=("report_period", "announcement_date"),
+    )
+    valuation_stats = _dated_record_stats(
+        valuation_history,
+        cutoff,
+        date_column="valuation_date",
+        required_columns=("valuation_date",),
+    )
+
     gaps: list[DataGap] = []
     for row in included_rows.to_dict(orient="records"):
         asset_id = str(row["asset_id"])
         list_date = _parse_optional_date(row.get("list_date"))
-        required_sessions = _required_market_sessions(list_date, cutoff)
-        asset_bars = _asset_rows(bars, asset_id)
-        asset_bars = _valid_before(asset_bars, "trade_date", cutoff)
-        if not _has_required_columns(asset_bars, ("trade_date", "close")):
+        required_sessions = _required_market_sessions(
+            list_date,
+            cutoff,
+            available_dates=available_dates,
+        )
+        market_stat = market_stats.get(asset_id)
+        if market_stat is None:
             gaps.append(
                 DataGap(
                     "daily_bars",
@@ -67,14 +86,7 @@ def run_consumer_preflight(
                 )
             )
         else:
-            actual = int(
-                asset_bars.loc[
-                    pd.to_numeric(asset_bars["close"], errors="coerce")
-                    .replace([np.inf, -np.inf], np.nan)
-                    .notna()
-                , "trade_date"].nunique()
-            )
-            latest = _latest_date(asset_bars, "trade_date")
+            actual, latest = market_stat
             if actual < required_sessions or latest != cutoff:
                 reason = "insufficient_history" if actual < required_sessions else "missing_cutoff_bar"
                 gaps.append(
@@ -89,8 +101,8 @@ def run_consumer_preflight(
                     )
                 )
 
-        asset_shares = _asset_rows(share_capacity, asset_id)
-        if not _has_positive_single_row(asset_shares, ("total_share", "float_share")):
+        share_stat = share_stats.get(asset_id)
+        if share_stat is None:
             gaps.append(
                 DataGap(
                     "share_capacity",
@@ -98,14 +110,13 @@ def run_consumer_preflight(
                     cutoff.isoformat(),
                     cutoff.isoformat(),
                     1,
-                    int(len(asset_shares)),
+                    0,
                     "missing_positive_share_capacity",
                 )
             )
 
-        asset_finance = _asset_rows(finance, asset_id)
-        asset_finance = _valid_before(asset_finance, "announcement_date", cutoff)
-        if not _has_nonempty_rows(asset_finance, ("report_period", "announcement_date")):
+        finance_count = finance_stats.get(asset_id, 0)
+        if finance_count <= 0:
             gaps.append(
                 DataGap(
                     "finance_history",
@@ -113,14 +124,13 @@ def run_consumer_preflight(
                     None,
                     cutoff.isoformat(),
                     1,
-                    int(len(asset_finance)),
+                    int(finance_count),
                     "missing_pit_finance_record",
                 )
             )
 
-        asset_valuation = _asset_rows(valuation_history, asset_id)
-        asset_valuation = _valid_before(asset_valuation, "valuation_date", cutoff)
-        if not _has_nonempty_rows(asset_valuation, ("valuation_date",)):
+        valuation_count = valuation_stats.get(asset_id, 0)
+        if valuation_count <= 0:
             gaps.append(
                 DataGap(
                     "valuation_history",
@@ -128,7 +138,7 @@ def run_consumer_preflight(
                     None,
                     cutoff.isoformat(),
                     1,
-                    int(len(asset_valuation)),
+                    int(valuation_count),
                     "missing_pit_valuation_record",
                 )
             )
@@ -156,6 +166,76 @@ def _asset_rows(frame: pd.DataFrame, asset_id: str) -> pd.DataFrame:
     if not isinstance(frame, pd.DataFrame) or "asset_id" not in frame.columns:
         return pd.DataFrame()
     return frame.loc[frame["asset_id"].astype(str).str.strip().eq(asset_id)].copy()
+
+
+def _market_stats(
+    frame: pd.DataFrame,
+    cutoff: date,
+) -> dict[str, tuple[int, date | None]]:
+    required = {"asset_id", "trade_date", "close"}
+    if not isinstance(frame, pd.DataFrame) or not required.issubset(frame.columns):
+        return {}
+    work = frame.loc[:, ["asset_id", "trade_date", "close"]].copy()
+    work["asset_id"] = work["asset_id"].astype(str).str.strip()
+    work["trade_date"] = pd.to_datetime(work["trade_date"], errors="coerce")
+    work["close"] = pd.to_numeric(work["close"], errors="coerce")
+    work = work.loc[
+        work["asset_id"].ne("")
+        & work["trade_date"].notna()
+        & work["trade_date"].le(pd.Timestamp(cutoff))
+        & work["close"].replace([np.inf, -np.inf], np.nan).notna()
+    ]
+    if work.empty:
+        return {}
+    grouped = work.groupby("asset_id", sort=False).agg(
+        actual_rows=("trade_date", "nunique"),
+        latest_date=("trade_date", "max"),
+    )
+    return {
+        str(asset_id): (int(row.actual_rows), row.latest_date.date())
+        for asset_id, row in grouped.iterrows()
+    }
+
+
+def _share_stats(frame: pd.DataFrame) -> dict[str, bool]:
+    required = {"asset_id", "total_share", "float_share"}
+    if not isinstance(frame, pd.DataFrame) or not required.issubset(frame.columns):
+        return {}
+    work = frame.loc[:, ["asset_id", "total_share", "float_share"]].copy()
+    work["asset_id"] = work["asset_id"].astype(str).str.strip()
+    for column in ("total_share", "float_share"):
+        work[column] = pd.to_numeric(work[column], errors="coerce")
+    work = work.loc[
+        work["asset_id"].ne("")
+        & work["total_share"].replace([np.inf, -np.inf], np.nan).gt(0.0)
+        & work["float_share"].replace([np.inf, -np.inf], np.nan).gt(0.0)
+    ]
+    return {str(asset_id): True for asset_id in work["asset_id"].drop_duplicates()}
+
+
+def _dated_record_stats(
+    frame: pd.DataFrame,
+    cutoff: date,
+    *,
+    date_column: str,
+    required_columns: tuple[str, ...],
+) -> dict[str, int]:
+    required = {"asset_id", *required_columns}
+    if not isinstance(frame, pd.DataFrame) or not required.issubset(frame.columns):
+        return {}
+    work = frame.loc[:, ["asset_id", *required_columns]].copy()
+    work["asset_id"] = work["asset_id"].astype(str).str.strip()
+    parsed_date = pd.to_datetime(work[date_column], errors="coerce")
+    valid = work["asset_id"].ne("") & parsed_date.notna() & parsed_date.le(pd.Timestamp(cutoff))
+    for column in required_columns:
+        valid &= work[column].notna()
+    work = work.loc[valid]
+    if work.empty:
+        return {}
+    return {
+        str(asset_id): int(count)
+        for asset_id, count in work.groupby("asset_id", sort=False).size().items()
+    }
 
 
 def _has_required_columns(frame: pd.DataFrame, columns: Iterable[str]) -> bool:
@@ -192,10 +272,26 @@ def _latest_date(frame: pd.DataFrame, column: str) -> date | None:
     return parsed.max().date()
 
 
-def _required_market_sessions(list_date: date | None, cutoff: date) -> int:
+def _required_market_sessions(
+    list_date: date | None,
+    cutoff: date,
+    *,
+    available_dates: tuple[date, ...],
+) -> int:
     if list_date is None or list_date >= cutoff:
         return 1
-    return min(REQUIRED_MARKET_HISTORY_SESSIONS, max(1, (cutoff - list_date).days + 1))
+    sessions = sum(list_date <= value <= cutoff for value in available_dates)
+    if sessions <= 0:
+        return 1
+    return min(REQUIRED_MARKET_HISTORY_SESSIONS, sessions)
+
+
+def _available_market_dates(frame: pd.DataFrame, cutoff: date) -> tuple[date, ...]:
+    if not isinstance(frame, pd.DataFrame) or "trade_date" not in frame.columns:
+        return ()
+    parsed = pd.to_datetime(frame["trade_date"], errors="coerce").dropna()
+    dates = sorted({value.date() for value in parsed if value.date() <= cutoff})
+    return tuple(dates)
 
 
 def _parse_date(value: str) -> date:
