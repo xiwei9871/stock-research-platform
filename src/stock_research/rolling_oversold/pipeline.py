@@ -186,9 +186,13 @@ def run_one_anchor(
     snapshot_market_regime = dict(market_regime)
     snapshot_market_regime["preflight"] = _preflight_payload(preflight)
     snapshot_market_regime["backfill_requests"] = _gaps_frame(preflight.gaps)
+
+    # Assemble a probe snapshot first so outcome evaluation can complete before
+    # the immutable manifest is published.  Its normalized rows are retained;
+    # only the now-complete runtime metadata is attached before publication.
     runtime.begin_stage("snapshot")
     try:
-        snapshot = build_rolling_snapshot(
+        snapshot_probe = build_rolling_snapshot(
             anchor_date=anchor_date,
             data_cutoff_date=cutoff,
             market_regime=snapshot_market_regime,
@@ -198,35 +202,38 @@ def run_one_anchor(
             score_version=config.score_version,
             runtime_metadata=_snapshot_runtime_metadata(runtime),
         )
-        write_result = write_rolling_snapshot(snapshot, output_dir=output_dir)
     finally:
         runtime.end_stage("snapshot")
 
-    manifest_path = Path(str(write_result["manifest_path"]))
-    snapshot_dir = manifest_path.parent
     evaluation_cutoff = config.anchor_end_date or cutoff
     runtime.begin_stage("evaluation")
     try:
         evaluation_bars = _load_evaluation_bars(
-            asset_ids=_snapshot_asset_ids(snapshot),
+            asset_ids=_snapshot_asset_ids(snapshot_probe),
             anchor_date=anchor_date,
             evaluation_cutoff=evaluation_cutoff,
             adjust_type=config.adjust_type,
             service=service,
         )
         detail = evaluate_snapshot(
-            snapshot,
+            snapshot_probe,
             bars=_evaluation_bars(evaluation_bars, config.adjust_type),
             evaluation_cutoff=evaluation_cutoff,
             horizons=config.forecast_horizons,
         )
         summary = summarize_rolling_evaluation(detail)
-        evaluation_path = snapshot_dir / "evaluation_detail.csv"
-        evaluation_summary_path = snapshot_dir / "evaluation_summary.csv"
-        detail.to_csv(evaluation_path, index=False, lineterminator="\n")
-        summary.to_csv(evaluation_summary_path, index=False, lineterminator="\n")
     finally:
         runtime.end_stage("evaluation")
+
+    snapshot = dict(snapshot_probe)
+    snapshot["runtime_metadata"] = _snapshot_runtime_metadata(runtime)
+    write_result = write_rolling_snapshot(snapshot, output_dir=output_dir)
+    manifest_path = Path(str(write_result["manifest_path"]))
+    snapshot_dir = manifest_path.parent
+    evaluation_path = snapshot_dir / "evaluation_detail.csv"
+    evaluation_summary_path = snapshot_dir / "evaluation_summary.csv"
+    detail.to_csv(evaluation_path, index=False, lineterminator="\n")
+    summary.to_csv(evaluation_summary_path, index=False, lineterminator="\n")
 
     paths = _snapshot_paths(
         snapshot_dir,
@@ -348,9 +355,13 @@ def run_rolling_daily(
         before_anchor=selected,
         score_version=config.score_version,
     )
+    window_start = config.anchor_start_date
+    if window_start > selected:
+        window_start = date(1900, 1, 1)
     unresolved = _unresolved_blocked_anchor(
         output_dir=output_dir,
         after_anchor=_snapshot_anchor_date(previous_snapshot),
+        window_start=window_start,
         before_anchor=selected,
         score_version=config.score_version,
     )
@@ -1119,12 +1130,13 @@ def _unresolved_blocked_anchor(
     *,
     output_dir: str | Path,
     after_anchor: date | None,
+    window_start: date | None,
     before_anchor: date,
     score_version: str,
 ) -> date | None:
     """Find a persisted block that would make a later daily lineage stale."""
 
-    if after_anchor is None:
+    if after_anchor is None and window_start is None:
         return None
     blocked_root = Path(output_dir).expanduser().resolve() / "rolling_sector_oversold" / "blocked"
     if not blocked_root.is_dir():
@@ -1135,7 +1147,12 @@ def _unresolved_blocked_anchor(
             candidate_date = date.fromisoformat(candidate.name.removeprefix("anchor="))
         except ValueError:
             continue
-        if not after_anchor < candidate_date < before_anchor:
+        if after_anchor is None:
+            assert window_start is not None
+            in_window = window_start <= candidate_date < before_anchor
+        else:
+            in_window = after_anchor < candidate_date < before_anchor
+        if not in_window:
             continue
         blocked_dir = candidate / f"version={score_version}"
         successful_dir = _anchor_output_dir(

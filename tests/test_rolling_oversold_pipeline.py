@@ -263,13 +263,17 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
             "market_regime": kwargs["market_regime"],
             "sector_states": kwargs["sector_states"],
             "stock_candidates": kwargs["stock_candidates"],
+            "runtime_metadata": kwargs["runtime_metadata"],
         }
 
     def fake_write(snapshot, *, output_dir):
         destination = Path(output_dir) / "snapshot"
         destination.mkdir(parents=True)
         manifest = destination / "manifest.json"
-        manifest.write_text("{}\n", encoding="utf-8")
+        manifest.write_text(
+            json.dumps({"runtime_metadata": snapshot["runtime_metadata"]}) + "\n",
+            encoding="utf-8",
+        )
         return {"status": "created", "manifest_path": str(manifest)}
 
     monkeypatch.setattr(pipeline, "build_rolling_snapshot", fake_build, raising=False)
@@ -325,6 +329,12 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
     assert built_candidates.loc[0, "market_regime"] == "risk_off"
     assert evaluation_calls["evaluation_cutoff"] == evaluation_cutoff
     assert evaluation_calls["bars"].loc[0, "qfq_close"] == 10.2
+    persisted_metadata = json.loads(
+        (Path(result["paths"]["snapshot_manifest"])).read_text(encoding="utf-8")
+    )["runtime_metadata"]
+    persisted_timings = persisted_metadata["stage_timings_seconds"]
+    assert persisted_timings["snapshot"] > 0.0
+    assert persisted_timings["evaluation"] > 0.0
     assert Path(result["paths"]["evaluation"]).is_file()
 
 
@@ -478,6 +488,40 @@ def test_daily_refuses_to_skip_an_unresolved_blocked_anchor(monkeypatch, tmp_pat
         pipeline,
         "run_one_anchor",
         lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not skip the block")),
+    )
+
+    with pytest.raises(ValueError, match="unresolved blocked anchor"):
+        pipeline.run_rolling_daily(
+            trade_date=requested,
+            config=config,
+            output_dir=tmp_path,
+            service="research-test",
+        )
+
+
+def test_daily_refuses_first_blocked_anchor_without_prior_manifest(monkeypatch, tmp_path):
+    first = date(2026, 7, 21)
+    requested = date(2026, 7, 22)
+    config = RollingOversoldConfig(anchor_start_date=first, anchor_end_date=requested)
+    blocked_dir = (
+        tmp_path
+        / "rolling_sector_oversold"
+        / "blocked"
+        / f"anchor={first.isoformat()}"
+        / "version=rolling_oversold_v1"
+    )
+    blocked_dir.mkdir(parents=True)
+    (blocked_dir / "preflight.json").write_text('{"blocked": true}\n', encoding="utf-8")
+    monkeypatch.setattr(
+        pipeline,
+        "_load_complete_anchor_sessions",
+        lambda **kwargs: [first, requested],
+    )
+    monkeypatch.setattr(pipeline, "_load_previous_snapshot", lambda **kwargs: None)
+    monkeypatch.setattr(
+        pipeline,
+        "run_one_anchor",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must remain blocked")),
     )
 
     with pytest.raises(ValueError, match="unresolved blocked anchor"):
