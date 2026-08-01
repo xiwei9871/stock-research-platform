@@ -330,10 +330,16 @@ def _normalize_outcome_price_columns(frame: pd.DataFrame) -> None:
     invalid_source = source.notna() & ~source.isin(_OUTCOME_PRICE_SOURCES)
     if invalid_source.any():
         raise ValueError("stock_candidates adjusted_close_source must be one of raw, qfq, hfq")
+    excluded = frame["sector_gate_status"].eq("blocked") | frame["stock_lifecycle"].eq("invalidated")
     mismatched = anchor_supplied != source.notna()
     if mismatched.any():
         raise ValueError(
             "stock_candidates anchor_close and adjusted_close_source must be supplied together"
+        )
+    missing_eligible = ~excluded & ~anchor_supplied
+    if missing_eligible.any():
+        raise ValueError(
+            "eligible stock_candidates require anchor_close and adjusted_close_source"
         )
     frame["anchor_close"] = anchor_close
     frame["adjusted_close_source"] = source

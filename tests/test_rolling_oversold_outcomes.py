@@ -276,3 +276,17 @@ def test_summarize_evaluation_reports_completed_pending_and_contextual_hit_rates
     empty = summarize_rolling_evaluation(detail.iloc[0:0])
     assert list(empty.columns) == list(summary.columns)
     assert empty.empty
+
+
+def test_summarize_evaluation_keeps_data_errors_out_of_pending_count():
+    detail = evaluate_snapshot(
+        _snapshot(anchor_close=None),
+        bars=_bars([("2026-07-22", 10.2)]),
+        evaluation_cutoff=date(2026, 7, 22),
+        horizons=[1],
+    )
+
+    summary = summarize_rolling_evaluation(detail)
+    overall = summary.loc[summary["group_by"].eq("overall")].iloc[0]
+
+    assert overall[["total_count", "complete_count", "pending_count", "excluded_count", "data_error_count"]].tolist() == [1, 0, 0, 0, 1]

@@ -440,6 +440,7 @@ def _summarize_group(
     group_by: str, group_value: str, horizon: int, frame: pd.DataFrame
 ) -> dict[str, object]:
     excluded = frame["_evaluation_status"].str.startswith("excluded_")
+    data_error = frame["_evaluation_status"].eq("data_error")
     complete = (
         frame["_evaluation_status"].eq("complete")
         & frame["forward_Nd_status"].eq("complete")
@@ -452,13 +453,8 @@ def _summarize_group(
     total_count = int(len(frame))
     complete_count = int(len(returns))
     excluded_count = int(excluded.sum())
-    pending_count = total_count - complete_count - excluded_count
-    error_count = int(
-        (
-            frame.get("data_status", pd.Series("ok", index=frame.index)).ne("ok")
-            & ~excluded
-        ).sum()
-    )
+    error_count = int(data_error.sum())
+    pending_count = total_count - complete_count - excluded_count - error_count
     if returns.empty:
         metrics: dict[str, object] = {name: float("nan") for name in _SUMMARY_COLUMNS[8:]}
     else:

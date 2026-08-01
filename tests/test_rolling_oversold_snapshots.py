@@ -73,6 +73,8 @@ def _stocks() -> pd.DataFrame:
                 "stock_score": 82.0,
                 "stock_rank": 2,
                 "stock_lifecycle": "expected_repair",
+                "anchor_close": 10.0,
+                "adjusted_close_source": "qfq",
                 "score_reason": "",
             },
             {
@@ -88,6 +90,8 @@ def _stocks() -> pd.DataFrame:
                 "stock_score": 91.0,
                 "stock_rank": 1,
                 "stock_lifecycle": "new_oversold",
+                "anchor_close": 10.0,
+                "adjusted_close_source": "qfq",
                 "score_reason": "",
             },
         ]
@@ -127,6 +131,30 @@ def test_build_snapshot_assigns_exact_metadata_and_normalizes_contract_rows():
     assert snapshot["stock_candidates"]["asset_id"].tolist() == ["000001", "000002"]
     assert validate_snapshot_columns(snapshot["stock_candidates"].columns) == []
     assert set(REQUIRED_SNAPSHOT_COLUMNS).issubset(snapshot["stock_candidates"].columns)
+
+
+def test_build_rejects_eligible_rows_without_frozen_outcome_inputs():
+    stocks = _stocks().copy(deep=True)
+    stocks.loc[:, ["anchor_close", "adjusted_close_source"]] = pd.NA
+
+    with pytest.raises(ValueError, match="eligible.*anchor_close"):
+        _build(stocks=stocks)
+
+
+def test_build_allows_excluded_rows_without_frozen_outcome_inputs():
+    stocks = _stocks().iloc[[0]].copy(deep=True)
+    stocks.loc[:, ["anchor_close", "adjusted_close_source"]] = pd.NA
+    stocks.loc[:, "sector_gate_status"] = "blocked"
+    stocks.loc[:, "sector_recovery_state"] = "unknown"
+    sectors = _sectors().iloc[[0]].copy(deep=True)
+    sectors.loc[:, "sector_gate_status"] = "blocked"
+    sectors.loc[:, "sector_recovery_state"] = "unknown"
+    stocks.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    sectors.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+
+    snapshot = _build(stocks=stocks, sectors=sectors)
+
+    assert pd.isna(snapshot["stock_candidates"].loc[0, "anchor_close"])
 
 
 def test_snapshot_revisions_link_ranks_and_keep_absent_asset_as_invalidated_row():

@@ -61,6 +61,8 @@ _OUTPUT_COLUMNS = (
     "stock_score",
     "stock_rank",
     "stock_lifecycle",
+    "anchor_close",
+    "adjusted_close_source",
     "score_status",
     "score_reason",
 )
@@ -169,6 +171,7 @@ def score_rolling_stock_candidates(
     _assign_required_features(active)
     _validate_sector_numeric_context(active)
     _score_components(active)
+    _assign_outcome_inputs(active, config)
     active["stock_lifecycle"] = [
         classify_stock_lifecycle(
             anchor_return=anchor_return,
@@ -478,6 +481,21 @@ def _assign_required_features(frame: pd.DataFrame) -> None:
     # Percentile inputs from consumer V2 are 0--1; generic scores remain 0--100.
     if "valuation_depression_percentile" in frame and "valuation" not in frame:
         frame["_valuation_input"] *= 100.0
+
+
+def _assign_outcome_inputs(frame: pd.DataFrame, config: RollingOversoldConfig) -> None:
+    """Carry the point-in-time price and adjustment source into candidates."""
+
+    anchor = pd.to_numeric(frame.get("anchor_close"), errors="coerce") if "anchor_close" in frame else None
+    fallback = _numeric_feature(frame, ("adjusted_close", "adj_close", "close"))
+    frame["anchor_close"] = fallback if anchor is None else anchor.fillna(fallback)
+    source = frame.get(
+        "adjusted_close_source",
+        pd.Series(config.adjust_type, index=frame.index, dtype="string"),
+    )
+    frame["adjusted_close_source"] = (
+        source.astype("string").str.strip().replace("", pd.NA).fillna(config.adjust_type)
+    )
 
 
 def _numeric_feature(frame: pd.DataFrame, candidates: Sequence[str]) -> pd.Series:

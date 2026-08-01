@@ -112,6 +112,15 @@ def test_stock_scoring_output_carries_sector_market_regime_or_unknown():
     assert fallback["market_regime"].tolist() == ["unknown", "unknown"]
 
 
+def test_stock_scoring_preserves_frozen_outcome_price_inputs():
+    stocks = _stocks().assign(close=[20.0, 10.0], adjusted_close_source="qfq")
+
+    result = score_rolling_stock_candidates(stocks, _sectors(), top_n=2, config=_config())
+
+    assert result["anchor_close"].notna().all()
+    assert result["adjusted_close_source"].tolist() == ["qfq", "qfq"]
+
+
 def test_lifecycle_classifies_rebound_with_residual_space():
     assert classify_stock_lifecycle(
         anchor_return=0.12,
