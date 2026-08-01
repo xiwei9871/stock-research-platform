@@ -77,7 +77,7 @@ def _install_db(monkeypatch):
     monkeypatch.setattr(
         loaders,
         "load_consumer_valuation_history",
-        lambda asset_ids, trade_date, *, service: pd.DataFrame(
+        lambda asset_ids, trade_date, *, service, latest_only=False: pd.DataFrame(
             {"asset_id": asset_ids, "valuation_date": [trade_date] * len(asset_ids)}
         ),
     )
@@ -140,7 +140,7 @@ def test_loader_bounds_history_frames_and_keeps_latest_status_as_of_cutoff(monke
     )
     assert "SELECT DISTINCT ON (asset_id)" in status_sql
     assert "ORDER BY asset_id, trade_date DESC" in status_sql
-    assert status_params == ["2026-07-29"]
+    assert status_params == ["2026-07-28", "2026-07-29"]
 
 
 def test_loader_uses_original_non_trading_anchor_for_pit_memberships(monkeypatch):
@@ -177,8 +177,8 @@ def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypa
     monkeypatch.setattr(
         loaders,
         "load_consumer_valuation_history",
-        lambda asset_ids, trade_date, *, service: (
-            valuation_dates.append(trade_date),
+        lambda asset_ids, trade_date, *, service, latest_only=False: (
+            valuation_dates.append((trade_date, latest_only)),
             pd.DataFrame({"asset_id": asset_ids, "valuation_date": [trade_date] * len(asset_ids)}),
         )[1],
     )
@@ -188,7 +188,7 @@ def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypa
     )
 
     assert finance_dates == [("2026-08-01", 4)]
-    assert valuation_dates == ["2026-08-01"]
+    assert valuation_dates == [("2026-08-01", True)]
 
 
 def test_loader_rejects_anchor_without_an_open_calendar_session(monkeypatch):

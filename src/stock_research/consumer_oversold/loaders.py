@@ -1212,9 +1212,12 @@ def load_consumer_valuation_history(
     trade_date: str,
     *,
     service: str,
+    latest_only: bool = False,
 ) -> pd.DataFrame:
     assets = _asset_ids(asset_ids)
     cutoff = validate_trade_date(trade_date)
+    if type(latest_only) is not bool:
+        raise TypeError("latest_only must be a boolean")
     if not assets:
         return _frame([], VALUATION_COLUMNS)
     sql = """
@@ -1238,6 +1241,41 @@ def load_consumer_valuation_history(
       AND f.factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')
     ORDER BY f.asset_id, f.trade_date, f.factor_name, f.computed_at DESC, f.calc_version DESC
     """
+    if latest_only:
+        sql = """
+        WITH visible AS (
+            SELECT f.asset_id, f.trade_date, f.factor_name, f.factor_value,
+                   f.computed_at, f.calc_version
+            FROM factor.factor_daily f
+            WHERE f.asset_id = ANY(%s)
+              AND f.trade_date <= %s
+              AND f.trade_date >= %s::date - INTERVAL '5 years'
+              AND f.computed_at < ((%s::date + interval '1 day') AT TIME ZONE 'Asia/Shanghai')
+              AND f.factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')
+        ), latest_dates AS (
+            SELECT f.asset_id, MAX(f.trade_date) AS valuation_date
+            FROM visible f
+            GROUP BY f.asset_id
+        )
+        SELECT visible.asset_id, visible.trade_date, visible.factor_name,
+               visible.factor_value, visible.computed_at, visible.calc_version,
+               membership.industry_system, membership.industry_name
+        FROM visible
+        JOIN latest_dates
+          ON latest_dates.asset_id = visible.asset_id
+         AND latest_dates.valuation_date = visible.trade_date
+        LEFT JOIN LATERAL (
+            SELECT m.industry_system, m.industry_name
+            FROM core.industry_membership m
+            WHERE m.asset_id = visible.asset_id
+              AND m.start_date <= visible.trade_date
+              AND (m.end_date IS NULL OR visible.trade_date < m.end_date)
+            ORDER BY m.level DESC, m.start_date DESC, m.industry_system, m.industry_code
+            LIMIT 1
+        ) membership ON TRUE
+        ORDER BY visible.asset_id, visible.trade_date, visible.factor_name,
+                 visible.computed_at DESC, visible.calc_version DESC
+        """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [assets, cutoff, cutoff, cutoff])
     if not rows:

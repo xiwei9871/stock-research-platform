@@ -949,10 +949,38 @@ def test_valuation_enforces_pit_deduplicates_versions_and_pivots(monkeypatch):
     }]
     sql, params = calls[0]
     assert "factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')" in sql
+    assert "latest_dates" not in sql
     assert "trade_date <= %s" in sql
     assert "INTERVAL '5 years'" in sql
     assert "core.industry_membership" in sql
     assert "f.computed_at < ((%s::date + interval '1 day') AT TIME ZONE 'Asia/Shanghai')" in sql
+    assert params == [["A"], "2026-07-29", "2026-07-29", "2026-07-29"]
+
+
+def test_valuation_latest_only_is_opt_in_and_uses_latest_date_cte(monkeypatch):
+    rows = [
+        {
+            "asset_id": "A", "trade_date": date(2026, 7, 28), "factor_name": "pe_ttm",
+            "factor_value": 12, "computed_at": datetime(2026, 7, 29, 9),
+            "calc_version": "v2", "industry_system": "sw", "industry_name": "食品",
+        },
+        {
+            "asset_id": "A", "trade_date": date(2026, 7, 28), "factor_name": "ps_ttm",
+            "factor_value": 2, "computed_at": datetime(2026, 7, 29, 9),
+            "calc_version": "v2", "industry_system": "sw", "industry_name": "食品",
+        },
+    ]
+    calls, _ = _install_db(monkeypatch, [rows])
+
+    result = loaders.load_consumer_valuation_history(
+        ["A"], "2026-07-29", service="test", latest_only=True
+    )
+
+    assert result["valuation_date"].tolist() == ["2026-07-28"]
+    sql, params = calls[0]
+    assert "latest_dates" in sql
+    assert "MAX(f.trade_date)" in sql
+    assert "factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')" in sql
     assert params == [["A"], "2026-07-29", "2026-07-29", "2026-07-29"]
 
 

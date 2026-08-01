@@ -684,12 +684,16 @@ def _build_stock_features(
         date_column="valuation_date",
         cutoff=anchor_date,
     )
+    bars_by_asset = {
+        str(asset_id): frame
+        for asset_id, frame in prepared_bars.groupby("asset_id", sort=False)
+    }
     rows: list[dict[str, object]] = []
     for membership in memberships.to_dict(orient="records"):
         asset_id = str(membership["asset_id"])
         if _is_ineligible_status(status.get(asset_id)):
             continue
-        asset_bars = prepared_bars.loc[prepared_bars["asset_id"].eq(asset_id)]
+        asset_bars = bars_by_asset.get(asset_id, prepared_bars.iloc[0:0])
         if asset_bars.empty:
             _raise_stock_gap(asset_id, anchor_date, "market_daily_bar", "missing_stock_bar")
         closes = asset_bars["close"].dropna()

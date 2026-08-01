@@ -77,15 +77,33 @@ def run_rolling_preflight(
     concept_sectors = _active_sectors(frames["concept_membership"], "concept", anchor_date)
     coverage.append(_coverage("core.industry_membership", expected=len(industry_sectors), actual=len(industry_sectors)))
     coverage.append(_coverage("core.concept_membership", expected=len(concept_sectors), actual=len(concept_sectors)))
-    _check_sector_bars(gaps, coverage, industry_sectors, frames["industry_bars"], "industry", cutoff)
-    _check_sector_bars(gaps, coverage, concept_sectors, frames["concept_bars"], "concept", cutoff)
+    _check_sector_bars(
+        gaps,
+        coverage,
+        industry_sectors,
+        frames["industry_bars"],
+        "industry",
+        cutoff,
+        cutoff_keys=_sector_cutoff_keys(frames["industry_bars"], "industry", cutoff),
+    )
+    _check_sector_bars(
+        gaps,
+        coverage,
+        concept_sectors,
+        frames["concept_bars"],
+        "concept",
+        cutoff,
+        cutoff_keys=_sector_cutoff_keys(frames["concept_bars"], "concept", cutoff),
+    )
 
     assets = sorted({sector["asset_id"] for sector in industry_sectors + concept_sectors})
+    stock_cutoff_assets = _assets_at_cutoff(frames["stock_bars"], cutoff)
+    status_cutoff_assets = _assets_at_cutoff(frames["stock_status"], cutoff)
     stock_actual = 0
     status_actual = 0
     for asset_id in assets:
-        has_bar = _has_cutoff_row(frames["stock_bars"], asset_id, cutoff)
-        has_status = _has_cutoff_row(frames["stock_status"], asset_id, cutoff)
+        has_bar = asset_id in stock_cutoff_assets
+        has_status = asset_id in status_cutoff_assets
         stock_actual += int(has_bar)
         status_actual += int(has_status)
         if not has_bar:
@@ -95,8 +113,24 @@ def run_rolling_preflight(
     coverage.append(_coverage("market_daily_bar", expected=len(assets), actual=stock_actual))
     coverage.append(_coverage("core.asset_status_daily", expected=len(assets), actual=status_actual))
 
-    finance_actual = _check_pit_records(gaps, frames["finance"], assets, anchor_date, "announcement_date", "finance_history")
-    valuation_actual = _check_pit_records(gaps, frames["valuation"], assets, cutoff, "valuation_date", "valuation_history")
+    finance_actual = _check_pit_records(
+        gaps,
+        frames["finance"],
+        assets,
+        anchor_date,
+        "announcement_date",
+        "finance_history",
+        pit_assets=_pit_assets(frames["finance"], "announcement_date", anchor_date),
+    )
+    valuation_actual = _check_pit_records(
+        gaps,
+        frames["valuation"],
+        assets,
+        cutoff,
+        "valuation_date",
+        "valuation_history",
+        pit_assets=_pit_assets(frames["valuation"], "valuation_date", cutoff),
+    )
     coverage.append(_coverage("finance_history", expected=len(assets), actual=finance_actual))
     coverage.append(_coverage("valuation_history", expected=len(assets), actual=valuation_actual))
 
@@ -159,22 +193,48 @@ def _active_sectors(frame: pd.DataFrame, prefix: str, anchor: date) -> list[dict
     return [sectors[key] for key in sorted(sectors)]
 
 
-def _check_sector_bars(gaps: list[DataGap], coverage: list[dict[str, Any]], sectors: list[dict[str, str]], bars: pd.DataFrame, prefix: str, cutoff: date) -> None:
+def _check_sector_bars(
+    gaps: list[DataGap],
+    coverage: list[dict[str, Any]],
+    sectors: list[dict[str, str]],
+    bars: pd.DataFrame,
+    prefix: str,
+    cutoff: date,
+    *,
+    cutoff_keys: set[tuple[str, str, str]] | None = None,
+) -> None:
     dataset = f"market.{prefix}_daily_bar"
     cutoff_text = cutoff.isoformat()
     unique = {(sector["system"], sector["code"], sector["name"]) for sector in sectors}
     for system, code, name in sorted(unique):
-        actual = int(_has_sector_cutoff_bar(bars, prefix, system, code, cutoff))
+        actual = int(
+            (system, code, name) in cutoff_keys
+            if cutoff_keys is not None
+            else _has_sector_cutoff_bar(bars, prefix, system, code, cutoff)
+        )
         coverage.append(_coverage(dataset, f"{system}:{code}", expected=1, actual=actual, sector_code=code, sector_name=name))
         if not actual:
             gaps.append(DataGap(dataset, f"{system}:{code}", cutoff_text, cutoff_text, 1, 0, "missing_cutoff_sector_bar"))
 
 
-def _check_pit_records(gaps: list[DataGap], frame: pd.DataFrame, assets: list[str], cutoff: date, date_column: str, dataset: str) -> int:
+def _check_pit_records(
+    gaps: list[DataGap],
+    frame: pd.DataFrame,
+    assets: list[str],
+    cutoff: date,
+    date_column: str,
+    dataset: str,
+    *,
+    pit_assets: set[str] | None = None,
+) -> int:
     actual = 0
     cutoff_text = cutoff.isoformat()
     for asset_id in assets:
-        present = _has_pit_record(frame, asset_id, date_column, cutoff)
+        present = (
+            asset_id in pit_assets
+            if pit_assets is not None
+            else _has_pit_record(frame, asset_id, date_column, cutoff)
+        )
         actual += int(present)
         if not present:
             gaps.append(DataGap(dataset, asset_id, None, cutoff_text, 1, 0, f"missing_pit_{dataset}_record"))
@@ -183,6 +243,40 @@ def _check_pit_records(gaps: list[DataGap], frame: pd.DataFrame, assets: list[st
 
 def _coverage(dataset: str, asset_id: str | None = None, *, expected: int, actual: int, sector_code: str | None = None, sector_name: str | None = None) -> dict[str, Any]:
     return {"dataset": dataset, "asset_id": asset_id, "sector_code": sector_code, "sector_name": sector_name, "expected_rows": expected, "actual_rows": actual, "status": "covered" if actual >= expected else "gap"}
+
+
+def _assets_at_cutoff(frame: pd.DataFrame, cutoff: date) -> set[str]:
+    if not {"asset_id", "trade_date"}.issubset(frame.columns):
+        return set()
+    dates = pd.to_datetime(frame["trade_date"], errors="coerce").dt.date
+    values = frame.loc[dates.eq(cutoff), "asset_id"].astype("string").str.strip()
+    return {str(value) for value in values.dropna() if str(value)}
+
+
+def _pit_assets(frame: pd.DataFrame, date_column: str, cutoff: date) -> set[str]:
+    if not {"asset_id", date_column}.issubset(frame.columns):
+        return set()
+    dates = pd.to_datetime(frame[date_column], errors="coerce").dt.date
+    values = frame.loc[dates.le(cutoff), "asset_id"].astype("string").str.strip()
+    return {str(value) for value in values.dropna() if str(value)}
+
+
+def _sector_cutoff_keys(
+    frame: pd.DataFrame, prefix: str, cutoff: date
+) -> set[tuple[str, str, str]]:
+    required = {f"{prefix}_system", f"{prefix}_code", f"{prefix}_name", "trade_date"}
+    if not required.issubset(frame.columns):
+        return set()
+    dates = pd.to_datetime(frame["trade_date"], errors="coerce").dt.date
+    selected = frame.loc[dates.eq(cutoff), list(required - {"trade_date"})].copy()
+    if selected.empty:
+        return set()
+    for column in (f"{prefix}_system", f"{prefix}_code", f"{prefix}_name"):
+        selected[column] = selected[column].astype("string").fillna("").str.strip()
+    return {
+        (str(row[f"{prefix}_system"]), str(row[f"{prefix}_code"]), str(row[f"{prefix}_name"]))
+        for row in selected.to_dict(orient="records")
+    }
 
 
 def _dated_rows(frame: pd.DataFrame, column: str, cutoff: date) -> list[date]:

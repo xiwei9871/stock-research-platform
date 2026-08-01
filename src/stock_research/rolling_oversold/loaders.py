@@ -129,10 +129,10 @@ def load_rolling_inputs(
                    asset_id, trade_date, is_trade, is_st, is_suspended,
                    is_limit_up, is_limit_down
             FROM core.asset_status_daily
-            WHERE trade_date <= %s
+            WHERE trade_date BETWEEN %s AND %s
             ORDER BY asset_id, trade_date DESC
             """,
-            [cutoff_text],
+            [history_start_text, cutoff_text],
         )
         industry_membership_rows = fetch_all(
             conn,
@@ -198,7 +198,12 @@ def load_rolling_inputs(
         ("asset_id", "report_period", "announcement_date"),
     )
     valuation = _normalize_external_frame(
-        load_consumer_valuation_history(asset_ids, anchor, service=service),
+        load_consumer_valuation_history(
+            asset_ids,
+            anchor,
+            service=service,
+            latest_only=True,
+        ),
         VALUATION_COLUMNS,
         ("valuation_date",),
         ("asset_id", "valuation_date", "industry_system", "industry_name"),
@@ -284,7 +289,8 @@ def _frame(
 ) -> pd.DataFrame:
     frame = pd.DataFrame(rows, columns=list(columns))
     for column in date_columns:
-        frame[column] = frame[column].map(lambda value: _date_value(value).isoformat() if _date_value(value) else pd.NA)
+        parsed = pd.to_datetime(frame[column], errors="coerce")
+        frame[column] = parsed.dt.strftime("%Y-%m-%d").astype("string")
     if not frame.empty:
         frame = frame.sort_values(list(sort_columns), kind="stable", na_position="last")
     return frame.reset_index(drop=True)
