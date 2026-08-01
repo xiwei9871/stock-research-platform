@@ -1017,6 +1017,13 @@ def _evaluation_has_pending_rows(directory: Path | None) -> bool:
     return bool(normalized.eq("pending").any())
 
 
+def _evaluation_artifacts_match(directory: Path, artifacts: dict[str, bytes]) -> bool:
+    return all(
+        (path := directory / name).is_file() and path.read_bytes() == contents
+        for name, contents in artifacts.items()
+    )
+
+
 def _persist_evaluation_revision(
     *,
     snapshot: dict[str, object],
@@ -1032,12 +1039,25 @@ def _persist_evaluation_revision(
         match = revision_dir.name.removeprefix("evaluation_revision=")
         if match.isdigit():
             existing_revisions.append(int(match))
+    artifacts = _evaluation_artifact_bytes(detail, summary)
+    latest_directory = latest_rolling_evaluation_directory(snapshot_dir)
+    if latest_directory is not None and _evaluation_artifacts_match(
+        latest_directory, artifacts
+    ):
+        return {
+            "revision": _path_revision(latest_directory),
+            "evaluation": latest_directory / "evaluation_detail.csv",
+            "evaluation_summary": latest_directory / "evaluation_summary.csv",
+            "evaluation_manifest": latest_directory / "evaluation_manifest.json",
+            "runtime_metadata": (
+                _evaluation_runtime_metadata_from_directory(latest_directory) or {}
+            ),
+        }
     revision = max(existing_revisions, default=0) + 1
     destination = snapshot_dir / f"evaluation_revision={revision:04d}"
     staging = Path(
         tempfile.mkdtemp(prefix=f".evaluation_revision={revision:04d}.", dir=snapshot_dir)
     )
-    artifacts = _evaluation_artifact_bytes(detail, summary)
     artifact_hashes = {
         name: hashlib.sha256(contents).hexdigest()
         for name, contents in artifacts.items()
