@@ -1423,6 +1423,63 @@ def test_release_gate_rejects_missing_database_server_version(tmp_path):
     assert "Dashboard release check failed" in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("map_name", "mutation"),
+    [
+        ("server_version_nums", "empty"),
+        ("server_version_nums", "missing"),
+        ("server_version_nums", "extra"),
+        ("login_attributes", "empty"),
+        ("login_attributes", "missing"),
+        ("login_attributes", "extra"),
+    ],
+)
+def test_release_gate_requires_exact_service_identity_profile_maps(
+    tmp_path, map_name, mutation
+):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    health_path = Path(env["THEME_RESEARCH_REPORT_HEALTH_JSON"])
+    payload = json.loads(health_path.read_text(encoding="utf-8"))
+    identity_map = payload["service_identity"][map_name]
+    if mutation == "empty":
+        identity_map.clear()
+    elif mutation == "missing":
+        identity_map.pop("reviewer")
+    else:
+        identity_map["unexpected"] = identity_map["runtime"]
+    health_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Dashboard release check failed" in result.stderr
+
+
+def test_release_gate_rejects_non_object_login_attribute_profile(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    health_path = Path(env["THEME_RESEARCH_REPORT_HEALTH_JSON"])
+    payload = json.loads(health_path.read_text(encoding="utf-8"))
+    payload["service_identity"]["login_attributes"]["runtime"] = None
+    health_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Dashboard release check failed" in result.stderr
+
+
 def test_release_gate_rejects_old_public_dist_even_when_api_reports_new_release(tmp_path):
     env = _release_gate_env(tmp_path, frontend_release_id="old-release")
 

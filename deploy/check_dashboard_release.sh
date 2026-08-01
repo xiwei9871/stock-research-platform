@@ -194,16 +194,25 @@ report_health_matches_release() {
       and .service_permissions.indexer.status == "ok"
       and .service_permissions.reviewer.status == "ok"
       and .service_identity.status == "ok"
-      and all(.service_identity.server_version_nums[];
-        type == "number" and . > 0
+      and (.service_identity.server_version_nums as $versions
+        | ($versions | type == "object")
+        and (($versions | keys | sort) == ["indexer", "reviewer", "runtime"])
+        and ([$versions.runtime, $versions.indexer, $versions.reviewer]
+          | all(type == "number" and . > 0))
       )
-      and all(.service_identity.login_attributes[];
-        .rolcanlogin == true
-        and .rolsuper == false
-        and .rolcreatedb == false
-        and .rolcreaterole == false
-        and .rolreplication == false
-        and .rolbypassrls == false
+      and (.service_identity.login_attributes as $attributes
+        | ($attributes | type == "object")
+        and (($attributes | keys | sort) == ["indexer", "reviewer", "runtime"])
+        and ([$attributes.runtime, $attributes.indexer, $attributes.reviewer]
+          | all(
+            type == "object"
+            and .rolcanlogin == true
+            and .rolsuper == false
+            and .rolcreatedb == false
+            and .rolcreaterole == false
+            and .rolreplication == false
+            and .rolbypassrls == false
+          ))
       )
       and .scheduler_index_diagnostics.status == "ok"
       and .scheduler_index_diagnostics.invalid == 0
