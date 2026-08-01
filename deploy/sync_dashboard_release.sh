@@ -11,6 +11,8 @@ ssh_opts_override="${SSH_OPTS:-}"
 ssh_config_override="${STOCK_RESEARCH_SSH_CONFIG:-}"
 base_url_override="${BASE_URL:-}"
 dashboard_auth_override="${DASHBOARD_AUTH:-}"
+dashboard_login_username_override="${DASHBOARD_LOGIN_USERNAME:-}"
+dashboard_login_password_override="${DASHBOARD_LOGIN_PASSWORD:-}"
 container_root_override="${REMOTE_CONTAINER_RELEASE_ROOT:-}"
 strategy_output_root_override="${STRATEGY_OUTPUT_ROOT:-}"
 local_readiness_url_override="${LOCAL_READINESS_URL:-}"
@@ -43,6 +45,8 @@ SSH_OPTS="${ssh_opts_override:-${SSH_OPTS:-}}"
 STOCK_RESEARCH_SSH_CONFIG="${ssh_config_override:-${STOCK_RESEARCH_SSH_CONFIG:-}}"
 BASE_URL="${base_url_override:-${BASE_URL:-https://stock.manqiaotechnology.com}}"
 DASHBOARD_AUTH="${dashboard_auth_override:-${DASHBOARD_AUTH:-}}"
+DASHBOARD_LOGIN_USERNAME="${dashboard_login_username_override:-${DASHBOARD_LOGIN_USERNAME:-}}"
+DASHBOARD_LOGIN_PASSWORD="${dashboard_login_password_override:-${DASHBOARD_LOGIN_PASSWORD:-}}"
 REMOTE_CONTAINER_RELEASE_ROOT="${container_root_override:-${REMOTE_CONTAINER_RELEASE_ROOT:-/app}}"
 STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$ROOT/outputs/research}}"
 LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http://127.0.0.1:8765/api/platform/readiness}}"
@@ -259,6 +263,8 @@ check_release_state() {
   capture_theme_research_report_health "$1" "$2" || return 1
   BASE_URL="$BASE_URL" \
   DASHBOARD_AUTH="$DASHBOARD_AUTH" \
+  DASHBOARD_LOGIN_USERNAME="$DASHBOARD_LOGIN_USERNAME" \
+  DASHBOARD_LOGIN_PASSWORD="$DASHBOARD_LOGIN_PASSWORD" \
   EXPECTED_TRADE_DATE="$EXPECTED_TRADE_DATE" \
   EXPECTED_RELEASE_ID="$release_id" \
   EXPECTED_REMOTE_SOURCE_ROOT="$REMOTE_CONTAINER_RELEASE_ROOT" \

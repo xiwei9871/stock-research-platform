@@ -5,6 +5,8 @@ BASE_URL="${BASE_URL:-https://stock.manqiaotechnology.com}"
 EXPECTED_TRADE_DATE="${EXPECTED_TRADE_DATE:?EXPECTED_TRADE_DATE is required (YYYY-MM-DD)}"
 EXPECTED_RELEASE_ID="${EXPECTED_RELEASE_ID:?EXPECTED_RELEASE_ID is required}"
 DASHBOARD_AUTH="${DASHBOARD_AUTH:-}"
+DASHBOARD_LOGIN_USERNAME="${DASHBOARD_LOGIN_USERNAME:-}"
+DASHBOARD_LOGIN_PASSWORD="${DASHBOARD_LOGIN_PASSWORD:-}"
 EXPECTED_REMOTE_SOURCE_ROOT="${EXPECTED_REMOTE_SOURCE_ROOT:-}"
 EXPECTED_FRONTEND_BUILD_ID="${EXPECTED_FRONTEND_BUILD_ID:-$EXPECTED_RELEASE_ID}"
 EXPECTED_STRATEGY_ARTIFACT_DATE="${EXPECTED_STRATEGY_ARTIFACT_DATE:-$EXPECTED_TRADE_DATE}"
@@ -65,8 +67,12 @@ umask 077
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 curl_config="$tmp_dir/curl.conf"
+cookie_jar="$tmp_dir/cookies.txt"
+login_payload="$tmp_dir/login.json"
 : > "$curl_config"
-chmod 600 "$curl_config"
+: > "$cookie_jar"
+: > "$login_payload"
+chmod 600 "$curl_config" "$cookie_jar" "$login_payload"
 if [[ -n "$DASHBOARD_AUTH" ]]; then
   curl_auth_escaped="${DASHBOARD_AUTH//\\/\\\\}"
   curl_auth_escaped="${curl_auth_escaped//\"/\\\"}"
@@ -74,7 +80,58 @@ if [[ -n "$DASHBOARD_AUTH" ]]; then
   curl_auth_escaped="${curl_auth_escaped//$'\r'/\\r}"
   printf 'user = "%s"\n' "$curl_auth_escaped" > "$curl_config"
 fi
+if [[ -n "$DASHBOARD_LOGIN_USERNAME" || -n "$DASHBOARD_LOGIN_PASSWORD" ]]; then
+  if [[ -z "$DASHBOARD_LOGIN_USERNAME" || -z "$DASHBOARD_LOGIN_PASSWORD" ]]; then
+    echo "DASHBOARD_LOGIN_USERNAME and DASHBOARD_LOGIN_PASSWORD must be set together" >&2
+    exit 2
+  fi
+  "$DATE_VALIDATION_PYTHON" - "$login_payload" <<'PY'
+import json
+import os
+import sys
+
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(
+        {
+            "username": os.environ["DASHBOARD_LOGIN_USERNAME"],
+            "password": os.environ["DASHBOARD_LOGIN_PASSWORD"],
+        },
+        handle,
+    )
+PY
+fi
 deadline=$((SECONDS + RELEASE_CHECK_TIMEOUT_SECONDS))
+
+login_session() {
+  local remaining
+  local status
+
+  if [[ -z "$DASHBOARD_LOGIN_USERNAME" ]]; then
+    return 0
+  fi
+  while (( SECONDS <= deadline )); do
+    remaining=$((deadline - SECONDS))
+    if (( remaining < 1 )); then
+      break
+    fi
+    if (( remaining > 15 )); then
+      remaining=15
+    fi
+    status="$(curl --config "$curl_config" -sS --connect-timeout 5 --max-time "$remaining" \
+      -X POST -H 'Content-Type: application/json' --data-binary "@$login_payload" \
+      --cookie-jar "$cookie_jar" -o "$tmp_dir/login-response.json" -w '%{http_code}' \
+      "${BASE_URL%/}/api/auth/login" || true)"
+    if [[ "$status" == "200" ]] \
+      && jq -e '.user | type == "object"' "$tmp_dir/login-response.json" >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( SECONDS + RELEASE_CHECK_RETRY_SECONDS > deadline )); then
+      break
+    fi
+    sleep "$RELEASE_CHECK_RETRY_SECONDS"
+  done
+  return 1
+}
 
 fetch_json() {
   local url="$1"
@@ -89,7 +146,11 @@ fetch_json() {
   if (( remaining > 15 )); then
     remaining=15
   fi
-  status="$(curl --config "$curl_config" -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
+  if [[ -n "$DASHBOARD_LOGIN_USERNAME" ]]; then
+    status="$(curl --config "$curl_config" --cookie "$cookie_jar" -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
+  else
+    status="$(curl --config "$curl_config" -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
+  fi
   [[ "$status" == "200" ]] && jq -e . "$output" >/dev/null 2>&1
 }
 
@@ -219,6 +280,11 @@ report_health_matches_release() {
       and .scheduler_index_diagnostics.errors == []
     ' "$1" >/dev/null
 }
+
+if ! login_session; then
+  echo "Dashboard session login failed at ${BASE_URL%/}/api/auth/login" >&2
+  exit 1
+fi
 
 echo "Waiting for dashboard release ${EXPECTED_RELEASE_ID} at ${BASE_URL%/}"
 while (( SECONDS <= deadline )); do

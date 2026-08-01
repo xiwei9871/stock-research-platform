@@ -1381,6 +1381,98 @@ def test_release_gate_keeps_basic_auth_secret_out_of_curl_argv(tmp_path):
     assert mode.read_text(encoding="utf-8").strip() == "600"
 
 
+def test_release_gate_logs_in_and_uses_session_cookie_for_protected_apis(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    fake_curl = tmp_path / "bin" / "curl"
+    _write_executable(
+        fake_curl,
+        """
+        #!/bin/bash
+        printf '%s\n' "$*" >> "$FAKE_CURL_ARGV_LOG"
+        output=''
+        url=''
+        cookie_jar=''
+        cookie_file=''
+        data_file=''
+        while (( $# )); do
+          case "$1" in
+            -o) output="$2"; shift 2 ;;
+            --config|-w|--connect-timeout|--max-time|-H|-X) shift 2 ;;
+            --cookie-jar|-c) cookie_jar="$2"; shift 2 ;;
+            --cookie|-b) cookie_file="$2"; shift 2 ;;
+            --data-binary) data_file="${2#@}"; shift 2 ;;
+            -*) shift ;;
+            *) url="$1"; shift ;;
+          esac
+        done
+        if [[ "$url" == */api/auth/login ]]; then
+          attempts=0
+          [[ -f "$FAKE_LOGIN_ATTEMPTS" ]] && attempts="$(cat "$FAKE_LOGIN_ATTEMPTS")"
+          attempts=$((attempts + 1))
+          printf '%s\n' "$attempts" > "$FAKE_LOGIN_ATTEMPTS"
+          if (( attempts <= FAKE_LOGIN_FAILURES )); then
+            printf '{"detail":"service_starting"}\n' > "$output"
+            printf '503'
+            exit 0
+          fi
+          jq -e \
+            --arg username "$FAKE_LOGIN_USERNAME" \
+            --arg password "$FAKE_LOGIN_PASSWORD" \
+            '.username == $username and .password == $password' \
+            "$data_file" >/dev/null || exit 91
+          printf '# Netscape HTTP Cookie File\nrelease.invalid\tFALSE\t/\tFALSE\t0\tstock_research_session\tsession-token\n' > "$cookie_jar"
+          printf '{"user":{"username":"admin"}}\n' > "$output"
+          printf '200'
+          exit 0
+        fi
+        if [[ "$url" == */release.json ]]; then
+          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7","frontend_base_image":"nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
+          printf '200'
+          exit 0
+        fi
+        if [[ ! -f "$cookie_file" ]] || ! grep -q 'stock_research_session.*session-token' "$cookie_file"; then
+          printf '{"detail":"not_authenticated"}\n' > "$output"
+          printf '401'
+          exit 0
+        fi
+        if [[ "$url" == */api/platform/readiness ]]; then
+          printf '%s\n' "$FAKE_READINESS_JSON" > "$output"
+        else
+          printf '%s\n' "$FAKE_QUEUE_JSON" > "$output"
+        fi
+        printf '200'
+        """,
+    )
+    env.update(
+        {
+            "DASHBOARD_AUTH": "mqkj:outer-secret",
+            "DASHBOARD_LOGIN_USERNAME": "admin",
+            "DASHBOARD_LOGIN_PASSWORD": "session-secret",
+            "FAKE_LOGIN_USERNAME": "admin",
+            "FAKE_LOGIN_PASSWORD": "session-secret",
+            "FAKE_LOGIN_ATTEMPTS": str(tmp_path / "login-attempts"),
+            "FAKE_LOGIN_FAILURES": "1",
+            "RELEASE_CHECK_TIMEOUT_SECONDS": "2",
+        }
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = Path(env["FAKE_CURL_ARGV_LOG"]).read_text(encoding="utf-8")
+    assert "/api/auth/login" in argv
+    assert "--cookie-jar" in argv
+    assert "--cookie" in argv
+    assert "outer-secret" not in argv
+    assert "session-secret" not in argv
+
+
 def test_release_gate_rejects_report_root_or_index_health_errors(tmp_path):
     env = _release_gate_env(tmp_path, frontend_release_id="new-release")
     health_path = Path(env["THEME_RESEARCH_REPORT_HEALTH_JSON"])
@@ -1809,6 +1901,8 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
         "sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7",
         "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
         "DASHBOARD_AUTH",
+        "DASHBOARD_LOGIN_USERNAME",
+        "DASHBOARD_LOGIN_PASSWORD",
         "THEME_RESEARCH_REPORT_HOST_ROOT",
         "THEME_RESEARCH_REPORT_INDEX_SERVICE",
         "THEME_RESEARCH_REPORT_REVIEW_SERVICE",
