@@ -176,13 +176,13 @@ def load_rolling_inputs(
         }
     )
     finance = _normalize_external_frame(
-        load_consumer_finance_history(asset_ids, cutoff_text, service=service),
+        load_consumer_finance_history(asset_ids, anchor, service=service),
         FINANCE_COLUMNS,
         ("report_period", "announcement_date"),
         ("asset_id", "report_period", "announcement_date"),
     )
     valuation = _normalize_external_frame(
-        load_consumer_valuation_history(asset_ids, cutoff_text, service=service),
+        load_consumer_valuation_history(asset_ids, anchor, service=service),
         VALUATION_COLUMNS,
         ("valuation_date",),
         ("asset_id", "valuation_date", "industry_system", "industry_name"),

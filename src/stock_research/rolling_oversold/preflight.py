@@ -41,6 +41,10 @@ def run_rolling_preflight(
     """Classify missing PIT database coverage and request a separate backfill."""
     if not isinstance(anchor_date, date):
         raise TypeError("anchor_date must be a date")
+    if isinstance(inputs, RollingInputs) and inputs.anchor_date != anchor_date:
+        raise ValueError(
+            "anchor_date does not agree with inputs.anchor_date"
+        )
     frames, cutoff, index_ids, score_version = _normalize_inputs(inputs, anchor_date)
     cutoff_text = cutoff.isoformat()
     gaps: list[DataGap] = []
@@ -54,7 +58,7 @@ def run_rolling_preflight(
                 "market.trading_calendar",
                 "__market__",
                 calendar_rows[0].isoformat() if calendar_rows else None,
-                anchor_date.isoformat(),
+                cutoff_text,
                 252,
                 len(calendar_rows),
                 "insufficient_history",

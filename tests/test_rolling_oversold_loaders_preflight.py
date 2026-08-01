@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ast
+import csv
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -128,6 +130,36 @@ def test_loader_uses_original_non_trading_anchor_for_pit_memberships(monkeypatch
     assert concept_params[:2] == ["2026-08-01", "2026-08-01"]
 
 
+def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypatch):
+    _install_db(monkeypatch)
+    finance_dates = []
+    valuation_dates = []
+
+    monkeypatch.setattr(
+        loaders,
+        "load_consumer_finance_history",
+        lambda asset_ids, trade_date, *, service: (
+            finance_dates.append(trade_date),
+            pd.DataFrame({"asset_id": asset_ids, "announcement_date": [trade_date] * len(asset_ids)}),
+        )[1],
+    )
+    monkeypatch.setattr(
+        loaders,
+        "load_consumer_valuation_history",
+        lambda asset_ids, trade_date, *, service: (
+            valuation_dates.append(trade_date),
+            pd.DataFrame({"asset_id": asset_ids, "valuation_date": [trade_date] * len(asset_ids)}),
+        )[1],
+    )
+
+    load_rolling_inputs(
+        anchor_date=date(2026, 8, 1), config=_config(), service="research-test"
+    )
+
+    assert finance_dates == ["2026-08-01"]
+    assert valuation_dates == ["2026-08-01"]
+
+
 def test_loader_rejects_anchor_without_an_open_calendar_session(monkeypatch):
     @contextmanager
     def fake_connect(service):
@@ -196,6 +228,24 @@ def test_preflight_blocks_missing_sector_bar_and_writes_backfill(monkeypatch, tm
     assert requests[0][1]["ranking_version"] == "test-v1"
     assert (tmp_path / "preflight.json").is_file()
     assert (tmp_path / "backfill_requests.csv").is_file()
+    payload = json.loads((tmp_path / "preflight.json").read_text(encoding="utf-8"))
+    assert payload["blocked"] is True
+    assert payload["data_cutoff_date"] == "2026-07-29"
+    assert payload["gaps"] == [asdict(gap) for gap in result.gaps]
+    with (tmp_path / "backfill_requests.csv").open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        assert reader.fieldnames == [
+            "dataset", "asset_id", "start_date", "end_date",
+            "expected_rows", "actual_rows", "reason",
+        ]
+        rows = list(reader)
+    assert rows == [
+        {
+            key: "" if getattr(gap, key) is None else str(getattr(gap, key))
+            for key in reader.fieldnames
+        }
+        for gap in result.gaps
+    ]
 
 
 def test_complete_synthetic_inputs_pass_and_report_every_dataset(tmp_path):
@@ -215,6 +265,17 @@ def test_complete_synthetic_inputs_pass_and_report_every_dataset(tmp_path):
     assert any(row["sector_code"] == "801010" for row in result.coverage_rows)
     assert (tmp_path / "preflight.json").is_file()
     assert (tmp_path / "backfill_requests.csv").is_file()
+    payload = json.loads((tmp_path / "preflight.json").read_text(encoding="utf-8"))
+    assert payload["blocked"] is False
+    assert payload["data_cutoff_date"] == "2026-07-29"
+    assert payload["gaps"] == []
+    with (tmp_path / "backfill_requests.csv").open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        assert reader.fieldnames == [
+            "dataset", "asset_id", "start_date", "end_date",
+            "expected_rows", "actual_rows", "reason",
+        ]
+        assert list(reader) == []
 
 
 def test_preflight_blocks_short_complete_calendar_and_persists_exact_artifacts(tmp_path):
@@ -233,9 +294,18 @@ def test_preflight_blocks_short_complete_calendar_and_persists_exact_artifacts(t
     assert calendar_gap.expected_rows == 252
     assert calendar_gap.actual_rows == 10
     assert calendar_gap.reason == "insufficient_history"
+    assert calendar_gap.start_date == inputs.trading_dates["trade_date"].min().date().isoformat()
+    assert calendar_gap.end_date == inputs.data_cutoff_date.isoformat()
     assert (tmp_path / "preflight.json").is_file()
     assert (tmp_path / "backfill_requests.csv").is_file()
     assert (tmp_path / "consumer_oversold_backfill_request.json").is_file()
+
+
+def test_preflight_rejects_anchor_mismatch(tmp_path):
+    with pytest.raises(ValueError, match="anchor_date"):
+        preflight.run_rolling_preflight(
+            _inputs(), anchor_date=date(2026, 7, 30), output_dir=tmp_path
+        )
 
 
 def test_loader_module_has_no_external_ingestion_imports():
