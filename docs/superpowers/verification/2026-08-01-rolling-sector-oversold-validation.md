@@ -140,31 +140,48 @@ rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_res
 
 ## Blocker and next run requirements
 
-After the aborted replay, the loader was tightened in commit `2215e8a0`:
+After the aborted replay, the loader and hot paths were tightened in commits
+`2215e8a0`, `53278e5d`, and `7b5b563`:
 
 - index, stock, industry, and concept bars now use the 252-session
   `history_start` through `data_cutoff_date` range;
 - asset status now returns the latest point-in-time row per asset with
   `DISTINCT ON (asset_id)`;
-- finance and valuation transport/query semantics were intentionally left
-  unchanged in this patch.
+- finance transport keeps only the latest four disclosed report periods for
+  the rolling strategy, preserving TTM inputs while leaving the consumer
+  default unbounded;
+- rolling valuation uses only the latest disclosed factor date per asset,
+  while the consumer default remains five-year history;
+- date normalization, stock-bar grouping, and preflight coverage checks are
+  vectorized or set-based instead of repeatedly scanning every asset's full
+  frame.
 
-The loader/preflight suite passed 11 tests and the rolling acceptance,
-pipeline, and CLI suite passed 24 tests after this change. A direct single
-anchor load against `stock_research` was then timed; after the finance limit,
-the active database query was the five-year PIT `factor.factor_daily`
-valuation query (with parallel workers) and the load still exceeded about 90
-seconds before being interrupted. No claim is made that the 3,600-second
-replay target is met. Valuation history loading is now the next profiling
-target; finance was not changed again in this pass.
+The combined loader, rolling, acceptance, and consumer regression run passed
+211 tests in 67.96 seconds. A bounded single-anchor run now fails closed in
+about 23 seconds rather than hanging: the database has no cutoff status row for
+3,750 active assets on 2026-07-21, so preflight writes a blocked artifact and
+`backfill_requests.csv`.
+
+The optimized replay command was then rerun against `stock_research`:
+
+```text
+runtime_seconds=23.5627
+blocked=1
+anchor_processed=2026-07-21
+successful_immutable_snapshots=0
+preflight/backfill artifacts=produced
+```
+
+This meets the fail-fast runtime target but is not a successful historical
+replay: the missing status coverage stops the ordered replay at its first
+anchor. The 2026-07-30 technology/consumer focus report therefore remains
+unavailable until the required status backfill is present.
 
 1. Add a `research` entry in `~/.pg_service.conf`, or explicitly standardize
    the operational command on the existing `stock_research` service.
-2. Profile and optimize the valuation PIT path without changing its
-   disclosure cutoff semantics. Add stage/anchor heartbeat output before
-   rerunning all nine anchors. If the full window remains slow, keep the
-   bounded diagnostic-anchor workflow and measure database and Python stages
-   separately.
+2. Backfill/repair the missing `core.asset_status_daily` cutoff rows, then
+   rerun the frozen nine-anchor replay and generate the 2026-07-30 focus
+   report. Keep stage/anchor heartbeat output for the successful run.
 3. Keep strategy execution database-only. A missing dependency must produce
    the existing preflight/backfill artifacts and a separate backfill task; it
    must never trigger a network market-data fallback.
