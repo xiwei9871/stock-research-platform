@@ -1322,6 +1322,7 @@ def _release_gate_env(
 
 def test_release_gate_keeps_basic_auth_secret_out_of_curl_argv(tmp_path):
     env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    env["RELEASE_CHECK_TIMEOUT_SECONDS"] = "5"
     auth = 'deploy:p@ ss#\"\\word'
     capture = tmp_path / "curl-auth.conf"
     mode = tmp_path / "curl-auth.mode"
