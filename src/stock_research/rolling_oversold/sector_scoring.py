@@ -19,6 +19,8 @@ _NUMERIC_COLUMNS = (
     "fundamental_quality_score", "valuation_support_score", "risk_concentration_score",
     "sector_oversold_score", "sector_repairability_score", "sector_direction_score",
 )
+_MISSING_SYSTEM = "__missing_sector_system__"
+_MISSING_CODE = "__missing_sector_code__"
 
 
 def score_sector_states(
@@ -36,16 +38,20 @@ def score_sector_states(
         raise TypeError("sector_bars and membership must be pandas DataFrames")
     bars = _canonicalize(sector_bars, is_membership=False, anchor_date=anchor_date)
     members = _canonicalize(membership, is_membership=True, anchor_date=anchor_date)
-    membership_counts = members.groupby(_key_columns(), dropna=False)["asset_id"].nunique().to_dict() if not members.empty else {}
-    membership_names = (
-        members.groupby(_key_columns(), dropna=False)["sector_name"].last().to_dict()
+    membership_counts = (
+        members.groupby(_internal_key_columns(), dropna=False)["asset_id"].nunique().to_dict()
         if not members.empty else {}
     )
-    bar_keys = set(map(tuple, bars[_key_columns()].drop_duplicates().to_numpy())) if not bars.empty else set()
+    mapped = pd.concat([bars, members], ignore_index=True, sort=False)
+    mapping_metadata = _mapping_metadata(mapped)
+    bar_keys = (
+        set(map(tuple, bars[_internal_key_columns()].drop_duplicates().to_numpy()))
+        if not bars.empty else set()
+    )
     member_keys = set(membership_counts)
     rows = [
         _score_one_sector(
-            bars, key, membership_counts.get(key, 0), membership_names.get(key, "unknown"), market_regime
+            bars, key, membership_counts.get(key, 0), mapping_metadata[key], market_regime
         )
         for key in sorted(bar_keys | member_keys)
     ]
@@ -64,29 +70,38 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
         ("concept_system", "concept_code", "concept_name"),
     )
     for canonical, index in zip(_key_columns() + ["sector_name"], range(3)):
-        if canonical not in result:
-            candidates = [mapping[index] for mapping in mappings if mapping[index] in result]
-            result[canonical] = result[candidates].bfill(axis=1).iloc[:, 0] if candidates else pd.NA
+        candidates = [mapping[index] for mapping in mappings if mapping[index] in result]
+        fallback = result[candidates].bfill(axis=1).iloc[:, 0] if candidates else pd.Series(pd.NA, index=result.index)
+        current = result[canonical] if canonical in result else pd.Series(pd.NA, index=result.index)
+        current = current.astype("string").str.strip().replace("", pd.NA)
+        result[canonical] = current.fillna(fallback)
     for column in _key_columns() + ["sector_name"]:
-        result[column] = result[column].astype("string").str.strip().fillna("unknown")
+        result[column] = result[column].astype("string").str.strip().replace("", pd.NA)
+    result["sector_mapping_reason"] = result.apply(_mapping_reason, axis=1)
+    result["sector_mapping_valid"] = result["sector_mapping_reason"].eq("")
+    result["_sector_key_system"] = result["sector_system"].fillna(_MISSING_SYSTEM)
+    result["_sector_key_code"] = result["sector_code"].fillna(_MISSING_CODE)
     if is_membership:
         if "asset_id" not in result:
             result["asset_id"] = pd.NA
         result["asset_id"] = result["asset_id"].astype("string").str.strip()
         result = _active_membership(result, anchor_date)
         return result.loc[result["asset_id"].notna()].copy()
-    if "trade_date" not in result:
-        return pd.DataFrame(columns=[*_key_columns(), "sector_name", "trade_date", "close", "amount"])
-    result["trade_date"] = pd.to_datetime(result["trade_date"], errors="coerce")
+    trade_dates = (
+        result["trade_date"]
+        if "trade_date" in result
+        else pd.Series(pd.NaT, index=result.index, dtype="datetime64[ns]")
+    )
+    result["trade_date"] = pd.to_datetime(trade_dates, errors="coerce")
     result["close"] = pd.to_numeric(result.get("close"), errors="coerce")
     result["amount"] = pd.to_numeric(result.get("amount"), errors="coerce")
     for column in ("up_count", "down_count", "stock_count", "new_low_count", "dispersion_20d", *(_NUMERIC_COLUMNS[16:19])):
         if column in result:
             result[column] = pd.to_numeric(result[column], errors="coerce")
-    result = result.loc[
+    result["_usable_bar"] = (
         result["trade_date"].notna() & (result["trade_date"].dt.date <= anchor_date)
-    ].copy()
-    return result.sort_values([*_key_columns(), "trade_date"], kind="stable")
+    )
+    return result.sort_values([*_internal_key_columns(), "trade_date"], kind="stable")
 
 
 def _active_membership(frame: pd.DataFrame, anchor_date: date) -> pd.DataFrame:
@@ -104,20 +119,23 @@ def _score_one_sector(
     bars: pd.DataFrame,
     key: tuple[str, str],
     membership_count: int,
-    membership_name: str,
+    mapping: dict[str, object],
     market_regime: dict[str, object],
 ) -> dict[str, object]:
-    sector = bars.loc[(bars[_key_columns()] == list(key)).all(axis=1)].copy() if not bars.empty else bars
-    name = str(membership_name)
+    all_sector_bars = (
+        bars.loc[(bars[_internal_key_columns()] == list(key)).all(axis=1)].copy()
+        if not bars.empty else bars
+    )
+    sector = all_sector_bars.loc[all_sector_bars["_usable_bar"]].copy() if not all_sector_bars.empty else all_sector_bars
     if not sector.empty:
-        names = sector["sector_name"].replace("unknown", pd.NA).dropna()
-        name = str(names.iloc[-1]) if not names.empty else name
         sector = sector.drop_duplicates("trade_date", keep="last")
     closes = sector["close"].dropna().to_numpy(dtype=float) if not sector.empty else np.array([], dtype=float)
     history = len(closes)
     amounts = sector["amount"].dropna().to_numpy(dtype=float) if not sector.empty else np.array([], dtype=float)
     features = {
-        "sector_system": key[0], "sector_code": key[1], "sector_name": name,
+        "sector_system": mapping["sector_system"], "sector_code": mapping["sector_code"],
+        "sector_name": mapping["sector_name"], "sector_mapping_valid": mapping["valid"],
+        "sector_mapping_reason": mapping["reason"],
         "data_cutoff_date": sector["trade_date"].max().date() if not sector.empty else pd.NaT,
         "membership_count": int(membership_count), "history_observations": history,
         "ret_5d": _return(closes, 5), "ret_10d": _return(closes, 10), "ret_20d": _return(closes, 20),
@@ -142,10 +160,9 @@ def _activity_scores(result: pd.DataFrame) -> pd.Series:
     usable = size.notna()
     scores = pd.Series(float("nan"), index=result.index, dtype="float64")
     if usable.any():
-        clipped = size[usable].clip(size[usable].quantile(0.05), size[usable].quantile(0.95))
-        ranks = pd.Series(50.0, index=clipped.index) if len(clipped) == 1 else clipped.rank(method="average", pct=True) * 100.0
-        activity_ratio = ((result.loc[usable, "amount_ratio_5_20"].clip(0.5, 1.5) - 0.5) * 100.0).fillna(50.0)
-        scores.loc[usable] = ranks * 0.60 + activity_ratio * 0.40
+        size_ranks = _percentile_ranks(size[usable])
+        ratio_ranks = _percentile_ranks(result.loc[usable, "amount_ratio_5_20"])
+        scores.loc[usable] = size_ranks * 0.60 + ratio_ranks.reindex(size_ranks.index).fillna(50.0) * 0.40
     return scores
 
 
@@ -176,8 +193,9 @@ def _finalize_scores_and_states(result: pd.DataFrame, market_regime: dict[str, o
          (result["sector_direction_score"], 0.15)),
     )
     insufficient_history = result["history_observations"] < 6
+    invalid_mapping = ~result["sector_mapping_valid"].astype(bool)
     result.loc[
-        insufficient_history,
+        insufficient_history | invalid_mapping,
         ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"],
     ] = float("nan")
     result["sector_recovery_state"] = result.apply(_recovery_state, axis=1)
@@ -186,7 +204,7 @@ def _finalize_scores_and_states(result: pd.DataFrame, market_regime: dict[str, o
 
 
 def _recovery_state(row: pd.Series) -> str:
-    if row["history_observations"] < 6:
+    if not row["sector_mapping_valid"] or row["history_observations"] < 6:
         return RecoveryState.UNKNOWN.value
     if row["price_position_252d"] >= 0.95 or (
         row["recent_recovery_ratio"] >= 0.05 and row["drawdown_60d"] > -0.05
@@ -202,7 +220,7 @@ def _recovery_state(row: pd.Series) -> str:
 
 
 def _gate_status(row: pd.Series, regime: str) -> str:
-    if row["membership_count"] == 0 or row["history_observations"] < 6:
+    if not row["sector_mapping_valid"] or row["membership_count"] == 0 or row["history_observations"] < 6:
         return GateStatus.BLOCKED.value
     if row["sector_recovery_state"] in {RecoveryState.REPAIRED.value, RecoveryState.STRUCTURALLY_WEAK.value, RecoveryState.UNKNOWN.value}:
         return GateStatus.WATCH.value
@@ -307,14 +325,56 @@ def _weighted_score(frame: pd.DataFrame, components: tuple[tuple[pd.Series, floa
     return (numerator / denominator.replace(0.0, np.nan)).clip(0.0, 100.0)
 
 
+def _mapping_reason(row: pd.Series) -> str:
+    missing = [
+        f"missing_{column}"
+        for column in (*_key_columns(), "sector_name")
+        if pd.isna(row[column])
+    ]
+    return "|".join(missing)
+
+
+def _mapping_metadata(frame: pd.DataFrame) -> dict[tuple[str, str], dict[str, object]]:
+    metadata: dict[tuple[str, str], dict[str, object]] = {}
+    for key, group in frame.groupby(_internal_key_columns(), dropna=False, sort=False):
+        reasons = list(dict.fromkeys(reason for reason in group["sector_mapping_reason"] if reason))
+        metadata[key] = {
+            column: _last_known(group[column])
+            for column in (*_key_columns(), "sector_name")
+        }
+        metadata[key]["valid"] = bool(group["sector_mapping_valid"].all())
+        metadata[key]["reason"] = ";".join(reasons)
+    return metadata
+
+
+def _last_known(values: pd.Series) -> object:
+    known = values.dropna()
+    return known.iloc[-1] if not known.empty else pd.NA
+
+
+def _percentile_ranks(values: pd.Series) -> pd.Series:
+    valid = values.dropna()
+    if valid.empty:
+        return pd.Series(dtype="float64")
+    if len(valid) == 1:
+        return pd.Series(50.0, index=valid.index, dtype="float64")
+    clipped = valid.clip(valid.quantile(0.05), valid.quantile(0.95))
+    return clipped.rank(method="average", pct=True) * 100.0
+
+
 def _key_columns() -> list[str]:
     return ["sector_system", "sector_code"]
+
+
+def _internal_key_columns() -> list[str]:
+    return ["_sector_key_system", "_sector_key_code"]
 
 
 def _output_columns() -> list[str]:
     return [
         "sector_system", "sector_code", "sector_name", "data_cutoff_date", "membership_count",
-        "history_observations", "amount_20d", *_NUMERIC_COLUMNS, "sector_recovery_state",
+        "history_observations", "sector_mapping_valid", "sector_mapping_reason", "amount_20d",
+        *_NUMERIC_COLUMNS, "sector_recovery_state",
         "sector_gate_status",
     ]
 

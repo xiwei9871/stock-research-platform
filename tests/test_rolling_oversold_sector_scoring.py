@@ -1,8 +1,9 @@
 from datetime import date, timedelta
 
 import pandas as pd
+import pytest
 
-from stock_research.rolling_oversold.sector_scoring import score_sector_states
+from stock_research.rolling_oversold.sector_scoring import _activity_scores, score_sector_states
 
 
 def _bars_for(closes, *, anchor, code="I1", system="sw", name="Industry one"):
@@ -125,3 +126,67 @@ def test_sector_scoring_maps_concept_schema_to_canonical_identity():
 
     assert result.iloc[0]["sector_system"] == "sw"
     assert result.iloc[0]["sector_code"] == "I1"
+
+
+def test_sector_with_missing_canonical_mapping_is_retained_but_blocked():
+    anchor = date(2026, 7, 3)
+    bars = pd.DataFrame(
+        {
+            "trade_date": [anchor - timedelta(days=index) for index in range(6)],
+            "close": [100.0] * 6,
+            "amount": [100.0] * 6,
+        }
+    )
+
+    result = score_sector_states(
+        bars,
+        membership=pd.DataFrame(),
+        market_regime={"market_regime": "neutral"},
+        anchor_date=anchor,
+    )
+
+    row = result.iloc[0]
+    assert pd.isna(row["sector_system"])
+    assert pd.isna(row["sector_code"])
+    assert pd.isna(row["sector_name"])
+    assert not row["sector_mapping_valid"]
+    assert row["sector_mapping_reason"] == (
+        "missing_sector_system|missing_sector_code|missing_sector_name"
+    )
+    assert row["sector_recovery_state"] == "unknown"
+    assert row["sector_gate_status"] == "blocked"
+
+
+def test_activity_score_percentile_clips_ratio_and_keeps_one_row_neutral():
+    many = _activity_scores(
+        pd.DataFrame(
+            {
+                "amount_20d": [100.0, 100.0, 100.0],
+                "amount_ratio_5_20": [0.1, 1.0, 10.0],
+            }
+        )
+    )
+    one = _activity_scores(
+        pd.DataFrame({"amount_20d": [100.0], "amount_ratio_5_20": [10.0]})
+    )
+
+    assert many.tolist() == pytest.approx([53.333333, 66.666667, 80.0])
+    assert one.iloc[0] == pytest.approx(50.0)
+
+
+def test_future_only_sector_bar_key_is_retained_as_blocked_unknown():
+    anchor = date(2026, 7, 3)
+    result = score_sector_states(
+        _bars_for(
+            [100.0] * 6, anchor=anchor + timedelta(days=6), code="FUT", name="Future sector"
+        ),
+        membership=pd.DataFrame(),
+        market_regime={"market_regime": "neutral"},
+        anchor_date=anchor,
+    )
+
+    row = result.iloc[0]
+    assert row["sector_code"] == "FUT"
+    assert row["data_cutoff_date"] is pd.NaT
+    assert row["sector_recovery_state"] == "unknown"
+    assert row["sector_gate_status"] == "blocked"
