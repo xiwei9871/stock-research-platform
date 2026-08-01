@@ -46,6 +46,7 @@ _OUTPUT_COLUMNS = (
     "anchor_date",
     "data_cutoff_date",
     "score_version",
+    "market_regime",
     "previous_snapshot_id",
     "rank_delta",
     "lifecycle_delta",
@@ -133,13 +134,19 @@ def score_rolling_stock_candidates(
     # sector-state row is authoritative for all canonical context/output fields,
     # leaving one unambiguous column for each field at merge time.
     stocks = stocks.drop(
-        columns=[column for column in _SECTOR_CONTEXT_COLUMNS if column not in _KEY_COLUMNS],
+        columns=[
+            *[column for column in _SECTOR_CONTEXT_COLUMNS if column not in _KEY_COLUMNS],
+            "market_regime",
+        ],
         errors="ignore",
     )
     sectors = _canonicalize_sector(sector_states)
     _require_stock_sector_keys(stocks)
     _require_sector_context(stocks, sectors, config)
     sector_context = sectors.loc[:, list(_SECTOR_CONTEXT_COLUMNS)].copy()
+    sector_context["market_regime"] = (
+        sectors["market_regime"] if "market_regime" in sectors else "unknown"
+    )
     sector_context["_sector_context_matched"] = True
     joined = stocks.merge(
         sector_context,
@@ -150,6 +157,9 @@ def score_rolling_stock_candidates(
     )
     _raise_missing_sector_context(joined, config)
     _validate_matched_sector_context(joined)
+    joined["market_regime"] = (
+        joined["market_regime"].astype("string").str.strip().replace("", pd.NA).fillna("unknown")
+    )
 
     blocked = joined["sector_gate_status"].eq(GateStatus.BLOCKED.value)
     active = joined.loc[~blocked].copy()
@@ -317,7 +327,10 @@ def _canonicalize_sector(frame: pd.DataFrame) -> pd.DataFrame:
     result = _deterministically_deduplicate(result, list(_KEY_COLUMNS))
     for column in ("sector_recovery_state", "sector_gate_status"):
         result[column] = result[column].astype("string").str.strip().replace("", pd.NA)
-    return result.loc[:, list(_SECTOR_CONTEXT_COLUMNS)]
+    output_columns = [* _SECTOR_CONTEXT_COLUMNS]
+    if "market_regime" in result:
+        output_columns.append("market_regime")
+    return result.loc[:, output_columns]
 
 
 def _canonicalize_sector_keys(frame: pd.DataFrame) -> pd.DataFrame:

@@ -99,6 +99,19 @@ def test_industry_name_stock_mapping_merges_sector_context_and_scores_normally()
     assert result["asset_id"].tolist() == ["000001", "000002"]
 
 
+def test_stock_scoring_output_carries_sector_market_regime_or_unknown():
+    supplied = score_rolling_stock_candidates(
+        _stocks(),
+        _sectors().assign(market_regime="risk_off"),
+        top_n=2,
+        config=_config(),
+    )
+    fallback = score_rolling_stock_candidates(_stocks(), _sectors(), top_n=2, config=_config())
+
+    assert supplied["market_regime"].tolist() == ["risk_off", "risk_off"]
+    assert fallback["market_regime"].tolist() == ["unknown", "unknown"]
+
+
 def test_lifecycle_classifies_rebound_with_residual_space():
     assert classify_stock_lifecycle(
         anchor_return=0.12,
@@ -245,6 +258,7 @@ def test_empty_input_has_stable_required_schema():
 
     assert result.empty
     assert {
+        "market_regime",
         "sector_system",
         "sector_code",
         "sector_name",
