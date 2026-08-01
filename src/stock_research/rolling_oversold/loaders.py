@@ -80,7 +80,11 @@ def load_rolling_inputs(
     with connect(service) as conn:
         history_rows = fetch_all(conn, history_sql, [anchor, 252])
         history_dates = _dates_from_rows(history_rows)
-        cutoff = max(history_dates) if history_dates else anchor_date
+        if not history_dates:
+            raise ValueError(
+                "no complete open trading session exists on or before anchor_date"
+            )
+        cutoff = max(history_dates)
         cutoff_text = cutoff.isoformat()
         future_rows = fetch_all(
             conn,
@@ -130,12 +134,12 @@ def load_rolling_inputs(
         industry_membership_rows = fetch_all(
             conn,
             _membership_sql("core.industry_membership", "industry", config.industry_systems),
-            _membership_params(cutoff_text, config.industry_systems),
+            _membership_params(anchor, config.industry_systems),
         )
         concept_membership_rows = fetch_all(
             conn,
             _membership_sql("core.concept_membership", "concept", config.concept_systems),
-            _membership_params(cutoff_text, config.concept_systems),
+            _membership_params(anchor, config.concept_systems),
         )
         industry_rows = fetch_all(
             conn,

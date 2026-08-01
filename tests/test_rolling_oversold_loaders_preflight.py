@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research.rolling_oversold.contracts import RollingOversoldConfig
 from stock_research.rolling_oversold.loaders import RollingInputs, load_rolling_inputs
@@ -106,6 +107,43 @@ def test_loader_uses_anchor_cutoff_and_point_in_time_membership_predicates(monke
     )
     assert "adjust_type = %s" in stock_sql
     assert stock_params == ["qfq", "2026-07-29"]
+
+
+def test_loader_uses_original_non_trading_anchor_for_pit_memberships(monkeypatch):
+    calls = _install_db(monkeypatch)
+
+    inputs = load_rolling_inputs(
+        anchor_date=date(2026, 8, 1), config=_config(), service="research-test"
+    )
+
+    assert inputs.data_cutoff_date == date(2026, 7, 29)
+    industry_params = next(
+        params for sql, params in calls if "core.industry_membership" in sql
+    )
+    concept_params = next(
+        params for sql, params in calls if "core.concept_membership" in sql
+    )
+    assert industry_params[:2] == ["2026-08-01", "2026-08-01"]
+    assert concept_params[:2] == ["2026-08-01", "2026-08-01"]
+
+
+def test_loader_rejects_anchor_without_an_open_calendar_session(monkeypatch):
+    @contextmanager
+    def fake_connect(service):
+        assert service == "research-test"
+        yield object()
+
+    def fake_fetch_all(conn, sql, params=None):
+        del conn, sql, params
+        return []
+
+    monkeypatch.setattr(loaders, "connect", fake_connect)
+    monkeypatch.setattr(loaders, "fetch_all", fake_fetch_all)
+
+    with pytest.raises(ValueError, match="no complete open trading session"):
+        load_rolling_inputs(
+            anchor_date=date(2026, 7, 29), config=_config(), service="research-test"
+        )
 
 
 def _inputs(*, missing_industry_bar: bool = False) -> RollingInputs:
