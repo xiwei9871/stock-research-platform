@@ -8,6 +8,7 @@ import pytest
 from stock_research.theme_research_priority import (
     THEME_RESEARCH_PRIORITY_POLICY_DIR,
     ThemeResearchPriorityValidationError,
+    _build_company_priorities,
     build_human_review_queue,
     cli,
     list_company_research_priorities,
@@ -17,6 +18,27 @@ from stock_research.theme_research_priority import (
     load_theme_research_priority_package,
     summarize_theme_research_priority_package,
 )
+
+
+def test_company_mapping_outside_crosswalk_scope_remains_researchable():
+    package = load_theme_research_priority_package()
+    mapping = dict(package["mapping_package"]["company_mappings"][0])
+    mapping["mapping_id"] = "unscoped_mapping_v1"
+
+    rows = _build_company_priorities(
+        [mapping],
+        package["node_priorities"],
+        {},
+        package["policy"],
+    )
+
+    assert rows[0]["integration_status"] == "not_crosswalk_scoped"
+    assert rows[0]["integration_ref"] == "theme_mapping:unscoped_mapping_v1"
+    assert rows[0]["existing_review_context"] == {
+        "status": "not_evaluated",
+        "reviewer_decision": "",
+    }
+    assert rows[0]["recommended_action"] != "review_crosswalk_coverage_gap"
 
 
 def test_priority_package_scores_all_nodes_and_company_mappings_once():
