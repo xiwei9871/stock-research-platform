@@ -13,6 +13,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from stock_research.strategy_data_policy import DataGap
+
 from .contracts import GateStatus, RecoveryState, RollingOversoldConfig, StockLifecycle
 
 
@@ -67,6 +69,16 @@ _SECTOR_KEY_ALIASES = (
 )
 
 
+class StockScoringDataGap(ValueError):
+    """A fail-closed stock scoring error with structured missing-data detail."""
+
+    def __init__(self, gap: DataGap) -> None:
+        self.gap = gap
+        super().__init__(
+            f"stock scoring data gap {gap.dataset} asset {gap.asset_id}: {gap.reason}"
+        )
+
+
 def classify_stock_lifecycle(
     *,
     anchor_return: float,
@@ -117,9 +129,16 @@ def score_rolling_stock_candidates(
         return _empty_result()
 
     stocks = _canonicalize_stock(_adapt_consumer_v2_features(stock_features, config))
+    # Stock-side sector fields only establish an input mapping.  The matched
+    # sector-state row is authoritative for all canonical context/output fields,
+    # leaving one unambiguous column for each field at merge time.
+    stocks = stocks.drop(
+        columns=[column for column in _SECTOR_CONTEXT_COLUMNS if column not in _KEY_COLUMNS],
+        errors="ignore",
+    )
     sectors = _canonicalize_sector(sector_states)
     _require_stock_sector_keys(stocks)
-    _require_sector_context(stocks, sectors)
+    _require_sector_context(stocks, sectors, config)
     sector_context = sectors.loc[:, list(_SECTOR_CONTEXT_COLUMNS)].copy()
     sector_context["_sector_context_matched"] = True
     joined = stocks.merge(
@@ -129,7 +148,7 @@ def score_rolling_stock_candidates(
         validate="many_to_one",
         sort=False,
     )
-    _raise_missing_sector_context(joined)
+    _raise_missing_sector_context(joined, config)
     _validate_matched_sector_context(joined)
 
     blocked = joined["sector_gate_status"].eq(GateStatus.BLOCKED.value)
@@ -342,25 +361,39 @@ def _require_stock_sector_keys(stocks: pd.DataFrame) -> None:
         )
 
 
-def _require_sector_context(stocks: pd.DataFrame, sectors: pd.DataFrame) -> None:
+def _require_sector_context(
+    stocks: pd.DataFrame, sectors: pd.DataFrame, config: RollingOversoldConfig
+) -> None:
     if sectors.empty:
         row = stocks.sort_values("asset_id", kind="mergesort").iloc[0]
-        raise ValueError(
-            f"missing sector context for asset {row['asset_id']} key "
-            f"{row['sector_system']}/{row['sector_code']}"
-        )
+        _raise_sector_context_gap(row, config)
 
 
-def _raise_missing_sector_context(joined: pd.DataFrame) -> None:
+def _raise_missing_sector_context(
+    joined: pd.DataFrame, config: RollingOversoldConfig
+) -> None:
     missing = joined["_sector_context_matched"].isna()
     if missing.any():
         row = joined.loc[missing, ["asset_id", *_KEY_COLUMNS]].sort_values(
             ["asset_id", *_KEY_COLUMNS], kind="mergesort"
         ).iloc[0]
-        raise ValueError(
-            f"missing sector context for asset {row['asset_id']} key "
-            f"{row['sector_system']}/{row['sector_code']}"
-        )
+        _raise_sector_context_gap(row, config)
+
+
+def _raise_sector_context_gap(row: pd.Series, config: RollingOversoldConfig) -> None:
+    start_date = config.anchor_start_date.isoformat()
+    end_date = (config.anchor_end_date or config.anchor_start_date).isoformat()
+    key = f"{row['sector_system']}/{row['sector_code']}"
+    gap = DataGap(
+        dataset="sector_context",
+        asset_id=str(row["asset_id"]),
+        start_date=start_date,
+        end_date=end_date,
+        expected_rows=1,
+        actual_rows=0,
+        reason=f"missing_sector_context:{key}",
+    )
+    raise StockScoringDataGap(gap)
 
 
 def _validate_matched_sector_context(joined: pd.DataFrame) -> None:

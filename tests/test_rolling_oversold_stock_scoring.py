@@ -5,9 +5,11 @@ import pytest
 
 from stock_research.rolling_oversold.contracts import RollingOversoldConfig
 from stock_research.rolling_oversold.stock_scoring import (
+    StockScoringDataGap,
     classify_stock_lifecycle,
     score_rolling_stock_candidates,
 )
+from stock_research.strategy_data_policy import DataGap
 
 
 def _config() -> RollingOversoldConfig:
@@ -90,6 +92,13 @@ def test_blocked_sector_is_excluded_while_confirmed_sector_ranks_by_actual_score
     assert set(result["score_status"]) == {"scored"}
 
 
+def test_industry_name_stock_mapping_merges_sector_context_and_scores_normally():
+    result = score_rolling_stock_candidates(_stocks(), _sectors(), top_n=2, config=_config())
+
+    assert result["sector_name"].tolist() == ["Industry one", "Industry one"]
+    assert result["asset_id"].tolist() == ["000001", "000002"]
+
+
 def test_lifecycle_classifies_rebound_with_residual_space():
     assert classify_stock_lifecycle(
         anchor_return=0.12,
@@ -163,6 +172,24 @@ def test_missing_sector_context_names_asset_and_key_and_blocked_never_selects():
 
     blocked = _sectors(gate="blocked")
     assert score_rolling_stock_candidates(_stocks(), blocked, top_n=5, config=_config()).empty
+
+
+def test_missing_sector_context_exposes_structured_data_gap():
+    stocks = _stocks().iloc[[0]].copy()
+    stocks.loc[:, "industry_code"] = "MISSING"
+
+    with pytest.raises(StockScoringDataGap) as raised:
+        score_rolling_stock_candidates(stocks, _sectors(), top_n=5, config=_config())
+
+    gap = raised.value.gap
+    assert isinstance(gap, DataGap)
+    assert gap.dataset == "sector_context"
+    assert gap.asset_id == "000002"
+    assert gap.start_date == "2026-07-03"
+    assert gap.end_date == "2026-07-03"
+    assert gap.expected_rows == 1
+    assert gap.actual_rows == 0
+    assert gap.reason == "missing_sector_context:sw/MISSING"
 
 
 def test_missing_matched_sector_name_or_recovery_state_fails_closed():
