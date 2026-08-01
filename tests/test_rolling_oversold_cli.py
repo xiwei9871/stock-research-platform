@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 from stock_research import cli
 
@@ -109,3 +110,39 @@ def test_replay_cli_dispatches_without_database_and_prints_required_machine_keys
         "runtime_seconds",
         "blocked",
     }.issubset(keys)
+
+
+def test_daily_cli_preserves_persisted_history_start_for_blocked_guard(
+    monkeypatch, tmp_path
+):
+    first = date(2026, 7, 21)
+    blocked_dir = (
+        Path(tmp_path)
+        / "rolling_sector_oversold"
+        / "blocked"
+        / f"anchor={first.isoformat()}"
+        / "version=rolling_oversold_v1"
+    )
+    blocked_dir.mkdir(parents=True)
+    (blocked_dir / "preflight.json").write_text('{"blocked": true}\n', encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return {"blocked": True, "runtime_seconds": 0.01, "paths": {}}
+
+    monkeypatch.setattr(cli, "run_rolling_daily", fake_run, raising=False)
+
+    cli.main_for_args(
+        [
+            "rolling-sector-oversold-daily",
+            "--trade-date",
+            "2026-07-22",
+            "--output-dir",
+            str(tmp_path),
+            "--service",
+            "research-test",
+        ]
+    )
+
+    assert captured["config"].anchor_start_date == first

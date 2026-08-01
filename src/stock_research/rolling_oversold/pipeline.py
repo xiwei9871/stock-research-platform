@@ -206,6 +206,7 @@ def run_one_anchor(
         runtime.end_stage("snapshot")
 
     evaluation_cutoff = config.anchor_end_date or cutoff
+    evaluation_artifacts: dict[str, bytes] = {}
     runtime.begin_stage("evaluation")
     try:
         evaluation_bars = _load_evaluation_bars(
@@ -222,18 +223,26 @@ def run_one_anchor(
             horizons=config.forecast_horizons,
         )
         summary = summarize_rolling_evaluation(detail)
+        evaluation_artifacts = _evaluation_artifact_bytes(detail, summary)
     finally:
         runtime.end_stage("evaluation")
 
     snapshot = dict(snapshot_probe)
     snapshot["runtime_metadata"] = _snapshot_runtime_metadata(runtime)
-    write_result = write_rolling_snapshot(snapshot, output_dir=output_dir)
+    runtime.begin_stage("publication")
+    try:
+        write_result = write_rolling_snapshot(
+            snapshot,
+            output_dir=output_dir,
+            additional_artifacts=evaluation_artifacts,
+        )
+    finally:
+        runtime.end_stage("publication")
+    runtime.checkpoint("publication")
     manifest_path = Path(str(write_result["manifest_path"]))
     snapshot_dir = manifest_path.parent
     evaluation_path = snapshot_dir / "evaluation_detail.csv"
     evaluation_summary_path = snapshot_dir / "evaluation_summary.csv"
-    detail.to_csv(evaluation_path, index=False, lineterminator="\n")
-    summary.to_csv(evaluation_summary_path, index=False, lineterminator="\n")
 
     paths = _snapshot_paths(
         snapshot_dir,
@@ -279,6 +288,23 @@ def run_rolling_replay(
         before_anchor=sessions[0] if sessions else config.anchor_start_date,
         score_version=config.score_version,
     )
+    if sessions:
+        unresolved = _unresolved_blocked_anchor(
+            output_dir=output_dir,
+            after_anchor=_snapshot_anchor_date(previous_snapshot),
+            window_start=resolve_rolling_history_start(
+                output_dir=output_dir,
+                score_version=config.score_version,
+                fallback=min(config.anchor_start_date, sessions[0]),
+            ),
+            before_anchor=sessions[0],
+            score_version=config.score_version,
+        )
+        if unresolved is not None:
+            raise ValueError(
+                "cannot replay after unresolved blocked anchor "
+                f"{unresolved.isoformat()}; repair it before the configured replay start"
+            )
     replay_evaluation_cutoff = config.anchor_end_date or (sessions[-1] if sessions else None)
     snapshot_ids: list[str] = []
     blocked_count = 0
@@ -355,9 +381,11 @@ def run_rolling_daily(
         before_anchor=selected,
         score_version=config.score_version,
     )
-    window_start = config.anchor_start_date
-    if window_start > selected:
-        window_start = date(1900, 1, 1)
+    window_start = resolve_rolling_history_start(
+        output_dir=output_dir,
+        score_version=config.score_version,
+        fallback=min(config.anchor_start_date, selected),
+    )
     unresolved = _unresolved_blocked_anchor(
         output_dir=output_dir,
         after_anchor=_snapshot_anchor_date(previous_snapshot),
@@ -391,7 +419,11 @@ def _load_complete_anchor_sessions(
 
     if not isinstance(config, RollingOversoldConfig):
         raise TypeError("config must be a RollingOversoldConfig")
-    end = config.anchor_end_date.isoformat() if config.anchor_end_date else None
+    end = (
+        config.anchor_end_date.isoformat()
+        if config.anchor_end_date is not None
+        else date.today().isoformat()
+    )
     sql = """
     WITH latest_bar AS (
         SELECT MAX(trade_date) AS trade_date
@@ -873,6 +905,15 @@ def _evaluation_bars(stock_bars: object, adjust_type: str) -> pd.DataFrame:
     return result.rename(columns={"close": f"{adjust_type}_close"})
 
 
+def _evaluation_artifact_bytes(
+    detail: pd.DataFrame, summary: pd.DataFrame
+) -> dict[str, bytes]:
+    return {
+        "evaluation_detail.csv": detail.to_csv(index=False, lineterminator="\n").encode("utf-8"),
+        "evaluation_summary.csv": summary.to_csv(index=False, lineterminator="\n").encode("utf-8"),
+    }
+
+
 def _snapshot_asset_ids(snapshot: dict[str, object]) -> list[str]:
     candidates = snapshot.get("stock_candidates")
     if not isinstance(candidates, pd.DataFrame) or candidates.empty or "asset_id" not in candidates:
@@ -1117,6 +1158,45 @@ def _load_previous_snapshot(
     return load_rolling_oversold_snapshot(snapshot_dir)
 
 
+def resolve_rolling_history_start(
+    *, output_dir: str | Path, score_version: str, fallback: date
+) -> date:
+    """Resolve the earliest persisted anchor used for lineage-gap checks."""
+
+    persisted = _earliest_persisted_anchor(output_dir=output_dir, score_version=score_version)
+    return min(fallback, persisted) if persisted is not None else fallback
+
+
+def _earliest_persisted_anchor(
+    *, output_dir: str | Path, score_version: str
+) -> date | None:
+    root = Path(output_dir).expanduser().resolve() / "rolling_sector_oversold"
+    candidates: list[date] = []
+    for anchor_dir in root.glob("anchor=*") if root.is_dir() else ():
+        candidate = _parse_anchor_dir(anchor_dir)
+        if candidate is None:
+            continue
+        if (anchor_dir / f"version={score_version}" / "manifest.json").is_file():
+            candidates.append(candidate)
+    blocked_root = root / "blocked"
+    for anchor_dir in blocked_root.glob("anchor=*") if blocked_root.is_dir() else ():
+        candidate = _parse_anchor_dir(anchor_dir)
+        if candidate is None:
+            continue
+        if (anchor_dir / f"version={score_version}" / "preflight.json").is_file():
+            candidates.append(candidate)
+    return min(candidates) if candidates else None
+
+
+def _parse_anchor_dir(path: Path) -> date | None:
+    if not path.is_dir() or not path.name.startswith("anchor="):
+        return None
+    try:
+        return date.fromisoformat(path.name.removeprefix("anchor="))
+    except ValueError:
+        return None
+
+
 def _snapshot_anchor_date(snapshot: dict[str, object] | None) -> date | None:
     if snapshot is None:
         return None
@@ -1221,34 +1301,16 @@ def _existing_snapshot_result(
     manifest_path = snapshot_dir / "manifest.json"
     detail_path = snapshot_dir / "evaluation_detail.csv"
     summary_path = snapshot_dir / "evaluation_summary.csv"
-    evaluation_cutoff = config.anchor_end_date or anchor
-    runtime.begin_stage("evaluation")
-    try:
-        detail = evaluate_snapshot(
-            snapshot,
-            bars=_evaluation_bars(
-                _load_evaluation_bars(
-                    asset_ids=_snapshot_asset_ids(snapshot),
-                    anchor_date=anchor,
-                    evaluation_cutoff=evaluation_cutoff,
-                    adjust_type=config.adjust_type,
-                    service=service,
-                ),
-                config.adjust_type,
-            ),
-            evaluation_cutoff=evaluation_cutoff,
-            horizons=config.forecast_horizons,
+    if not detail_path.is_file() or not summary_path.is_file():
+        raise ValueError(
+            "existing rolling snapshot lacks coordinated evaluation artifacts; "
+            "rerun into a new output directory"
         )
-        summary = summarize_rolling_evaluation(detail)
-        detail.to_csv(detail_path, index=False, lineterminator="\n")
-        summary.to_csv(summary_path, index=False, lineterminator="\n")
-    finally:
-        runtime.end_stage("evaluation")
     manifest = snapshot.get("manifest", {})
     persisted_metadata = manifest.get("runtime_metadata", {}) if isinstance(manifest, dict) else {}
     if not isinstance(persisted_metadata, dict):
         persisted_metadata = {}
-    runtime_metadata = runtime.metadata()
+    runtime_metadata = dict(persisted_metadata)
     runtime_metadata["snapshot_runtime_metadata"] = persisted_metadata
     candidates = snapshot.get("stock_candidates")
     count = int(len(candidates)) if isinstance(candidates, pd.DataFrame) else 0
@@ -1266,7 +1328,7 @@ def _existing_snapshot_result(
             evaluation_summary_path=summary_path,
         ),
         "stock_candidate_count": count,
-        "runtime_seconds": runtime_metadata["runtime_seconds"],
+        "runtime_seconds": runtime_metadata.get("runtime_seconds", 0.0),
         "runtime_metadata": runtime_metadata,
         "future_rows_used_for_scoring": 0,
     }

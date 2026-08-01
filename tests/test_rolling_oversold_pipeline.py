@@ -102,6 +102,39 @@ def test_replay_stops_at_first_block_to_preserve_snapshot_lineage(monkeypatch, t
     assert result["snapshot_ids"] == ["rolling_oversold_v1|2026-07-21"]
 
 
+def test_replay_refuses_blocked_anchor_before_configured_start(monkeypatch, tmp_path):
+    blocked = date(2026, 7, 21)
+    start = date(2026, 7, 22)
+    end = date(2026, 7, 23)
+    config = RollingOversoldConfig(anchor_start_date=start, anchor_end_date=end)
+    blocked_dir = (
+        tmp_path
+        / "rolling_sector_oversold"
+        / "blocked"
+        / f"anchor={blocked.isoformat()}"
+        / "version=rolling_oversold_v1"
+    )
+    blocked_dir.mkdir(parents=True)
+    (blocked_dir / "preflight.json").write_text('{"blocked": true}\n', encoding="utf-8")
+    monkeypatch.setattr(
+        pipeline,
+        "_load_complete_anchor_sessions",
+        lambda **kwargs: [start, end],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "run_one_anchor",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not bridge blocked lineage")),
+    )
+
+    with pytest.raises(ValueError, match="unresolved blocked anchor"):
+        pipeline.run_rolling_replay(
+            config=config,
+            output_dir=tmp_path,
+            service="research-test",
+        )
+
+
 def test_preflight_blocked_stops_before_scoring_and_persists_gap_artifacts(
     monkeypatch, tmp_path
 ):
@@ -266,7 +299,7 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
             "runtime_metadata": kwargs["runtime_metadata"],
         }
 
-    def fake_write(snapshot, *, output_dir):
+    def fake_write(snapshot, *, output_dir, additional_artifacts=None):
         destination = Path(output_dir) / "snapshot"
         destination.mkdir(parents=True)
         manifest = destination / "manifest.json"
@@ -274,6 +307,8 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
             json.dumps({"runtime_metadata": snapshot["runtime_metadata"]}) + "\n",
             encoding="utf-8",
         )
+        for name, contents in (additional_artifacts or {}).items():
+            (destination / name).write_bytes(contents)
         return {"status": "created", "manifest_path": str(manifest)}
 
     monkeypatch.setattr(pipeline, "build_rolling_snapshot", fake_build, raising=False)
@@ -335,7 +370,9 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
     persisted_timings = persisted_metadata["stage_timings_seconds"]
     assert persisted_timings["snapshot"] > 0.0
     assert persisted_timings["evaluation"] > 0.0
+    assert result["runtime_metadata"]["stage_timings_seconds"]["publication"] > 0.0
     assert Path(result["paths"]["evaluation"]).is_file()
+    assert Path(result["paths"]["evaluation_summary"]).is_file()
 
 
 def test_stock_scoring_gap_returns_blocked_policy_artifacts(monkeypatch, tmp_path):
@@ -531,6 +568,32 @@ def test_daily_refuses_first_blocked_anchor_without_prior_manifest(monkeypatch, 
             output_dir=tmp_path,
             service="research-test",
         )
+
+
+def test_replay_default_end_is_capped_at_today(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    monkeypatch.setattr(pipeline, "connect", lambda service: FakeConnection())
+    monkeypatch.setattr(
+        pipeline,
+        "fetch_all",
+        lambda connection, sql, params: captured.update(params=params) or [],
+    )
+
+    pipeline._load_complete_anchor_sessions(
+        config=RollingOversoldConfig(anchor_start_date=date(2026, 7, 21)),
+        service="research-test",
+    )
+
+    assert captured["params"][2] == date.today().isoformat()
+    assert captured["params"][3] == date.today().isoformat()
 
 
 def test_pipeline_has_no_external_market_imports():

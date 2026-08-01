@@ -172,7 +172,10 @@ def build_rolling_snapshot(
 
 
 def write_rolling_snapshot(
-    snapshot: dict[str, object], *, output_dir: str | Path
+    snapshot: dict[str, object],
+    *,
+    output_dir: str | Path,
+    additional_artifacts: Mapping[str, bytes] | None = None,
 ) -> dict[str, object]:
     """Write one anchor directory without replacing an existing different snapshot."""
 
@@ -184,6 +187,9 @@ def write_rolling_snapshot(
         / f"version={normalized['score_version']}"
     )
     artifact_bytes = _artifact_bytes(normalized)
+    extra_artifacts = _normalize_additional_artifacts(additional_artifacts)
+    artifact_bytes.update(extra_artifacts)
+    artifact_names = tuple((*_ARTIFACT_NAMES, *extra_artifacts))
     manifest = {
         "snapshot_id": normalized["snapshot_id"],
         "anchor_date": normalized["anchor_date"],
@@ -210,7 +216,7 @@ def write_rolling_snapshot(
     )
     published = False
     try:
-        for name in _ARTIFACT_NAMES:
+        for name in artifact_names:
             _atomic_write_new(staging / name, artifact_bytes[name])
         _atomic_write_new(staging / "manifest.json", manifest_bytes)
         _fsync_directory(staging)
@@ -813,6 +819,22 @@ def _artifact_bytes(snapshot: dict[str, object]) -> dict[str, bytes]:
         "preflight.json": _json_bytes(snapshot["preflight"]),
         "backfill_requests.csv": _csv_bytes(snapshot["backfill_requests"]),
     }
+
+
+def _normalize_additional_artifacts(value: Mapping[str, bytes] | None) -> dict[str, bytes]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError("additional_artifacts must be a mapping when supplied")
+    allowed = {"evaluation_detail.csv", "evaluation_summary.csv"}
+    normalized: dict[str, bytes] = {}
+    for name, contents in sorted(value.items(), key=lambda item: str(item[0])):
+        if name not in allowed:
+            raise ValueError(f"unsupported additional snapshot artifact: {name}")
+        if not isinstance(contents, (bytes, bytearray)):
+            raise TypeError(f"additional snapshot artifact {name} must contain bytes")
+        normalized[name] = bytes(contents)
+    return normalized
 
 
 def _is_identical_existing_snapshot(

@@ -318,6 +318,31 @@ def test_write_snapshot_is_immutable_and_has_hashed_deterministic_artifacts(tmp_
     assert hashlib.sha256(manifest_path.read_bytes()).hexdigest() == original_manifest_hash
 
 
+def test_write_snapshot_publishes_evaluation_sidecars_with_manifest(tmp_path):
+    snapshot = _build()
+    extras = {
+        "evaluation_detail.csv": b"asset_id,forward_Nd_status\nA,complete\n",
+        "evaluation_summary.csv": b"forward_horizon_days,complete_count\n1,1\n",
+    }
+
+    result = write_rolling_snapshot(
+        snapshot,
+        output_dir=tmp_path,
+        additional_artifacts=extras,
+    )
+
+    artifact_dir = Path(result["manifest_path"]).parent
+    manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert (artifact_dir / "evaluation_detail.csv").read_bytes() == extras["evaluation_detail.csv"]
+    assert (artifact_dir / "evaluation_summary.csv").read_bytes() == extras["evaluation_summary.csv"]
+    assert manifest["artifact_hashes"]["evaluation_detail.csv"] == hashlib.sha256(
+        extras["evaluation_detail.csv"]
+    ).hexdigest()
+    assert manifest["artifact_hashes"]["evaluation_summary.csv"] == hashlib.sha256(
+        extras["evaluation_summary.csv"]
+    ).hexdigest()
+
+
 def test_empty_snapshot_uses_stable_schemas_and_required_artifact_names(tmp_path):
     snapshot = _build(stocks=pd.DataFrame(), sectors=pd.DataFrame())
     assert snapshot["stock_candidates"].empty

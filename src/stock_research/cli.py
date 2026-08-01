@@ -41,6 +41,7 @@ from stock_research.auction_data import (
 from stock_research.config import SETTINGS
 from stock_research.rolling_oversold.contracts import RollingOversoldConfig
 from stock_research.rolling_oversold.pipeline import (
+    resolve_rolling_history_start,
     run_rolling_daily,
     run_rolling_replay,
 )
@@ -8434,9 +8435,14 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         _print_rolling_oversold_machine_lines(result)
     elif args.command == "rolling-sector-oversold-daily":
         trade_date = dt.date.fromisoformat(args.trade_date)
+        history_start = resolve_rolling_history_start(
+            output_dir=args.output_dir,
+            score_version=args.score_version,
+            fallback=trade_date,
+        )
         config = _rolling_oversold_config_from_args(
             args,
-            anchor_date=trade_date,
+            anchor_date=history_start,
             anchor_end_date=trade_date,
         )
         result = run_rolling_daily(
