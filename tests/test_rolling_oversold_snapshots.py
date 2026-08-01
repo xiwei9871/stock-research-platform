@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+from datetime import date
+import hashlib
+import json
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from stock_research.rolling_oversold.contracts import REQUIRED_SNAPSHOT_COLUMNS, validate_snapshot_columns
+from stock_research.rolling_oversold.snapshots import (
+    build_rolling_snapshot,
+    write_rolling_snapshot,
+)
+
+
+ANCHOR = date(2026, 7, 21)
+CUTOFF = date(2026, 7, 20)
+VERSION = "rolling_oversold_v1"
+
+
+def _market_regime() -> dict[str, object]:
+    return {
+        "market_regime": "risk_off",
+        "market_direction_score": 31.5,
+        "data_cutoff_date": CUTOFF,
+    }
+
+
+def _sectors() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "sector_system": "sw",
+                "sector_code": "I2",
+                "sector_name": "Industry two",
+                "sector_oversold_score": 84.0,
+                "sector_repairability_score": 69.0,
+                "sector_direction_score": 52.0,
+                "sector_recovery_state": "repairing",
+                "sector_gate_status": "confirmed",
+            },
+            {
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Industry one",
+                "sector_oversold_score": 78.0,
+                "sector_repairability_score": 66.0,
+                "sector_direction_score": 49.0,
+                "sector_recovery_state": "fresh_oversold",
+                "sector_gate_status": "watch",
+            },
+        ]
+    )
+
+
+def _stocks() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "asset_id": "000002",
+                "sector_system": "sw",
+                "sector_code": "I2",
+                "sector_name": "Industry two",
+                "sector_oversold_score": 84.0,
+                "sector_repairability_score": 69.0,
+                "sector_direction_score": 52.0,
+                "sector_recovery_state": "repairing",
+                "sector_gate_status": "confirmed",
+                "stock_score": 82.0,
+                "stock_rank": 2,
+                "stock_lifecycle": "expected_repair",
+                "score_reason": "",
+            },
+            {
+                "asset_id": "000001",
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Industry one",
+                "sector_oversold_score": 78.0,
+                "sector_repairability_score": 66.0,
+                "sector_direction_score": 49.0,
+                "sector_recovery_state": "fresh_oversold",
+                "sector_gate_status": "watch",
+                "stock_score": 91.0,
+                "stock_rank": 1,
+                "stock_lifecycle": "new_oversold",
+                "score_reason": "",
+            },
+        ]
+    )
+
+
+def _build(
+    *,
+    stocks: pd.DataFrame | None = None,
+    sectors: pd.DataFrame | None = None,
+    previous: dict[str, object] | None = None,
+    anchor: date = ANCHOR,
+) -> dict[str, object]:
+    return build_rolling_snapshot(
+        anchor_date=anchor,
+        data_cutoff_date=CUTOFF,
+        market_regime=_market_regime(),
+        sector_states=_sectors() if sectors is None else sectors,
+        stock_candidates=_stocks() if stocks is None else stocks,
+        previous_snapshot=previous,
+        score_version=VERSION,
+    )
+
+
+def test_build_snapshot_assigns_exact_metadata_and_normalizes_contract_rows():
+    snapshot = _build()
+
+    assert snapshot["snapshot_id"] == "rolling_oversold_v1|2026-07-21"
+    assert snapshot["anchor_date"] == "2026-07-21"
+    assert snapshot["data_cutoff_date"] == "2026-07-20"
+    assert snapshot["score_version"] == VERSION
+    assert snapshot["previous_snapshot_id"] is None
+    assert snapshot["market_regime"]["market_regime"] == "risk_off"
+    assert snapshot["row_counts"] == {"sector_states": 2, "stock_candidates": 2}
+    assert snapshot["stock_candidates"]["asset_id"].tolist() == ["000001", "000002"]
+    assert validate_snapshot_columns(snapshot["stock_candidates"].columns) == []
+    assert set(REQUIRED_SNAPSHOT_COLUMNS).issubset(snapshot["stock_candidates"].columns)
+
+
+def test_snapshot_revisions_link_ranks_and_keep_absent_asset_as_invalidated_row():
+    previous = _build(stocks=_stocks().assign(stock_rank=[3, 2]))
+    current_stocks = _stocks().iloc[[1]].copy()
+    current_stocks.loc[:, "asset_id"] = "000003"
+    current_stocks.loc[:, "stock_rank"] = 1
+    current_stocks.loc[:, "stock_lifecycle"] = "expected_repair"
+    current = _build(stocks=current_stocks, previous=previous)
+
+    new_row = current["stock_candidates"].loc[
+        current["stock_candidates"]["asset_id"].eq("000003")
+    ].iloc[0]
+    assert new_row["previous_snapshot_id"] == previous["snapshot_id"]
+    assert pd.isna(new_row["rank_delta"])
+    assert new_row["lifecycle_delta"] == "absent->expected_repair"
+
+    removed = current["stock_candidates"].loc[
+        current["stock_candidates"]["asset_id"].eq("000001")
+    ].iloc[0]
+    assert removed["stock_lifecycle"] == "invalidated"
+    assert removed["lifecycle_delta"] == "new_oversold->invalidated"
+    assert pd.isna(removed["stock_rank"])
+    assert removed["score_reason"] == "sector_gate_or_data_change"
+
+
+def test_snapshot_revisions_compute_previous_rank_minus_current_rank():
+    previous = _build(stocks=_stocks().assign(stock_rank=[3, 2]))
+    current = _build(stocks=_stocks().iloc[[0]].assign(stock_rank=1), previous=previous)
+
+    row = current["stock_candidates"].loc[
+        current["stock_candidates"]["asset_id"].eq("000002")
+    ].iloc[0]
+    assert row["rank_delta"] == 2
+    assert row["lifecycle_delta"] == "expected_repair->expected_repair"
+
+
+def test_snapshot_build_is_permutation_invariant_and_does_not_mutate_frames():
+    stocks = _stocks()
+    sectors = _sectors()
+    stocks_before = stocks.copy(deep=True)
+    sectors_before = sectors.copy(deep=True)
+
+    first = _build(stocks=stocks, sectors=sectors)
+    second = _build(
+        stocks=stocks.sample(frac=1.0, random_state=9).reset_index(drop=True),
+        sectors=sectors.sample(frac=1.0, random_state=11).reset_index(drop=True),
+    )
+
+    pd.testing.assert_frame_equal(first["stock_candidates"], second["stock_candidates"])
+    pd.testing.assert_frame_equal(first["sector_states"], second["sector_states"])
+    pd.testing.assert_frame_equal(stocks, stocks_before)
+    pd.testing.assert_frame_equal(sectors, sectors_before)
+
+
+def test_write_snapshot_is_immutable_and_has_hashed_deterministic_artifacts(tmp_path):
+    snapshot = _build()
+    first = write_rolling_snapshot(snapshot, output_dir=tmp_path)
+    manifest_path = tmp_path / "rolling_sector_oversold" / "anchor=2026-07-21" / f"version={VERSION}" / "manifest.json"
+    original_manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+
+    assert first["status"] == "created"
+    assert first["manifest_path"] == str(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["snapshot_id"] == snapshot["snapshot_id"]
+    assert manifest["row_counts"] == {"sector_states": 2, "stock_candidates": 2}
+    assert set(manifest["artifact_hashes"]) == {
+        "market_regime.csv",
+        "sector_states.csv",
+        "stock_candidates.csv",
+        "preflight.json",
+        "backfill_requests.csv",
+    }
+    for name, digest in manifest["artifact_hashes"].items():
+        assert hashlib.sha256((manifest_path.parent / name).read_bytes()).hexdigest() == digest
+    assert not list(manifest_path.parent.rglob("*.tmp"))
+
+    assert write_rolling_snapshot(snapshot, output_dir=tmp_path)["status"] == "already_exists_identical"
+    changed = _build(stocks=_stocks().assign(stock_score=[82.0, 92.0]))
+    with pytest.raises(ValueError, match="immutable rolling snapshot"):
+        write_rolling_snapshot(changed, output_dir=tmp_path)
+    assert hashlib.sha256(manifest_path.read_bytes()).hexdigest() == original_manifest_hash
+
+
+def test_empty_snapshot_uses_stable_schemas_and_required_artifact_names(tmp_path):
+    snapshot = _build(stocks=pd.DataFrame(), sectors=pd.DataFrame())
+    assert snapshot["stock_candidates"].empty
+    assert snapshot["sector_states"].empty
+    assert validate_snapshot_columns(snapshot["stock_candidates"].columns) == []
+
+    result = write_rolling_snapshot(snapshot, output_dir=tmp_path)
+    assert Path(result["manifest_path"]).is_file()
+    artifact_dir = tmp_path / "rolling_sector_oversold" / "anchor=2026-07-21" / f"version={VERSION}"
+    assert {path.name for path in artifact_dir.iterdir()} == {
+        "manifest.json",
+        "market_regime.csv",
+        "sector_states.csv",
+        "stock_candidates.csv",
+        "preflight.json",
+        "backfill_requests.csv",
+    }
+    assert (artifact_dir / "backfill_requests.csv").read_text(encoding="utf-8") == (
+        "dataset,asset_id,start_date,end_date,expected_rows,actual_rows,reason\n"
+    )
