@@ -209,6 +209,26 @@ def test_validate_strategy_runner_publication_rejects_failed_fourth_runner(tmp_p
     assert result["error_code"] == "strategy_runner_status_invalid"
 
 
+def test_validate_strategy_runner_publication_accepts_publishable_degraded_lhb():
+    payload = _successful_strategy_summary()
+    payload.update(
+        {
+            "status": "partial",
+            "review_rows": 14,
+            "degraded_strategies": ["lhb_shortline"],
+            "warnings": ["lhb_shortline published four safe rows"],
+        }
+    )
+    payload["score_audit"]["strategy_counts"]["lhb_shortline"] = 4
+
+    result = eod_auto_repair.validate_strategy_runner_publication(
+        payload,
+        expected_trade_date="2026-07-02",
+    )
+
+    assert result == {"status": "success"}
+
+
 def test_finalize_repaired_release_invokes_shared_finalizer(monkeypatch, tmp_path):
     captured = {}
 
@@ -767,6 +787,91 @@ def test_repair_action_fails_safely_for_malformed_publication_summary(
     assert result.status == RepairStatus.FAILED
     assert result.exit_code == 2
     assert "publication_receipt" not in result.metrics
+
+
+def test_degraded_publication_action_binds_publication_receipt(tmp_path):
+    payload = _successful_strategy_summary()
+    payload.update(
+        {
+            "status": "partial",
+            "review_rows": 14,
+            "degraded_strategies": ["lhb_shortline"],
+            "warnings": ["lhb_shortline published four safe rows"],
+        }
+    )
+    payload["score_audit"]["strategy_counts"]["lhb_shortline"] = 4
+    (tmp_path / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+    action = RepairActionResult(
+        "repair_strategy_publish",
+        RepairStatus.DEGRADED,
+        artifact_paths=[str(tmp_path)],
+    )
+
+    result = eod_auto_repair._action_with_publication_receipt(
+        action,
+        trade_date="2026-07-02",
+        repair_run_id="repair-current",
+    )
+
+    assert result.status == RepairStatus.DEGRADED
+    assert result.metrics["publication_receipt"]["review_rows"] == 14
+
+
+def test_degraded_action_defaults_to_zero_exit_code():
+    action = RepairActionResult("strategy_publish", RepairStatus.DEGRADED)
+
+    result = eod_auto_repair._annotate_action_timing(
+        action,
+        started_at="2026-07-31T00:00:00+00:00",
+        ended_at="2026-07-31T00:00:01+00:00",
+    )
+
+    assert result.exit_code == 0
+
+
+def test_finalizer_accepts_publishable_degraded_lhb_publication(tmp_path):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    summary_path = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    summary_path.parent.mkdir(parents=True)
+
+    def official_publication(*, trade_date, output_root):
+        payload = _successful_strategy_summary(trade_date, summary_path=summary_path)
+        payload.update(
+            {
+                "status": "partial",
+                "review_rows": 14,
+                "degraded_strategies": ["lhb_shortline"],
+                "warnings": ["lhb_shortline published four safe rows"],
+            }
+        )
+        payload["score_audit"]["strategy_counts"]["lhb_shortline"] = 4
+        summary_path.write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        official_publication=official_publication,
+        contract_check=lambda: {"status": "success"},
+        readiness_check=lambda: {"status": "success"},
+        clear_cache=lambda: True,
+        sync_external=lambda: True,
+    )
+
+    assert result["status"] == "success"
+    persisted = json.loads((repair_output / "run_summary.json").read_text(encoding="utf-8"))
+    assert persisted["publication_receipt"]["review_rows"] == 14
 
 
 @pytest.mark.parametrize(

@@ -13,6 +13,7 @@ base_url_override="${BASE_URL:-}"
 dashboard_auth_override="${DASHBOARD_AUTH:-}"
 container_root_override="${REMOTE_CONTAINER_RELEASE_ROOT:-}"
 strategy_output_root_override="${STRATEGY_OUTPUT_ROOT:-}"
+strategy_source_root_override="${STRATEGY_SOURCE_ROOT:-}"
 local_readiness_url_override="${LOCAL_READINESS_URL:-}"
 remote_env_file_override="${DASHBOARD_REMOTE_ENV_FILE:-}"
 remote_pgservice_file_override="${DASHBOARD_PGSERVICE_FILE:-}"
@@ -37,6 +38,7 @@ BASE_URL="${base_url_override:-${BASE_URL:-https://stock.manqiaotechnology.com}}
 DASHBOARD_AUTH="${dashboard_auth_override:-${DASHBOARD_AUTH:-}}"
 REMOTE_CONTAINER_RELEASE_ROOT="${container_root_override:-${REMOTE_CONTAINER_RELEASE_ROOT:-/app}}"
 STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$ROOT/outputs/research}}"
+STRATEGY_SOURCE_ROOT="${strategy_source_root_override:-${STRATEGY_SOURCE_ROOT:-$ROOT}}"
 LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http://127.0.0.1:8765/api/platform/readiness}}"
 DASHBOARD_REMOTE_ENV_FILE="${remote_env_file_override:-${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}}"
 DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVICE_FILE:-.pg_service.conf}}"
@@ -57,7 +59,12 @@ if [[ ! -d "$ROOT" ]]; then
   echo "Release root does not exist: $ROOT" >&2
   exit 2
 fi
+if [[ ! -d "$STRATEGY_SOURCE_ROOT" ]]; then
+  echo "Strategy source root does not exist: $STRATEGY_SOURCE_ROOT" >&2
+  exit 2
+fi
 ROOT="$(cd "$ROOT" && pwd -P)"
+STRATEGY_SOURCE_ROOT="$(cd "$STRATEGY_SOURCE_ROOT" && pwd -P)"
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
     echo "Refusing disposable worktree release root: $ROOT" >&2
@@ -168,6 +175,14 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
 fi
 if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
   EXPECTED_TRADE_DATE="$(
+    STRATEGY_OUTPUT_ROOT="$STRATEGY_OUTPUT_ROOT" \
+      "$STOCK_RESEARCH_PYTHON" -c \
+      'from pathlib import Path; import os, re; root = Path(os.environ["STRATEGY_OUTPUT_ROOT"]) / "strategy_daily_eod"; dates = sorted(path.name for path in root.iterdir() if path.is_dir() and re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", path.name) and (path / "strategy_eod_publish_summary.json").is_file()) if root.is_dir() else []; print(dates[-1] if dates else "")' \
+      2>/dev/null || true
+  )"
+fi
+if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
+  EXPECTED_TRADE_DATE="$(
     env \
       PYTHONPATH="$ROOT/src" \
       STOCK_RESEARCH_RELEASE_ROOT="$ROOT" \
@@ -204,7 +219,7 @@ cleanup_manifest_snapshot() {
 trap cleanup_manifest_snapshot EXIT
 PYTHONPATH="$ROOT/src" "$STOCK_RESEARCH_PYTHON" -m stock_research.strategy_manifest_transfer export \
   --trade-date "$EXPECTED_TRADE_DATE" \
-  --source-root "$ROOT" \
+  --source-root "$STRATEGY_SOURCE_ROOT" \
   --target-root "$REMOTE_CONTAINER_RELEASE_ROOT" > "$manifest_snapshot"
 
 check_release_state() {

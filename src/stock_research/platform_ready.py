@@ -352,15 +352,16 @@ def _check_strategy_daily_eod(service: str, trade_date: str) -> dict[str, Any]:
         Path(str(row.get("output_dir") or "")) / "strategy_mid_trend_review.csv",
         Path(str(row.get("output_dir") or "")) / "strategy_tech_bottleneck_review.csv",
     ]
-    ok = (
-        str(row.get("status") or "") == "success"
-        and str(row.get("lhb_shortline_status") or "") == "success"
+    runner_ok = (
+        str(row.get("lhb_shortline_status") or "") == "success"
         and str(row.get("mid_trend_status") or "") == "success"
         and str(row.get("midtrend_artifacts_status") or "") == "success"
         and str(row.get("tech_bottleneck_status") or "") == "success"
         and summary_path.exists()
         and all(path.exists() and path.stat().st_size > 0 for path in review_paths)
     )
+    row_status = str(row.get("status") or "")
+    ok = runner_ok and row_status in {"success", "partial", "degraded"}
     detail = (
         f"status={row.get('status')} lhb={row.get('lhb_shortline_status')} "
         f"mid={row.get('mid_trend_status')} "
@@ -368,7 +369,13 @@ def _check_strategy_daily_eod(service: str, trade_date: str) -> dict[str, Any]:
         f"tech={row.get('tech_bottleneck_status')} "
         f"summary_path={summary_path}"
     )
-    return _pass("strategy_daily_eod", detail) if ok else _fail("strategy_daily_eod", detail)
+    if not ok:
+        return _fail("strategy_daily_eod", detail)
+    return _pass(
+        "strategy_daily_eod",
+        detail,
+        degraded=row_status in {"partial", "degraded"},
+    )
 
 
 def _check_scores(service: str, trade_date: str, score_version: str, min_rows: int) -> dict[str, str]:

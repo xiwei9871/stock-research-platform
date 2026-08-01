@@ -61,6 +61,37 @@ def test_receipt_binds_complete_publication_contract(tmp_path):
     )["status"] == "success"
 
 
+def test_receipt_accepts_publishable_degraded_lhb_summary(tmp_path):
+    path = tmp_path / "strategy_eod_publish_summary.json"
+    payload = _summary()
+    payload.update(
+        {
+            "status": "partial",
+            "review_rows": 14,
+            "degraded_strategies": ["lhb_shortline"],
+            "warnings": ["lhb_shortline published four safe rows"],
+        }
+    )
+    payload["score_audit"]["strategy_counts"]["lhb_shortline"] = 4
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    receipt = build_publication_receipt(
+        summary_path=path,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+    )
+
+    assert receipt["overall_status"] == "partial"
+    assert receipt["review_rows"] == 14
+    assert validate_publication_receipt(
+        receipt,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+        expected_summary_path=path,
+        release_root=tmp_path,
+    )["status"] == "success"
+
+
 def test_nonempty_legacy_receipt_fails_closed_as_missing_contract(tmp_path):
     path = tmp_path / "strategy_eod_publish_summary.json"
     path.write_text(json.dumps(_summary()), encoding="utf-8")

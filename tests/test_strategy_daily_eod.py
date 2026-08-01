@@ -106,7 +106,14 @@ def _write_complete_mature_release(
         "manifest_modules": [*modules.values(), "review_queue_strategy_manifest"],
         "strategy_counts": counts,
         "review_rows": sum(counts.values()),
-        "publishable": counts == {key: 5 for key in modules},
+        "status": "degraded" if counts.get("lhb_shortline") in {1, 2, 3, 4} else "success",
+        "publishable": (
+            1 <= counts.get("lhb_shortline", 0) <= 5
+            and counts.get("mid_trend") == 5
+            and counts.get("tech_bottleneck") == 5
+        ),
+        "degraded_strategies": ["lhb_shortline"] if counts.get("lhb_shortline") in {1, 2, 3, 4} else [],
+        "warnings": ["lhb_shortline published four safe rows"] if counts.get("lhb_shortline") == 4 else [],
         "score_audit": {"status": "success", "strategy_counts": counts},
     }
     (release / "strategy_eod_publish_summary.json").write_text(
@@ -158,6 +165,46 @@ def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
         for key, value in (entry.get("metadata") or {}).items():
             if key.endswith("_path") and value:
                 assert str(value).startswith(str(tmp_path / "2026-07-24"))
+
+
+def test_official_runner_accepts_four_safe_lhb_rows_as_degraded(
+    tmp_path: Path, monkeypatch
+):
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda payload, **_kwargs: persisted.append(payload))
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-30",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(
+            **kwargs,
+            counts={
+                "lhb_shortline": 4,
+                "mid_trend": 5,
+                "tech_bottleneck": 5,
+            },
+        ),
+        service="test",
+    )
+
+    assert summary["status"] == "partial"
+    assert summary["publishable"] is True
+    assert summary["review_rows"] == 14
+    assert summary["strategy_status"]["lhb_shortline"] == "success"
+    assert persisted[-1]["midtrend_artifacts_status"] == "success"
+
+    validator_path = Path(__file__).resolve().parents[1] / "deploy" / "validate_strategy_release.py"
+    spec = importlib.util.spec_from_file_location("validate_strategy_release_degraded", validator_path)
+    assert spec and spec.loader
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    validator.validate_strategy_release(
+        output_dir=Path(summary["output_dir"]),
+        trade_date="2026-07-30",
+    )
 
 
 def test_official_runner_rejects_tampered_identity_before_transaction(tmp_path, monkeypatch):
@@ -1242,7 +1289,7 @@ def test_status_payload_and_schema():
     assert "attnotnull" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "IF NOT column_exists" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "ELSIF NOT column_not_null" in store.STRATEGY_DAILY_EOD_STATUS_SQL
-    assert "SET midtrend_artifacts_status = 'skipped'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "SET midtrend_artifacts_status = 'unknown'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "COALESCE(midtrend_artifacts_status, mid_trend_status" not in store.STRATEGY_DAILY_EOD_STATUS_SQL
 
 

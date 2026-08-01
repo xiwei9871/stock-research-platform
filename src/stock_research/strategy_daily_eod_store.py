@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     dependency_check_status text NOT NULL,
     lhb_shortline_status text NOT NULL,
     mid_trend_status text NOT NULL,
-    midtrend_artifacts_status text NOT NULL,
+    midtrend_artifacts_status text NOT NULL DEFAULT 'unknown',
     tech_bottleneck_status text NOT NULL,
     review_rows integer NOT NULL DEFAULT 0,
     output_dir text,
@@ -37,12 +37,17 @@ BEGIN
       AND NOT attisdropped;
 
     IF NOT column_exists THEN
-        EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ADD COLUMN midtrend_artifacts_status text';
-        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'skipped' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ADD COLUMN midtrend_artifacts_status text DEFAULT ''unknown''';
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'unknown' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET DEFAULT 'unknown'$sql$;
         EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET NOT NULL';
     ELSIF NOT column_not_null THEN
-        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'skipped' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'unknown' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET DEFAULT 'unknown'$sql$;
         EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET NOT NULL';
+    ELSE
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'unknown' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET DEFAULT 'unknown'$sql$;
     END IF;
 END
 $strategy_daily_eod_midtrend_artifacts_migration$;
@@ -98,7 +103,7 @@ def build_status_payload(
         "dependency_check_status": dependency_check_status,
         "lhb_shortline_status": lhb_shortline_status,
         "mid_trend_status": mid_trend_status,
-        "midtrend_artifacts_status": midtrend_artifacts_status,
+        "midtrend_artifacts_status": str(midtrend_artifacts_status or "unknown"),
         "tech_bottleneck_status": tech_bottleneck_status,
         "review_rows": int(review_rows),
         "output_dir": output_dir,
@@ -121,6 +126,9 @@ def upsert_strategy_daily_eod_status_with_connection(
     *,
     conn: Any,
 ) -> None:
+    payload = dict(payload)
+    if not payload.get("midtrend_artifacts_status"):
+        payload["midtrend_artifacts_status"] = str(payload.get("mid_trend_status") or "unknown")
     sql = """
     INSERT INTO ops.strategy_daily_eod_status (
         trade_date,

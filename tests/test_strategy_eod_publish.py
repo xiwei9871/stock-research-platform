@@ -650,12 +650,34 @@ def test_publish_strategy_eod_returns_exact_review_counts_and_collected_entries(
     assert "manifest_entries" not in summary
 
 
+def test_publish_strategy_eod_accepts_four_safe_lhb_rows_as_degraded(monkeypatch, tmp_path):
+    strategy_assets = {
+        "lhb_shortline": [f"CN:SH:{index:06d}" for index in range(1, 5)],
+        "mid_trend": [f"CN:SH:{index:06d}" for index in range(101, 106)],
+        "tech_bottleneck": [f"CN:SH:{index:06d}" for index in range(201, 206)],
+    }
+    _install_publish_contract_fakes(monkeypatch, tmp_path, strategy_assets=strategy_assets)
+
+    summary = strategy_eod_publish.publish_strategy_eod(
+        trade_date="2026-07-30",
+        output_root=tmp_path,
+        runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+        manifest_upsert=lambda entry: None,
+    )
+
+    assert summary["status"] == "degraded"
+    assert summary["publishable"] is True
+    assert summary["review_rows"] == 14
+    assert summary["strategy_counts"]["lhb_shortline"] == 4
+    assert summary["degraded_strategies"] == ["lhb_shortline"]
+    assert any("lhb_shortline" in warning for warning in summary["warnings"])
+
+
 @pytest.mark.parametrize(
     "lhb_assets",
     [
         [],
         ["CN:SH:000001"] * 5,
-        [f"CN:SH:{index:06d}" for index in range(1, 5)],
         [f"CN:SH:{index:06d}" for index in range(1, 6)] + ["CN:SH:000005"],
     ],
 )

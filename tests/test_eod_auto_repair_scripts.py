@@ -112,6 +112,8 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_python_flock_wrapper():
     assert "--mode loop" in script
     assert "--action-timeout-seconds" in script
     assert 'ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"' in script
+    assert 'STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"' in script
+    assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
     assert "logs/eod_auto_repair" in script
     assert "run_summary.json" in script
     assert "run_report.md" in script

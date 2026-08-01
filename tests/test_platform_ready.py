@@ -58,6 +58,25 @@ def test_strategy_daily_eod_readiness_accepts_all_four_success(
     assert result["status"] == "pass"
 
 
+def test_strategy_daily_eod_readiness_accepts_publishable_degraded_lhb(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _prepare_strategy_daily_eod_ok(monkeypatch, tmp_path)
+    original_loader = platform_ready.load_strategy_daily_eod_status
+
+    def degraded_loader(*args, **kwargs):
+        row = dict(original_loader(*args, **kwargs))
+        row["status"] = "partial"
+        return row
+
+    monkeypatch.setattr(platform_ready, "load_strategy_daily_eod_status", degraded_loader)
+
+    result = platform_ready._check_strategy_daily_eod("test", "2026-06-18")
+
+    assert result["status"] == "pass"
+    assert result["degraded"] is True
+
+
 def test_platform_ready_check_fails_when_frontend_inputs_are_missing(monkeypatch, tmp_path: Path):
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()

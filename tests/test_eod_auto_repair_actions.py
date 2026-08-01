@@ -236,6 +236,23 @@ def test_repair_strategy_publish_propagates_partial_business_failure():
     assert result.metrics["strategy_status"]["midtrend_artifacts"] == "failed"
 
 
+def test_repair_strategy_publish_preserves_degraded_publisher_result():
+    result = repair_strategy_publish(
+        "2026-07-30",
+        output_root="outputs",
+        publisher=lambda **kwargs: {
+            "review_rows": 14,
+            "output_dir": "outputs/research/strategy_daily_eod/2026-07-30",
+            "degraded_strategies": ["lhb_shortline"],
+            "warnings": ["lhb_shortline published four safe rows"],
+        },
+    )
+
+    assert result.status == RepairStatus.DEGRADED
+    assert result.metrics["degraded_strategies"] == ["lhb_shortline"]
+    assert result.metrics["warnings"] == ["lhb_shortline published four safe rows"]
+
+
 def test_repair_market_monitor_wraps_runner_result():
     result = repair_market_monitor(
         "2026-06-29",

@@ -394,8 +394,8 @@ def check_review_queue(trade_date: str, *, output_root: str | Path = "outputs") 
         )
     group_check = evaluate_review_queue_groups({"trade_date": trade_date, "groups": groups}, trade_date=trade_date)
     metrics = {"row_count": len(frame), "path": str(path), **group_check.metrics, **score_check.metrics}
-    if score_check.status == RepairStatus.SUCCESS and group_check.status == RepairStatus.SUCCESS:
-        return RepairCheckResult("review_queue", RepairStatus.SUCCESS, "ready", metrics)
+    if score_check.status == RepairStatus.SUCCESS and group_check.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
+        return RepairCheckResult("review_queue", group_check.status, group_check.message, metrics)
     return RepairCheckResult("review_queue", RepairStatus.FAILED, f"{score_check.message}; {group_check.message}", metrics, blocker=True)
 
 
@@ -629,17 +629,35 @@ def evaluate_review_queue_groups(payload: dict[str, object], *, trade_date: str)
         for bucket in required
     }
     failures = []
+    degraded_buckets = []
     if payload_trade_date != trade_date:
         failures.append(f"trade_date={payload_trade_date}")
     if missing:
         failures.append(f"missing={missing}")
-    if counts.get("strategy:tech_bottleneck", 0) < 1:
-        failures.append("tech_bottleneck count is zero")
+    contracts = {
+        "strategy:lhb_shortline": (1, 5),
+        "strategy:mid_trend": (5, 5),
+        "strategy:tech_bottleneck": (5, 5),
+    }
+    for bucket, (min_count, max_count) in contracts.items():
+        count = counts.get(bucket, 0)
+        item_assets = assets.get(bucket, [])
+        if count < min_count or count > max_count:
+            failures.append(f"{bucket} count={count}, expected {min_count}..{max_count}")
+        if count != len(item_assets):
+            failures.append(f"{bucket} count does not match item count")
+        nonempty_assets = [asset_id for asset_id in item_assets if asset_id]
+        if len(nonempty_assets) != len(set(nonempty_assets)):
+            failures.append(f"{bucket} contains duplicate assets")
+        if bucket == "strategy:lhb_shortline" and min_count <= count < max_count and not failures:
+            degraded_buckets.append(bucket)
     if assets.get("strategy:lhb_shortline") and assets.get("strategy:lhb_shortline") == assets.get("strategy:mid_trend"):
         failures.append("lhb_shortline and mid_trend assets are identical")
-    metrics = {"counts": counts, "missing": missing}
+    metrics = {"counts": counts, "missing": missing, "degraded_buckets": degraded_buckets}
     if failures:
         return RepairCheckResult("review_queue_groups", RepairStatus.FAILED, "; ".join(failures), metrics, blocker=True)
+    if degraded_buckets:
+        return RepairCheckResult("review_queue_groups", RepairStatus.DEGRADED, "review queue degraded", metrics)
     return RepairCheckResult("review_queue_groups", RepairStatus.SUCCESS, "ready", metrics)
 
 

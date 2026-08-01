@@ -50,6 +50,11 @@ EXPECTED_STRATEGY_REVIEW_COUNTS = {
     "mid_trend": 5,
     "tech_bottleneck": 5,
 }
+STRATEGY_REVIEW_CONTRACTS = {
+    "lhb_shortline": {"min_rows": 1, "max_rows": 5},
+    "mid_trend": {"min_rows": 5, "max_rows": 5},
+    "tech_bottleneck": {"min_rows": 5, "max_rows": 5},
+}
 BASE_CHECKS = {
     "daily_bars": {
         "source": "market_daily_bar",
@@ -279,13 +284,17 @@ def publish_strategy_eod(
 
     review_path, review_rows = _write_review_queue(review_frames, output_dir)
     strategy_counts, strategy_row_counts = _strategy_review_counts(review_rows)
+    degraded_strategies, contract_errors = _validate_strategy_review_contract(
+        review_rows,
+        strategy_counts=strategy_counts,
+        strategy_row_counts=strategy_row_counts,
+    )
     if (
         not _strategy_review_rows_valid(review_rows, expected_trade_date=selected_trade_date)
-        or strategy_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
-        or strategy_row_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
+        or contract_errors
     ):
         error = (
-            "strategy review contract requires exactly 5 rows per strategy: "
+            "strategy review contract requires exactly 5 rows per strategy (with LHB safe-row exception): "
             f"unique_assets={strategy_counts}, rows={strategy_row_counts}, total_rows={len(review_rows)}"
         )
         _replace_official_strategy_entries_with_failures(
@@ -326,6 +335,9 @@ def publish_strategy_eod(
             metadata={
                 "strategy_modules": list(STRATEGY_EOD_MODULES.values()),
                 "review_path": str(review_path),
+                "strategy_counts": strategy_counts,
+                "strategy_row_counts": strategy_row_counts,
+                "degraded_strategies": degraded_strategies,
             },
         )
     )
@@ -385,9 +397,16 @@ def publish_strategy_eod(
         "trade_date": selected_trade_date,
         "output_dir": str(output_dir),
         "manifest_modules": [entry["module"] for entry in entries],
+        "status": "degraded" if degraded_strategies else "success",
         "strategy_counts": strategy_counts,
+        "strategy_row_counts": strategy_row_counts,
         "review_rows": len(review_rows),
         "publishable": True,
+        "degraded_strategies": degraded_strategies,
+        "warnings": [
+            f"{strategy_id} published {strategy_row_counts[strategy_id]} safe review rows"
+            for strategy_id in degraded_strategies
+        ],
         "score_audit": score_audit,
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1500,13 +1519,41 @@ def _strategy_review_counts(
     return unique_counts, row_counts
 
 
+def _validate_strategy_review_contract(
+    review_rows: list[dict[str, Any]],
+    *,
+    strategy_counts: dict[str, int],
+    strategy_row_counts: dict[str, int],
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    degraded: list[str] = []
+    for strategy_id, contract in STRATEGY_REVIEW_CONTRACTS.items():
+        unique_count = int(strategy_counts.get(strategy_id) or 0)
+        row_count = int(strategy_row_counts.get(strategy_id) or 0)
+        min_rows = int(contract["min_rows"])
+        max_rows = int(contract["max_rows"])
+        if row_count < min_rows or row_count > max_rows:
+            errors.append(
+                f"{strategy_id} requires {min_rows}..{max_rows} rows, got {row_count}"
+            )
+        elif unique_count != row_count:
+            errors.append(
+                f"{strategy_id} has duplicate or invalid assets: unique_assets={unique_count}, rows={row_count}"
+            )
+        if strategy_id == "lhb_shortline" and 1 <= row_count < max_rows and unique_count == row_count:
+            degraded.append(strategy_id)
+    if len(review_rows) != sum(strategy_row_counts.values()):
+        errors.append(
+            f"strategy review contract contains unknown or malformed rows: total_rows={len(review_rows)}"
+        )
+    return degraded, errors
+
+
 def _strategy_review_rows_valid(
     review_rows: list[dict[str, Any]],
     *,
     expected_trade_date: str,
 ) -> bool:
-    if len(review_rows) != sum(EXPECTED_STRATEGY_REVIEW_COUNTS.values()):
-        return False
     frame = pd.DataFrame(review_rows)
     required_columns = {"trade_date", "strategy_id", "rank", "review_tier"}
     if not required_columns.issubset(frame.columns):
@@ -1532,9 +1579,15 @@ def _strategy_review_rows_valid(
     ):
         return False
     expected_ranks = {1, 2, 3, 4, 5}
-    for strategy_id in EXPECTED_STRATEGY_REVIEW_COUNTS:
+    for strategy_id, contract in STRATEGY_REVIEW_CONTRACTS.items():
         strategy_ranks = ranks[strategy_ids.eq(strategy_id)]
-        if len(strategy_ranks) != 5 or set(strategy_ranks.astype(int)) != expected_ranks:
+        row_count = len(strategy_ranks)
+        if row_count < int(contract["min_rows"]) or row_count > int(contract["max_rows"]):
+            return False
+        rank_set = set(strategy_ranks.astype(int))
+        if len(rank_set) != row_count or not rank_set.issubset(expected_ranks):
+            return False
+        if strategy_id != "lhb_shortline" and rank_set != expected_ranks:
             return False
     return True
 

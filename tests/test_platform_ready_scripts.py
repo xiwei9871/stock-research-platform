@@ -7,6 +7,13 @@ from pathlib import Path
 import pytest
 
 
+def test_platform_ready_cron_pins_runtime_data_roots() -> None:
+    script = (Path(__file__).resolve().parents[1] / "scripts/run_platform_ready_check_cron.sh").read_text()
+
+    assert 'STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"' in script
+    assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
+
+
 def _prepare_fake_guard(fake_root: Path) -> None:
     scripts_dir = fake_root / "scripts"
     deploy_dir = fake_root / "deploy"
@@ -222,7 +229,9 @@ exit 3
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-18" in call
     assert "--output-dir" in call
     assert "eod_auto_repair/2026-06-18" in call
-    assert "--mode repair" in call
+    assert "--mode loop" in call
+    assert "--include-pending-dates" in call
+    assert "--pending-date-limit" in call
     assert "--finalize-publication" in call
     assert "--repair-exit-code 3" in call
     assert not (fake_root / "sync.log").exists()
@@ -292,7 +301,7 @@ exit 0
     assert "EOD自动修复完成" in result.stdout
     calls = calls_file.read_text(encoding="utf-8")
     assert "--finalize-publication" in calls
-    assert calls.index("--mode repair") < calls.index("--finalize-publication")
+    assert calls.index("--mode loop") < calls.index("--finalize-publication")
     log_text = (log_dir / "platform_ready_check.host.log").read_text(encoding="utf-8")
     assert "child-detail-line" in log_text
 

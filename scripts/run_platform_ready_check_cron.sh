@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT="${PLATFORM_READY_ROOT:-/Users/xiwei/stock_research}"
 PYTHON="${PLATFORM_READY_PYTHON:-$ROOT/.venv/bin/python}"
+STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"
+STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"
+export STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT
 LOG_DIR="${PLATFORM_READY_LOG_DIR:-$ROOT/logs}"
 RUN_LOG="${PLATFORM_READY_CHECK_RUN_LOG:-$LOG_DIR/platform_ready_check.host.log}"
 TRADE_DATE="${PLATFORM_READY_TRADE_DATE:-}"
@@ -10,6 +13,7 @@ REPORTS_DIR="${PLATFORM_READY_REPORTS_DIR:-$ROOT/reports}"
 OUTPUT_DIR="${PLATFORM_READY_OUTPUT_DIR:-$ROOT/outputs/research}"
 REPAIR_OUTPUT_DIR="${PLATFORM_READY_REPAIR_OUTPUT_DIR:-$OUTPUT_DIR/eod_auto_repair/$TRADE_DATE}"
 HEARTBEAT_SECONDS="${PLATFORM_READY_CHECK_HEARTBEAT_SECONDS:-60}"
+PENDING_DATE_LIMIT="${PLATFORM_READY_PENDING_DATE_LIMIT:-3}"
 
 if [ -z "$TRADE_DATE" ]; then
   latest_market_date="$("$PYTHON" -c 'from stock_research.dashboard.platform import load_platform_summary; summary = load_platform_summary(); print(summary.get("latest_market_date") or summary.get("latest_trade_date") or "")' 2>/dev/null || true)"
@@ -106,7 +110,10 @@ cd "$ROOT"
 "$PYTHON" -m stock_research.eod_auto_repair \
   --trade-date "$TRADE_DATE" \
   --output-dir "$REPAIR_OUTPUT_DIR" \
-  --mode repair >>"$RUN_LOG" 2>&1 &
+  --output-root "$ROOT/outputs" \
+  --mode loop \
+  --include-pending-dates \
+  --pending-date-limit "$PENDING_DATE_LIMIT" >>"$RUN_LOG" 2>&1 &
 PIPELINE_PID=$!
 
 (

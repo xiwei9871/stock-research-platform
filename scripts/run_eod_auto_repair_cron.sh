@@ -3,11 +3,15 @@ set -euo pipefail
 
 ROOT="${STOCK_RESEARCH_ROOT:-/Users/xiwei/stock_research}"
 PYTHON="${STOCK_RESEARCH_PYTHON:-$ROOT/.venv/bin/python}"
+STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"
+STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"
+export STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT
 TRADE_DATE="${1:-$(date +%F)}"
 LOG_DIR="$ROOT/logs/eod_auto_repair"
 OUTPUT_DIR="$ROOT/outputs/research/eod_auto_repair/$TRADE_DATE"
 DETAIL_LOG="$LOG_DIR/$TRADE_DATE.log"
 ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
+PENDING_DATE_LIMIT="${EOD_AUTO_REPAIR_PENDING_DATE_LIMIT:-3}"
 DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-eod_repair}"
 DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-research-dashboard-eod-repair}"
@@ -70,7 +74,10 @@ run_repair() {
   rtk "$PYTHON" -m stock_research.eod_auto_repair \
     --trade-date "$TRADE_DATE" \
     --output-dir "$OUTPUT_DIR" \
+    --output-root "$ROOT/outputs" \
     --mode loop \
+    --include-pending-dates \
+    --pending-date-limit "$PENDING_DATE_LIMIT" \
     --action-timeout-seconds "$ACTION_TIMEOUT_SECONDS" >>"$DETAIL_LOG" 2>&1 &
   PIPELINE_PID=$!
   wait "$PIPELINE_PID"

@@ -102,6 +102,7 @@ REMOTE_DIR=/absolute/remote/release/path
 SSH_OPTS=-o BatchMode=yes
 STOCK_RESEARCH_SSH_CONFIG=/Users/xiwei/.ssh/stock-research-dashboard.conf
 STRATEGY_OUTPUT_ROOT=/absolute/local/outputs/research
+STRATEGY_SOURCE_ROOT=/absolute/local/source/root
 DASHBOARD_REMOTE_ENV_FILE=.env.dashboard
 DASHBOARD_PGSERVICE_FILE=.pg_service.conf
 STOCK_RESEARCH_COMPOSE_PROJECT=stock_research_dashboard

@@ -19,6 +19,11 @@ REQUIRED_MODULES = {
     "strategy_tech_bottleneck",
     "review_queue_strategy_manifest",
 }
+REVIEW_CONTRACTS = {
+    "lhb_shortline": (1, 5),
+    "mid_trend": (5, 5),
+    "tech_bottleneck": (5, 5),
+}
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -38,15 +43,29 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         raise ValueError(f"missing required release file: {path}") from exc
 
 
-def _validate_rows(rows: list[dict[str, str]], *, trade_date: str, label: str) -> None:
-    if len(rows) != 5:
-        raise ValueError(f"{label} must contain exactly 5 rows, got {len(rows)}")
+def _validate_rows(
+    rows: list[dict[str, str]],
+    *,
+    trade_date: str,
+    label: str,
+    strategy_id: str,
+) -> None:
+    minimum, maximum = REVIEW_CONTRACTS[strategy_id]
+    if not minimum <= len(rows) <= maximum:
+        raise ValueError(
+            f"{label} must contain {minimum}..{maximum} rows, got {len(rows)}"
+        )
     dates = {str(row.get("trade_date") or "") for row in rows}
     if dates != {trade_date}:
         raise ValueError(f"{label} trade_date mismatch: {sorted(dates)}")
-    ranks = sorted(int(str(row.get("rank") or "0")) for row in rows)
-    if ranks != [1, 2, 3, 4, 5]:
-        raise ValueError(f"{label} ranks must be 1..5, got {ranks}")
+    try:
+        ranks = [int(str(row.get("rank") or "0")) for row in rows]
+    except ValueError as exc:
+        raise ValueError(f"{label} contains an invalid rank") from exc
+    if len(set(ranks)) != len(ranks) or any(rank not in {1, 2, 3, 4, 5} for rank in ranks):
+        raise ValueError(f"{label} ranks must be unique values from 1..5, got {sorted(ranks)}")
+    if maximum == 5 and len(rows) == 5 and sorted(ranks) != [1, 2, 3, 4, 5]:
+        raise ValueError(f"{label} ranks must be 1..5, got {sorted(ranks)}")
     if any(str(row.get("review_tier") or "") != "top5_focus" for row in rows):
         raise ValueError(f"{label} contains non-top5 review rows")
     assets = [_asset_id(row) for row in rows]
@@ -96,8 +115,6 @@ def validate_strategy_release(*, output_dir: str | Path, trade_date: str) -> Non
         raise ValueError("strategy publish summary trade_date mismatch")
     if "publishable" in summary and summary.get("publishable") is not True:
         raise ValueError("strategy publish summary is not publishable")
-    if int(summary.get("review_rows") or 0) != 15:
-        raise ValueError("strategy publish summary must report 15 review rows")
 
     modules = {str(item) for item in summary.get("manifest_modules") or []}
     missing_modules = sorted(REQUIRED_MODULES - modules)
@@ -108,15 +125,32 @@ def validate_strategy_release(*, output_dir: str | Path, trade_date: str) -> Non
     if not isinstance(score_audit, dict) or score_audit.get("status") != "success":
         raise ValueError("strategy score audit is not successful")
     strategy_counts = score_audit.get("strategy_counts")
-    expected_counts = {strategy_id: 5 for strategy_id in OFFICIAL_STRATEGIES}
-    if strategy_counts != expected_counts:
+    expected_strategy_ids = set(OFFICIAL_STRATEGIES)
+    if (
+        not isinstance(strategy_counts, dict)
+        or set(strategy_counts) != expected_strategy_ids
+        or any(
+            type(strategy_counts.get(strategy_id)) is not int
+            or not REVIEW_CONTRACTS[strategy_id][0]
+            <= strategy_counts[strategy_id]
+            <= REVIEW_CONTRACTS[strategy_id][1]
+            for strategy_id in OFFICIAL_STRATEGIES
+        )
+    ):
         raise ValueError(f"strategy score audit counts mismatch: {strategy_counts}")
+    expected_review_rows = sum(int(strategy_counts[strategy_id]) for strategy_id in OFFICIAL_STRATEGIES)
+    if summary.get("review_rows") != expected_review_rows:
+        raise ValueError(
+            f"strategy publish summary review rows mismatch: {summary.get('review_rows')}"
+        )
 
     manifest_rows = _read_csv(root / "review_queue_strategy_manifest.csv")
-    if len(manifest_rows) != 15:
-        raise ValueError(f"review queue manifest must contain 15 rows, got {len(manifest_rows)}")
+    if len(manifest_rows) != expected_review_rows:
+        raise ValueError(
+            f"review queue manifest must contain {expected_review_rows} rows, got {len(manifest_rows)}"
+        )
     manifest_counts = Counter(str(row.get("strategy_id") or "") for row in manifest_rows)
-    if manifest_counts != Counter(expected_counts):
+    if manifest_counts != Counter(strategy_counts):
         raise ValueError(f"review queue manifest strategy counts mismatch: {dict(manifest_counts)}")
     _validate_artifact_paths(manifest_rows, output_dir=root)
     for strategy_id in OFFICIAL_STRATEGIES:
@@ -124,11 +158,17 @@ def validate_strategy_release(*, output_dir: str | Path, trade_date: str) -> Non
             [row for row in manifest_rows if row.get("strategy_id") == strategy_id],
             trade_date=trade_date,
             label=f"manifest {strategy_id}",
+            strategy_id=strategy_id,
         )
 
     for strategy_id, filename in OFFICIAL_STRATEGIES.items():
         rows = _read_csv(root / filename)
-        _validate_rows(rows, trade_date=trade_date, label=filename)
+        _validate_rows(
+            rows,
+            trade_date=trade_date,
+            label=filename,
+            strategy_id=strategy_id,
+        )
         row_ids = {str(row.get("strategy_id") or "") for row in rows}
         if row_ids != {strategy_id}:
             raise ValueError(f"{filename} strategy_id mismatch: {sorted(row_ids)}")

@@ -52,6 +52,11 @@ STRATEGY_DEPENDENCIES = {
     "midtrend_artifacts": ("common",),
     "tech_bottleneck": ("common",),
 }
+STRATEGY_REVIEW_COUNT_CONTRACTS = {
+    "lhb_shortline": (1, 5),
+    "mid_trend": (5, 5),
+    "tech_bottleneck": (5, 5),
+}
 
 ARTIFACT_METADATA_FILE_KEYS = {
     "artifact_path",
@@ -85,7 +90,6 @@ def run_strategy_daily_eod(
         for runner in (lhb_runner, mid_runner, tech_runner, midtrend_artifact_builder)
     ):
         raise ValueError("legacy strategy runner injection is unsupported")
-    apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
     root = Path(output_root).resolve()
     allowed_release_root = (
@@ -95,6 +99,7 @@ def run_strategy_daily_eod(
     )
     if not _path_is_within(root, allowed_release_root):
         raise ValueError("strategy output root must be contained within release root")
+    apply_strategy_daily_eod_status_schema(service=service)
     publication_transaction = publication_transaction or commit_strategy_publication
     canonical_output_dir = root / trade_date
     versions_dir = root / ".versions" / trade_date
@@ -156,8 +161,12 @@ def run_strategy_daily_eod(
                 for name in expected_counts
             }
             strategy_status = {
-                name: "success" if strategy_counts[name] == expected else "failed"
-                for name, expected in expected_counts.items()
+                name: "success"
+                if STRATEGY_REVIEW_COUNT_CONTRACTS[name][0]
+                <= strategy_counts[name]
+                <= STRATEGY_REVIEW_COUNT_CONTRACTS[name][1]
+                else "failed"
+                for name in expected_counts
             }
             strategy_status["midtrend_artifacts"] = (
                 "success"
@@ -165,7 +174,10 @@ def run_strategy_daily_eod(
                 else "failed"
             )
             strategy_errors = {
-                name: f"expected 5 review rows, got {strategy_counts[name]}"
+                name: (
+                    f"expected {STRATEGY_REVIEW_COUNT_CONTRACTS[name][0]}.."
+                    f"{STRATEGY_REVIEW_COUNT_CONTRACTS[name][1]} review rows, got {strategy_counts[name]}"
+                )
                 for name in expected_counts
                 if strategy_status[name] != "success"
             }
@@ -196,19 +208,34 @@ def run_strategy_daily_eod(
             strategy_errors = {name: publication_error for name in strategy_status}
 
     review_rows = sum(strategy_counts.values())
+    degraded_strategies = list(publisher_summary.get("degraded_strategies") or [])
+    if (
+        strategy_status.get("lhb_shortline") == "success"
+        and strategy_counts.get("lhb_shortline", 0) < STRATEGY_REVIEW_COUNT_CONTRACTS["lhb_shortline"][1]
+        and "lhb_shortline" not in degraded_strategies
+    ):
+        degraded_strategies.append("lhb_shortline")
     contract_valid = (
         not dependency_blocked
         and publication_error is None
-        and strategy_counts == expected_counts
+        and all(status == "success" for status in strategy_status.values() if status is not None)
         and strategy_status.get("midtrend_artifacts") == "success"
         and publisher_summary.get("publishable") is True
-        and int(publisher_summary.get("review_rows") or 0) == 15
+        and int(publisher_summary.get("review_rows") or 0) == sum(strategy_counts.values())
         and (publisher_summary.get("score_audit") or {}).get("status") == "success"
         and not required_manifest_errors
         and _staged_release_valid(output_dir, trade_date=trade_date)
     )
     success_count = sum(status == "success" for status in strategy_status.values())
-    final_status = "success" if contract_valid else "partial" if success_count else "failed"
+    final_status = (
+        "partial"
+        if contract_valid and degraded_strategies
+        else "success"
+        if contract_valid
+        else "partial"
+        if success_count
+        else "failed"
+    )
     failure_output_dir = root / ".failures" / trade_date / staging_name
     persistent_output_dir = canonical_output_dir if contract_valid else failure_output_dir
     manifest_modules = list(dict.fromkeys(
@@ -229,6 +256,8 @@ def run_strategy_daily_eod(
         "review_rows": review_rows,
         "status": final_status,
         "publishable": contract_valid,
+        "degraded_strategies": degraded_strategies,
+        "warnings": list(publisher_summary.get("warnings") or []),
         "manifest_modules": manifest_modules,
         "score_audit": {
             "status": "success" if contract_valid else "failed",
@@ -555,7 +584,7 @@ def _staged_release_valid(staging: Path, *, trade_date: str) -> bool:
     }
     try:
         manifest = pd.read_csv(staging / "review_queue_strategy_manifest.csv", low_memory=False)
-        if len(manifest) != 15:
+        if set(manifest["strategy_id"].astype(str)) != set(STRATEGY_REVIEW_COUNT_CONTRACTS):
             return False
         for strategy_id, filename in expected_files.items():
             frame = pd.read_csv(staging / filename, low_memory=False)
@@ -575,15 +604,22 @@ def _staged_release_valid(staging: Path, *, trade_date: str) -> bool:
 
 def _review_frame_valid(frame: pd.DataFrame, *, strategy_id: str, trade_date: str) -> bool:
     required = {"trade_date", "strategy_id", "asset_id", "rank", "review_tier"}
-    if len(frame) != 5 or not required.issubset(frame.columns):
+    min_rows, max_rows = STRATEGY_REVIEW_COUNT_CONTRACTS.get(strategy_id, (0, 0))
+    if not min_rows <= len(frame) <= max_rows or not required.issubset(frame.columns):
         return False
+    ranks = frame["rank"].astype(int).tolist()
+    rank_set = set(ranks)
+    if strategy_id == "lhb_shortline":
+        ranks_valid = len(rank_set) == len(frame) and rank_set.issubset({1, 2, 3, 4, 5})
+    else:
+        ranks_valid = sorted(ranks) == [1, 2, 3, 4, 5]
     return (
         set(frame["trade_date"].astype(str)) == {trade_date}
         and set(frame["strategy_id"].astype(str)) == {strategy_id}
-        and sorted(frame["rank"].astype(int).tolist()) == [1, 2, 3, 4, 5]
+        and ranks_valid
         and frame["review_tier"].astype(str).eq("top5_focus").all()
         and frame["asset_id"].astype(str).str.strip().ne("").all()
-        and frame["asset_id"].astype(str).nunique() == 5
+        and frame["asset_id"].astype(str).nunique() == len(frame)
     )
 
 

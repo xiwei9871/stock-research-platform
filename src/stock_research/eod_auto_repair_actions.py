@@ -230,16 +230,28 @@ def repair_strategy_publish(
 ) -> RepairActionResult:
     result = publisher(trade_date=trade_date, output_root=output_root)
     output_dir = str(result.get("output_dir") or "")
-    publication_status = str(result.get("status") or "failed")
-    succeeded = publication_status == "success"
+    degraded_strategies = list(result.get("degraded_strategies") or [])
+    warnings = list(result.get("warnings") or [])
+    publication_status = str(
+        result.get("status")
+        or ("degraded" if degraded_strategies else "success")
+    )
+    if publication_status == "degraded" or degraded_strategies:
+        action_status = RepairStatus.DEGRADED
+    elif publication_status in {"success", "ready"}:
+        action_status = RepairStatus.SUCCESS
+    else:
+        action_status = RepairStatus.FAILED
     return RepairActionResult(
         name="repair_strategy_publish",
-        status=RepairStatus.SUCCESS if succeeded else RepairStatus.FAILED,
-        message="strategy publish complete" if succeeded else "strategy publish failed",
+        status=action_status,
+        message="strategy publish complete" if action_status != RepairStatus.FAILED else "strategy publish failed",
         metrics={
             "review_rows": int(result.get("review_rows") or 0),
             "publication_status": publication_status,
             "strategy_status": dict(result.get("strategy_status") or {}),
+            "degraded_strategies": degraded_strategies,
+            "warnings": warnings,
         },
         artifact_paths=[output_dir] if output_dir else [],
     )
