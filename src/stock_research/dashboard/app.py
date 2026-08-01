@@ -677,7 +677,7 @@ def create_app() -> FastAPI:
     app.state.theme_research_report_scheduler = ThemeResearchReportScheduler(
         SETTINGS.theme_research_report_root,
         theme_research_report_limits_from_settings(SETTINGS),
-        SETTINGS.theme_research_runtime_service,
+        SETTINGS.theme_research_report_index_service,
         SETTINGS.theme_research_report_scan_interval_seconds,
         scan_fn=scan_theme_research_report_root,
     )
@@ -984,7 +984,7 @@ def create_app() -> FastAPI:
             comment=payload.comment,
             request_id=str(request.state.request_id),
             idempotency_key=payload.idempotency_key,
-            service=SETTINGS.theme_research_runtime_service,
+            service=SETTINGS.theme_research_report_review_service,
         )
         return {"report": report}
 
@@ -1005,7 +1005,7 @@ def create_app() -> FastAPI:
             reason=payload.reason,
             request_id=str(request.state.request_id),
             idempotency_key=payload.idempotency_key,
-            service=SETTINGS.theme_research_runtime_service,
+            service=SETTINGS.theme_research_report_review_service,
         )
         return {"report": report}
 

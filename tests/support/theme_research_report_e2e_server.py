@@ -113,15 +113,31 @@ def _write_isolated_service_file(temp_root: Path) -> Path:
 
     path = temp_root / "pg_service.conf"
     with path.open("w", encoding="utf-8") as stream:
-        for alias, source_name in (
-            ("stock_research", "theme_research_test_migration"),
-            ("theme_research_runtime", "theme_research_test_runtime"),
+        for alias, source_name, role_name in (
+            ("stock_research", "theme_research_test_migration", None),
+            ("theme_research_runtime", "theme_research_test_runtime", None),
+            (
+                "theme_research_report_indexer",
+                "theme_research_test_migration",
+                "theme_research_report_indexer",
+            ),
+            (
+                "theme_research_report_reviewer",
+                "theme_research_test_migration",
+                "theme_research_report_reviewer",
+            ),
         ):
             stream.write(f"[{alias}]\n")
             for key, value in parser[source_name].items():
+                if role_name is not None and key == "options":
+                    continue
                 if "\n" in key or "\n" in value:
                     raise RuntimeError("PostgreSQL service entries must be single-line values")
                 stream.write(f"{key}={value}\n")
+            if role_name is not None:
+                existing_options = parser[source_name].get("options", "").strip()
+                options = f"{existing_options} -c role={role_name}".strip()
+                stream.write(f"options={options}\n")
             stream.write("\n")
     path.chmod(0o600)
     return path
@@ -369,7 +385,7 @@ def _build_test_app(report_root: Path, token: str, cleanup: Callable[[], None]):
             result = scan_theme_research_report_root(
                 report_root,
                 limits=limits_from_settings(SETTINGS),
-                service=SETTINGS.theme_research_runtime_service,
+                service=SETTINGS.theme_research_report_index_service,
             )
         if result.invalid:
             raise HTTPException(status_code=500, detail="fixture_index_failed")
@@ -382,7 +398,7 @@ def _build_test_app(report_root: Path, token: str, cleanup: Callable[[], None]):
             return _reset_report_fixture(
                 report_root,
                 SETTINGS.theme_research_migration_service,
-                SETTINGS.theme_research_runtime_service,
+                SETTINGS.theme_research_report_index_service,
             )
 
     # AppShell fetches these unrelated market summaries on every page. The dedicated
@@ -484,7 +500,7 @@ def main() -> int:
         scan_result = scan_theme_research_report_root(
             report_root,
             limits=limits_from_settings(SETTINGS),
-            service="theme_research_runtime",
+            service="theme_research_report_indexer",
         )
         if scan_result.indexed != 1 or scan_result.invalid:
             raise RuntimeError(f"v1 report fixture indexing failed: {scan_result.to_dict()}")

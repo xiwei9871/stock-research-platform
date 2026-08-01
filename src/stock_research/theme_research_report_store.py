@@ -59,70 +59,14 @@ def report_version_id(theme_id: str, version: str) -> str:
 def register_report_manifest(
     manifest: ThemeResearchReportManifest,
     *,
-    service: str = SETTINGS.theme_research_runtime_service,
+    service: str = SETTINGS.theme_research_report_index_service,
 ) -> dict[str, str]:
     version_id = report_version_id(manifest.theme_id, manifest.version)
     metadata = metadata_to_jsonable(manifest.metadata)
-    desired = {
-        "report_version_id": version_id,
-        **_immutable_values(manifest, metadata),
-    }
-    lock_key_1, lock_key_2 = _advisory_lock_keys(manifest.theme_id, manifest.version)
 
     try:
         with connect(service) as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT pg_advisory_xact_lock(%s, %s)",
-                    (lock_key_1, lock_key_2),
-                )
-                cur.execute(
-                    """
-                    SELECT 1
-                    FROM research.theme_research_theme
-                    WHERE theme_id = %s
-                    """,
-                    (manifest.theme_id,),
-                )
-                if cur.fetchone() is None:
-                    raise ThemeResearchReportError(
-                        "THEME_REPORT_THEME_NOT_FOUND",
-                        "theme research report theme was not found",
-                    )
-
-                cur.execute(
-                    """
-                    SELECT report_version_id, title, summary,
-                           markdown_relative_path, markdown_sha256,
-                           pdf_relative_path, pdf_sha256,
-                           manifest_relative_path, manifest_sha256,
-                           generator_name, generator_version, generator_metadata,
-                           generated_at, metadata, status
-                    FROM research.theme_research_report_version
-                    WHERE theme_id = %s AND version = %s
-                    """,
-                    (manifest.theme_id, manifest.version),
-                )
-                existing = cur.fetchone()
-                if existing is not None:
-                    differing_fields = [
-                        field_name
-                        for field_name, desired_value in desired.items()
-                        if existing[field_name] != desired_value
-                    ]
-                    if differing_fields:
-                        raise ThemeResearchReportError(
-                            "THEME_REPORT_VERSION_CONTENT_CONFLICT",
-                            "theme research report version already has different content",
-                            {"fields": differing_fields},
-                        )
-                    return _safe_result(
-                        version_id,
-                        manifest,
-                        status=existing["status"],
-                        result="unchanged",
-                    )
-
                 pdf_relative_path = manifest.pdf.relative_path if manifest.pdf else None
                 pdf_sha256 = manifest.pdf.sha256 if manifest.pdf else None
                 event_id = _stable_digest("theme-research-report-index-event", version_id)
@@ -133,10 +77,11 @@ def register_report_manifest(
                 )
                 cur.execute(
                     """
-                    SELECT research.register_theme_research_report_pending(
+                    SELECT inserted, report_status, differing_fields
+                    FROM research.register_theme_research_report_pending(
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    ) AS inserted
+                    )
                     """,
                     (
                         version_id,
@@ -160,27 +105,11 @@ def register_report_manifest(
                         idempotency_key,
                     ),
                 )
-                inserted = cur.fetchone()["inserted"]
-                if not inserted:
-                    cur.execute(
-                        """
-                        SELECT report_version_id, title, summary,
-                               markdown_relative_path, markdown_sha256,
-                               pdf_relative_path, pdf_sha256,
-                               manifest_relative_path, manifest_sha256,
-                               generator_name, generator_version, generator_metadata,
-                               generated_at, metadata, status
-                        FROM research.theme_research_report_version
-                        WHERE theme_id = %s AND version = %s
-                        """,
-                        (manifest.theme_id, manifest.version),
-                    )
-                    existing = cur.fetchone()
-                    differing_fields = [
-                        field_name
-                        for field_name, desired_value in desired.items()
-                        if existing is None or existing[field_name] != desired_value
-                    ]
+                outcome = cur.fetchone()
+                if outcome is None:
+                    raise _store_unavailable()
+                if not outcome["inserted"]:
+                    differing_fields = list(outcome["differing_fields"] or [])
                     if differing_fields:
                         raise ThemeResearchReportError(
                             "THEME_REPORT_VERSION_CONTENT_CONFLICT",
@@ -190,7 +119,7 @@ def register_report_manifest(
                     return _safe_result(
                         version_id,
                         manifest,
-                        status=existing["status"],
+                        status=outcome["report_status"],
                         result="unchanged",
                     )
     except ThemeResearchReportError:
@@ -244,7 +173,7 @@ def publish_report_version(
     comment: str,
     request_id: str,
     idempotency_key: str,
-    service: str = SETTINGS.theme_research_runtime_service,
+    service: str = SETTINGS.theme_research_report_review_service,
 ) -> dict[str, Any]:
     normalized = _validate_review_request(
         report_version_id=report_version_id,
@@ -272,7 +201,7 @@ def reject_report_version(
     reason: str,
     request_id: str,
     idempotency_key: str,
-    service: str = SETTINGS.theme_research_runtime_service,
+    service: str = SETTINGS.theme_research_report_review_service,
 ) -> dict[str, Any]:
     normalized = _validate_review_request(
         report_version_id=report_version_id,
@@ -407,7 +336,7 @@ def _mutate_review_state(
                 event_comment = comment if action == "publish" else reason
                 cur.execute(
                     """
-                    SELECT replayed, event_to_status, event_created_at
+                    SELECT *
                     FROM research.review_theme_research_report_version(
                         %s, %s, %s, %s, %s, %s, %s, %s
                     )
@@ -424,26 +353,17 @@ def _mutate_review_state(
                     ),
                 )
                 outcome = cur.fetchone()
-                cur.execute(
-                    """
-                    SELECT *
-                    FROM research.theme_research_report_version
-                    WHERE report_version_id = %s
-                    """,
-                    (report_version_id,),
-                )
-                updated = cur.fetchone()
-                if updated is None or outcome is None:
+                if outcome is None:
                     raise _store_unavailable()
                 if outcome["replayed"]:
                     return _replayed_admin_safe_row(
-                        updated,
+                        outcome,
                         {
                             "to_status": outcome["event_to_status"],
                             "created_at": outcome["event_created_at"],
                         },
                     )
-                return _admin_safe_row(updated)
+                return _admin_safe_row(outcome)
     except ThemeResearchReportError:
         raise
     except psycopg.errors.UniqueViolation as exc:
@@ -762,37 +682,6 @@ def _required_identity(value: str, field_name: str) -> str:
 def _stable_digest(namespace: str, *parts: str) -> str:
     payload = "\x00".join((namespace, *parts)).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
-
-
-def _advisory_lock_keys(theme_id: str, version: str) -> tuple[int, int]:
-    digest = hashlib.sha256(
-        "\x00".join(("theme-research-report-lock", theme_id, version)).encode("utf-8")
-    ).digest()
-    return (
-        int.from_bytes(digest[:4], "big", signed=True),
-        int.from_bytes(digest[4:8], "big", signed=True),
-    )
-
-
-def _immutable_values(
-    manifest: ThemeResearchReportManifest,
-    metadata: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        "title": manifest.title,
-        "summary": manifest.summary,
-        "markdown_relative_path": manifest.markdown.relative_path,
-        "markdown_sha256": manifest.markdown.sha256,
-        "pdf_relative_path": manifest.pdf.relative_path if manifest.pdf else None,
-        "pdf_sha256": manifest.pdf.sha256 if manifest.pdf else None,
-        "manifest_relative_path": manifest.manifest_relative_path,
-        "manifest_sha256": manifest.manifest_sha256,
-        "generator_name": manifest.generator_name,
-        "generator_version": manifest.generator_version,
-        "generator_metadata": {},
-        "generated_at": manifest.generated_at,
-        "metadata": metadata,
-    }
 
 
 def _safe_result(

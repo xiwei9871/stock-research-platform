@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import configparser
 import json
 import os
+import tempfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -28,6 +30,8 @@ from stock_research.theme_research_report_store import (
 
 TEST_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE", "")
 TEST_RUNTIME_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_RUNTIME_SERVICE", "")
+TEST_INDEX_SERVICE = "theme_research_test_report_indexer"
+TEST_REVIEW_SERVICE = "theme_research_test_report_reviewer"
 POSTGRES_ENABLED = (
     os.getenv("THEME_RESEARCH_POSTGRES_TEST") == "1" and bool(TEST_SERVICE)
 )
@@ -52,6 +56,8 @@ def test_theme_research_report_settings_parse_environment(monkeypatch, tmp_path)
     monkeypatch.setenv("THEME_RESEARCH_REPORT_MAX_MANIFEST_BYTES", "1234")
     monkeypatch.setenv("THEME_RESEARCH_REPORT_MAX_MARKDOWN_BYTES", "5678")
     monkeypatch.setenv("THEME_RESEARCH_REPORT_MAX_PDF_BYTES", "9012")
+    monkeypatch.setenv("THEME_RESEARCH_REPORT_INDEX_SERVICE", "report_index_service")
+    monkeypatch.setenv("THEME_RESEARCH_REPORT_REVIEW_SERVICE", "report_review_service")
 
     settings = Settings()
 
@@ -60,6 +66,8 @@ def test_theme_research_report_settings_parse_environment(monkeypatch, tmp_path)
     assert settings.theme_research_report_max_manifest_bytes == 1234
     assert settings.theme_research_report_max_markdown_bytes == 5678
     assert settings.theme_research_report_max_pdf_bytes == 9012
+    assert settings.theme_research_report_index_service == "report_index_service"
+    assert settings.theme_research_report_review_service == "report_review_service"
 
 
 def test_theme_research_report_settings_have_bounded_defaults(monkeypatch, tmp_path) -> None:
@@ -70,6 +78,8 @@ def test_theme_research_report_settings_have_bounded_defaults(monkeypatch, tmp_p
         "THEME_RESEARCH_REPORT_MAX_MANIFEST_BYTES",
         "THEME_RESEARCH_REPORT_MAX_MARKDOWN_BYTES",
         "THEME_RESEARCH_REPORT_MAX_PDF_BYTES",
+        "THEME_RESEARCH_REPORT_INDEX_SERVICE",
+        "THEME_RESEARCH_REPORT_REVIEW_SERVICE",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -80,6 +90,8 @@ def test_theme_research_report_settings_have_bounded_defaults(monkeypatch, tmp_p
     assert settings.theme_research_report_max_manifest_bytes == 64 * 1024
     assert settings.theme_research_report_max_markdown_bytes == 10 * 1024 * 1024
     assert settings.theme_research_report_max_pdf_bytes == 50 * 1024 * 1024
+    assert settings.theme_research_report_index_service == "theme_research_report_indexer"
+    assert settings.theme_research_report_review_service == "theme_research_report_reviewer"
 
 
 def test_theme_research_report_root_follows_instance_reports_root(monkeypatch, tmp_path) -> None:
@@ -118,7 +130,7 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
 
     sql = schema.THEME_RESEARCH_REPORT_SCHEMA_SQL
 
-    assert schema.THEME_RESEARCH_REPORT_SCHEMA_VERSION == "4"
+    assert schema.THEME_RESEARCH_REPORT_SCHEMA_VERSION == "5"
     assert "CREATE TABLE IF NOT EXISTS research.theme_research_report_version" in sql
     assert "REFERENCES research.theme_research_theme(theme_id)" in sql
     assert "\n    version text NOT NULL," in sql
@@ -150,14 +162,16 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
     assert "REVOKE ALL ON TABLE research.theme_research_report_version FROM PUBLIC" in sql
     assert "REVOKE ALL ON TABLE research.theme_research_report_review_event FROM PUBLIC" in sql
     assert "ALTER TABLE research.theme_research_report_version OWNER TO theme_research_owner" in sql
-    assert "CREATE OR REPLACE FUNCTION research.register_theme_research_report_pending" in sql
-    assert "CREATE OR REPLACE FUNCTION research.review_theme_research_report_version" in sql
+    assert "CREATE FUNCTION research.register_theme_research_report_pending" in sql
+    assert "CREATE FUNCTION research.review_theme_research_report_version" in sql
     assert sql.count("SECURITY DEFINER") == 2
     assert sql.count("SET search_path = pg_catalog") == 2
     assert "REVOKE ALL ON FUNCTION research.register_theme_research_report_pending" in sql
     assert "REVOKE ALL ON FUNCTION research.review_theme_research_report_version" in sql
     assert "GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending" in sql
     assert "GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version" in sql
+    assert "theme_research_report_indexer" in sql
+    assert "theme_research_report_reviewer" in sql
     assert "GRANT SELECT ON research.theme_research_report_version" in sql
     assert "GRANT SELECT ON research.theme_research_report_review_event" in sql
     assert "GRANT SELECT, INSERT" not in sql
@@ -342,7 +356,7 @@ def test_apply_report_schema_rejects_same_named_non_v2_actor_constraint(
     assert calls == [schema.THEME_RESEARCH_REPORT_MIGRATION_LOCK_SQL]
 
 
-def test_report_schema_inspection_requires_owner_and_runtime_roles() -> None:
+def test_report_schema_inspection_requires_all_report_service_roles() -> None:
     from stock_research import theme_research_report_schema as schema
 
     class Cursor:
@@ -396,7 +410,7 @@ def test_report_schema_inspection_requires_owner_and_runtime_roles() -> None:
                     }
                     for table_name in schema._EXPECTED_COLUMNS
                 ]
-            if "SELECT rolname FROM pg_roles" in self.sql:
+            if "FROM pg_roles" in self.sql:
                 return []
             if "relation.relacl" in self.sql and "privilege.grantee" in self.sql:
                 return []
@@ -417,7 +431,12 @@ def test_report_schema_inspection_requires_owner_and_runtime_roles() -> None:
 
     assert inspection == {
         "status": "drifted",
-        "missing": ["role:theme_research_owner", "role:theme_research_runtime"],
+        "missing": [
+            "role:theme_research_owner",
+            "role:theme_research_report_indexer",
+            "role:theme_research_report_reviewer",
+            "role:theme_research_runtime",
+        ],
     }
 
 
@@ -478,6 +497,46 @@ def _exclusive_postgres_test_schema():
         lock_connection.close()
 
 
+@contextmanager
+def _report_role_test_services():
+    source_path = Path(
+        os.environ.get("PGSERVICEFILE", "").strip()
+        or Path.home() / ".pg_service.conf"
+    )
+    parser = configparser.ConfigParser(interpolation=None)
+    if not parser.read(source_path, encoding="utf-8"):
+        raise RuntimeError(f"PostgreSQL service file is unavailable: {source_path}")
+    if not parser.has_section(TEST_SERVICE):
+        raise RuntimeError(f"PostgreSQL migration service is unavailable: {TEST_SERVICE}")
+    previous = os.environ.get("PGSERVICEFILE")
+    with tempfile.TemporaryDirectory(prefix="theme-report-pg-") as temp_dir:
+        isolated_path = Path(temp_dir) / "pg_service.conf"
+        with isolated_path.open("w", encoding="utf-8") as stream:
+            stream.write(source_path.read_text(encoding="utf-8").rstrip())
+            stream.write("\n\n")
+            for alias, role_name in (
+                (TEST_INDEX_SERVICE, "theme_research_report_indexer"),
+                (TEST_REVIEW_SERVICE, "theme_research_report_reviewer"),
+            ):
+                stream.write(f"[{alias}]\n")
+                for key, value in parser[TEST_SERVICE].items():
+                    if key == "options":
+                        continue
+                    stream.write(f"{key}={value}\n")
+                existing_options = parser[TEST_SERVICE].get("options", "").strip()
+                options = f"{existing_options} -c role={role_name}".strip()
+                stream.write(f"options={options}\n\n")
+        isolated_path.chmod(0o600)
+        os.environ["PGSERVICEFILE"] = str(isolated_path)
+        try:
+            yield
+        finally:
+            if previous is None:
+                os.environ.pop("PGSERVICEFILE", None)
+            else:
+                os.environ["PGSERVICEFILE"] = previous
+
+
 def _postgres_conn_impl():
     global _ACTIVE_POSTGRES_FIXTURE_ROWS
 
@@ -490,41 +549,42 @@ def _postgres_conn_impl():
         apply_theme_research_report_schema,
     )
 
-    bootstrap = psycopg.connect(f"service={TEST_SERVICE}")
-    try:
-        database_name = bootstrap.execute("SELECT current_database()").fetchone()[0]
-        if not database_name.endswith("_test"):
-            pytest.fail(f"refusing to run integration tests against {database_name}")
-        bootstrap.execute(DASHBOARD_AUTH_SCHEMA_SQL)
-        bootstrap.execute(THEME_RESEARCH_SCHEMA_SQL)
-        bootstrap.commit()
-    finally:
-        bootstrap.close()
-
-    apply_theme_research_report_schema(service=TEST_SERVICE)
-    apply_theme_research_report_schema(service=TEST_SERVICE)
-
-    connection = psycopg.connect(f"service={TEST_SERVICE}")
-    fixture_rows = {
-        "report_version_ids": set(),
-        "created_theme_ids": set(),
-        "created_user_ids": set(),
-    }
-    _POSTGRES_FIXTURE_ROWS[id(connection)] = fixture_rows
-    previous_active_fixture_rows = _ACTIVE_POSTGRES_FIXTURE_ROWS
-    _ACTIVE_POSTGRES_FIXTURE_ROWS = fixture_rows
-    try:
-        yield connection
-    finally:
-        _ACTIVE_POSTGRES_FIXTURE_ROWS = previous_active_fixture_rows
+    with _report_role_test_services():
+        bootstrap = psycopg.connect(f"service={TEST_SERVICE}")
         try:
-            try:
-                connection.rollback()
-            finally:
-                connection.close()
+            database_name = bootstrap.execute("SELECT current_database()").fetchone()[0]
+            if not database_name.endswith("_test"):
+                pytest.fail(f"refusing to run integration tests against {database_name}")
+            bootstrap.execute(DASHBOARD_AUTH_SCHEMA_SQL)
+            bootstrap.execute(THEME_RESEARCH_SCHEMA_SQL)
+            bootstrap.commit()
         finally:
-            _POSTGRES_FIXTURE_ROWS.pop(id(connection), None)
-            _cleanup_postgres_fixture_rows(fixture_rows)
+            bootstrap.close()
+
+        apply_theme_research_report_schema(service=TEST_SERVICE)
+        apply_theme_research_report_schema(service=TEST_SERVICE)
+
+        connection = psycopg.connect(f"service={TEST_SERVICE}")
+        fixture_rows = {
+            "report_version_ids": set(),
+            "created_theme_ids": set(),
+            "created_user_ids": set(),
+        }
+        _POSTGRES_FIXTURE_ROWS[id(connection)] = fixture_rows
+        previous_active_fixture_rows = _ACTIVE_POSTGRES_FIXTURE_ROWS
+        _ACTIVE_POSTGRES_FIXTURE_ROWS = fixture_rows
+        try:
+            yield connection
+        finally:
+            _ACTIVE_POSTGRES_FIXTURE_ROWS = previous_active_fixture_rows
+            try:
+                try:
+                    connection.rollback()
+                finally:
+                    connection.close()
+            finally:
+                _POSTGRES_FIXTURE_ROWS.pop(id(connection), None)
+                _cleanup_postgres_fixture_rows(fixture_rows)
 
 
 @pytest.fixture
@@ -1071,6 +1131,8 @@ def test_postgres_report_tables_follow_owner_and_runtime_permissions(postgres_co
         """
         SELECT proname, prosecdef, pg_get_userbyid(proowner), proconfig,
                has_function_privilege('theme_research_runtime', oid, 'EXECUTE'),
+               has_function_privilege('theme_research_report_indexer', oid, 'EXECUTE'),
+               has_function_privilege('theme_research_report_reviewer', oid, 'EXECUTE'),
                has_function_privilege('public', oid, 'EXECUTE')
         FROM pg_proc
         WHERE pronamespace = 'research'::regnamespace
@@ -1087,7 +1149,9 @@ def test_postgres_report_tables_follow_owner_and_runtime_permissions(postgres_co
             True,
             "theme_research_owner",
             ["search_path=pg_catalog"],
+            False,
             True,
+            False,
             False,
         ),
         (
@@ -1095,9 +1159,25 @@ def test_postgres_report_tables_follow_owner_and_runtime_permissions(postgres_co
             True,
             "theme_research_owner",
             ["search_path=pg_catalog"],
+            False,
+            False,
             True,
             False,
         ),
+    ]
+    assert postgres_conn.execute(
+        """
+        SELECT rolname, rolcanlogin
+        FROM pg_roles
+        WHERE rolname IN (
+            'theme_research_report_indexer',
+            'theme_research_report_reviewer'
+        )
+        ORDER BY rolname
+        """
+    ).fetchall() == [
+        ("theme_research_report_indexer", False),
+        ("theme_research_report_reviewer", False),
     ]
 
     postgres_conn.execute("SET LOCAL ROLE theme_research_runtime")
@@ -1283,8 +1363,18 @@ def test_postgres_inspection_repairs_report_function_security_drift(postgres_con
         inspection = inspect_theme_research_report_schema(connection.cursor())
 
         assert inspection["status"] == "drifted"
-        assert "function_security:review_theme_research_report_version" in inspection["missing"]
-        assert "public_privilege:function.review_theme_research_report_version" in inspection["missing"]
+        assert any(
+            item.startswith(
+                "function_security:research.review_theme_research_report_version("
+            )
+            for item in inspection["missing"]
+        )
+        assert any(
+            item.startswith(
+                "public_privilege:function.research.review_theme_research_report_version("
+            )
+            for item in inspection["missing"]
+        )
     finally:
         connection.close()
 
@@ -1317,9 +1407,12 @@ def test_postgres_apply_revokes_direct_report_function_grant_from_app(postgres_c
         inspection = inspect_theme_research_report_schema(connection.cursor())
 
         assert inspection["status"] == "drifted"
-        assert (
-            "function_acl:review_theme_research_report_version.theme_research_app.EXECUTE"
-            in inspection["missing"]
+        assert any(
+            item.startswith(
+                "function_acl:research.review_theme_research_report_version("
+            )
+            and item.endswith(".theme_research_app.EXECUTE")
+            for item in inspection["missing"]
         )
     finally:
         connection.close()
@@ -1347,7 +1440,7 @@ def test_postgres_apply_revokes_direct_report_function_grant_from_app(postgres_c
         verified.close()
 
 
-def test_postgres_apply_removes_runtime_report_function_grant_option(postgres_conn) -> None:
+def test_postgres_apply_removes_runtime_report_function_execute(postgres_conn) -> None:
     from stock_research.theme_research_report_schema import (
         apply_theme_research_report_schema,
         inspect_theme_research_report_schema,
@@ -1369,9 +1462,12 @@ def test_postgres_apply_removes_runtime_report_function_grant_option(postgres_co
         inspection = inspect_theme_research_report_schema(connection.cursor())
 
         assert inspection["status"] == "drifted"
-        assert (
-            "function_grant_option:register_theme_research_report_pending.theme_research_runtime"
-            in inspection["missing"]
+        assert any(
+            item.startswith(
+                "function_acl:research.register_theme_research_report_pending("
+            )
+            and item.endswith(".theme_research_runtime.EXECUTE")
+            for item in inspection["missing"]
         )
     finally:
         connection.close()
@@ -1391,8 +1487,65 @@ def test_postgres_apply_removes_runtime_report_function_grant_option(postgres_co
               AND privilege.privilege_type = 'EXECUTE'
             """
         ).fetchone()
-        assert runtime_acl == (False,)
+        assert runtime_acl is None
         assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+    finally:
+        verified.close()
+
+
+def test_postgres_apply_replaces_missing_expected_function_and_drops_rogue_overload(
+    postgres_conn,
+) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            DROP FUNCTION research.review_theme_research_report_version(
+                text, text, bigint, text, text, text, text, text
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE FUNCTION research.review_theme_research_report_version(text)
+            RETURNS boolean LANGUAGE sql AS 'SELECT true'
+            """
+        )
+        connection.execute(
+            """
+            GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(text)
+            TO theme_research_runtime, theme_research_report_indexer,
+               theme_research_report_reviewer
+            """
+        )
+        connection.commit()
+
+        inspection = inspect_theme_research_report_schema(connection.cursor())
+
+        assert inspection["status"] == "drifted"
+        assert any(
+            item.startswith(
+                "function_missing:research.review_theme_research_report_version("
+            )
+            for item in inspection["missing"]
+        )
+        assert "function_overload:research.review_theme_research_report_version(text)" in inspection["missing"]
+    finally:
+        connection.close()
+
+    apply_theme_research_report_schema(service=TEST_SERVICE)
+    verified = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+        assert verified.execute(
+            "SELECT to_regprocedure('research.review_theme_research_report_version(text)')"
+        ).fetchone()[0] is None
     finally:
         verified.close()
 
@@ -2542,19 +2695,17 @@ def test_postgres_event_failure_rolls_back_report_version(postgres_conn, tmp_pat
         apply_theme_research_report_schema(service=TEST_SERVICE)
 
 
-def test_postgres_runtime_service_registers_with_minimum_permissions(
+def test_postgres_index_service_registers_with_minimum_permissions(
     postgres_conn,
     tmp_path,
 ) -> None:
-    if not TEST_RUNTIME_SERVICE:
-        pytest.skip("dedicated runtime test service is required")
     manifest = _validated_manifest(tmp_path)
     _seed_report_store(postgres_conn, manifest.theme_id)
     assert postgres_conn.execute(
         "SELECT count(*) FROM identity.user_account WHERE user_id = 'system'"
     ).fetchone()[0] == 0
 
-    result = register_report_manifest(manifest, service=TEST_RUNTIME_SERVICE)
+    result = register_report_manifest(manifest, service=TEST_INDEX_SERVICE)
 
     assert result["result"] == "indexed"
     assert postgres_conn.execute(
@@ -2571,11 +2722,9 @@ def test_postgres_runtime_service_registers_with_minimum_permissions(
     ).fetchone()[0] == "system"
 
 
-def test_postgres_runtime_service_can_publish_with_minimum_permissions(
+def test_postgres_review_service_can_publish_with_minimum_permissions(
     postgres_conn,
 ) -> None:
-    if not TEST_RUNTIME_SERVICE:
-        pytest.skip("dedicated runtime test service is required")
     theme_id = "report-runtime-review-theme"
     actor_id = "report-runtime-review-admin"
     report_id = "report-runtime-review-version"
@@ -2583,8 +2732,8 @@ def test_postgres_runtime_service_can_publish_with_minimum_permissions(
     _insert_user(postgres_conn, actor_id)
     _insert_report(postgres_conn, report_id, theme_id, "v1")
     postgres_conn.commit()
-    with psycopg.connect(f"service={TEST_RUNTIME_SERVICE}") as runtime_conn:
-        assert runtime_conn.execute(
+    with psycopg.connect(f"service={TEST_REVIEW_SERVICE}") as review_conn:
+        assert review_conn.execute(
             "SELECT has_schema_privilege(current_user, 'identity', 'USAGE')"
         ).fetchone()[0] is False
 
@@ -2596,7 +2745,7 @@ def test_postgres_runtime_service_can_publish_with_minimum_permissions(
         comment="runtime approved",
         request_id="runtime-review-request",
         idempotency_key="runtime-review-key",
-        service=TEST_RUNTIME_SERVICE,
+        service=TEST_REVIEW_SERVICE,
     )
 
     assert result["status"] == "published"
@@ -2606,9 +2755,46 @@ def test_postgres_runtime_service_can_publish_with_minimum_permissions(
     ).fetchone() == ("published", 2)
 
 
+def test_postgres_report_services_enforce_separate_write_capabilities(
+    postgres_conn,
+) -> None:
+    theme_id = "report-service-split-theme"
+    actor_id = "report-service-split-admin"
+    report_id = "report-service-split-version"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, report_id, theme_id, "v1")
+    postgres_conn.commit()
+
+    review_sql = """
+        SELECT *
+        FROM research.review_theme_research_report_version(
+            'publish', %s, 1, %s, '', 'request', 'key', 'event'
+        )
+    """
+    for service in (TEST_RUNTIME_SERVICE, TEST_INDEX_SERVICE):
+        with psycopg.connect(f"service={service}") as connection:
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                connection.execute(review_sql, (report_id, actor_id))
+
+    with psycopg.connect(f"service={TEST_REVIEW_SERVICE}") as reviewer:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            reviewer.execute(
+                """
+                SELECT research.register_theme_research_report_pending(
+                    'id', %s, 'v2', 'title', 'summary', 'report.md', %s,
+                    NULL, NULL, 'manifest.json', %s, 'generator', '1',
+                    '{}'::jsonb, now(), '{}'::jsonb, 'event', 'request', 'key'
+                )
+                """,
+                (theme_id, "a" * 64, "b" * 64),
+            )
+        reviewer.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            _insert_report(reviewer, "reviewer-direct-write", theme_id, "v3")
+
+
 def test_postgres_review_function_rejects_null_concurrency_guard(postgres_conn) -> None:
-    if not TEST_RUNTIME_SERVICE:
-        pytest.skip("dedicated runtime test service is required")
     theme_id = "report-runtime-null-version-theme"
     actor_id = "report-runtime-null-version-admin"
     report_id = "report-runtime-null-version-report"
@@ -2617,7 +2803,7 @@ def test_postgres_review_function_rejects_null_concurrency_guard(postgres_conn) 
     _insert_report(postgres_conn, report_id, theme_id, "v1")
     postgres_conn.commit()
 
-    with psycopg.connect(f"service={TEST_RUNTIME_SERVICE}") as runtime_conn:
+    with psycopg.connect(f"service={TEST_REVIEW_SERVICE}") as runtime_conn:
         with pytest.raises(psycopg.errors.RaiseException) as exc_info:
             runtime_conn.execute(
                 """
@@ -2638,6 +2824,53 @@ def test_postgres_review_function_rejects_null_concurrency_guard(postgres_conn) 
         """,
         (report_id,),
     ).fetchone() == ("pending_review", 1)
+
+
+def test_postgres_review_holds_actor_lock_until_transaction_commits(
+    postgres_conn,
+) -> None:
+    theme_id = "report-review-actor-lock-theme"
+    actor_id = "report-review-actor-lock-admin"
+    report_id = "report-review-actor-lock-version"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, report_id, theme_id, "v1")
+    postgres_conn.commit()
+
+    update_started = threading.Event()
+    update_finished = threading.Event()
+
+    def demote_actor() -> None:
+        with psycopg.connect(f"service={TEST_SERVICE}") as connection:
+            update_started.set()
+            connection.execute(
+                "UPDATE identity.user_account SET role = 'user' WHERE user_id = %s",
+                (actor_id,),
+            )
+        update_finished.set()
+
+    with psycopg.connect(f"service={TEST_REVIEW_SERVICE}") as review_conn:
+        review_conn.execute(
+            """
+            SELECT *
+            FROM research.review_theme_research_report_version(
+                'publish', %s, 1, %s, '', 'request', 'key', 'event'
+            )
+            """,
+            (report_id, actor_id),
+        )
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(demote_actor)
+            assert update_started.wait(timeout=2)
+            assert not update_finished.wait(timeout=0.25)
+            review_conn.commit()
+            future.result(timeout=2)
+
+    assert update_finished.is_set()
+    assert postgres_conn.execute(
+        "SELECT role FROM identity.user_account WHERE user_id = %s",
+        (actor_id,),
+    ).fetchone()[0] == "user"
 
 
 def test_postgres_publish_archives_current_and_exposes_safe_read_models(

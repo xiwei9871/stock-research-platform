@@ -1469,6 +1469,10 @@ def test_theme_report_admin_list_and_diagnostics_are_admin_only(monkeypatch) -> 
     )
     client = _api_client(monkeypatch, role="admin")
     app = client.app
+    assert (
+        app.state.theme_research_report_scheduler._service
+        == dashboard_app.SETTINGS.theme_research_report_index_service
+    )
     monkeypatch.setattr(
         app.state.theme_research_report_scheduler,
         "diagnostics",
@@ -1603,7 +1607,7 @@ def test_theme_report_mutations_use_authenticated_actor_and_request_id(
                 text_field: "review text",
                 "request_id": "req-123",
                 "idempotency_key": "request-key",
-                "service": dashboard_app.SETTINGS.theme_research_runtime_service,
+                "service": dashboard_app.SETTINGS.theme_research_report_review_service,
             },
         )
     ]

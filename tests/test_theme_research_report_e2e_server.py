@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import importlib.util
 import sys
 from pathlib import Path
@@ -12,6 +13,45 @@ assert SPEC is not None and SPEC.loader is not None
 server = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = server
 SPEC.loader.exec_module(server)
+
+
+def test_isolated_service_file_uses_separate_report_roles(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.conf"
+    source.write_text(
+        """
+[theme_research_test_migration]
+host=database.test
+dbname=stock_research_theme_test
+user=postgres
+options=-c statement_timeout=5000
+
+[theme_research_test_runtime]
+host=database.test
+dbname=stock_research_theme_test
+user=theme_research_app
+""".strip(),
+        encoding="utf-8",
+    )
+    isolated_root = tmp_path / "isolated"
+    isolated_root.mkdir()
+    monkeypatch.setenv("PGSERVICEFILE", str(source))
+
+    generated = server._write_isolated_service_file(isolated_root)
+
+    parser = configparser.ConfigParser(interpolation=None)
+    assert parser.read(generated, encoding="utf-8")
+    assert parser["theme_research_runtime"]["user"] == "theme_research_app"
+    assert (
+        parser["theme_research_report_indexer"]["options"]
+        == "-c statement_timeout=5000 -c role=theme_research_report_indexer"
+    )
+    assert (
+        parser["theme_research_report_reviewer"]["options"]
+        == "-c statement_timeout=5000 -c role=theme_research_report_reviewer"
+    )
 
 
 class FakeConnection:

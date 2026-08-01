@@ -7,10 +7,29 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect
 
 
-THEME_RESEARCH_REPORT_SCHEMA_VERSION = "4"
+THEME_RESEARCH_REPORT_SCHEMA_VERSION = "5"
 
 THEME_RESEARCH_REPORT_SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS research;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_report_indexer'
+    ) THEN
+        CREATE ROLE theme_research_report_indexer NOLOGIN;
+    ELSE
+        ALTER ROLE theme_research_report_indexer NOLOGIN;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_report_reviewer'
+    ) THEN
+        CREATE ROLE theme_research_report_reviewer NOLOGIN;
+    ELSE
+        ALTER ROLE theme_research_report_reviewer NOLOGIN;
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS research.theme_research_report_version (
     report_version_id text CONSTRAINT pk_theme_research_report_version PRIMARY KEY,
@@ -90,7 +109,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_theme_research_report_review_actor_idempote
     ON research.theme_research_report_review_event (actor_user_id, idempotency_key)
     WHERE idempotency_key <> '';
 
-CREATE OR REPLACE FUNCTION research.register_theme_research_report_pending(
+DROP FUNCTION IF EXISTS research.register_theme_research_report_pending(
+    text, text, text, text, text, text, text, text, text, text,
+    text, text, text, jsonb, timestamptz, jsonb, text, text, text
+);
+
+CREATE FUNCTION research.register_theme_research_report_pending(
     p_report_version_id text,
     p_theme_id text,
     p_version text,
@@ -110,11 +134,18 @@ CREATE OR REPLACE FUNCTION research.register_theme_research_report_pending(
     p_event_id text,
     p_request_id text,
     p_idempotency_key text
-) RETURNS boolean
+) RETURNS TABLE (
+    inserted boolean,
+    report_status text,
+    differing_fields text[]
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog
 AS $$
+DECLARE
+    v_existing record;
+    v_differing_fields text[];
 BEGIN
     PERFORM pg_catalog.pg_advisory_xact_lock(
         pg_catalog.hashtextextended(
@@ -123,6 +154,32 @@ BEGIN
             0
         )
     );
+    SELECT report.*
+    INTO v_existing
+    FROM research.theme_research_report_version AS report
+    WHERE report.theme_id = p_theme_id
+      AND report.version = p_version;
+    IF FOUND THEN
+        v_differing_fields := pg_catalog.array_remove(ARRAY[
+            CASE WHEN v_existing.report_version_id IS DISTINCT FROM p_report_version_id THEN 'report_version_id' END,
+            CASE WHEN v_existing.title IS DISTINCT FROM p_title THEN 'title' END,
+            CASE WHEN v_existing.summary IS DISTINCT FROM p_summary THEN 'summary' END,
+            CASE WHEN v_existing.markdown_relative_path IS DISTINCT FROM p_markdown_relative_path THEN 'markdown_relative_path' END,
+            CASE WHEN v_existing.markdown_sha256 IS DISTINCT FROM p_markdown_sha256 THEN 'markdown_sha256' END,
+            CASE WHEN v_existing.pdf_relative_path IS DISTINCT FROM p_pdf_relative_path THEN 'pdf_relative_path' END,
+            CASE WHEN v_existing.pdf_sha256 IS DISTINCT FROM p_pdf_sha256 THEN 'pdf_sha256' END,
+            CASE WHEN v_existing.manifest_relative_path IS DISTINCT FROM p_manifest_relative_path THEN 'manifest_relative_path' END,
+            CASE WHEN v_existing.manifest_sha256 IS DISTINCT FROM p_manifest_sha256 THEN 'manifest_sha256' END,
+            CASE WHEN v_existing.generator_name IS DISTINCT FROM p_generator_name THEN 'generator_name' END,
+            CASE WHEN v_existing.generator_version IS DISTINCT FROM p_generator_version THEN 'generator_version' END,
+            CASE WHEN v_existing.generator_metadata IS DISTINCT FROM p_generator_metadata THEN 'generator_metadata' END,
+            CASE WHEN v_existing.generated_at IS DISTINCT FROM p_generated_at THEN 'generated_at' END,
+            CASE WHEN v_existing.metadata IS DISTINCT FROM p_metadata THEN 'metadata' END
+        ], NULL);
+        RETURN QUERY SELECT false, v_existing.status, v_differing_fields;
+        RETURN;
+    END IF;
+
     INSERT INTO research.theme_research_report_version (
         report_version_id, theme_id, version, title, summary, status,
         markdown_relative_path, markdown_sha256,
@@ -138,9 +195,8 @@ BEGIN
         p_generator_metadata, p_generated_at, p_metadata, 1
     )
     ON CONFLICT (theme_id, version) DO NOTHING;
-
     IF NOT FOUND THEN
-        RETURN false;
+        RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'THEME_REPORT_REGISTER_RETRY';
     END IF;
 
     INSERT INTO research.theme_research_report_review_event (
@@ -150,11 +206,15 @@ BEGIN
         p_event_id, p_report_version_id, NULL, 'pending_review',
         'system', '', p_request_id, p_idempotency_key
     );
-    RETURN true;
+    RETURN QUERY SELECT true, 'pending_review'::text, ARRAY[]::text[];
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION research.review_theme_research_report_version(
+DROP FUNCTION IF EXISTS research.review_theme_research_report_version(
+    text, text, bigint, text, text, text, text, text
+);
+
+CREATE FUNCTION research.review_theme_research_report_version(
     p_action text,
     p_report_version_id text,
     p_expected_row_version bigint,
@@ -166,7 +226,23 @@ CREATE OR REPLACE FUNCTION research.review_theme_research_report_version(
 ) RETURNS TABLE (
     replayed boolean,
     event_to_status text,
-    event_created_at timestamptz
+    event_created_at timestamptz,
+    report_version_id text,
+    theme_id text,
+    version text,
+    title text,
+    summary text,
+    status text,
+    generated_at timestamptz,
+    indexed_at timestamptz,
+    published_at timestamptz,
+    published_by_user_id text,
+    row_version bigint,
+    created_at timestamptz,
+    updated_at timestamptz,
+    rejected_at timestamptz,
+    rejected_by_user_id text,
+    rejection_reason text
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -244,17 +320,26 @@ BEGIN
            OR v_previous.to_status <> v_to_status THEN
             RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_IDEMPOTENCY_CONFLICT';
         END IF;
-        RETURN QUERY SELECT true, v_previous.to_status, v_previous.created_at;
+        RETURN QUERY
+        SELECT true, v_previous.to_status, v_previous.created_at,
+               report.report_version_id, report.theme_id, report.version,
+               report.title, report.summary, report.status,
+               report.generated_at, report.indexed_at, report.published_at,
+               report.published_by_user_id, report.row_version,
+               report.created_at, report.updated_at, report.rejected_at,
+               report.rejected_by_user_id, report.rejection_reason
+        FROM research.theme_research_report_version AS report
+        WHERE report.report_version_id = p_report_version_id;
         RETURN;
     END IF;
 
-    IF NOT EXISTS (
-        SELECT 1
-        FROM identity.user_account AS actor
-        WHERE actor.user_id = p_actor_user_id
-          AND actor.role = 'admin'
-          AND actor.is_active
-    ) THEN
+    PERFORM 1
+    FROM identity.user_account AS actor
+    WHERE actor.user_id = p_actor_user_id
+      AND actor.role = 'admin'
+      AND actor.is_active
+    FOR SHARE;
+    IF NOT FOUND THEN
         RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_ACTOR_NOT_FOUND';
     END IF;
     IF v_status <> 'pending_review' THEN
@@ -322,7 +407,16 @@ BEGIN
         p_event_id, p_report_version_id, 'pending_review', v_to_status,
         p_actor_user_id, p_comment, p_request_id, p_idempotency_key
     );
-    RETURN QUERY SELECT false, v_to_status, pg_catalog.now();
+    RETURN QUERY
+    SELECT false, v_to_status, pg_catalog.now(),
+           report.report_version_id, report.theme_id, report.version,
+           report.title, report.summary, report.status,
+           report.generated_at, report.indexed_at, report.published_at,
+           report.published_by_user_id, report.row_version,
+           report.created_at, report.updated_at, report.rejected_at,
+           report.rejected_by_user_id, report.rejection_reason
+    FROM research.theme_research_report_version AS report
+    WHERE report.report_version_id = p_report_version_id;
 END;
 $$;
 
@@ -346,7 +440,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_owner') THEN
         EXECUTE 'GRANT USAGE, CREATE ON SCHEMA research TO theme_research_owner';
         EXECUTE 'GRANT USAGE ON SCHEMA identity TO theme_research_owner';
-        EXECUTE 'GRANT SELECT (user_id, role, is_active) ON identity.user_account TO theme_research_owner';
+        EXECUTE 'GRANT SELECT (user_id, role, is_active), UPDATE (role) ON identity.user_account TO theme_research_owner';
         EXECUTE 'ALTER TABLE research.theme_research_report_version OWNER TO theme_research_owner';
         EXECUTE 'ALTER TABLE research.theme_research_report_review_event OWNER TO theme_research_owner';
         EXECUTE 'ALTER FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) OWNER TO theme_research_owner';
@@ -361,25 +455,74 @@ BEGIN
         EXECUTE 'GRANT SELECT ON research.theme_research_report_review_event TO theme_research_runtime';
         EXECUTE 'REVOKE ALL ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) FROM theme_research_runtime';
         EXECUTE 'REVOKE ALL ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) FROM theme_research_runtime';
-        EXECUTE 'GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) TO theme_research_runtime';
-        EXECUTE 'GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) TO theme_research_runtime';
     END IF;
 
-    FOR routine_identity, grantee_name IN
-        SELECT DISTINCT routine.oid::regprocedure::text, role.rolname
+    EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_report_indexer';
+    EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_report_reviewer';
+    EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_version FROM theme_research_report_indexer, theme_research_report_reviewer';
+    EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_review_event FROM theme_research_report_indexer, theme_research_report_reviewer';
+    EXECUTE 'REVOKE ALL ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) FROM theme_research_report_indexer, theme_research_report_reviewer';
+    EXECUTE 'REVOKE ALL ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) FROM theme_research_report_indexer, theme_research_report_reviewer';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) TO theme_research_report_indexer';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) TO theme_research_report_reviewer';
+
+    FOR routine_identity IN
+        SELECT routine.oid::regprocedure::text
         FROM pg_proc routine
         JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
-        CROSS JOIN LATERAL aclexplode(
-            COALESCE(routine.proacl, acldefault('f', routine.proowner))
-        ) privilege
-        JOIN pg_roles role ON role.oid = privilege.grantee
         WHERE namespace.nspname = 'research'
           AND routine.proname IN (
               'register_theme_research_report_pending',
               'review_theme_research_report_version'
           )
+          AND routine.oid NOT IN (
+              'research.register_theme_research_report_pending(text,text,text,text,text,text,text,text,text,text,text,text,text,jsonb,timestamp with time zone,jsonb,text,text,text)'::regprocedure,
+              'research.review_theme_research_report_version(text,text,bigint,text,text,text,text,text)'::regprocedure
+          )
+    LOOP
+        EXECUTE format(
+            'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM PUBLIC',
+            routine_identity
+        );
+        FOR grantee_name IN
+            SELECT DISTINCT role.rolname
+            FROM pg_proc granted_routine
+            CROSS JOIN LATERAL aclexplode(
+                COALESCE(
+                    granted_routine.proacl,
+                    acldefault('f', granted_routine.proowner)
+                )
+            ) privilege
+            JOIN pg_roles role ON role.oid = privilege.grantee
+            WHERE granted_routine.oid = routine_identity::regprocedure
+              AND privilege.grantee <> granted_routine.proowner
+        LOOP
+            EXECUTE format(
+                'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM %I',
+                routine_identity,
+                grantee_name
+            );
+        END LOOP;
+        EXECUTE format('DROP FUNCTION %s', routine_identity);
+    END LOOP;
+
+    FOR routine_identity, grantee_name IN
+        SELECT DISTINCT routine.oid::regprocedure::text, role.rolname
+        FROM pg_proc routine
+        CROSS JOIN LATERAL aclexplode(
+            COALESCE(routine.proacl, acldefault('f', routine.proowner))
+        ) privilege
+        JOIN pg_roles role ON role.oid = privilege.grantee
+        WHERE routine.oid IN (
+              'research.register_theme_research_report_pending(text,text,text,text,text,text,text,text,text,text,text,text,text,jsonb,timestamp with time zone,jsonb,text,text,text)'::regprocedure,
+              'research.review_theme_research_report_version(text,text,bigint,text,text,text,text,text)'::regprocedure
+          )
           AND privilege.grantee <> routine.proowner
-          AND role.rolname <> 'theme_research_runtime'
+          AND role.rolname <> CASE routine.proname
+              WHEN 'register_theme_research_report_pending'
+                  THEN 'theme_research_report_indexer'
+              ELSE 'theme_research_report_reviewer'
+          END
     LOOP
         EXECUTE format(
             'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM %I',
@@ -556,9 +699,43 @@ _EXPECTED_INDEX_DEFINITIONS = {
 }
 
 _ALLOWED_RUNTIME_UPDATE_COLUMNS: set[str] = set()
+_EXPECTED_REPORT_ROLES = (
+    "theme_research_owner",
+    "theme_research_runtime",
+    "theme_research_report_indexer",
+    "theme_research_report_reviewer",
+)
 _EXPECTED_SECURITY_DEFINER_FUNCTIONS = {
-    "register_theme_research_report_pending",
-    "review_theme_research_report_version",
+    "register_theme_research_report_pending": {
+        "identity_arguments": (
+            "p_report_version_id text, p_theme_id text, p_version text, "
+            "p_title text, p_summary text, p_markdown_relative_path text, "
+            "p_markdown_sha256 text, p_pdf_relative_path text, p_pdf_sha256 text, "
+            "p_manifest_relative_path text, p_manifest_sha256 text, "
+            "p_generator_name text, p_generator_version text, "
+            "p_generator_metadata jsonb, p_generated_at timestamp with time zone, "
+            "p_metadata jsonb, p_event_id text, p_request_id text, "
+            "p_idempotency_key text"
+        ),
+        "regprocedure": (
+            "research.register_theme_research_report_pending(text,text,text,text,"
+            "text,text,text,text,text,text,text,text,text,jsonb,"
+            "timestamp with time zone,jsonb,text,text,text)"
+        ),
+        "execute_role": "theme_research_report_indexer",
+    },
+    "review_theme_research_report_version": {
+        "identity_arguments": (
+            "p_action text, p_report_version_id text, "
+            "p_expected_row_version bigint, p_actor_user_id text, p_comment text, "
+            "p_request_id text, p_idempotency_key text, p_event_id text"
+        ),
+        "regprocedure": (
+            "research.review_theme_research_report_version(text,text,bigint,text,"
+            "text,text,text,text)"
+        ),
+        "execute_role": "theme_research_report_reviewer",
+    },
 }
 
 
@@ -762,19 +939,32 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
 
     cur.execute(
         """
-        SELECT rolname FROM pg_roles
-        WHERE rolname IN ('theme_research_owner', 'theme_research_runtime')
+        SELECT rolname, rolcanlogin FROM pg_roles
+        WHERE rolname = ANY(%s)
         """
+        ,
+        (list(_EXPECTED_REPORT_ROLES),),
     )
-    roles = {str(_row_value(row, "rolname")) for row in cur.fetchall()}
-    for role_name in ("theme_research_owner", "theme_research_runtime"):
+    role_rows = cur.fetchall()
+    roles = {str(_row_value(row, "rolname", 0)) for row in role_rows}
+    for role_name in _EXPECTED_REPORT_ROLES:
         if role_name not in roles:
             missing.append(f"role:{role_name}")
-    if {"theme_research_owner", "theme_research_runtime"}.issubset(roles):
+    for row in role_rows:
+        role_name = str(_row_value(row, "rolname", 0))
+        if role_name in {
+            "theme_research_report_indexer",
+            "theme_research_report_reviewer",
+        } and bool(_row_value(row, "rolcanlogin", 1)):
+            missing.append(f"role_login:{role_name}")
+    if set(_EXPECTED_REPORT_ROLES).issubset(roles):
         cur.execute(
             """
             SELECT
+                routine.oid AS function_oid,
                 routine.proname AS function_name,
+                pg_get_function_identity_arguments(routine.oid) AS identity_arguments,
+                routine.oid::regprocedure::text AS regprocedure,
                 routine.prosecdef AS security_definer,
                 pg_get_userbyid(routine.proowner) AS owner_name,
                 routine.proconfig AS configuration
@@ -785,71 +975,98 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             """,
             (list(_EXPECTED_SECURITY_DEFINER_FUNCTIONS),),
         )
-        function_rows = {
-            str(_row_value(row, "function_name", 0)): row
-            for row in cur.fetchall()
-        }
-        for function_name in sorted(_EXPECTED_SECURITY_DEFINER_FUNCTIONS):
-            row = function_rows.get(function_name)
+        function_rows = cur.fetchall()
+        expected_oids: dict[int, tuple[str, str]] = {}
+        for function_name, expected in sorted(
+            _EXPECTED_SECURITY_DEFINER_FUNCTIONS.items()
+        ):
+            row = next(
+                (
+                    candidate
+                    for candidate in function_rows
+                    if str(_row_value(candidate, "function_name", 1))
+                    == function_name
+                    and str(_row_value(candidate, "identity_arguments", 2))
+                    == expected["identity_arguments"]
+                ),
+                None,
+            )
             if row is None:
-                missing.append(f"migration:v3_function:{function_name}")
+                missing.append(f"function_missing:{expected['regprocedure']}")
                 continue
-            if not bool(_row_value(row, "security_definer", 1)):
-                missing.append(f"function_security:{function_name}")
-            if str(_row_value(row, "owner_name", 2)) != "theme_research_owner":
-                missing.append(f"function_owner:{function_name}")
-            configuration = _row_value(row, "configuration", 3)
+            function_oid = int(_row_value(row, "function_oid", 0))
+            regprocedure = str(_row_value(row, "regprocedure", 3))
+            expected_oids[function_oid] = (
+                regprocedure,
+                str(expected["execute_role"]),
+            )
+            if not bool(_row_value(row, "security_definer", 4)):
+                missing.append(f"function_security:{regprocedure}")
+            if str(_row_value(row, "owner_name", 5)) != "theme_research_owner":
+                missing.append(f"function_owner:{regprocedure}")
+            configuration = _row_value(row, "configuration", 6)
             if list(configuration or []) != ["search_path=pg_catalog"]:
-                missing.append(f"function_config:{function_name}")
-        cur.execute(
-            """
-            SELECT
-                routine.proname AS function_name,
-                pg_get_userbyid(routine.proowner) AS owner_name,
-                privilege.grantee,
-                role.rolname AS grantee_name,
-                privilege.privilege_type,
-                privilege.is_grantable
-            FROM pg_proc routine
-            JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
-            CROSS JOIN LATERAL aclexplode(
-                COALESCE(routine.proacl, acldefault('f', routine.proowner))
-            ) privilege
-            LEFT JOIN pg_roles role ON role.oid = privilege.grantee
-            WHERE namespace.nspname = 'research'
-              AND routine.proname = ANY(%s)
-            """,
-            (list(_EXPECTED_SECURITY_DEFINER_FUNCTIONS),),
-        )
-        runtime_execute: set[str] = set()
-        for row in cur.fetchall():
-            function_name = str(_row_value(row, "function_name", 0))
-            owner_name = str(_row_value(row, "owner_name", 1))
-            grantee_oid = int(_row_value(row, "grantee", 2))
-            grantee_name = str(_row_value(row, "grantee_name", 3) or "PUBLIC")
-            privilege_type = str(_row_value(row, "privilege_type", 4))
-            is_grantable = bool(_row_value(row, "is_grantable", 5))
-            if grantee_name == owner_name:
-                continue
-            if (
-                grantee_name == "theme_research_runtime"
-                and privilege_type == "EXECUTE"
-            ):
-                runtime_execute.add(function_name)
-                if is_grantable:
-                    missing.append(
-                        f"function_grant_option:{function_name}.theme_research_runtime"
-                    )
-                continue
-            if grantee_oid == 0:
-                missing.append(f"public_privilege:function.{function_name}")
-            else:
+                missing.append(f"function_config:{regprocedure}")
+        for row in function_rows:
+            function_name = str(_row_value(row, "function_name", 1))
+            identity_arguments = str(_row_value(row, "identity_arguments", 2))
+            expected = _EXPECTED_SECURITY_DEFINER_FUNCTIONS[function_name]
+            if identity_arguments != expected["identity_arguments"]:
                 missing.append(
-                    f"function_acl:{function_name}.{grantee_name}.{privilege_type}"
+                    f"function_overload:{_row_value(row, 'regprocedure', 3)}"
                 )
-        for function_name in sorted(_EXPECTED_SECURITY_DEFINER_FUNCTIONS):
-            if function_name not in runtime_execute:
-                missing.append(f"function_privilege:{function_name}")
+
+        if expected_oids:
+            cur.execute(
+                """
+                SELECT
+                    routine.oid AS function_oid,
+                    pg_get_userbyid(routine.proowner) AS owner_name,
+                    privilege.grantee,
+                    role.rolname AS grantee_name,
+                    privilege.privilege_type,
+                    privilege.is_grantable
+                FROM pg_proc routine
+                CROSS JOIN LATERAL aclexplode(
+                    COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                ) privilege
+                LEFT JOIN pg_roles role ON role.oid = privilege.grantee
+                WHERE routine.oid = ANY(%s::oid[])
+                """,
+                (list(expected_oids),),
+            )
+            allowed_execute: set[int] = set()
+            for row in cur.fetchall():
+                function_oid = int(_row_value(row, "function_oid", 0))
+                owner_name = str(_row_value(row, "owner_name", 1))
+                grantee_oid = int(_row_value(row, "grantee", 2))
+                grantee_name = str(
+                    _row_value(row, "grantee_name", 3) or "PUBLIC"
+                )
+                privilege_type = str(_row_value(row, "privilege_type", 4))
+                is_grantable = bool(_row_value(row, "is_grantable", 5))
+                regprocedure, execute_role = expected_oids[function_oid]
+                if grantee_name == owner_name:
+                    continue
+                if grantee_name == execute_role and privilege_type == "EXECUTE":
+                    allowed_execute.add(function_oid)
+                    if is_grantable:
+                        missing.append(
+                            f"function_grant_option:{regprocedure}.{execute_role}"
+                        )
+                    continue
+                if grantee_oid == 0:
+                    missing.append(f"public_privilege:function.{regprocedure}")
+                else:
+                    missing.append(
+                        f"function_acl:{regprocedure}.{grantee_name}."
+                        f"{privilege_type}"
+                    )
+            for function_oid, (regprocedure, execute_role) in expected_oids.items():
+                if function_oid not in allowed_execute:
+                    missing.append(
+                        f"function_privilege:{regprocedure}.{execute_role}"
+                    )
     cur.execute(
         """
         SELECT
@@ -1083,12 +1300,16 @@ def apply_theme_research_report_schema(
             cur.execute(THEME_RESEARCH_REPORT_MIGRATION_LOCK_SQL)
             inspection = inspect_theme_research_report_schema(cur)
             repairable_prefixes = (
+                "role:",
+                "role_login:",
                 "owner:",
                 "privilege:",
                 "public_privilege:",
                 "column_privilege:",
                 "acl:",
                 "migration:v3_function:",
+                "function_missing:",
+                "function_overload:",
                 "function_security:",
                 "function_owner:",
                 "function_config:",

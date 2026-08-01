@@ -521,7 +521,7 @@ def scan_theme_research_report_root(
                                 )
                             if selected_service is None:
                                 selected_service = (
-                                    _load_settings().theme_research_runtime_service
+                                    _load_settings().theme_research_report_index_service
                                 )
                             store_result = register_report_manifest(
                                 manifest, service=selected_service
@@ -597,7 +597,9 @@ def scan_theme_research_report_root(
 def _build_parser(settings: Any) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m stock_research.theme_research_report_index")
     parser.add_argument("--root", type=Path, default=settings.theme_research_report_root)
-    parser.add_argument("--service", default=settings.theme_research_runtime_service)
+    parser.add_argument(
+        "--service", default=settings.theme_research_report_index_service
+    )
     return parser
 
 

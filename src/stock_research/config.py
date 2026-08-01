@@ -63,6 +63,20 @@ class Settings:
         ).strip()
         or "theme_research_runtime"
     )
+    theme_research_report_index_service: str = field(
+        default_factory=lambda: os.getenv(
+            "THEME_RESEARCH_REPORT_INDEX_SERVICE",
+            "theme_research_report_indexer",
+        ).strip()
+        or "theme_research_report_indexer"
+    )
+    theme_research_report_review_service: str = field(
+        default_factory=lambda: os.getenv(
+            "THEME_RESEARCH_REPORT_REVIEW_SERVICE",
+            "theme_research_report_reviewer",
+        ).strip()
+        or "theme_research_report_reviewer"
+    )
     hfq_service: str = "stock_hfq"
     qfq_service: str = "stock_qfq"
     default_market: str = "CN_A"

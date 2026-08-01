@@ -769,7 +769,7 @@ def test_first_report_is_registered_before_later_theme_discovery(
     assert (result.discovered, result.indexed, result.invalid) == (1, 1, 1)
 
 
-def test_default_runtime_service_is_resolved_once_per_scan(tmp_path: Path, monkeypatch) -> None:
+def test_default_index_service_is_resolved_once_per_scan(tmp_path: Path, monkeypatch) -> None:
     root = tmp_path / "reports"
     _write_report(root, "a-theme", "v1")
     _write_report(root, "b-theme", "v1")
@@ -779,7 +779,7 @@ def test_default_runtime_service_is_resolved_once_per_scan(tmp_path: Path, monke
     def load_settings():
         nonlocal settings_calls
         settings_calls += 1
-        return SimpleNamespace(theme_research_runtime_service="runtime-once")
+        return SimpleNamespace(theme_research_report_index_service="index-once")
 
     def register(manifest, *, service):
         services.append(service)
@@ -792,7 +792,7 @@ def test_default_runtime_service_is_resolved_once_per_scan(tmp_path: Path, monke
 
     assert result.indexed == 2
     assert settings_calls == 1
-    assert services == ["runtime-once", "runtime-once"]
+    assert services == ["index-once", "index-once"]
 
 
 def test_log_context_escapes_newlines_from_directory_names(
