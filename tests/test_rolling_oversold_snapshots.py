@@ -317,6 +317,25 @@ def test_write_rejects_conflicting_stock_cross_artifact_metadata(tmp_path):
         write_rolling_snapshot(previous_link_tampered, output_dir=tmp_path)
 
 
+@pytest.mark.parametrize("previous_snapshot_id", ["", " \t "])
+def test_write_rejects_blank_previous_link_for_empty_snapshot(tmp_path, previous_snapshot_id):
+    snapshot = _build(stocks=pd.DataFrame(), sectors=pd.DataFrame())
+    snapshot["previous_snapshot_id"] = previous_snapshot_id
+
+    with pytest.raises(ValueError, match="previous_snapshot_id"):
+        write_rolling_snapshot(snapshot, output_dir=tmp_path)
+
+
+def test_write_rejects_conflicting_sector_previous_snapshot_id(tmp_path):
+    linked = _build(previous=_build())
+    tampered = dict(linked)
+    tampered["sector_states"] = linked["sector_states"].copy(deep=True)
+    tampered["sector_states"].loc[:, "previous_snapshot_id"] = "other|2026-07-20"
+
+    with pytest.raises(ValueError, match="previous_snapshot_id"):
+        write_rolling_snapshot(tampered, output_dir=tmp_path)
+
+
 def test_write_allows_explicit_unknown_stock_metadata_only_for_blocked_rows(tmp_path):
     blocked_stocks = _stocks().iloc[[0]].copy()
     blocked_stocks.loc[:, "sector_gate_status"] = "blocked"

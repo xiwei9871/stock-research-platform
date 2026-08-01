@@ -518,8 +518,10 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     if missing_sector_schema:
         raise ValueError("sector snapshot rows missing canonical columns: " + ", ".join(missing_sector_schema))
     previous_id = snapshot["previous_snapshot_id"]
-    if previous_id is not None and not isinstance(previous_id, str):
-        raise ValueError("snapshot previous_snapshot_id must be a string or null")
+    if previous_id is not None:
+        if not isinstance(previous_id, str) or not previous_id.strip():
+            raise ValueError("snapshot previous_snapshot_id must be a non-empty string or null")
+        previous_id = previous_id.strip()
     market_regime = _normalize_mapping(snapshot["market_regime"])
     market_state = market_regime.get("market_regime")
     if not isinstance(market_state, str) or not market_state.strip():
@@ -534,7 +536,9 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         market_state=market_state.strip(),
         previous_snapshot_id=previous_id,
     )
-    sector_rows = _validate_sector_snapshot_rows(snapshot["sector_states"])
+    sector_rows = _validate_sector_snapshot_rows(
+        snapshot["sector_states"], previous_snapshot_id=previous_id
+    )
     expected_row_counts = {
         "sector_states": int(len(sector_rows)),
         "stock_candidates": int(len(stock_rows)),
@@ -626,7 +630,9 @@ def _validate_stock_cross_artifact_metadata(
     frame["previous_snapshot_id"] = row_previous
 
 
-def _validate_sector_snapshot_rows(frame: pd.DataFrame) -> pd.DataFrame:
+def _validate_sector_snapshot_rows(
+    frame: pd.DataFrame, *, previous_snapshot_id: str | None
+) -> pd.DataFrame:
     result = frame.copy(deep=True)
     if result.empty:
         return result
@@ -659,7 +665,28 @@ def _validate_sector_snapshot_rows(frame: pd.DataFrame) -> pd.DataFrame:
     if invalid_rank.any():
         raise ValueError("sector_states sector_rank must contain positive integers")
     result["sector_rank"] = result["sector_rank"].astype("Int64")
+    _validate_sector_cross_artifact_metadata(
+        result, previous_snapshot_id=previous_snapshot_id
+    )
     return result
+
+
+def _validate_sector_cross_artifact_metadata(
+    frame: pd.DataFrame, *, previous_snapshot_id: str | None
+) -> None:
+    blocked_or_unknown = _allow_missing_sector_scores(frame)
+    row_previous = frame["previous_snapshot_id"].astype("string").str.strip().replace("", pd.NA)
+    missing_previous = row_previous.isna()
+    if previous_snapshot_id is None:
+        conflicting_previous = row_previous.notna()
+    else:
+        conflicting_previous = row_previous.notna() & ~row_previous.eq(previous_snapshot_id)
+        conflicting_previous |= (~blocked_or_unknown) & missing_previous
+    if conflicting_previous.any():
+        raise ValueError(
+            "sector_states previous_snapshot_id conflicts with snapshot previous_snapshot_id"
+        )
+    frame["previous_snapshot_id"] = row_previous
 
 
 def _require_exact_column(frame: pd.DataFrame, column: str, expected: str, label: str) -> None:
