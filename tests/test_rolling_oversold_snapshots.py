@@ -185,6 +185,20 @@ def test_snapshot_build_preserves_invalidated_historical_sector_context_when_sec
     assert write_rolling_snapshot(current, output_dir=tmp_path)["status"] == "created"
 
 
+def test_write_rejects_root_invalidation_with_conflicting_sector_context(tmp_path):
+    snapshot = _build()
+    tampered = dict(snapshot)
+    tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    tampered["stock_candidates"].loc[:, "stock_lifecycle"] = "invalidated"
+    tampered["stock_candidates"].loc[:, "stock_rank"] = pd.NA
+    tampered["stock_candidates"].loc[:, "score_reason"] = "sector_gate_or_data_change"
+    tampered["stock_candidates"].loc[:, "lifecycle_delta"] = "new_oversold->invalidated"
+    tampered["stock_candidates"].loc[:, "sector_name"] = "Tampered sector name"
+
+    with pytest.raises(ValueError, match="sector context conflicts.*sector_name"):
+        write_rolling_snapshot(tampered, output_dir=tmp_path)
+
+
 def test_build_rejects_active_stock_rows_with_conflicting_sector_context():
     stocks = _stocks().copy()
     stocks.loc[:, "sector_name"] = "Tampered sector name"

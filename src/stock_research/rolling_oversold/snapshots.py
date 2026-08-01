@@ -148,7 +148,7 @@ def build_rolling_snapshot(
         score_version=score_version,
         market_state=regime["market_regime"],
     )
-    _validate_stock_sector_context(stocks, sectors)
+    _validate_stock_sector_context(stocks, sectors, previous_snapshot_id=previous_id)
 
     preflight = _normalize_preflight(regime.pop("preflight", None))
     backfill_requests = _normalize_backfill(regime.pop("backfill_requests", None))
@@ -541,7 +541,9 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     sector_rows = _validate_sector_snapshot_rows(
         snapshot["sector_states"], previous_snapshot_id=previous_id
     )
-    _validate_stock_sector_context(stock_rows, sector_rows)
+    _validate_stock_sector_context(
+        stock_rows, sector_rows, previous_snapshot_id=previous_id
+    )
     expected_row_counts = {
         "sector_states": int(len(sector_rows)),
         "stock_candidates": int(len(stock_rows)),
@@ -684,7 +686,10 @@ def _validate_sector_cross_artifact_metadata(
 
 
 def _validate_stock_sector_context(
-    stock_rows: pd.DataFrame, sector_rows: pd.DataFrame
+    stock_rows: pd.DataFrame,
+    sector_rows: pd.DataFrame,
+    *,
+    previous_snapshot_id: str | None,
 ) -> None:
     """Require stock candidates to preserve the canonical sector artifact context."""
 
@@ -700,7 +705,9 @@ def _validate_stock_sector_context(
                 "stock_candidates references missing sector state "
                 f"{identity[0]}/{identity[1]}"
             )
-        if _is_historical_invalidation_revision(stock):
+        if _is_historical_invalidation_revision(
+            stock, previous_snapshot_id=previous_snapshot_id
+        ):
             continue
         sector = sectors_by_identity.loc[identity]
         conflicting_columns = [
@@ -715,10 +722,17 @@ def _validate_stock_sector_context(
             )
 
 
-def _is_historical_invalidation_revision(stock: pd.Series) -> bool:
+def _is_historical_invalidation_revision(
+    stock: pd.Series, *, previous_snapshot_id: str | None
+) -> bool:
     lifecycle_delta = stock["lifecycle_delta"]
+    row_previous_snapshot_id = stock["previous_snapshot_id"]
     return (
-        stock["stock_lifecycle"] == "invalidated"
+        isinstance(previous_snapshot_id, str)
+        and bool(previous_snapshot_id.strip())
+        and not _is_missing(row_previous_snapshot_id)
+        and str(row_previous_snapshot_id).strip() == previous_snapshot_id.strip()
+        and stock["stock_lifecycle"] == "invalidated"
         and _is_missing(stock["stock_rank"])
         and str(stock["score_reason"]).strip() == "sector_gate_or_data_change"
         and not _is_missing(lifecycle_delta)
