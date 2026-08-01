@@ -1044,14 +1044,17 @@ def _persist_evaluation_revision(
     if latest_directory is not None and _evaluation_artifacts_match(
         latest_directory, artifacts
     ):
+        runtime_metadata = _evaluation_runtime_metadata_from_directory(latest_directory)
+        if runtime_metadata is None:
+            persisted = snapshot.get("manifest", {})
+            persisted = persisted.get("runtime_metadata", {}) if isinstance(persisted, dict) else {}
+            runtime_metadata = dict(persisted) if isinstance(persisted, dict) else {}
         return {
             "revision": _path_revision(latest_directory),
             "evaluation": latest_directory / "evaluation_detail.csv",
             "evaluation_summary": latest_directory / "evaluation_summary.csv",
             "evaluation_manifest": latest_directory / "evaluation_manifest.json",
-            "runtime_metadata": (
-                _evaluation_runtime_metadata_from_directory(latest_directory) or {}
-            ),
+            "runtime_metadata": runtime_metadata,
         }
     revision = max(existing_revisions, default=0) + 1
     destination = snapshot_dir / f"evaluation_revision={revision:04d}"
