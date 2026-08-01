@@ -317,6 +317,39 @@ def test_write_rejects_conflicting_stock_cross_artifact_metadata(tmp_path):
         write_rolling_snapshot(previous_link_tampered, output_dir=tmp_path)
 
 
+def test_write_rejects_stock_rows_without_matching_sector_state(tmp_path):
+    snapshot = _build()
+    tampered = dict(snapshot)
+    tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    tampered["stock_candidates"].loc[:, "sector_code"] = "missing"
+
+    with pytest.raises(ValueError, match="missing sector state"):
+        write_rolling_snapshot(tampered, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("column", "tampered_value"),
+    [
+        ("sector_name", "Tampered sector name"),
+        ("sector_oversold_score", 0.0),
+        ("sector_repairability_score", 0.0),
+        ("sector_direction_score", 0.0),
+        ("sector_recovery_state", "unknown"),
+        ("sector_gate_status", "blocked"),
+    ],
+)
+def test_write_rejects_stock_rows_with_conflicting_sector_context(
+    tmp_path, column, tampered_value
+):
+    snapshot = _build()
+    tampered = dict(snapshot)
+    tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    tampered["stock_candidates"].loc[:, column] = tampered_value
+
+    with pytest.raises(ValueError, match=f"sector context conflicts.*{column}"):
+        write_rolling_snapshot(tampered, output_dir=tmp_path)
+
+
 @pytest.mark.parametrize("previous_snapshot_id", ["", " \t "])
 def test_write_rejects_blank_previous_link_for_empty_snapshot(tmp_path, previous_snapshot_id):
     snapshot = _build(stocks=pd.DataFrame(), sectors=pd.DataFrame())
@@ -341,7 +374,11 @@ def test_write_allows_explicit_unknown_stock_metadata_only_for_blocked_rows(tmp_
     blocked_stocks.loc[:, "sector_gate_status"] = "blocked"
     blocked_stocks.loc[:, "sector_recovery_state"] = "unknown"
     blocked_stocks.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
-    snapshot = _build(stocks=blocked_stocks)
+    blocked_sectors = _sectors().iloc[[0]].copy()
+    blocked_sectors.loc[:, "sector_gate_status"] = "blocked"
+    blocked_sectors.loc[:, "sector_recovery_state"] = "unknown"
+    blocked_sectors.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    snapshot = _build(stocks=blocked_stocks, sectors=blocked_sectors)
     snapshot["stock_candidates"].loc[:, "market_regime"] = "unknown"
     snapshot["stock_candidates"].loc[:, "previous_snapshot_id"] = pd.NA
 

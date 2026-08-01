@@ -63,6 +63,7 @@ _STOCK_COLUMNS = (
     "score_reason",
 )
 _SECTOR_INPUT_COLUMNS = _STOCK_CONTEXT_COLUMNS
+_SECTOR_CONTEXT_VALUE_COLUMNS = _STOCK_CONTEXT_COLUMNS[2:]
 _SECTOR_COLUMNS = (
     *_SECTOR_INPUT_COLUMNS,
     "sector_rank",
@@ -539,6 +540,7 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     sector_rows = _validate_sector_snapshot_rows(
         snapshot["sector_states"], previous_snapshot_id=previous_id
     )
+    _validate_stock_sector_context(stock_rows, sector_rows)
     expected_row_counts = {
         "sector_states": int(len(sector_rows)),
         "stock_candidates": int(len(stock_rows)),
@@ -687,6 +689,45 @@ def _validate_sector_cross_artifact_metadata(
             "sector_states previous_snapshot_id conflicts with snapshot previous_snapshot_id"
         )
     frame["previous_snapshot_id"] = row_previous
+
+
+def _validate_stock_sector_context(
+    stock_rows: pd.DataFrame, sector_rows: pd.DataFrame
+) -> None:
+    """Require stock candidates to preserve the canonical sector artifact context."""
+
+    if stock_rows.empty:
+        return
+    sectors_by_identity = sector_rows.set_index(
+        ["sector_system", "sector_code"], drop=False
+    )
+    for _, stock in stock_rows.iterrows():
+        identity = (stock["sector_system"], stock["sector_code"])
+        if identity not in sectors_by_identity.index:
+            raise ValueError(
+                "stock_candidates references missing sector state "
+                f"{identity[0]}/{identity[1]}"
+            )
+        sector = sectors_by_identity.loc[identity]
+        conflicting_columns = [
+            column
+            for column in _SECTOR_CONTEXT_VALUE_COLUMNS
+            if not _na_aware_equal(stock[column], sector[column])
+        ]
+        if conflicting_columns:
+            raise ValueError(
+                "stock_candidates sector context conflicts with sector_states for "
+                f"{identity[0]}/{identity[1]}: {', '.join(conflicting_columns)}"
+            )
+
+
+def _na_aware_equal(left: object, right: object) -> bool:
+    if _is_missing(left) or _is_missing(right):
+        return _is_missing(left) and _is_missing(right)
+    try:
+        return bool(left == right)
+    except (TypeError, ValueError):
+        return False
 
 
 def _require_exact_column(frame: pd.DataFrame, column: str, expected: str, label: str) -> None:
