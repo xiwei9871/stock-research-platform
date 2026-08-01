@@ -39,6 +39,15 @@ from stock_research.auction_data import (
     write_tushare_auction_full_backfill_report,
 )
 from stock_research.config import SETTINGS
+from stock_research.rolling_oversold.contracts import RollingOversoldConfig
+from stock_research.rolling_oversold.pipeline import (
+    run_rolling_daily,
+    run_rolling_replay,
+)
+from stock_research.rolling_oversold.reporting import (
+    load_rolling_oversold_snapshot,
+    write_rolling_sector_oversold_report,
+)
 from stock_research.backtest import run_top20_backtest
 from stock_research.backfill_runs import (
     backfill_status_for_service,
@@ -4528,6 +4537,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--service", default=SETTINGS.research_service
     )
 
+    rolling_oversold_replay = subparsers.add_parser("rolling-sector-oversold-replay")
+    rolling_oversold_replay.add_argument("--anchor-start-date", required=True)
+    rolling_oversold_replay.add_argument("--anchor-end-date")
+    rolling_oversold_replay.add_argument("--output-dir", required=True)
+    rolling_oversold_replay.add_argument("--service", default=SETTINGS.research_service)
+    rolling_oversold_replay.add_argument("--sector-top-n", type=int, default=30)
+    rolling_oversold_replay.add_argument("--stock-top-n", type=int, default=20)
+    rolling_oversold_replay.add_argument("--score-version", default="rolling_oversold_v1")
+    rolling_oversold_replay.add_argument(
+        "--adjust-type", choices=("qfq", "hfq", "raw"), default="qfq"
+    )
+
+    rolling_oversold_daily = subparsers.add_parser("rolling-sector-oversold-daily")
+    rolling_oversold_daily.add_argument("--trade-date", required=True)
+    rolling_oversold_daily.add_argument("--output-dir", required=True)
+    rolling_oversold_daily.add_argument("--service", default=SETTINGS.research_service)
+    rolling_oversold_daily.add_argument("--sector-top-n", type=int, default=30)
+    rolling_oversold_daily.add_argument("--stock-top-n", type=int, default=20)
+    rolling_oversold_daily.add_argument("--score-version", default="rolling_oversold_v1")
+    rolling_oversold_daily.add_argument(
+        "--adjust-type", choices=("qfq", "hfq", "raw"), default="qfq"
+    )
+
+    rolling_oversold_report = subparsers.add_parser("rolling-sector-oversold-report")
+    rolling_oversold_report.add_argument("--snapshot-dir", required=True)
+    rolling_oversold_report.add_argument("--focus-patterns")
+    rolling_oversold_report.add_argument("--output-dir", required=True)
+
     mid_trend_round2 = subparsers.add_parser("mid-trend-round2-optimize")
     mid_trend_round2.add_argument("--start-date", required=True)
     mid_trend_round2.add_argument("--train-end-date", required=True)
@@ -5801,6 +5838,56 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
         return False
     versions = {str(value) for value in frame["diagnostics_rule_version"].dropna().unique()}
     return versions == {DIAGNOSTICS_RULE_VERSION}
+
+
+def _rolling_oversold_config_from_args(args, *, anchor_date: dt.date, anchor_end_date: dt.date | None) -> RollingOversoldConfig:
+    return RollingOversoldConfig(
+        anchor_start_date=anchor_date,
+        anchor_end_date=anchor_end_date,
+        sector_top_n=args.sector_top_n,
+        stock_top_n=args.stock_top_n,
+        score_version=args.score_version,
+        adjust_type=args.adjust_type,
+    )
+
+
+def _print_rolling_oversold_machine_lines(result: dict[str, object]) -> None:
+    source = result
+    anchors = result.get("anchors")
+    if isinstance(anchors, list) and anchors and isinstance(anchors[-1], dict):
+        source = anchors[-1]
+    paths = source.get("paths", {}) if isinstance(source, dict) else {}
+    if not isinstance(paths, dict):
+        paths = {}
+    for key in (
+        "snapshot_manifest",
+        "market_regime",
+        "sector_states",
+        "stock_candidates",
+        "evaluation",
+        "preflight",
+        "backfill_requests",
+    ):
+        value = paths.get(key, "")
+        print(f"rolling_sector_oversold|{key}|{_rolling_oversold_machine_value(value)}")
+    print(
+        "rolling_sector_oversold|runtime_seconds|"
+        f"{_rolling_oversold_machine_value(result.get('runtime_seconds', ''))}"
+    )
+    print(
+        "rolling_sector_oversold|blocked|"
+        f"{_rolling_oversold_machine_value(result.get('blocked', ''))}"
+    )
+
+
+def _rolling_oversold_machine_value(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).replace("\r", "").replace("\n", "")
+
+
+def _rolling_oversold_existing_path(path: Path) -> str:
+    return str(path) if path.is_file() else ""
 
 
 def main_for_args(argv: list[str] | None = None) -> int | None:
@@ -8327,6 +8414,70 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for line in _consumer_oversold_v2_evaluation_machine_lines(result):
             print(line)
+    elif args.command == "rolling-sector-oversold-replay":
+        anchor_start = dt.date.fromisoformat(args.anchor_start_date)
+        anchor_end = (
+            dt.date.fromisoformat(args.anchor_end_date)
+            if args.anchor_end_date is not None
+            else None
+        )
+        config = _rolling_oversold_config_from_args(
+            args,
+            anchor_date=anchor_start,
+            anchor_end_date=anchor_end,
+        )
+        result = run_rolling_replay(
+            config=config,
+            output_dir=args.output_dir,
+            service=args.service,
+        )
+        _print_rolling_oversold_machine_lines(result)
+    elif args.command == "rolling-sector-oversold-daily":
+        trade_date = dt.date.fromisoformat(args.trade_date)
+        config = _rolling_oversold_config_from_args(
+            args,
+            anchor_date=trade_date,
+            anchor_end_date=trade_date,
+        )
+        result = run_rolling_daily(
+            trade_date=trade_date,
+            config=config,
+            output_dir=args.output_dir,
+            service=args.service,
+        )
+        _print_rolling_oversold_machine_lines(result)
+    elif args.command == "rolling-sector-oversold-report":
+        snapshot_dir = Path(args.snapshot_dir).expanduser().resolve()
+        snapshot = load_rolling_oversold_snapshot(snapshot_dir)
+        focus_patterns = tuple(
+            item.strip()
+            for item in (args.focus_patterns or "").split(",")
+            if item.strip()
+        )
+        report_path = write_rolling_sector_oversold_report(
+            snapshot=snapshot,
+            snapshot_dir=snapshot_dir,
+            output_dir=args.output_dir,
+            focus_patterns=focus_patterns,
+        )
+        manifest = snapshot.get("manifest", {})
+        runtime_metadata = manifest.get("runtime_metadata", {}) if isinstance(manifest, dict) else {}
+        preflight = snapshot.get("preflight", {})
+        result = {
+            "blocked": bool(preflight.get("blocked")) if isinstance(preflight, dict) else False,
+            "runtime_seconds": runtime_metadata.get("runtime_seconds", "") if isinstance(runtime_metadata, dict) else "",
+            "paths": {
+                "snapshot_manifest": _rolling_oversold_existing_path(snapshot_dir / "manifest.json"),
+                "market_regime": _rolling_oversold_existing_path(snapshot_dir / "market_regime.csv"),
+                "sector_states": _rolling_oversold_existing_path(snapshot_dir / "sector_states.csv"),
+                "stock_candidates": _rolling_oversold_existing_path(snapshot_dir / "stock_candidates.csv"),
+                "evaluation": _rolling_oversold_existing_path(snapshot_dir / "evaluation_detail.csv"),
+                "preflight": _rolling_oversold_existing_path(snapshot_dir / "preflight.json"),
+                "backfill_requests": _rolling_oversold_existing_path(snapshot_dir / "backfill_requests.csv"),
+            },
+        }
+        _print_rolling_oversold_machine_lines(result)
+        print(f"rolling_sector_oversold|report|{report_path}")
     elif args.command == "mid-trend-round2-optimize":
         from stock_research.mid_trend_round2_optimization import run_mid_trend_round2_optimization
 
