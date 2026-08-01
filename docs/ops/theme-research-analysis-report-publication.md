@@ -7,7 +7,8 @@
 在应用服务和一次性运维命令中设置同一组环境变量：
 
 ```bash
-export THEME_RESEARCH_REPORT_ROOT=/srv/stock-research/theme-research-reports
+export THEME_RESEARCH_REPORT_HOST_ROOT=/srv/stock-research/theme-research-reports
+export THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research
 export THEME_RESEARCH_REPORT_SCAN_INTERVAL_SECONDS=60
 export THEME_RESEARCH_REPORT_MAX_MANIFEST_BYTES=65536
 export THEME_RESEARCH_REPORT_MAX_MARKDOWN_BYTES=10485760
@@ -16,7 +17,8 @@ export THEME_RESEARCH_MIGRATION_SERVICE=stock_research
 export THEME_RESEARCH_RUNTIME_SERVICE=theme_research_runtime
 ```
 
-- `THEME_RESEARCH_REPORT_ROOT` 必须使用跨 release 持久化的绝对目录；不得放在每次发布会替换的代码目录、临时目录或容器可写层。
+- `THEME_RESEARCH_REPORT_HOST_ROOT` 必须使用跨 release 持久化的宿主机绝对目录；不得放在每次发布会替换的代码目录、临时目录或容器可写层。canonical compose 将其只读挂载为 `${THEME_RESEARCH_REPORT_HOST_ROOT}:/app/reports/theme-research:ro`，容器内固定 `THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research`。
+- 宿主目录由报告生成/运维流程预先建立。`deploy/sync_dashboard_release.sh` 只校验绝对路径、存在、目录、可读/可遍历，不会自动创建或写入报告树；重建与回滚必须复用同一个宿主目录。
 - 未显式设置根目录时，程序回退到 `STOCK_RESEARCH_REPORTS_ROOT/theme-research`。生产环境必须显式设置，避免 release 切换后指向不同位置。
 - 四个数值必须是正整数。上线前按实际报告上限设置，避免正常文件被拒绝，也不要无边界放大。
 - migration service 用于建表和校验 DDL；runtime service 仅拥有索引、审核所需的最小表权限。
@@ -130,6 +132,8 @@ python -m stock_research.theme_research_report_index --root /absolute/report/roo
 
 退出码：`0` 表示没有无效版本；`2` 表示发现版本级错误；`3` 表示根目录/配置等全局错误。重复扫描已登记且字节一致的版本应显示在 `unchanged`，不会重复创建审核事件。
 
+canonical release 在镜像构建后、服务重建前使用 `THEME_RESEARCH_MIGRATION_SERVICE` 执行同一 `--apply`，并立即检查 schema version `3` 且状态为 `current`；任一步失败都阻断 `compose up`。服务重建后，容器内 canary 会用 `THEME_RESEARCH_RUNTIME_SERVICE` 做一次 one-shot scan，同时通过 `statvfs(ST_RDONLY)` 验证 `/app/reports/theme-research` 的只读挂载；要求 `invalid=0`、`errors=[]`。该检查不通过时外部 release gate 不会成功。
+
 ## Scheduler 与诊断
 
 应用启动后立即扫描一次，并按 `THEME_RESEARCH_REPORT_SCAN_INTERVAL_SECONDS` 周期扫描。只有 admin 可读取：
@@ -187,7 +191,7 @@ pnpm test:e2e:theme-reports -- --repeat-each=2
 
 ## 回滚、归档与恢复
 
-- 应用代码回滚：保留报告根目录和报告表，不删除文件、不回退审核数据。旧 release 若不认识新 schema，应先验证兼容性；报告 root 必须继续挂载到相同绝对路径。
+- 应用代码回滚：保留报告根目录和报告表，不删除文件、不回退审核数据。继续使用相同 `THEME_RESEARCH_REPORT_HOST_ROOT`，由 canonical compose 挂到固定的 `/app/reports/theme-research`。旧 release 若不认识 schema version `3` 或不能通过 schema/index gate，回滚会失败关闭；不得绕过门禁。
 - 发布新版本：批准时系统原子地将原 current 版本改为 `archived`，并将新版本改为 `published`。归档版本继续作为已批准历史可读。
 - 内容回滚：不要修改已发布/归档版本，也不要把数据库状态手工改回去。将需恢复的旧内容复制为一个新的不可变版本、生成新的 checksum/manifest、扫描并由 admin 批准；这样保留完整审计链。
 - 灾难恢复：数据库报告表、审核事件表与整个报告根目录必须作为同一恢复点备份。先恢复文件根，再恢复数据库，校验所有已发布/归档记录的 artifact checksum，最后启动 Web/scheduler。

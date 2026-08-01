@@ -16,11 +16,15 @@ services:
       STOCK_RESEARCH_RELEASE_ID: ${STOCK_RESEARCH_RELEASE_ID:?required}
       STOCK_RESEARCH_FRONTEND_BUILD_ID: ${STOCK_RESEARCH_FRONTEND_BUILD_ID:?required}
       STOCK_RESEARCH_FRONTEND_METADATA_FILE: /app/dashboard/dist/release.json
+      THEME_RESEARCH_REPORT_ROOT: /app/reports/theme-research
+      THEME_RESEARCH_MIGRATION_SERVICE: ${THEME_RESEARCH_MIGRATION_SERVICE:-stock_research}
+      THEME_RESEARCH_RUNTIME_SERVICE: ${THEME_RESEARCH_RUNTIME_SERVICE:-theme_research_runtime}
     ports:
       - "127.0.0.1:${DASHBOARD_API_BIND_PORT:-8765}:8765"
     volumes:
       - ../outputs/research:/app/outputs/research:ro
       - ${DASHBOARD_PGSERVICE_FILE:-./.pg_service.conf}:/app/.pg_service.conf:ro
+      - ${THEME_RESEARCH_REPORT_HOST_ROOT:?required}:/app/reports/theme-research:ro
     networks:
       - dashboard_release
 

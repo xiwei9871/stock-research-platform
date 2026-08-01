@@ -11,6 +11,8 @@ EXPECTED_STRATEGY_ARTIFACT_DATE="${EXPECTED_STRATEGY_ARTIFACT_DATE:-$EXPECTED_TR
 EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="${EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT:-${EXPECTED_REMOTE_SOURCE_ROOT:+$EXPECTED_REMOTE_SOURCE_ROOT/src/stock_research}}"
 EXPECTED_API_BASE_IMAGE="${EXPECTED_API_BASE_IMAGE:-python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7}"
 EXPECTED_FRONTEND_BASE_IMAGE="${EXPECTED_FRONTEND_BASE_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}"
+THEME_RESEARCH_REPORT_HEALTH_JSON="${THEME_RESEARCH_REPORT_HEALTH_JSON:?THEME_RESEARCH_REPORT_HEALTH_JSON is required}"
+EXPECTED_THEME_RESEARCH_REPORT_ROOT="${EXPECTED_THEME_RESEARCH_REPORT_ROOT:-/app/reports/theme-research}"
 RELEASE_CHECK_TIMEOUT_SECONDS="${RELEASE_CHECK_TIMEOUT_SECONDS:-120}"
 RELEASE_CHECK_RETRY_SECONDS="${RELEASE_CHECK_RETRY_SECONDS:-3}"
 DATE_VALIDATION_PYTHON="${STOCK_RESEARCH_PYTHON:-python3}"
@@ -173,6 +175,23 @@ queue_matches_release() {
     ' "$1" >/dev/null
 }
 
+report_health_matches_release() {
+  jq -e \
+    --arg root "$EXPECTED_THEME_RESEARCH_REPORT_ROOT" \
+    '
+      .status == "ok"
+      and .root.path == $root
+      and .root.exists == true
+      and .root.readable == true
+      and .root.readonly == true
+      and .schema.status == "current"
+      and .schema.schema_version == "3"
+      and .scheduler_index_diagnostics.status == "ok"
+      and .scheduler_index_diagnostics.invalid == 0
+      and .scheduler_index_diagnostics.errors == []
+    ' "$1" >/dev/null
+}
+
 echo "Waiting for dashboard release ${EXPECTED_RELEASE_ID} at ${BASE_URL%/}"
 while (( SECONDS <= deadline )); do
   if fetch_json "${BASE_URL%/}/api/platform/readiness" "$tmp_dir/readiness.json" \
@@ -180,7 +199,8 @@ while (( SECONDS <= deadline )); do
     && fetch_json "${BASE_URL%/}/release.json" "$tmp_dir/frontend-release.json" \
     && frontend_matches_release "$tmp_dir/frontend-release.json" \
     && fetch_json "${BASE_URL%/}/api/review-queue?trade_date=${EXPECTED_TRADE_DATE}&limit=10&lookback_days=90" "$tmp_dir/review-queue.json" \
-    && queue_matches_release "$tmp_dir/review-queue.json"; then
+    && queue_matches_release "$tmp_dir/review-queue.json" \
+    && report_health_matches_release "$THEME_RESEARCH_REPORT_HEALTH_JSON"; then
     echo "Dashboard release check passed for ${EXPECTED_TRADE_DATE} (${EXPECTED_RELEASE_ID})."
     exit 0
   fi
@@ -201,5 +221,8 @@ if [[ -s "$tmp_dir/frontend-release.json" ]]; then
 fi
 if [[ -s "$tmp_dir/review-queue.json" ]]; then
   jq '{requested_trade_date, trade_date, groups: [.groups[]? | {strategy_id, count, data_trade_date, freshness_status}]}' "$tmp_dir/review-queue.json" >&2 || true
+fi
+if [[ -s "$THEME_RESEARCH_REPORT_HEALTH_JSON" ]]; then
+  jq '{status, root, schema, scheduler_index_diagnostics}' "$THEME_RESEARCH_REPORT_HEALTH_JSON" >&2 || true
 fi
 exit 1

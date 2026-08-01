@@ -1,8 +1,10 @@
 import json
 import os
+import re
 import stat
 import subprocess
 import textwrap
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -24,6 +26,7 @@ def _sync_env(release_root: Path) -> dict[str, str]:
         "REMOTE_USER": "deploy",
         "REMOTE_HOST": "example.invalid",
         "REMOTE_DIR": "/srv/stock-research",
+        "THEME_RESEARCH_REPORT_HOST_ROOT": "/srv/theme-research-reports",
     }
 
 
@@ -50,6 +53,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "dashboard-api-requirements.lock",
         "dashboard-api-requirements.in",
         "check_dashboard_remote_host.sh",
+        "check_theme_research_report_runtime.py",
     ):
         source = REPO_ROOT / "deploy" / name
         if source.exists():
@@ -153,11 +157,23 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         echo '{"latest_market_date":"2026-05-18","runtime_provenance":{"release_id":"old-release","source_root":"/old/release","python_package_root":"/old/release/src/stock_research"}}'
         """,
     )
-    for command in ("ssh", "rsync"):
-        _write_executable(
-            fake_bin / command,
-            f"#!/bin/bash\necho \"{command}:CI=${{CI-unset}}:$*\" >> \"$FAKE_COMMAND_LOG\"\n",
-        )
+    _write_executable(
+        fake_bin / "ssh",
+        """
+        #!/bin/bash
+        echo "ssh:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
+        if [[ "$*" == *"check_theme_research_report_runtime.py --expected-root"* ]]; then
+          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"3"},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
+        fi
+        """,
+    )
+    _write_executable(
+        fake_bin / "rsync",
+        """
+        #!/bin/bash
+        echo "rsync:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
+        """,
+    )
 
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     subprocess.run(["git", "-C", str(root), "add", "."], check=True)
@@ -188,6 +204,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "FAKE_COMMAND_LOG": str(log_file),
         "FAKE_RELEASE_GATE_LOG": str(tmp_path / "release-gates.log"),
         "FAKE_RELEASE_GATE_COUNT": str(tmp_path / "release-gates.count"),
+        "THEME_RESEARCH_REPORT_HOST_ROOT": "/srv/theme-research-reports",
     }
     env.pop("EXPECTED_TRADE_DATE", None)
     return root, env, log_file
@@ -229,6 +246,10 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
     assert "networks:" in compose
     assert compose.count("context: ..") == 2
     assert "../outputs/research:/app/outputs/research:ro" in compose
+    assert "THEME_RESEARCH_REPORT_ROOT: /app/reports/theme-research" in compose
+    assert "THEME_RESEARCH_MIGRATION_SERVICE: ${THEME_RESEARCH_MIGRATION_SERVICE:-stock_research}" in compose
+    assert "THEME_RESEARCH_RUNTIME_SERVICE: ${THEME_RESEARCH_RUNTIME_SERVICE:-theme_research_runtime}" in compose
+    assert "${THEME_RESEARCH_REPORT_HOST_ROOT:?required}:/app/reports/theme-research:ro" in compose
     assert "COPY src ./src" in api_dockerfile
     assert "COPY dashboard/dist ./dashboard/dist" in api_dockerfile
     assert "COPY dashboard/dist /usr/share/nginx/html" in frontend_dockerfile
@@ -307,6 +328,42 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
     assert "pydantic-core==" in requirements
     for package in ("fastapi==", "uvicorn==", "pandas==", "psycopg[binary]=="):
         assert package in requirements
+
+
+def test_release_lock_covers_all_project_runtime_dependencies():
+    project = tomllib.loads(_read("pyproject.toml"))["project"]
+    requirements_input = _read("deploy/dashboard-api-requirements.in").lower()
+    requirements_lock = _read("deploy/dashboard-api-requirements.lock").lower()
+
+    for dependency in project["dependencies"]:
+        package = re.split(r"[<>=!~;\[\s]", dependency, maxsplit=1)[0].lower()
+        normalized = package.replace("_", "-")
+        assert re.search(rf"(?m)^{re.escape(normalized)}(?:\[.*\])?==", requirements_input), package
+        assert re.search(rf"(?m)^{re.escape(normalized)}(?:\[.*\])?==", requirements_lock), package
+
+
+def test_release_sync_validates_and_preserves_read_only_report_root():
+    script = _read("deploy/sync_dashboard_release.sh")
+
+    assert "THEME_RESEARCH_REPORT_HOST_ROOT" in script
+    assert "must be a safe absolute path" in script
+    assert "Theme Research report host root" in script
+    assert "test -d" in script and "test -r" in script and "test -x" in script
+    assert "mkdir -p ${theme_research_report_host_root_q}" not in script
+    assert "THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q}" in script
+    assert "THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q}" in script
+    assert "THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q}" in script
+
+
+def test_release_sync_applies_report_schema_and_gates_runtime_health():
+    script = _read("deploy/sync_dashboard_release.sh")
+
+    assert "stock_research.theme_research_report_schema --apply" in script
+    assert "THEME_RESEARCH_MIGRATION_SERVICE" in script
+    assert "check_theme_research_report_runtime.py --schema-only" in script
+    assert "check_theme_research_report_runtime.py --expected-root" in script
+    assert script.index("theme_research_report_schema --apply") < script.index("up -d --force-recreate")
+    assert script.index("check_theme_research_report_runtime.py --expected-root") < script.index("Running bounded external release gate")
 
 
 def test_release_sync_transfers_trusted_strategy_manifest_before_external_gate():
@@ -589,7 +646,10 @@ def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp
     assert "deployment skipped" in result.stdout
     commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
     assert "rsync:" not in commands
-    assert "ssh:" not in commands
+    ssh_lines = [line for line in commands.splitlines() if line.startswith("ssh:")]
+    assert len(ssh_lines) == 1
+    assert "check_theme_research_report_runtime.py --expected-root" in ssh_lines[0]
+    assert " compose " not in ssh_lines[0]
     assert " build" not in commands
 
 
@@ -848,6 +908,10 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
     assert "/api/platform/readiness" in script
     assert "/api/review-queue" in script
     assert "/release.json" in script
+    assert "THEME_RESEARCH_REPORT_HEALTH_JSON" in script
+    assert "schema_version" in script
+    assert "scheduler_index_diagnostics" in script
+    assert "readonly" in script
     assert "latest_market_date" in script
     assert "runtime_provenance" in script
     assert "frontend_build_id" in script
@@ -921,6 +985,27 @@ def _release_gate_env(
             for strategy_id in ("lhb_shortline", "mid_trend", "tech_bottleneck")
         ],
     }
+    report_health_path = tmp_path / "theme-research-report-health.json"
+    report_health_path.write_text(
+        json.dumps(
+            {
+                "status": "ok",
+                "root": {
+                    "path": "/app/reports/theme-research",
+                    "exists": True,
+                    "readable": True,
+                    "readonly": True,
+                },
+                "schema": {"status": "current", "schema_version": "3"},
+                "scheduler_index_diagnostics": {
+                    "status": "ok",
+                    "invalid": 0,
+                    "errors": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     return {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
@@ -934,7 +1019,31 @@ def _release_gate_env(
         "FAKE_READINESS_JSON": json.dumps(readiness),
         "FAKE_QUEUE_JSON": json.dumps(queue),
         "FAKE_CURL_LOG": str(tmp_path / "curl.log"),
+        "THEME_RESEARCH_REPORT_HEALTH_JSON": str(report_health_path),
     }
+
+
+def test_release_gate_rejects_report_root_or_index_health_errors(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    health_path = Path(env["THEME_RESEARCH_REPORT_HEALTH_JSON"])
+    payload = json.loads(health_path.read_text(encoding="utf-8"))
+    payload["scheduler_index_diagnostics"] = {
+        "status": "error",
+        "invalid": 1,
+        "errors": [{"code": "INVALID_MANIFEST"}],
+    }
+    health_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Dashboard release check failed" in result.stderr
 
 
 def test_release_gate_rejects_old_public_dist_even_when_api_reports_new_release(tmp_path):
@@ -1266,6 +1375,10 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
         "sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7",
         "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
         "DASHBOARD_AUTH",
+        "THEME_RESEARCH_REPORT_HOST_ROOT",
+        "THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research",
+        "theme_research_report_schema --apply",
+        "report-index/status",
         "回滚",
     ):
         assert expected in runbook
