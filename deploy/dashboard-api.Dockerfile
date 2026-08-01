@@ -7,8 +7,6 @@ RUN python -m pip install --no-cache-dir --require-hashes --requirement deploy/d
 COPY deploy/check_theme_research_report_runtime.py ./deploy/check_theme_research_report_runtime.py
 COPY src ./src
 COPY dashboard/dist ./dashboard/dist
-COPY artifacts/theme_decomposition/priority_policies ./artifacts/theme_decomposition/priority_policies
-COPY artifacts/theme_decomposition/tech_bottleneck_crosswalks ./artifacts/theme_decomposition/tech_bottleneck_crosswalks
 RUN python -m pip install --no-cache-dir --no-deps .
 
 ENV PYTHONPATH=/app/src

@@ -54,6 +54,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "dashboard-api-requirements.in",
         "check_dashboard_remote_host.sh",
         "check_dashboard_report_mount.sh",
+        "check_theme_research_artifacts.sh",
         "check_theme_research_report_runtime.py",
     ):
         source = REPO_ROOT / "deploy" / name
@@ -297,7 +298,7 @@ def test_release_sync_provides_frontend_dist_in_docker_build_context():
     assert '"$ROOT/.dockerignore"' in script
 
 
-def test_release_packages_theme_research_priority_support_without_canonical_artifacts():
+def test_release_mounts_server_theme_artifacts_without_overwriting_them():
     script = _read("deploy/sync_dashboard_release.sh")
     dockerignore = _read(".dockerignore")
     api_dockerfile = _read("deploy/dashboard-api.Dockerfile")
@@ -306,12 +307,13 @@ def test_release_packages_theme_research_priority_support_without_canonical_arti
         "artifacts/theme_decomposition/priority_policies",
         "artifacts/theme_decomposition/tech_bottleneck_crosswalks",
     ):
-        assert f"!{relative_dir}/" in dockerignore
-        assert f"!{relative_dir}/**" in dockerignore
-        assert f'"$ROOT/{relative_dir}/"' in script
-        assert f"COPY {relative_dir} ./{relative_dir}" in api_dockerfile
+        assert f"!{relative_dir}/" not in dockerignore
+        assert f"!{relative_dir}/**" not in dockerignore
+        assert f'"$ROOT/{relative_dir}/"' not in script
+        assert f"COPY {relative_dir} ./{relative_dir}" not in api_dockerfile
 
     assert "COPY artifacts/theme_decomposition ./artifacts/theme_decomposition" not in api_dockerfile
+    assert "check_theme_research_artifacts.sh" in script
     assert (
         "      - type: bind\n"
         "        source: ../artifacts/theme_decomposition\n"
@@ -853,10 +855,11 @@ def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp
     commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
     assert "rsync:" not in commands
     ssh_lines = [line for line in commands.splitlines() if line.startswith("ssh:")]
-    assert len(ssh_lines) == 3
+    assert len(ssh_lines) == 4
     assert "--host-only /srv/stock-research/theme-research-reports" in ssh_lines[0]
-    assert "--require-mount /srv/stock-research/theme-research-reports" in ssh_lines[1]
-    assert "check_theme_research_report_runtime.py --expected-root" in ssh_lines[2]
+    assert "artifacts/theme_decomposition 25" in ssh_lines[1]
+    assert "--require-mount /srv/stock-research/theme-research-reports" in ssh_lines[2]
+    assert "check_theme_research_report_runtime.py --expected-root" in ssh_lines[3]
     assert all(" compose " not in line for line in ssh_lines)
     assert " build" not in commands
 
@@ -1059,7 +1062,7 @@ def test_release_sync_same_project_unpublished_worker_fails_before_rsync_and_up(
         """
         #!/bin/bash
         echo "ssh:$*" >> "$FAKE_COMMAND_LOG"
-        if [[ "$*" == *"--host-only"* || "$*" == *"--require-mount"* ]]; then
+        if [[ "$*" == *"--host-only"* || "$*" == *"--require-mount"* || "$*" == *"artifacts/theme_decomposition"* ]]; then
           exit 0
         fi
         if [[ "$*" == *"bash -s --"* ]]; then

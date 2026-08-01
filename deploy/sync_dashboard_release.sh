@@ -337,6 +337,8 @@ printf -v compose_project_q '%q' "$STOCK_RESEARCH_COMPOSE_PROJECT"
 printf -v api_bind_port_q '%q' "$DASHBOARD_API_BIND_PORT"
 printf -v frontend_bind_port_q '%q' "$DASHBOARD_FRONTEND_BIND_PORT"
 printf -v theme_research_report_host_root_q '%q' "$THEME_RESEARCH_REPORT_HOST_ROOT"
+theme_research_artifact_host_root="$REMOTE_DIR/artifacts/theme_decomposition"
+printf -v theme_research_artifact_host_root_q '%q' "$theme_research_artifact_host_root"
 printf -v theme_research_migration_service_q '%q' "$THEME_RESEARCH_MIGRATION_SERVICE"
 printf -v theme_research_runtime_service_q '%q' "$THEME_RESEARCH_RUNTIME_SERVICE"
 printf -v theme_research_report_index_service_q '%q' "$THEME_RESEARCH_REPORT_INDEX_SERVICE"
@@ -389,6 +391,12 @@ if ! validate_theme_research_report_host_root >/dev/null; then
   echo "Theme Research report host root validation failed: $THEME_RESEARCH_REPORT_HOST_ROOT" >&2
   exit 2
 fi
+if ! ssh "${ssh_opts[@]}" -- "$remote" \
+  "bash -s -- ${theme_research_artifact_host_root_q} 25 ai_compute_infrastructure_value_chain_v1" \
+  < "$ROOT/deploy/check_theme_research_artifacts.sh" >/dev/null; then
+  echo "Theme Research canonical artifact validation failed: $theme_research_artifact_host_root" >&2
+  exit 2
+fi
 
 if check_release_state \
   "${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
@@ -422,7 +430,7 @@ echo "Preparing remote release directories"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/artifacts/theme_decomposition/priority_policies ${remote_dir_q}/artifacts/theme_decomposition/tech_bottleneck_crosswalks ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
+  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
 
 echo "Syncing backend source"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
@@ -439,14 +447,6 @@ rsync -az -e "$rsync_rsh" -- \
   "$ROOT/deploy/check_dashboard_remote_host.sh" \
   "$ROOT/deploy/dashboard-release.compose.yml" \
   "$remote:$REMOTE_DIR/deploy/"
-
-echo "Syncing Theme Research priority support"
-rsync -az --delete -e "$rsync_rsh" -- \
-  "$ROOT/artifacts/theme_decomposition/priority_policies/" \
-  "$remote:$REMOTE_DIR/artifacts/theme_decomposition/priority_policies/"
-rsync -az --delete -e "$rsync_rsh" -- \
-  "$ROOT/artifacts/theme_decomposition/tech_bottleneck_crosswalks/" \
-  "$remote:$REMOTE_DIR/artifacts/theme_decomposition/tech_bottleneck_crosswalks/"
 
 echo "Syncing canonical frontend build"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
