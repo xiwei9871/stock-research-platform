@@ -191,7 +191,11 @@ def load_rolling_inputs(
             asset_ids,
             anchor,
             service=service,
-            max_report_periods=4,
+            # A cumulative Q1/Q2/Q3 row may need the prior same quarter plus
+            # the prior fiscal year.  With all quarters present that anchor
+            # can be the fifth distinct disclosed period, so four rows are
+            # insufficient for point-in-time TTM reconstruction.
+            max_report_periods=5,
         ),
         FINANCE_COLUMNS,
         ("report_period", "announcement_date"),

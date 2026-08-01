@@ -27,6 +27,10 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 24 passed, 2 warnings
 
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
+  tests/test_rolling_oversold_*.py -q
+122 passed, 2 warnings
+
+rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
   tests/test_consumer_oversold_pipeline.py \
   tests/test_consumer_oversold_v2_evaluation.py -q
 103 passed, 2 warnings, 61.03s
@@ -133,7 +137,7 @@ The 2026-07-30 focus command remains the follow-up once an immutable
 ```bash
 rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_research.cli \
   rolling-sector-oversold-report \
-  --snapshot-dir artifacts/rolling_sector_oversold/replay_2026-07-21_2026-07-31/anchor=2026-07-30/version=rolling_oversold_v1 \
+  --snapshot-dir artifacts/rolling_sector_oversold/replay_2026-07-21_2026-07-31_stock_research_v2/rolling_sector_oversold/anchor=2026-07-30/version=rolling_oversold_v1 \
   --focus-patterns '芯片,半导体,CPO,算力,科技,消费' \
   --output-dir artifacts/rolling_sector_oversold/validation_2026-07-30
 ```
@@ -141,15 +145,15 @@ rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_res
 ## Blocker and next run requirements
 
 After the aborted replay, the loader and hot paths were tightened in commits
-`2215e8a0`, `53278e5d`, and `7b5b563`:
+`2215e8a0`, `53278e5d`, `7b5b563`, and `222d3a4`:
 
 - index, stock, industry, and concept bars now use the 252-session
   `history_start` through `data_cutoff_date` range;
 - asset status now returns the latest point-in-time row per asset with
   `DISTINCT ON (asset_id)`;
-- finance transport keeps only the latest four disclosed report periods for
-  the rolling strategy, preserving TTM inputs while leaving the consumer
-  default unbounded;
+- finance transport keeps the latest five disclosed report periods for the
+  rolling strategy, which is sufficient for cumulative Q1/Q2/Q3 TTM inputs,
+  while leaving the consumer default unbounded;
 - rolling valuation uses only the latest disclosed factor date per asset,
   while the consumer default remains five-year history;
 - date normalization, stock-bar grouping, and preflight coverage checks are
@@ -157,10 +161,15 @@ After the aborted replay, the loader and hot paths were tightened in commits
   frame.
 
 The combined loader, rolling, acceptance, and consumer regression run passed
-211 tests in 67.96 seconds. A bounded single-anchor run now fails closed in
-about 23 seconds rather than hanging: the database has no cutoff status row for
-3,750 active assets on 2026-07-21, so preflight writes a blocked artifact and
-`backfill_requests.csv`.
+213 tests after the final compatibility and TTM-window fixes. A bounded
+single-anchor run now fails closed in about 23 seconds rather than hanging:
+preflight writes a blocked artifact and `backfill_requests.csv`.
+
+The blocked artifact contains 3,750 total gaps on 2026-07-21, distributed as
+follows: `core.asset_status_daily` 686, `market_daily_bar` 686,
+`finance_history` 673, `valuation_history` 706,
+`market.concept_daily_bar` 976, `market.industry_daily_bar` 21, and
+`market.index_daily_bar` 2. The total is not a status-row count.
 
 The optimized replay command was then rerun against `stock_research`:
 
@@ -173,15 +182,17 @@ preflight/backfill artifacts=produced
 ```
 
 This meets the fail-fast runtime target but is not a successful historical
-replay: the missing status coverage stops the ordered replay at its first
-anchor. The 2026-07-30 technology/consumer focus report therefore remains
-unavailable until the required status backfill is present.
+replay: the first anchor has a non-empty set of required-data gaps, with
+missing status rows being one of the largest categories. The 2026-07-30
+technology/consumer focus report therefore remains unavailable until all
+required gap categories are backfilled.
 
 1. Add a `research` entry in `~/.pg_service.conf`, or explicitly standardize
    the operational command on the existing `stock_research` service.
-2. Backfill/repair the missing `core.asset_status_daily` cutoff rows, then
-   rerun the frozen nine-anchor replay and generate the 2026-07-30 focus
-   report. Keep stage/anchor heartbeat output for the successful run.
+2. Backfill/repair the complete preflight gap set (status, market bars,
+   finance, valuation, sector bars, and index bars), then rerun the frozen
+   nine-anchor replay and generate the 2026-07-30 focus report. Keep
+   stage/anchor heartbeat output for the successful run.
 3. Keep strategy execution database-only. A missing dependency must produce
    the existing preflight/backfill artifacts and a separate backfill task; it
    must never trigger a network market-data fallback.

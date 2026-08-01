@@ -201,14 +201,19 @@ def _check_sector_bars(
     prefix: str,
     cutoff: date,
     *,
-    cutoff_keys: set[tuple[str, str, str]] | None = None,
+    cutoff_keys: set[tuple[str, str]] | None = None,
 ) -> None:
     dataset = f"market.{prefix}_daily_bar"
     cutoff_text = cutoff.isoformat()
-    unique = {(sector["system"], sector["code"], sector["name"]) for sector in sectors}
-    for system, code, name in sorted(unique):
+    unique = {(sector["system"], sector["code"]) for sector in sectors}
+    names = {
+        (sector["system"], sector["code"]): sector["name"]
+        for sector in sectors
+    }
+    for system, code in sorted(unique):
+        name = names[(system, code)]
         actual = int(
-            (system, code, name) in cutoff_keys
+            (system, code) in cutoff_keys
             if cutoff_keys is not None
             else _has_sector_cutoff_bar(bars, prefix, system, code, cutoff)
         )
@@ -263,18 +268,20 @@ def _pit_assets(frame: pd.DataFrame, date_column: str, cutoff: date) -> set[str]
 
 def _sector_cutoff_keys(
     frame: pd.DataFrame, prefix: str, cutoff: date
-) -> set[tuple[str, str, str]]:
-    required = {f"{prefix}_system", f"{prefix}_code", f"{prefix}_name", "trade_date"}
+) -> set[tuple[str, str]]:
+    required = {f"{prefix}_system", f"{prefix}_code", "trade_date"}
     if not required.issubset(frame.columns):
         return set()
     dates = pd.to_datetime(frame["trade_date"], errors="coerce").dt.date
-    selected = frame.loc[dates.eq(cutoff), list(required - {"trade_date"})].copy()
+    selected = frame.loc[
+        dates.eq(cutoff), [f"{prefix}_system", f"{prefix}_code"]
+    ].copy()
     if selected.empty:
         return set()
-    for column in (f"{prefix}_system", f"{prefix}_code", f"{prefix}_name"):
+    for column in (f"{prefix}_system", f"{prefix}_code"):
         selected[column] = selected[column].astype("string").fillna("").str.strip()
     return {
-        (str(row[f"{prefix}_system"]), str(row[f"{prefix}_code"]), str(row[f"{prefix}_name"]))
+        (str(row[f"{prefix}_system"]), str(row[f"{prefix}_code"]))
         for row in selected.to_dict(orient="records")
     }
 

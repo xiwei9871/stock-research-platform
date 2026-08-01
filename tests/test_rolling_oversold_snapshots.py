@@ -31,7 +31,7 @@ def _market_regime() -> dict[str, object]:
 
 
 def _sectors() -> pd.DataFrame:
-    return pd.DataFrame(
+    result = pd.DataFrame(
         [
             {
                 "sector_system": "sw",
@@ -55,10 +55,17 @@ def _sectors() -> pd.DataFrame:
             },
         ]
     )
+    for column in (
+        "sector_oversold_score",
+        "sector_repairability_score",
+        "sector_direction_score",
+    ):
+        result[column] = result[column].astype("Float64")
+    return result
 
 
 def _stocks() -> pd.DataFrame:
-    return pd.DataFrame(
+    result = pd.DataFrame(
         [
             {
                 "asset_id": "000002",
@@ -96,6 +103,18 @@ def _stocks() -> pd.DataFrame:
             },
         ]
     )
+    for column in (
+        "sector_oversold_score",
+        "sector_repairability_score",
+        "sector_direction_score",
+        "anchor_close",
+    ):
+        result[column] = result[column].astype("Float64")
+    # This column is intentionally replaced with a non-numeric value by a
+    # schema-rejection test; object dtype keeps that fixture portable across
+    # pandas versions with stricter setitem casting.
+    result["stock_score"] = result["stock_score"].astype("object")
+    return result
 
 
 def _build(
@@ -469,6 +488,9 @@ def test_write_revalidates_pit_and_hand_built_frame_schema(tmp_path):
 
     invalid_frame = dict(snapshot)
     invalid_frame["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    invalid_frame["stock_candidates"]["stock_score"] = invalid_frame["stock_candidates"][
+        "stock_score"
+    ].astype("object")
     invalid_frame["stock_candidates"].loc[:, "stock_score"] = "not-a-score"
     with pytest.raises(ValueError, match="stock_candidates"):
         write_rolling_snapshot(invalid_frame, output_dir=tmp_path)

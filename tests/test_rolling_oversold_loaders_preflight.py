@@ -187,7 +187,7 @@ def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypa
         anchor_date=date(2026, 8, 1), config=_config(), service="research-test"
     )
 
-    assert finance_dates == [("2026-08-01", 4)]
+    assert finance_dates == [("2026-08-01", 5)]
     assert valuation_dates == [("2026-08-01", True)]
 
 
@@ -307,6 +307,21 @@ def test_complete_synthetic_inputs_pass_and_report_every_dataset(tmp_path):
             "expected_rows", "actual_rows", "reason",
         ]
         assert list(reader) == []
+
+
+def test_preflight_matches_sector_bars_by_system_and_code_not_display_name(tmp_path):
+    inputs = _inputs()
+    inputs = replace(
+        inputs,
+        industry_bars=inputs.industry_bars.assign(industry_name="Renamed agriculture"),
+    )
+
+    result = preflight.run_rolling_preflight(
+        inputs, anchor_date=date(2026, 7, 29), output_dir=tmp_path
+    )
+
+    assert result.blocked is False
+    assert not any(gap.dataset == "market.industry_daily_bar" for gap in result.gaps)
 
 
 def test_preflight_blocks_short_complete_calendar_and_persists_exact_artifacts(tmp_path):

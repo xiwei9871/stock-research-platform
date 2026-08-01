@@ -790,14 +790,43 @@ def test_finance_report_period_limit_is_opt_in_and_keeps_ttm_inputs(monkeypatch)
     calls, _ = _install_db(monkeypatch, [income, indicators, balances, cash, shares])
 
     result = loaders.load_consumer_finance_history(
-        ["A"], "2025-06-30", service="test", max_report_periods=4
+        ["A"], "2025-06-30", service="test", max_report_periods=5
     )
 
     assert not result.empty
     for sql, params in calls[:4]:
         assert "DENSE_RANK() OVER" in sql
         assert "report_period_rank <= %s" in sql
-        assert params == [["A"], "2025-06-30", 4]
+        assert params == [["A"], "2025-06-30", 5]
+
+
+def test_finance_report_period_limit_keeps_fifth_period_for_cumulative_ttm(monkeypatch):
+    income = [
+        {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-04-20", "revenue": 10, "np_parent": 1, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-06-30", "announcement_date": "2024-07-20", "revenue": 20, "np_parent": 2, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-09-30", "announcement_date": "2024-10-20", "revenue": 30, "np_parent": 3, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-12-31", "announcement_date": "2025-03-20", "revenue": 100, "np_parent": 10, "source": "s"},
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-20", "revenue": 14, "np_parent": 1.4, "source": "s"},
+        {"asset_id": "A", "report_period": "2025-06-30", "announcement_date": "2025-07-20", "revenue": 24, "np_parent": 2.4, "source": "s"},
+    ]
+    indicators = [
+        {"asset_id": "A", "report_period": "2025-06-30", "announcement_date": "2025-07-25", "roe": .08, "source": "s", "calc_version": "v1"},
+    ]
+    balances = [
+        {"asset_id": "A", "report_period": "2025-06-30", "announcement_date": "2025-07-26", "total_equity": 50, "source": "s"},
+    ]
+    calls, _ = _install_db(monkeypatch, [income, indicators, balances, [], []])
+
+    result = loaders.load_consumer_finance_history(
+        ["A"], "2025-07-31", service="test", max_report_periods=5
+    )
+
+    latest = result.loc[result["report_period"].eq("2025-06-30")].iloc[0]
+    assert latest["revenue_ttm"] == pytest.approx(104.0)
+    assert latest["np_parent_ttm"] == pytest.approx(10.4)
+    for sql, params in calls[:4]:
+        assert "report_period_rank <= %s" in sql
+        assert params == [["A"], "2025-07-31", 5]
 
 
 def test_finance_preserves_non_null_fields_and_derives_balance_debt_ratio(monkeypatch):

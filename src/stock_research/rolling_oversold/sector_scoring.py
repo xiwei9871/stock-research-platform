@@ -114,9 +114,12 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
     duplicate_sort_columns = [
         column
         for column in (
+            # Prefer the most informative optional score when duplicate
+            # sector/date rows disagree.  The score must precede market fields
+            # so a lower close/amount cannot override a higher-quality record.
+            "fundamental_quality_score", "valuation_support_score", "risk_concentration_score",
             "sector_name", "close", "preclose", "high", "low", "amount", "volume",
             "up_count", "down_count", "stock_count", "new_low_count", "dispersion_20d",
-            "fundamental_quality_score", "valuation_support_score", "risk_concentration_score",
         )
         if column in result
     ]
