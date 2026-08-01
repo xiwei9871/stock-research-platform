@@ -267,6 +267,8 @@ def _normalize_stock_rows(
     result = frame.copy(deep=True)
     _normalize_string_columns(result, ("asset_id", "sector_system", "sector_code", "sector_name"))
     _normalize_string_columns(result, ("stock_lifecycle", "sector_recovery_state", "sector_gate_status"))
+    for column in ("stock_lifecycle", "sector_gate_status"):
+        result[column] = result[column].str.casefold()
     _require_nonempty_strings(result, ("asset_id", "sector_system", "sector_code", "sector_name"), "stock_candidates")
     _require_nonempty_strings(
         result, ("stock_lifecycle", "sector_recovery_state", "sector_gate_status"), "stock_candidates"
@@ -354,6 +356,8 @@ def _normalize_sector_rows(frame: pd.DataFrame) -> pd.DataFrame:
         result,
         ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
     )
+    for column in ("sector_gate_status",):
+        result[column] = result[column].str.casefold()
     _require_nonempty_strings(
         result,
         ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),

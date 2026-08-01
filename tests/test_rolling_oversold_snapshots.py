@@ -157,6 +157,22 @@ def test_build_allows_excluded_rows_without_frozen_outcome_inputs():
     assert pd.isna(snapshot["stock_candidates"].loc[0, "anchor_close"])
 
 
+def test_build_normalizes_mixed_case_gate_and_lifecycle_statuses_for_exclusions():
+    blocked_stocks = _stocks().iloc[[0]].copy(deep=True)
+    blocked_stocks.loc[:, "sector_gate_status"] = "  BLOCKED "
+    blocked_stocks.loc[:, "sector_recovery_state"] = " UNKNOWN "
+    blocked_sectors = _sectors().iloc[[0]].copy(deep=True)
+    blocked_sectors.loc[:, "sector_gate_status"] = " BLOCKED "
+    blocked_sectors.loc[:, "sector_recovery_state"] = " UNKNOWN "
+    blocked_stocks.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    blocked_sectors.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+
+    blocked = _build(stocks=blocked_stocks, sectors=blocked_sectors)
+
+    assert blocked["stock_candidates"].loc[0, "sector_gate_status"] == "blocked"
+    assert blocked["stock_candidates"].loc[0, "sector_recovery_state"] == "unknown"
+
+
 def test_snapshot_revisions_link_ranks_and_keep_absent_asset_as_invalidated_row():
     previous = _build(stocks=_stocks().assign(stock_rank=[3, 2]))
     current_stocks = _stocks().iloc[[1]].copy()

@@ -197,13 +197,13 @@ def test_evaluate_snapshot_keeps_auditable_rows_with_bad_anchor_close_and_reject
 
 def test_evaluate_snapshot_excludes_blocked_and_invalidated_rows_from_calibration():
     blocked = evaluate_snapshot(
-        _snapshot(gate_status="blocked"),
+        _snapshot(gate_status="  BLOCKED "),
         bars=_bars([("2026-07-22", 10.2)]),
         evaluation_cutoff=date(2026, 7, 22),
         horizons=[1],
     )
     invalidated = evaluate_snapshot(
-        _snapshot(lifecycle="invalidated"),
+        _snapshot(lifecycle="  INVALIDATED "),
         bars=_bars([("2026-07-22", 10.2)]),
         evaluation_cutoff=date(2026, 7, 22),
         horizons=[1],
@@ -290,3 +290,27 @@ def test_summarize_evaluation_keeps_data_errors_out_of_pending_count():
     overall = summary.loc[summary["group_by"].eq("overall")].iloc[0]
 
     assert overall[["total_count", "complete_count", "pending_count", "excluded_count", "data_error_count"]].tolist() == [1, 0, 0, 0, 1]
+
+
+def test_summarize_legacy_detail_uses_data_status_to_separate_errors_from_pending():
+    detail = pd.DataFrame(
+        [
+            {
+                "forward_horizon_days": 1,
+                "forward_Nd_status": "pending",
+                "forward_Nd_return": float("nan"),
+                "data_status": "missing_anchor_close",
+            },
+            {
+                "forward_horizon_days": 1,
+                "forward_Nd_status": "pending",
+                "forward_Nd_return": float("nan"),
+                "data_status": "ok",
+            },
+        ]
+    )
+
+    summary = summarize_rolling_evaluation(detail)
+    overall = summary.loc[summary["group_by"].eq("overall")].iloc[0]
+
+    assert overall[["total_count", "complete_count", "pending_count", "excluded_count", "data_error_count"]].tolist() == [2, 0, 1, 0, 1]

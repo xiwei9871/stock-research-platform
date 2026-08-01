@@ -215,8 +215,16 @@ def summarize_rolling_evaluation(detail: pd.DataFrame) -> pd.DataFrame:
     )
     evaluation_status = normalized.get("evaluation_status")
     if evaluation_status is None:
+        raw_data_status = normalized.get(
+            "data_status", pd.Series("ok", index=normalized.index, dtype="string")
+        )
+        raw_data_status = raw_data_status.astype("string").fillna("").str.strip().str.casefold()
+        excluded = raw_data_status.str.startswith("excluded_")
+        data_error = ~raw_data_status.isin(("", "ok")) & ~excluded
         evaluation_status = pd.Series("pending", index=normalized.index, dtype="string")
-        evaluation_status.loc[normalized["forward_Nd_status"].eq("complete")] = "complete"
+        evaluation_status.loc[normalized["forward_Nd_status"].eq("complete") & ~data_error & ~excluded] = "complete"
+        evaluation_status.loc[data_error] = "data_error"
+        evaluation_status.loc[excluded] = raw_data_status.loc[excluded]
     normalized["_evaluation_status"] = evaluation_status.astype("string").fillna("data_error")
     normalized["_rank_bucket"] = normalized.get(
         "stock_rank", pd.Series(pd.NA, index=normalized.index)
