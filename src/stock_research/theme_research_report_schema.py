@@ -341,6 +341,7 @@ DECLARE
     relation_name text;
     column_name text;
     grantee_name text;
+    routine_identity text;
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_owner') THEN
         EXECUTE 'GRANT USAGE, CREATE ON SCHEMA research TO theme_research_owner';
@@ -358,9 +359,34 @@ BEGIN
         EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_runtime';
         EXECUTE 'GRANT SELECT ON research.theme_research_report_version TO theme_research_runtime';
         EXECUTE 'GRANT SELECT ON research.theme_research_report_review_event TO theme_research_runtime';
+        EXECUTE 'REVOKE ALL ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) FROM theme_research_runtime';
+        EXECUTE 'REVOKE ALL ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) FROM theme_research_runtime';
         EXECUTE 'GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) TO theme_research_runtime';
         EXECUTE 'GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) TO theme_research_runtime';
     END IF;
+
+    FOR routine_identity, grantee_name IN
+        SELECT DISTINCT routine.oid::regprocedure::text, role.rolname
+        FROM pg_proc routine
+        JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL aclexplode(
+            COALESCE(routine.proacl, acldefault('f', routine.proowner))
+        ) privilege
+        JOIN pg_roles role ON role.oid = privilege.grantee
+        WHERE namespace.nspname = 'research'
+          AND routine.proname IN (
+              'register_theme_research_report_pending',
+              'review_theme_research_report_version'
+          )
+          AND privilege.grantee <> routine.proowner
+          AND role.rolname <> 'theme_research_runtime'
+    LOOP
+        EXECUTE format(
+            'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM %I',
+            routine_identity,
+            grantee_name
+        );
+    END LOOP;
 
     FOR relation_name IN
         SELECT unnest(ARRAY[
@@ -751,18 +777,7 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
                 routine.proname AS function_name,
                 routine.prosecdef AS security_definer,
                 pg_get_userbyid(routine.proowner) AS owner_name,
-                routine.proconfig AS configuration,
-                EXISTS (
-                    SELECT 1
-                    FROM aclexplode(
-                        COALESCE(routine.proacl, acldefault('f', routine.proowner))
-                    ) AS privilege
-                    WHERE privilege.grantee = 0
-                      AND privilege.privilege_type = 'EXECUTE'
-                ) AS public_execute,
-                has_function_privilege(
-                    'theme_research_runtime', routine.oid, 'EXECUTE'
-                ) AS runtime_execute
+                routine.proconfig AS configuration
             FROM pg_proc routine
             JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
             WHERE namespace.nspname = 'research'
@@ -786,9 +801,54 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             configuration = _row_value(row, "configuration", 3)
             if list(configuration or []) != ["search_path=pg_catalog"]:
                 missing.append(f"function_config:{function_name}")
-            if bool(_row_value(row, "public_execute", 4)):
+        cur.execute(
+            """
+            SELECT
+                routine.proname AS function_name,
+                pg_get_userbyid(routine.proowner) AS owner_name,
+                privilege.grantee,
+                role.rolname AS grantee_name,
+                privilege.privilege_type,
+                privilege.is_grantable
+            FROM pg_proc routine
+            JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL aclexplode(
+                COALESCE(routine.proacl, acldefault('f', routine.proowner))
+            ) privilege
+            LEFT JOIN pg_roles role ON role.oid = privilege.grantee
+            WHERE namespace.nspname = 'research'
+              AND routine.proname = ANY(%s)
+            """,
+            (list(_EXPECTED_SECURITY_DEFINER_FUNCTIONS),),
+        )
+        runtime_execute: set[str] = set()
+        for row in cur.fetchall():
+            function_name = str(_row_value(row, "function_name", 0))
+            owner_name = str(_row_value(row, "owner_name", 1))
+            grantee_oid = int(_row_value(row, "grantee", 2))
+            grantee_name = str(_row_value(row, "grantee_name", 3) or "PUBLIC")
+            privilege_type = str(_row_value(row, "privilege_type", 4))
+            is_grantable = bool(_row_value(row, "is_grantable", 5))
+            if grantee_name == owner_name:
+                continue
+            if (
+                grantee_name == "theme_research_runtime"
+                and privilege_type == "EXECUTE"
+            ):
+                runtime_execute.add(function_name)
+                if is_grantable:
+                    missing.append(
+                        f"function_grant_option:{function_name}.theme_research_runtime"
+                    )
+                continue
+            if grantee_oid == 0:
                 missing.append(f"public_privilege:function.{function_name}")
-            if not bool(_row_value(row, "runtime_execute", 5)):
+            else:
+                missing.append(
+                    f"function_acl:{function_name}.{grantee_name}.{privilege_type}"
+                )
+        for function_name in sorted(_EXPECTED_SECURITY_DEFINER_FUNCTIONS):
+            if function_name not in runtime_execute:
                 missing.append(f"function_privilege:{function_name}")
     cur.execute(
         """
@@ -1033,6 +1093,8 @@ def apply_theme_research_report_schema(
                 "function_owner:",
                 "function_config:",
                 "function_privilege:",
+                "function_acl:",
+                "function_grant_option:",
             )
             repairable_items = {
                 "migration:v2_actor_fk",

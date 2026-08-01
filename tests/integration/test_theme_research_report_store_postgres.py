@@ -1296,6 +1296,107 @@ def test_postgres_inspection_repairs_report_function_security_drift(postgres_con
         verified.close()
 
 
+def test_postgres_apply_revokes_direct_report_function_grant_from_app(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(
+                text, text, bigint, text, text, text, text, text
+            ) TO theme_research_app
+            """
+        )
+        connection.commit()
+
+        inspection = inspect_theme_research_report_schema(connection.cursor())
+
+        assert inspection["status"] == "drifted"
+        assert (
+            "function_acl:review_theme_research_report_version.theme_research_app.EXECUTE"
+            in inspection["missing"]
+        )
+    finally:
+        connection.close()
+
+    apply_theme_research_report_schema(service=TEST_SERVICE)
+    verified = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        direct_grant = verified.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_proc routine
+                CROSS JOIN LATERAL aclexplode(routine.proacl) privilege
+                JOIN pg_roles role ON role.oid = privilege.grantee
+                WHERE routine.oid =
+                    'research.review_theme_research_report_version(text,text,bigint,text,text,text,text,text)'::regprocedure
+                  AND role.rolname = 'theme_research_app'
+                  AND privilege.privilege_type = 'EXECUTE'
+            )
+            """
+        ).fetchone()[0]
+        assert direct_grant is False
+        assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+    finally:
+        verified.close()
+
+
+def test_postgres_apply_removes_runtime_report_function_grant_option(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending(
+                text, text, text, text, text, text, text, text, text, text,
+                text, text, text, jsonb, timestamptz, jsonb, text, text, text
+            ) TO theme_research_runtime WITH GRANT OPTION
+            """
+        )
+        connection.commit()
+
+        inspection = inspect_theme_research_report_schema(connection.cursor())
+
+        assert inspection["status"] == "drifted"
+        assert (
+            "function_grant_option:register_theme_research_report_pending.theme_research_runtime"
+            in inspection["missing"]
+        )
+    finally:
+        connection.close()
+
+    apply_theme_research_report_schema(service=TEST_SERVICE)
+    verified = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        runtime_acl = verified.execute(
+            """
+            SELECT privilege.is_grantable
+            FROM pg_proc routine
+            CROSS JOIN LATERAL aclexplode(routine.proacl) privilege
+            JOIN pg_roles role ON role.oid = privilege.grantee
+            WHERE routine.oid =
+                'research.register_theme_research_report_pending(text,text,text,text,text,text,text,text,text,text,text,text,text,jsonb,timestamptz,jsonb,text,text,text)'::regprocedure
+              AND role.rolname = 'theme_research_runtime'
+              AND privilege.privilege_type = 'EXECUTE'
+            """
+        ).fetchone()
+        assert runtime_acl == (False,)
+        assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+    finally:
+        verified.close()
+
+
 def test_postgres_apply_migrates_v2_actor_fk_to_internal_system_subject(
     postgres_conn,
 ) -> None:

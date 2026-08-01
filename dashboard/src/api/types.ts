@@ -528,6 +528,9 @@ export type ThemeResearchReportIndexResult = {
   errors: ThemeResearchReportIndexError[];
   started_at: string | null;
   completed_at: string | null;
+  root_exists: boolean;
+  root_readable: boolean;
+  error_code: string | null;
 };
 
 export type ThemeResearchReportIndexDiagnostics = {

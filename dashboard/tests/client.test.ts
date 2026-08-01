@@ -78,6 +78,7 @@ import {
 import type {
   AdminThemeResearchReport,
   ThemeResearchReportDocument,
+  ThemeResearchReportIndexResult,
   ThemeResearchReportPublishRequest,
   ThemeResearchReportSummary,
   ThemeResearchReportVersion
@@ -133,12 +134,25 @@ describe('dashboard API client', () => {
       has_pdf: true,
       html: '<h1>Title</h1>'
     };
+    const indexResult: ThemeResearchReportIndexResult = {
+      discovered: 0,
+      indexed: 0,
+      unchanged: 0,
+      invalid: 0,
+      errors: [],
+      started_at: '2026-08-01T08:00:00+08:00',
+      completed_at: '2026-08-01T08:00:01+08:00',
+      root_exists: false,
+      root_readable: false,
+      error_code: 'REPORT_ROOT_MISSING'
+    };
 
     expect(summary.status).toBe('published');
     expect(publishWithoutComment.idempotency_key).toBe('publish-1');
     expect(researchingTheme.analysis_report.status).toBe('researching');
     expect(version.has_pdf).toBe(true);
     expect(document.html).toContain('Title');
+    expect(indexResult.root_exists).toBe(false);
   });
 
   it('fetches approved theme reports and document through encoded paths', async () => {
