@@ -700,7 +700,7 @@ def _validate_stock_sector_context(
                 "stock_candidates references missing sector state "
                 f"{identity[0]}/{identity[1]}"
             )
-        if stock["stock_lifecycle"] == "invalidated":
+        if _is_historical_invalidation_revision(stock):
             continue
         sector = sectors_by_identity.loc[identity]
         conflicting_columns = [
@@ -713,6 +713,17 @@ def _validate_stock_sector_context(
                 "stock_candidates sector context conflicts with sector_states for "
                 f"{identity[0]}/{identity[1]}: {', '.join(conflicting_columns)}"
             )
+
+
+def _is_historical_invalidation_revision(stock: pd.Series) -> bool:
+    lifecycle_delta = stock["lifecycle_delta"]
+    return (
+        stock["stock_lifecycle"] == "invalidated"
+        and _is_missing(stock["stock_rank"])
+        and str(stock["score_reason"]).strip() == "sector_gate_or_data_change"
+        and not _is_missing(lifecycle_delta)
+        and str(lifecycle_delta).strip().endswith("->invalidated")
+    )
 
 
 def _na_aware_equal(left: object, right: object) -> bool:

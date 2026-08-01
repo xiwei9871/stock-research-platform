@@ -193,6 +193,15 @@ def test_build_rejects_active_stock_rows_with_conflicting_sector_context():
         _build(stocks=stocks)
 
 
+def test_build_rejects_ranked_invalidated_stock_with_conflicting_sector_context():
+    stocks = _stocks().copy()
+    stocks.loc[:, "stock_lifecycle"] = "invalidated"
+    stocks.loc[:, "sector_name"] = "Tampered sector name"
+
+    with pytest.raises(ValueError, match="sector context conflicts.*sector_name"):
+        _build(stocks=stocks)
+
+
 def test_snapshot_revisions_compute_previous_rank_minus_current_rank():
     previous = _build(stocks=_stocks().assign(stock_rank=[3, 2]))
     current = _build(stocks=_stocks().iloc[[0]].assign(stock_rank=1), previous=previous)
