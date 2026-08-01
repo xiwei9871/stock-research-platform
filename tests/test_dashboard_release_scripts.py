@@ -164,7 +164,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         #!/bin/bash
         echo "ssh:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *"check_theme_research_report_runtime.py --expected-root"* ]]; then
-          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"3"},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
+          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"4"},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
         fi
         """,
     )
@@ -1013,6 +1013,12 @@ def test_release_sync_builds_and_syncs_one_identified_release():
 
 def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
     script = _read("deploy/check_dashboard_release.sh")
+    schema_source = _read("src/stock_research/theme_research_report_schema.py")
+    schema_version = re.search(
+        r'^THEME_RESEARCH_REPORT_SCHEMA_VERSION = "([^"]+)"$',
+        schema_source,
+        re.MULTILINE,
+    ).group(1)
 
     assert "set -euo pipefail" in script
     assert "120" in script
@@ -1021,6 +1027,10 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
     assert "/release.json" in script
     assert "THEME_RESEARCH_REPORT_HEALTH_JSON" in script
     assert "schema_version" in script
+    assert f'EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION:-{schema_version}' in script
+    assert f'EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="{schema_version}"' in _read(
+        "deploy/sync_dashboard_release.sh"
+    )
     assert "scheduler_index_diagnostics" in script
     assert "readonly" in script
     assert "latest_market_date" in script
@@ -1107,7 +1117,7 @@ def _release_gate_env(
                     "readable": True,
                     "readonly": True,
                 },
-                "schema": {"status": "current", "schema_version": "3"},
+                "schema": {"status": "current", "schema_version": "4"},
                 "scheduler_index_diagnostics": {
                     "status": "ok",
                     "invalid": 0,

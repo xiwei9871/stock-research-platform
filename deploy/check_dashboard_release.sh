@@ -11,6 +11,7 @@ EXPECTED_STRATEGY_ARTIFACT_DATE="${EXPECTED_STRATEGY_ARTIFACT_DATE:-$EXPECTED_TR
 EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="${EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT:-${EXPECTED_REMOTE_SOURCE_ROOT:+$EXPECTED_REMOTE_SOURCE_ROOT/src/stock_research}}"
 EXPECTED_API_BASE_IMAGE="${EXPECTED_API_BASE_IMAGE:-python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7}"
 EXPECTED_FRONTEND_BASE_IMAGE="${EXPECTED_FRONTEND_BASE_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}"
+EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="${EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION:-4}"
 THEME_RESEARCH_REPORT_HEALTH_JSON="${THEME_RESEARCH_REPORT_HEALTH_JSON:?THEME_RESEARCH_REPORT_HEALTH_JSON is required}"
 EXPECTED_THEME_RESEARCH_REPORT_ROOT="${EXPECTED_THEME_RESEARCH_REPORT_ROOT:-/app/reports/theme-research}"
 RELEASE_CHECK_TIMEOUT_SECONDS="${RELEASE_CHECK_TIMEOUT_SECONDS:-120}"
@@ -178,6 +179,7 @@ queue_matches_release() {
 report_health_matches_release() {
   jq -e \
     --arg root "$EXPECTED_THEME_RESEARCH_REPORT_ROOT" \
+    --arg schema_version "$EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION" \
     '
       .status == "ok"
       and .root.path == $root
@@ -185,7 +187,7 @@ report_health_matches_release() {
       and .root.readable == true
       and .root.readonly == true
       and .schema.status == "current"
-      and .schema.schema_version == "3"
+      and .schema.schema_version == $schema_version
       and .scheduler_index_diagnostics.status == "ok"
       and .scheduler_index_diagnostics.invalid == 0
       and .scheduler_index_diagnostics.errors == []
