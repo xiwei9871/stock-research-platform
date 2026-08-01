@@ -408,6 +408,120 @@ def _many_frames(
     return frames, evidence, config
 
 
+def _patch_runner_loaders_for_fixture(monkeypatch, tmp_path, frames):
+    from stock_research.consumer_oversold import pipeline
+
+    rules_path = tmp_path / "rules.csv"
+    frames["industry_rules"].to_csv(rules_path, index=False)
+    overrides_path = tmp_path / "overrides.csv"
+    frames["asset_overrides"].to_csv(overrides_path, index=False)
+    monkeypatch.setattr(pipeline, "INDUSTRY_RULES_PATH", rules_path)
+    monkeypatch.setattr(pipeline, "ASSET_OVERRIDES_PATH", overrides_path)
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_universe_frames",
+        lambda trade_date, service: {
+            key: frames[key]
+            for key in ("assets", "statuses", "liquidity", "industries")
+        },
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_share_capacity",
+        lambda asset_ids, trade_date, service: frames["share_capacity"],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_market_history",
+        lambda trade_date, service, asset_ids=None: frames["bars"],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_finance_history",
+        lambda asset_ids, trade_date, service: frames["finance"],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_valuation_history",
+        lambda asset_ids, trade_date, service: frames["valuation_history"].drop(
+            columns=["consumer_subindustry"], errors="ignore"
+        ),
+    )
+
+
+def test_runner_blocks_missing_market_data_and_writes_gap_request(monkeypatch, tmp_path):
+    from stock_research.consumer_oversold import pipeline
+
+    frames, evidence, _ = _frames()
+    frames["bars"] = frames["bars"].iloc[0:0]
+    _patch_runner_loaders_for_fixture(monkeypatch, tmp_path, frames)
+    evidence_path = tmp_path / "evidence.csv"
+    evidence.to_csv(evidence_path, index=False)
+
+    result = pipeline.run_consumer_oversold_weekly(
+        trade_date=TRADE_DATE,
+        evidence_path=evidence_path,
+        output_dir=tmp_path / "out",
+        service="test-service",
+    )
+
+    assert result["publication_status"] == "blocked_missing_data"
+    assert Path(result["paths"]["backfill_request"]).is_file()
+    assert set(result["paths"]) == {"coverage", "backfill_request", "report"}
+
+
+def test_runner_records_db_only_policy_and_stage_timings(monkeypatch, tmp_path):
+    from stock_research.consumer_oversold import pipeline
+
+    frames, evidence, _ = _frames()
+    _patch_runner_loaders_for_fixture(monkeypatch, tmp_path, frames)
+    evidence_path = tmp_path / "evidence.csv"
+    evidence.to_csv(evidence_path, index=False)
+
+    result = pipeline.run_consumer_oversold_weekly(
+        trade_date=TRADE_DATE,
+        evidence_path=evidence_path,
+        output_dir=tmp_path / "out",
+        service="test-service",
+    )
+
+    coverage = result["coverage"]
+    assert coverage["data_source_policy"] == "db_only"
+    assert coverage["preflight_status"] == "passed"
+    assert coverage["runtime_seconds"] >= 0.0
+    assert coverage["stage_timings_seconds"]["preflight"] >= 0.0
+    persisted = json.loads(
+        Path(result["paths"]["coverage"]).read_text(encoding="utf-8")
+    )
+    assert persisted["data_source_policy"] == "db_only"
+    assert persisted["preflight_status"] == "passed"
+    assert persisted["stage_timings_seconds"]["scoring"] >= 0.0
+
+
+def test_runner_returns_runtime_timeout_diagnostic_without_rankings(monkeypatch, tmp_path):
+    from stock_research.consumer_oversold import pipeline
+    from stock_research.strategy_data_policy import StrategyRuntimeTimeout
+
+    frames, evidence, _ = _frames()
+    _patch_runner_loaders_for_fixture(monkeypatch, tmp_path, frames)
+    evidence_path = tmp_path / "evidence.csv"
+    evidence.to_csv(evidence_path, index=False)
+
+    def fail_checkpoint(self, stage):
+        raise StrategyRuntimeTimeout(f"runtime budget exceeded at {stage}")
+
+    monkeypatch.setattr(pipeline.StrategyRuntimeBudget, "checkpoint", fail_checkpoint)
+    result = pipeline.run_consumer_oversold_weekly(
+        trade_date=TRADE_DATE,
+        evidence_path=evidence_path,
+        output_dir=tmp_path / "out",
+        service="test-service",
+    )
+
+    assert result["publication_status"] == "runtime_timeout"
+    assert set(result["paths"]) == {"coverage", "backfill_request", "report"}
+
+
 def test_builds_two_buckets_keeps_scores_and_universe_exclusions():
     frames, evidence, config = _frames()
 

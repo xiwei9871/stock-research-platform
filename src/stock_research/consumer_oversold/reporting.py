@@ -9,6 +9,7 @@ import os
 import shutil
 import stat
 import uuid
+from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path, PurePath
 from numbers import Real
@@ -16,6 +17,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from stock_research.strategy_data_policy import DataGap, write_backfill_request
 
 from .contracts import (
     UNIFIED_OUTPUT_FILENAMES,
@@ -1328,6 +1331,99 @@ def _write_text(text: str, path: Path) -> None:
         handle.write(text)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def write_consumer_oversold_data_gap_artifacts(
+    *,
+    output_dir: str | Path,
+    trade_date: str,
+    ranking_version: str,
+    status: str,
+    gaps: tuple[DataGap, ...] | list[DataGap],
+    coverage: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Write diagnostics without replacing a previous normal ``current`` release."""
+    destination = Path(output_dir).expanduser().resolve()
+    run_dir = destination / "diagnostics" / (
+        f"consumer-oversold-{trade_date}-{status}-{uuid.uuid4().hex}"
+    )
+    run_dir.mkdir(parents=True, exist_ok=False)
+    normalized_gaps = tuple(gaps)
+    request_path = write_backfill_request(
+        run_dir,
+        strategy="consumer_oversold_weekly",
+        trade_date=trade_date,
+        ranking_version=ranking_version,
+        gaps=normalized_gaps,
+        status=status,
+    )
+    diagnostic_coverage = {
+        "trade_date": trade_date,
+        "ranking_version": ranking_version,
+        "publication_status": status,
+        "data_source_policy": "db_only",
+        "preflight_status": status,
+        "gap_count": len(normalized_gaps),
+        "gaps": [asdict(gap) for gap in normalized_gaps],
+        **(coverage or {}),
+    }
+    coverage_path = run_dir / "consumer_oversold_data_gap_coverage.json"
+    _write_text(
+        json.dumps(
+            diagnostic_coverage,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        coverage_path,
+    )
+    report_path = run_dir / "consumer_oversold_data_gap_report.md"
+    lines = [
+        "# 消费超跌策略数据缺口诊断",
+        "",
+        f"- 交易日：`{trade_date}`",
+        f"- 排名版本：`{ranking_version}`",
+        f"- 状态：`{status}`",
+        "- 数据策略：`db_only`",
+        f"- 缺口数量：`{len(normalized_gaps)}`",
+        "",
+        "策略已阻断，未生成或覆盖正常 Top20/Top30 产物。请先执行独立回填任务，再重新运行策略。",
+        "",
+        "| 数据集 | 资产 | 起始日期 | 截止日期 | 期望行数 | 实际行数 | 原因 |",
+        "|---|---|---|---|---:|---:|---|",
+    ]
+    for gap in normalized_gaps:
+        lines.append(
+            "| "
+            + " | ".join(
+                str(value or "")
+                for value in (
+                    gap.dataset,
+                    gap.asset_id,
+                    gap.start_date,
+                    gap.end_date,
+                    gap.expected_rows,
+                    gap.actual_rows,
+                    gap.reason,
+                )
+            )
+            + " |"
+        )
+    _write_text("\n".join(lines) + "\n", report_path)
+    return {
+        "paths": {
+            "coverage": str(coverage_path),
+            "backfill_request": str(request_path),
+            "report": str(report_path),
+        },
+        "coverage": diagnostic_coverage,
+        "publication_status": status,
+        "top20": pd.DataFrame(),
+        "reserve": pd.DataFrame(),
+        "preaudit": pd.DataFrame(),
+    }
 
 
 def _fsync_file(path: Path) -> None:

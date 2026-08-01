@@ -57,6 +57,26 @@ def _evaluation_result():
     }
 
 
+def _blocked_result(*, ranking_version="v1", status="blocked_missing_data"):
+    return {
+        "paths": {
+            "coverage": "/tmp/gap/coverage.json",
+            "backfill_request": "/tmp/gap/backfill.json",
+            "report": "/tmp/gap/report.md",
+        },
+        "top20": [],
+        "reserve": [],
+        "preaudit": [],
+        "coverage": {
+            "ranking_version": ranking_version,
+            "publication_status": status,
+        },
+        "as_of_trade_date": "2026-07-29",
+        "date_mode": "explicit_backtest",
+        "publication_status": status,
+    }
+
+
 def test_consumer_oversold_evaluate_dispatches_and_prints_machine_lines(monkeypatch, capsys):
     captured = {}
 
@@ -187,6 +207,36 @@ def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatc
         "consumer_oversold|as_of_trade_date|2026-07-29",
         "consumer_oversold|date_mode|explicit_backtest",
         "consumer_oversold|publication_status|ready",
+    ]
+
+
+def test_consumer_oversold_weekly_blocked_result_prints_gap_artifacts(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cli,
+        "_run_consumer_oversold_weekly",
+        lambda **kwargs: _blocked_result(),
+    )
+
+    cli.main_for_args(
+        [
+            "consumer-oversold-weekly",
+            "--trade-date",
+            "2026-07-29",
+            "--evidence-path",
+            "/tmp/gap/evidence.csv",
+            "--output-dir",
+            "/tmp/gap",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "consumer_oversold|coverage|/tmp/gap/coverage.json",
+        "consumer_oversold|backfill_request|/tmp/gap/backfill.json",
+        "consumer_oversold|report|/tmp/gap/report.md",
+        "consumer_oversold|ranking_version|v1",
+        "consumer_oversold|publication_status|blocked_missing_data",
     ]
 
 

@@ -1528,6 +1528,11 @@ _CONSUMER_OVERSOLD_V2_PATH_KEYS = (
     "top30",
     "ranked_pool",
 )
+_CONSUMER_OVERSOLD_BLOCKED_PATH_KEYS = (
+    "coverage",
+    "backfill_request",
+    "report",
+)
 _CONSUMER_OVERSOLD_RETROSPECTIVE_DATE = "2026-07-27"
 _CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES = {
     "detail": "consumer_oversold_v2_evaluation_detail.csv",
@@ -2018,6 +2023,27 @@ def _consumer_oversold_machine_lines(result, *, ranking_version: str = "v1") -> 
     paths = result["paths"]
     if not isinstance(paths, dict):
         raise ValueError("consumer oversold result paths must be a dict")
+    publication_status = result.get("publication_status")
+    if publication_status in {"blocked_missing_data", "runtime_timeout"}:
+        if set(paths) != set(_CONSUMER_OVERSOLD_BLOCKED_PATH_KEYS):
+            raise ValueError(
+                "blocked consumer oversold result paths must contain coverage, "
+                "backfill_request, and report"
+            )
+        validated = {
+            key: _validate_consumer_oversold_machine_path(
+                paths[key], f"consumer oversold result path {key}"
+            )
+            for key in _CONSUMER_OVERSOLD_BLOCKED_PATH_KEYS
+        }
+        return [
+            *(
+                f"consumer_oversold|{key}|{validated[key]}"
+                for key in _CONSUMER_OVERSOLD_BLOCKED_PATH_KEYS
+            ),
+            f"consumer_oversold|ranking_version|{ranking_version}",
+            f"consumer_oversold|publication_status|{publication_status}",
+        ]
     path_keys = (
         _CONSUMER_OVERSOLD_V2_PATH_KEYS
         if ranking_version == "v2"

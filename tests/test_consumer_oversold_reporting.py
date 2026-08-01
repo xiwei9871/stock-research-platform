@@ -22,8 +22,10 @@ from stock_research.consumer_oversold.evidence import (
 from stock_research.consumer_oversold.reporting import (
     REPORT_COLUMNS,
     _render_report,
+    write_consumer_oversold_data_gap_artifacts,
     write_consumer_oversold_artifacts,
 )
+from stock_research.strategy_data_policy import DataGap
 
 
 FUNNEL = {
@@ -392,6 +394,28 @@ def test_v2_writes_versioned_files_and_manifest_covers_every_artifact(tmp_path):
     assert Path(result["paths"]["comparison"]).name == (
         "consumer_oversold_v1_v2_comparison.csv"
     )
+
+
+def test_data_gap_artifacts_do_not_replace_previous_current_release(tmp_path):
+    normal = write_consumer_oversold_artifacts(_v2_payload(), output_dir=tmp_path)
+    previous_target = os.readlink(tmp_path / "current")
+
+    blocked = write_consumer_oversold_data_gap_artifacts(
+        output_dir=tmp_path,
+        trade_date="2026-07-29",
+        ranking_version="v2",
+        status="blocked_missing_data",
+        gaps=[DataGap("daily_bars", "A", "2026-07-29", "2026-07-29", 1, 0, "missing")],
+    )
+
+    assert set(blocked["paths"]) == {"coverage", "backfill_request", "report"}
+    assert (tmp_path / "current").is_symlink()
+    assert os.readlink(tmp_path / "current") == previous_target
+    assert Path(blocked["paths"]["backfill_request"]).is_file()
+    assert "blocked_missing_data" in Path(blocked["paths"]["report"]).read_text(
+        encoding="utf-8"
+    )
+    assert Path(normal["paths"]["top30"]).exists()
 
 
 def test_v2_publication_is_byte_deterministic_for_identical_payloads(tmp_path):

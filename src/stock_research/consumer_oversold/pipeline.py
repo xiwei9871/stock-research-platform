@@ -12,6 +12,12 @@ import numpy as np
 import pandas as pd
 
 from stock_research.config import SETTINGS
+from stock_research.strategy_data_policy import (
+    DEFAULT_RUNTIME_BUDGET_SECONDS,
+    StrategyRuntimeBudget,
+    StrategyRuntimeTimeout,
+    assert_db_only_source,
+)
 
 from .activation import (
     compute_technical_readiness_features,
@@ -58,6 +64,7 @@ from .reporting import (
     _ordered_frame,
     _publish_release,
     _render_report,
+    write_consumer_oversold_data_gap_artifacts,
     write_consumer_oversold_artifacts,
 )
 from .scoring import (
@@ -68,6 +75,7 @@ from .scoring import (
     score_candidates,
 )
 from .universe import build_consumer_universe_from_frames
+from .preflight import run_consumer_preflight
 
 
 INDUSTRY_RULES_PATH = SETTINGS.repo_root / "config" / "consumer_oversold_industry_rules_v1.csv"
@@ -2237,7 +2245,49 @@ def run_consumer_oversold_weekly(
     evidence_reconstruction_mode: str | None = None,
     evidence_information_cutoff: str | None = None,
 ) -> dict[str, Any]:
+    """Run the DB-only strategy and convert runtime overruns to diagnostics."""
+    try:
+        return _run_consumer_oversold_weekly_impl(
+            trade_date=trade_date,
+            evidence_path=evidence_path,
+            output_dir=output_dir,
+            service=service,
+            preaudit_only=preaudit_only,
+            ranking_version=ranking_version,
+            evidence_reconstruction_mode=evidence_reconstruction_mode,
+            evidence_information_cutoff=evidence_information_cutoff,
+        )
+    except StrategyRuntimeTimeout as exc:
+        return write_consumer_oversold_data_gap_artifacts(
+            output_dir=output_dir,
+            trade_date=trade_date,
+            ranking_version=ranking_version,
+            status="runtime_timeout",
+            gaps=(),
+            coverage={
+                "data_source_policy": "db_only",
+                "preflight_status": "runtime_timeout",
+                "runtime_error": str(exc),
+                "runtime_budget_seconds": DEFAULT_RUNTIME_BUDGET_SECONDS,
+            },
+        )
+
+
+def _run_consumer_oversold_weekly_impl(
+    *,
+    trade_date: str,
+    evidence_path: str | Path,
+    output_dir: str | Path,
+    service: str = SETTINGS.research_service,
+    preaudit_only: bool = False,
+    ranking_version: str = "v1",
+    evidence_reconstruction_mode: str | None = None,
+    evidence_information_cutoff: str | None = None,
+) -> dict[str, Any]:
     """Load point-in-time database inputs and publish the weekly pipeline."""
+    assert_db_only_source("database")
+    runtime = StrategyRuntimeBudget(timeout_seconds=DEFAULT_RUNTIME_BUDGET_SECONDS)
+    runtime.start()
     config = ConsumerOversoldConfig(
         trade_date=trade_date, ranking_version=ranking_version
     )
@@ -2277,28 +2327,47 @@ def run_consumer_oversold_weekly(
     industry_rules = pd.read_csv(INDUSTRY_RULES_PATH)
     asset_overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
 
+    runtime.begin_stage("universe_load")
     universe_frames = load_consumer_universe_frames(trade_date, service=service)
+    runtime.end_stage("universe_load")
+    runtime.begin_stage("universe_build")
     universe = build_consumer_universe_from_frames(
         **universe_frames,
         industry_rules=industry_rules,
         asset_overrides=asset_overrides,
         config=config,
     )
-    included = universe.loc[universe["included"].astype(bool), ["asset_id", "consumer_subindustry"]]
+    runtime.end_stage("universe_build")
+    included_columns = ["asset_id", "consumer_subindustry"]
+    if "list_date" in universe.columns:
+        included_columns.append("list_date")
+    included = universe.loc[
+        universe["included"].astype(bool), included_columns
+    ]
     asset_ids = included["asset_id"].astype(str).tolist()
+    runtime.begin_stage("share_capacity")
     share_capacity = load_consumer_share_capacity(
         asset_ids, trade_date, service=service
     )
+    runtime.end_stage("share_capacity")
+    runtime.begin_stage("market_history")
     bars = load_consumer_market_history(trade_date, service=service, asset_ids=asset_ids)
+    runtime.end_stage("market_history")
     activation_bars = bars
     if ranking_version == "v2":
+        runtime.begin_stage("turnover_derivation")
         activation_bars = derive_consumer_market_turnover_history(
             bars,
             share_capacity,
             trade_date=trade_date,
         )
+        runtime.end_stage("turnover_derivation")
+    runtime.begin_stage("finance_history")
     finance_with_shares = load_consumer_finance_history(asset_ids, trade_date, service=service)
+    runtime.end_stage("finance_history")
+    runtime.begin_stage("valuation_history")
     valuation_raw = load_consumer_valuation_history(asset_ids, trade_date, service=service)
+    runtime.end_stage("valuation_history")
     if "total_share" in share_capacity.columns:
         total_share = share_capacity.set_index("asset_id")["total_share"]
     else:
@@ -2326,6 +2395,35 @@ def run_consumer_oversold_weekly(
         valuation_history["asset_id"] = valuation_history["asset_id"].astype(str)
         valuation_history["consumer_subindustry"] = valuation_history["asset_id"].map(membership_map)
     valuation_history = valuation_history.loc[:, VALUATION_HISTORY_COLUMNS]
+    runtime.begin_stage("preflight")
+    preflight = run_consumer_preflight(
+        included=included,
+        bars=bars,
+        share_capacity=share_capacity,
+        finance=finance,
+        valuation_history=valuation_history,
+        trade_date=trade_date,
+    )
+    runtime.end_stage("preflight")
+    runtime.checkpoint("preflight")
+    if preflight.status != "passed":
+        diagnostic = runtime.metadata()
+        diagnostic.update(
+            {
+                "data_source_policy": "db_only",
+                "preflight_status": preflight.status,
+                "checked_assets": preflight.checked_assets,
+                "checked_datasets": list(preflight.checked_datasets),
+            }
+        )
+        return write_consumer_oversold_data_gap_artifacts(
+            output_dir=output_dir,
+            trade_date=trade_date,
+            ranking_version=ranking_version,
+            status=preflight.status,
+            gaps=preflight.gaps,
+            coverage=diagnostic,
+        )
     current_valuation = _current_valuation_from_histories(
         valuation_history,
         fundamentals,
@@ -2346,17 +2444,38 @@ def run_consumer_oversold_weekly(
     }
     if ranking_version == "v2":
         frames["activation_bars"] = activation_bars
+    runtime.begin_stage("scoring")
     payload = build_consumer_oversold_weekly_from_frames(
         frames=frames,
         evidence=evidence,
         config=config,
-        output_dir=None if reconstruction_requested else output_dir,
+        output_dir=None,
         preaudit_only=preaudit_only,
     )
-    if not reconstruction_requested:
+    runtime.end_stage("scoring")
+    if not isinstance(payload, dict) or not isinstance(payload.get("coverage"), dict):
         return payload
+    payload.setdefault("trade_date", trade_date)
+    payload["coverage"] = {
+        **payload["coverage"],
+        "data_source_policy": "db_only",
+        "preflight_status": "passed",
+        **runtime.metadata(),
+    }
     payload["coverage"] = {
         **payload["coverage"],
         **reconstruction_provenance,
     }
-    return write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+    runtime.begin_stage("publication")
+    published = write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+    runtime.end_stage("publication")
+    published["coverage"] = {
+        **published.get("coverage", {}),
+        "data_source_policy": "db_only",
+        "preflight_status": "passed",
+        **runtime.metadata(),
+        **reconstruction_provenance,
+    }
+    published["expected"] = payload.get("expected")
+    published["early"] = payload.get("early")
+    return published
