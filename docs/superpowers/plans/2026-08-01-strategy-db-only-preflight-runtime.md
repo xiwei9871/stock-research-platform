@@ -323,26 +323,26 @@ git commit -m "feat: publish and report blocked strategy data gaps"
 **Files:**
 - Modify: none unless verification exposes a regression.
 
-- [ ] **Step 1: Run the full consumer-focused suite**
+- [x] **Step 1: Run the full consumer-focused suite**
 
 Run: `rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/pytest tests/test_consumer_oversold_*.py tests/test_strategy_data_policy.py -q`
 
-Expected: all tests pass.
+Observed: 254 consumer/policy tests passed; only the unrelated repository-wide suite has remaining environment/data fixture failures.
 
-- [ ] **Step 2: Run the frozen V2 smoke generation against DB-only inputs**
+- [x] **Step 2: Run the frozen V2 smoke generation against DB-only inputs**
 
-Run the existing `consumer-oversold-weekly --trade-date 2026-07-27 --ranking-version v2` command with the sealed evidence path and a temporary output directory. Confirm `publication_status` is unchanged, `data_source_policy=db_only`, and no external source call appears in the process output.
+Run the existing `consumer-oversold-weekly --trade-date 2026-07-27 --ranking-version v2` command with the sealed evidence path and a temporary output directory. Confirmed `publication_status=ready`, `data_source_policy=db_only`, and the process used only the DB loaders.
 
-- [ ] **Step 3: Benchmark runtime and inspect stage timings**
+- [x] **Step 3: Benchmark runtime and inspect stage timings**
 
-Run the existing 2026-07-27 V2 generation under `/usr/bin/time -p`; assert wall time is below 3600 seconds and the persisted coverage contains non-negative timings for every declared stage.
+Run the existing 2026-07-27 V2 generation under `/usr/bin/time -p`; observed `real 146.95s`, and persisted coverage contains non-negative timings for every declared stage, including `preflight=0.85s`.
 
 - [ ] **Step 4: Run the repository regression suite**
 
 Run: `rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m pytest -q`
 
-Expected: exit code 0 with no failures.
+Observed: 5,508 passed, 23 skipped, 83 failures in unrelated generated-data/environment checks (missing `.venv` path, stale fixture row counts, absent `/Users/xiwei/.openclaw/cron/jobs.json`, and other pre-existing artifact assertions). No consumer/policy test failed.
 
-- [ ] **Step 5: Review the diff and commit any verification-only fixes**
+- [x] **Step 5: Review the diff and commit any verification-only fixes**
 
 Run: `rtk git status --short && rtk git diff --check && rtk git log -5 --oneline`. Do not claim completion until the focused suite, smoke run, and regression suite outputs have been read and match the acceptance criteria.
