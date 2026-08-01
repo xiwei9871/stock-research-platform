@@ -120,14 +120,17 @@ def score_rolling_stock_candidates(
     sectors = _canonicalize_sector(sector_states)
     _require_stock_sector_keys(stocks)
     _require_sector_context(stocks, sectors)
+    sector_context = sectors.loc[:, list(_SECTOR_CONTEXT_COLUMNS)].copy()
+    sector_context["_sector_context_matched"] = True
     joined = stocks.merge(
-        sectors.loc[:, list(_SECTOR_CONTEXT_COLUMNS)],
+        sector_context,
         on=list(_KEY_COLUMNS),
         how="left",
         validate="many_to_one",
         sort=False,
     )
     _raise_missing_sector_context(joined)
+    _validate_matched_sector_context(joined)
 
     blocked = joined["sector_gate_status"].eq(GateStatus.BLOCKED.value)
     active = joined.loc[~blocked].copy()
@@ -161,13 +164,11 @@ def score_rolling_stock_candidates(
     ).fillna("precomputed")
     _assign_revision_identity(active, config)
 
-    # Confirmed repairs are useful evaluation context, not new entries.  A
-    # repaired or structurally weak sector likewise stays out of fresh ranking.
+    # Confirmed repairs are useful evaluation context, not fresh entries.
+    # State classification above deliberately remains authoritative: a
+    # non-blocked expected_repair row is still a valid candidate.
     selected = active.loc[
         ~active["stock_lifecycle"].eq(StockLifecycle.CONFIRMED_REPAIR.value)
-        & ~active["sector_recovery_state"].isin(
-            {RecoveryState.REPAIRED.value, RecoveryState.STRUCTURALLY_WEAK.value}
-        )
     ].copy()
     selected = selected.sort_values(
         ["stock_score", "asset_id", "sector_system", "sector_code"],
@@ -351,7 +352,7 @@ def _require_sector_context(stocks: pd.DataFrame, sectors: pd.DataFrame) -> None
 
 
 def _raise_missing_sector_context(joined: pd.DataFrame) -> None:
-    missing = joined["sector_gate_status"].isna()
+    missing = joined["_sector_context_matched"].isna()
     if missing.any():
         row = joined.loc[missing, ["asset_id", *_KEY_COLUMNS]].sort_values(
             ["asset_id", *_KEY_COLUMNS], kind="mergesort"
@@ -360,6 +361,47 @@ def _raise_missing_sector_context(joined: pd.DataFrame) -> None:
             f"missing sector context for asset {row['asset_id']} key "
             f"{row['sector_system']}/{row['sector_code']}"
         )
+
+
+def _validate_matched_sector_context(joined: pd.DataFrame) -> None:
+    """Reject incomplete matched rows before gate/lifecycle evaluation."""
+
+    text_columns = (
+        "sector_system",
+        "sector_code",
+        "sector_name",
+        "sector_recovery_state",
+        "sector_gate_status",
+    )
+    numeric_columns = (
+        "sector_oversold_score",
+        "sector_repairability_score",
+        "sector_direction_score",
+    )
+    for column in text_columns:
+        values = joined[column].astype("string").str.strip()
+        invalid = values.isna() | values.eq("")
+        if invalid.any():
+            _raise_incomplete_sector_context(joined, invalid, column)
+        joined[column] = values
+    for column in numeric_columns:
+        values = pd.to_numeric(joined[column], errors="coerce")
+        invalid = values.isna() | ~np.isfinite(values)
+        if invalid.any():
+            _raise_incomplete_sector_context(joined, invalid, column)
+        joined[column] = values.clip(0.0, 100.0)
+
+
+def _raise_incomplete_sector_context(
+    joined: pd.DataFrame, invalid: pd.Series, column: str
+) -> None:
+    row = joined.loc[invalid, ["asset_id", *_KEY_COLUMNS]].sort_values(
+        ["asset_id", *_KEY_COLUMNS], kind="mergesort"
+    ).iloc[0]
+    raise ValueError(
+        f"sector context for asset {row['asset_id']} key "
+        f"{row['sector_system']}/{row['sector_code']} missing required field {column}"
+    )
 
 
 def _assign_required_features(frame: pd.DataFrame) -> None:

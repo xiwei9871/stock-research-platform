@@ -112,6 +112,48 @@ def test_lifecycle_classifies_near_high_repaired_sector_as_confirmed_repair():
     ) == "confirmed_repair"
 
 
+def test_lifecycle_classifies_blocked_sector_as_invalidated():
+    assert classify_stock_lifecycle(
+        anchor_return=0.0,
+        distance_to_252d_high=0.30,
+        sector_recovery_state="fresh_oversold",
+        sector_gate_status="blocked",
+        repair_trigger_return=0.10,
+        residual_high_distance=0.20,
+    ) == "invalidated"
+
+
+def test_lifecycle_classifies_below_trigger_fresh_oversold_as_new_oversold():
+    assert classify_stock_lifecycle(
+        anchor_return=0.05,
+        distance_to_252d_high=0.30,
+        sector_recovery_state="fresh_oversold",
+        sector_gate_status="watch",
+        repair_trigger_return=0.10,
+        residual_high_distance=0.20,
+    ) == "new_oversold"
+
+
+def test_lifecycle_classifies_other_nonblocked_state_as_expected_repair_and_selects_it():
+    assert classify_stock_lifecycle(
+        anchor_return=0.05,
+        distance_to_252d_high=0.30,
+        sector_recovery_state="repaired",
+        sector_gate_status="watch",
+        repair_trigger_return=0.10,
+        residual_high_distance=0.20,
+    ) == "expected_repair"
+
+    result = score_rolling_stock_candidates(
+        _stocks().assign(anchor_return=0.05),
+        _sectors(gate="watch", state="repaired"),
+        top_n=2,
+        config=_config(),
+    )
+
+    assert result["stock_lifecycle"].tolist() == ["expected_repair", "expected_repair"]
+
+
 def test_missing_sector_context_names_asset_and_key_and_blocked_never_selects():
     stocks = _stocks().iloc[[0]].copy()
     stocks.loc[:, "industry_code"] = "MISSING"
@@ -121,6 +163,16 @@ def test_missing_sector_context_names_asset_and_key_and_blocked_never_selects():
 
     blocked = _sectors(gate="blocked")
     assert score_rolling_stock_candidates(_stocks(), blocked, top_n=5, config=_config()).empty
+
+
+def test_missing_matched_sector_name_or_recovery_state_fails_closed():
+    missing_name = _sectors().assign(sector_name=pd.NA)
+    with pytest.raises(ValueError, match=r"asset 000001.*sector_name"):
+        score_rolling_stock_candidates(_stocks(), missing_name, top_n=5, config=_config())
+
+    missing_state = _sectors().assign(sector_recovery_state=pd.NA)
+    with pytest.raises(ValueError, match=r"asset 000001.*sector_recovery_state"):
+        score_rolling_stock_candidates(_stocks(), missing_state, top_n=5, config=_config())
 
 
 def test_residual_space_candidate_remains_selected_when_top_n_permits():
