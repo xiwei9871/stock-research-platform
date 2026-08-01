@@ -312,6 +312,14 @@ def test_release_packages_theme_research_priority_support_without_canonical_arti
         assert f"COPY {relative_dir} ./{relative_dir}" in api_dockerfile
 
     assert "COPY artifacts/theme_decomposition ./artifacts/theme_decomposition" not in api_dockerfile
+    assert (
+        "      - type: bind\n"
+        "        source: ../artifacts/theme_decomposition\n"
+        "        target: /app/artifacts/theme_decomposition\n"
+        "        read_only: true\n"
+        "        bind:\n"
+        "          create_host_path: false\n"
+    ) in _read("deploy/dashboard-release.compose.yml")
 
 
 def test_release_builds_use_lockfiles_and_pinned_base_images():
@@ -1254,6 +1262,8 @@ def _release_gate_env(
         fi
         if [[ "$url" == */api/platform/readiness ]]; then
           printf '%s\n' "$FAKE_READINESS_JSON" > "$output"
+        elif [[ "$url" == */api/research/theme-decomposition/themes ]]; then
+          printf '%s\n' "$FAKE_THEME_RESEARCH_JSON" > "$output"
         elif [[ "$url" == */release.json ]]; then
           printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7","frontend_base_image":"nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
         else
@@ -1285,6 +1295,13 @@ def _release_gate_env(
                 "freshness_status": "current",
             }
             for strategy_id in ("lhb_shortline", "mid_trend", "tech_bottleneck")
+        ],
+    }
+    themes = {
+        "total": 25,
+        "items": [
+            {"theme_id": "ai_compute_infrastructure_value_chain_v1"},
+            *[{"theme_id": f"theme_{index:02d}"} for index in range(1, 25)],
         ],
     }
     report_health_path = tmp_path / "theme-research-report-health.json"
@@ -1344,6 +1361,7 @@ def _release_gate_env(
         "FAKE_FRONTEND_RELEASE_ID": frontend_release_id,
         "FAKE_READINESS_JSON": json.dumps(readiness),
         "FAKE_QUEUE_JSON": json.dumps(queue),
+        "FAKE_THEME_RESEARCH_JSON": json.dumps(themes),
         "FAKE_CURL_LOG": str(tmp_path / "curl.log"),
         "FAKE_CURL_ARGV_LOG": str(tmp_path / "curl-argv.log"),
         "THEME_RESEARCH_REPORT_HEALTH_JSON": str(report_health_path),
@@ -1437,6 +1455,8 @@ def test_release_gate_logs_in_and_uses_session_cookie_for_protected_apis(tmp_pat
         fi
         if [[ "$url" == */api/platform/readiness ]]; then
           printf '%s\n' "$FAKE_READINESS_JSON" > "$output"
+        elif [[ "$url" == */api/research/theme-decomposition/themes ]]; then
+          printf '%s\n' "$FAKE_THEME_RESEARCH_JSON" > "$output"
         else
           printf '%s\n' "$FAKE_QUEUE_JSON" > "$output"
         fi
@@ -1452,7 +1472,7 @@ def test_release_gate_logs_in_and_uses_session_cookie_for_protected_apis(tmp_pat
             "FAKE_LOGIN_PASSWORD": "session-secret",
             "FAKE_LOGIN_ATTEMPTS": str(tmp_path / "login-attempts"),
             "FAKE_LOGIN_FAILURES": "1",
-            "RELEASE_CHECK_TIMEOUT_SECONDS": "2",
+            "RELEASE_CHECK_TIMEOUT_SECONDS": "5",
         }
     )
 
@@ -1483,6 +1503,28 @@ def test_release_gate_rejects_report_root_or_index_health_errors(tmp_path):
         "errors": [{"code": "INVALID_MANIFEST"}],
     }
     health_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Dashboard release check failed" in result.stderr
+
+
+def test_release_gate_rejects_incomplete_theme_research_artifacts(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    env["RELEASE_CHECK_TIMEOUT_SECONDS"] = "2"
+    env["FAKE_THEME_RESEARCH_JSON"] = json.dumps(
+        {
+            "total": 24,
+            "items": [{"theme_id": f"theme_{index:02d}"} for index in range(24)],
+        }
+    )
 
     result = subprocess.run(
         [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],

@@ -239,6 +239,16 @@ queue_matches_release() {
     ' "$1" >/dev/null
 }
 
+theme_research_matches_release() {
+  jq -e '
+    (.total | type == "number" and . >= 25)
+    and (.items | type == "array")
+    and ((.items | length) == .total)
+    and ([.items[].theme_id] | length == (unique | length))
+    and any(.items[]; .theme_id == "ai_compute_infrastructure_value_chain_v1")
+  ' "$1" >/dev/null
+}
+
 report_health_matches_release() {
   jq -e \
     --arg root "$EXPECTED_THEME_RESEARCH_REPORT_ROOT" \
@@ -290,6 +300,8 @@ echo "Waiting for dashboard release ${EXPECTED_RELEASE_ID} at ${BASE_URL%/}"
 while (( SECONDS <= deadline )); do
   if fetch_json "${BASE_URL%/}/api/platform/readiness" "$tmp_dir/readiness.json" \
     && readiness_matches_release "$tmp_dir/readiness.json" \
+    && fetch_json "${BASE_URL%/}/api/research/theme-decomposition/themes" "$tmp_dir/theme-research.json" \
+    && theme_research_matches_release "$tmp_dir/theme-research.json" \
     && fetch_json "${BASE_URL%/}/release.json" "$tmp_dir/frontend-release.json" \
     && frontend_matches_release "$tmp_dir/frontend-release.json" \
     && fetch_json "${BASE_URL%/}/api/review-queue?trade_date=${EXPECTED_TRADE_DATE}&limit=10&lookback_days=90" "$tmp_dir/review-queue.json" \
@@ -312,6 +324,9 @@ if [[ -s "$tmp_dir/readiness.json" ]]; then
 fi
 if [[ -s "$tmp_dir/frontend-release.json" ]]; then
   jq '{release_id}' "$tmp_dir/frontend-release.json" >&2 || true
+fi
+if [[ -s "$tmp_dir/theme-research.json" ]]; then
+  jq '{total, required_theme_present: any(.items[]?; .theme_id == "ai_compute_infrastructure_value_chain_v1")}' "$tmp_dir/theme-research.json" >&2 || true
 fi
 if [[ -s "$tmp_dir/review-queue.json" ]]; then
   jq '{requested_trade_date, trade_date, groups: [.groups[]? | {strategy_id, count, data_trade_date, freshness_status}]}' "$tmp_dir/review-queue.json" >&2 || true

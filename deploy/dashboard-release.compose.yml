@@ -27,6 +27,12 @@ services:
       - ../outputs/research:/app/outputs/research:ro
       - ${DASHBOARD_PGSERVICE_FILE:-./.pg_service.conf}:/app/.pg_service.conf:ro
       - type: bind
+        source: ../artifacts/theme_decomposition
+        target: /app/artifacts/theme_decomposition
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ${THEME_RESEARCH_REPORT_HOST_ROOT:?required}
         target: /app/reports/theme-research
         read_only: true
