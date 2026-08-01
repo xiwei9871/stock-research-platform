@@ -177,6 +177,7 @@ def write_rolling_snapshot(
     output_dir: str | Path,
     additional_artifacts: Mapping[str, bytes] | None = None,
     runtime_metadata_supplier: Callable[[], Mapping[str, object]] | None = None,
+    runtime_publish_guard: Callable[[], object] | None = None,
 ) -> dict[str, object]:
     """Write one anchor directory without replacing an existing different snapshot."""
 
@@ -229,6 +230,11 @@ def write_rolling_snapshot(
         manifest_bytes = _json_bytes(manifest)
         _atomic_write_new(staging / "manifest.json", manifest_bytes)
         _fsync_directory(staging)
+        if runtime_metadata_supplier is not None:
+            supplied_metadata = runtime_metadata_supplier()
+            manifest["runtime_metadata"] = _normalize_runtime_metadata(supplied_metadata)
+            _rewrite_staged_file(staging / "manifest.json", _json_bytes(manifest))
+            _fsync_directory(staging)
         # The final path is checked immediately before publication.  A second
         # writer that wins a race is handled below without replacing its files.
         if destination.exists():
@@ -239,6 +245,8 @@ def write_rolling_snapshot(
                     "runtime_metadata": manifest["runtime_metadata"],
                 }
             raise ValueError(f"immutable rolling snapshot already exists at {destination}")
+        if runtime_publish_guard is not None:
+            runtime_publish_guard()
         os.replace(staging, destination)
         published = True
         _fsync_directory(destination.parent)
@@ -884,6 +892,13 @@ def _fsync_directory(path: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _rewrite_staged_file(path: Path, contents: bytes) -> None:
+    with path.open("wb") as handle:
+        handle.write(contents)
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _atomic_write_new(path: Path, contents: bytes) -> None:

@@ -146,3 +146,54 @@ def test_daily_cli_preserves_persisted_history_start_for_blocked_guard(
     )
 
     assert captured["config"].anchor_start_date == first
+
+
+def test_report_cli_machine_evaluation_path_uses_latest_revision(monkeypatch, tmp_path, capsys):
+    snapshot_dir = tmp_path / "snapshot"
+    snapshot_dir.mkdir()
+    (snapshot_dir / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (snapshot_dir / "evaluation_detail.csv").write_text(
+        "asset_id,evaluation_status\nA,pending\n", encoding="utf-8"
+    )
+    revision_dir = snapshot_dir / "evaluation_revision=0001"
+    revision_dir.mkdir()
+    (revision_dir / "evaluation_detail.csv").write_text(
+        "asset_id,evaluation_status\nA,complete\n", encoding="utf-8"
+    )
+    (revision_dir / "evaluation_summary.csv").write_text(
+        "forward_horizon_days,complete_count\n1,1\n", encoding="utf-8"
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        cli,
+        "load_rolling_oversold_snapshot",
+        lambda path: {
+            "manifest": {"runtime_metadata": {"runtime_seconds": 0.2}},
+            "preflight": {},
+            "snapshot_id": "snapshot",
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "write_rolling_sector_oversold_report",
+        lambda **kwargs: captured.update(kwargs) or tmp_path / "report.md",
+    )
+
+    cli.main_for_args(
+        [
+            "rolling-sector-oversold-report",
+            "--snapshot-dir",
+            str(snapshot_dir),
+            "--output-dir",
+            str(tmp_path / "report"),
+        ]
+    )
+
+    assert captured["snapshot_dir"] == snapshot_dir.resolve()
+    lines = {
+        line.split("|", 2)[1]: line.split("|", 2)[2]
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("rolling_sector_oversold|")
+    }
+    assert lines["evaluation"] == str(revision_dir / "evaluation_detail.csv")

@@ -46,6 +46,7 @@ from stock_research.rolling_oversold.pipeline import (
     run_rolling_replay,
 )
 from stock_research.rolling_oversold.reporting import (
+    latest_rolling_evaluation_directory,
     load_rolling_oversold_snapshot,
     write_rolling_sector_oversold_report,
 )
@@ -8469,6 +8470,12 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         manifest = snapshot.get("manifest", {})
         runtime_metadata = manifest.get("runtime_metadata", {}) if isinstance(manifest, dict) else {}
         preflight = snapshot.get("preflight", {})
+        evaluation_directory = latest_rolling_evaluation_directory(snapshot_dir)
+        evaluation_path = (
+            evaluation_directory / "evaluation_detail.csv"
+            if evaluation_directory is not None
+            else snapshot_dir / "evaluation_detail.csv"
+        )
         result = {
             "blocked": bool(preflight.get("blocked")) if isinstance(preflight, dict) else False,
             "runtime_seconds": runtime_metadata.get("runtime_seconds", "") if isinstance(runtime_metadata, dict) else "",
@@ -8477,7 +8484,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 "market_regime": _rolling_oversold_existing_path(snapshot_dir / "market_regime.csv"),
                 "sector_states": _rolling_oversold_existing_path(snapshot_dir / "sector_states.csv"),
                 "stock_candidates": _rolling_oversold_existing_path(snapshot_dir / "stock_candidates.csv"),
-                "evaluation": _rolling_oversold_existing_path(snapshot_dir / "evaluation_detail.csv"),
+                "evaluation": _rolling_oversold_existing_path(evaluation_path),
                 "preflight": _rolling_oversold_existing_path(snapshot_dir / "preflight.json"),
                 "backfill_requests": _rolling_oversold_existing_path(snapshot_dir / "backfill_requests.csv"),
             },

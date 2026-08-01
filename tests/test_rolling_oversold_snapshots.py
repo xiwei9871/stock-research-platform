@@ -360,6 +360,31 @@ def test_write_snapshot_supplier_abort_leaves_no_published_manifest(tmp_path):
     assert not destination.exists()
 
 
+def test_write_snapshot_publish_guard_runs_before_atomic_rename(tmp_path):
+    snapshot = _build()
+    calls: list[str] = []
+
+    def supply_metadata():
+        calls.append("supplier")
+        return {"runtime_seconds": 0.01}
+
+    def abort_before_rename():
+        calls.append("guard")
+        raise RuntimeError("runtime budget exceeded before rename")
+
+    with pytest.raises(RuntimeError, match="before rename"):
+        write_rolling_snapshot(
+            snapshot,
+            output_dir=tmp_path,
+            runtime_metadata_supplier=supply_metadata,
+            runtime_publish_guard=abort_before_rename,
+        )
+
+    destination = tmp_path / "rolling_sector_oversold" / "anchor=2026-07-21" / f"version={VERSION}"
+    assert calls[-1] == "guard"
+    assert not destination.exists()
+
+
 def test_empty_snapshot_uses_stable_schemas_and_required_artifact_names(tmp_path):
     snapshot = _build(stocks=pd.DataFrame(), sectors=pd.DataFrame())
     assert snapshot["stock_candidates"].empty

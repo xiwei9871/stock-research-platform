@@ -246,15 +246,23 @@ def run_one_anchor(
     snapshot["runtime_metadata"] = _snapshot_runtime_metadata(runtime)
     publication_metadata: dict[str, object] | None = None
     publication_stage_closed = False
+    publication_metadata_started = False
 
     def publish_runtime_metadata() -> dict[str, object]:
-        nonlocal publication_metadata, publication_stage_closed
+        nonlocal publication_metadata, publication_stage_closed, publication_metadata_started
         runtime.checkpoint("publication")
-        runtime.end_stage("publication")
-        publication_stage_closed = True
-        runtime.checkpoint("publication")
+        if not publication_stage_closed and not publication_metadata_started:
+            publication_metadata_started = True
+            return runtime.metadata()
+        if not publication_stage_closed:
+            runtime.end_stage("publication")
+            publication_stage_closed = True
+            runtime.checkpoint("publication")
         publication_metadata = runtime.metadata()
         return publication_metadata
+
+    def publish_runtime_guard() -> None:
+        runtime.checkpoint("publication")
 
     runtime.begin_stage("publication")
     try:
@@ -263,6 +271,7 @@ def run_one_anchor(
             output_dir=output_dir,
             additional_artifacts=evaluation_artifacts,
             runtime_metadata_supplier=publish_runtime_metadata,
+            runtime_publish_guard=publish_runtime_guard,
         )
     finally:
         if not publication_stage_closed:
@@ -992,6 +1001,22 @@ def _evaluation_runtime_metadata_from_directory(
     return dict(runtime_metadata) if isinstance(runtime_metadata, dict) else None
 
 
+def _evaluation_has_pending_rows(directory: Path | None) -> bool:
+    """Return whether the latest evaluation still has horizons awaiting bars."""
+
+    if directory is None:
+        return True
+    detail_path = directory / "evaluation_detail.csv"
+    if not detail_path.is_file() or detail_path.stat().st_size == 0:
+        return True
+    try:
+        statuses = pd.read_csv(detail_path, usecols=["evaluation_status"])["evaluation_status"]
+    except (OSError, ValueError, pd.errors.EmptyDataError):
+        return True
+    normalized = statuses.astype("string").fillna("").str.strip().str.casefold()
+    return bool(normalized.eq("pending").any())
+
+
 def _persist_evaluation_revision(
     *,
     snapshot: dict[str, object],
@@ -1000,6 +1025,7 @@ def _persist_evaluation_revision(
     summary: pd.DataFrame,
     evaluation_cutoff: date,
     runtime_metadata_supplier: Any | None = None,
+    runtime_publish_guard: Any | None = None,
 ) -> dict[str, object]:
     existing_revisions: list[int] = []
     for revision_dir in snapshot_dir.glob("evaluation_revision=*"):
@@ -1044,8 +1070,20 @@ def _persist_evaluation_revision(
         with manifest_path.open("rb") as handle:
             os.fsync(handle.fileno())
         _fsync_directory(staging)
+        if runtime_metadata_supplier is not None:
+            runtime_metadata = runtime_metadata_supplier()
+            manifest["runtime_metadata"] = runtime_metadata
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with manifest_path.open("rb") as handle:
+                os.fsync(handle.fileno())
+            _fsync_directory(staging)
         if destination.exists():
             raise ValueError(f"evaluation revision already exists at {destination}")
+        if runtime_publish_guard is not None:
+            runtime_publish_guard()
         os.replace(staging, destination)
         published = True
         _fsync_directory(snapshot_dir)
@@ -1462,6 +1500,7 @@ def _existing_snapshot_result(
         latest_directory is None
         or latest_cutoff is None
         or latest_cutoff < evaluation_cutoff
+        or _evaluation_has_pending_rows(latest_directory)
     )
     revision_result: dict[str, object] | None = None
     if needs_refresh:
@@ -1486,15 +1525,23 @@ def _existing_snapshot_result(
 
         publication_metadata: dict[str, object] | None = None
         publication_stage_closed = False
+        publication_metadata_started = False
 
         def publish_revision_metadata() -> dict[str, object]:
-            nonlocal publication_metadata, publication_stage_closed
+            nonlocal publication_metadata, publication_stage_closed, publication_metadata_started
             runtime.checkpoint("publication")
-            runtime.end_stage("publication")
-            publication_stage_closed = True
-            runtime.checkpoint("publication")
+            if not publication_stage_closed and not publication_metadata_started:
+                publication_metadata_started = True
+                return runtime.metadata()
+            if not publication_stage_closed:
+                runtime.end_stage("publication")
+                publication_stage_closed = True
+                runtime.checkpoint("publication")
             publication_metadata = runtime.metadata()
             return publication_metadata
+
+        def publish_revision_guard() -> None:
+            runtime.checkpoint("publication")
 
         runtime.begin_stage("publication")
         try:
@@ -1505,6 +1552,7 @@ def _existing_snapshot_result(
                 summary=summary,
                 evaluation_cutoff=evaluation_cutoff,
                 runtime_metadata_supplier=publish_revision_metadata,
+                runtime_publish_guard=publish_revision_guard,
             )
         finally:
             if not publication_stage_closed:

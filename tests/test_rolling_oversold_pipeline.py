@@ -518,6 +518,18 @@ def test_existing_snapshot_refreshes_delayed_evaluation_as_versioned_revision(
     assert "5d: completed=1; pending=0" in report_text
 
 
+def test_pending_evaluation_remains_refreshable_when_cutoff_is_unchanged(tmp_path):
+    detail_path = tmp_path / "evaluation_detail.csv"
+    detail_path.write_text(
+        "evaluation_status\n" "pending\n" "complete\n", encoding="utf-8"
+    )
+    assert pipeline._evaluation_has_pending_rows(tmp_path) is True
+    detail_path.write_text(
+        "evaluation_status\n" "complete\n" "complete\n", encoding="utf-8"
+    )
+    assert pipeline._evaluation_has_pending_rows(tmp_path) is False
+
+
 def test_stock_scoring_gap_returns_blocked_policy_artifacts(monkeypatch, tmp_path):
     anchor = date(2026, 7, 21)
     config = RollingOversoldConfig(anchor_start_date=anchor)
