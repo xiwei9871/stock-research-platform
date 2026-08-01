@@ -42,8 +42,13 @@ def score_sector_states(
         members.groupby(_internal_key_columns(), dropna=False)["asset_id"].nunique().to_dict()
         if not members.empty else {}
     )
-    mapped = pd.concat([bars, members], ignore_index=True, sort=False)
+    anchor_bars = bars.loc[bars["_usable_bar"]] if not bars.empty else bars
+    future_bars = bars.loc[~bars["_usable_bar"]] if not bars.empty else bars
+    mapped = pd.concat([anchor_bars, members], ignore_index=True, sort=False)
     mapping_metadata = _mapping_metadata(mapped)
+    future_metadata = _mapping_metadata(future_bars)
+    for key, metadata in future_metadata.items():
+        mapping_metadata.setdefault(key, metadata)
     bar_keys = (
         set(map(tuple, bars[_internal_key_columns()].drop_duplicates().to_numpy()))
         if not bars.empty else set()
@@ -86,7 +91,12 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
             result["asset_id"] = pd.NA
         result["asset_id"] = result["asset_id"].astype("string").str.strip()
         result = _active_membership(result, anchor_date)
-        return result.loc[result["asset_id"].notna()].copy()
+        result = result.loc[result["asset_id"].notna()].copy()
+        return result.sort_values(
+            [*_internal_key_columns(), "asset_id", "sector_name"],
+            kind="mergesort",
+            na_position="first",
+        )
     trade_dates = (
         result["trade_date"]
         if "trade_date" in result
@@ -101,7 +111,23 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
     result["_usable_bar"] = (
         result["trade_date"].notna() & (result["trade_date"].dt.date <= anchor_date)
     )
-    return result.sort_values([*_internal_key_columns(), "trade_date"], kind="stable")
+    duplicate_sort_columns = [
+        column
+        for column in (
+            "sector_name", "close", "preclose", "high", "low", "amount", "volume",
+            "up_count", "down_count", "stock_count", "new_low_count", "dispersion_20d",
+            "fundamental_quality_score", "valuation_support_score", "risk_concentration_score",
+        )
+        if column in result
+    ]
+    result = result.sort_values(
+        [*_internal_key_columns(), "trade_date", *duplicate_sort_columns],
+        kind="mergesort",
+        na_position="first",
+    )
+    # Keep one canonical row per sector/date after deterministic ordering.
+    result = result.drop_duplicates([*_internal_key_columns(), "trade_date"], keep="last")
+    return result.sort_values([*_internal_key_columns(), "trade_date"], kind="mergesort")
 
 
 def _active_membership(frame: pd.DataFrame, anchor_date: date) -> pd.DataFrame:

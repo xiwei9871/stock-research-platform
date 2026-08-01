@@ -190,3 +190,59 @@ def test_future_only_sector_bar_key_is_retained_as_blocked_unknown():
     assert row["data_cutoff_date"] is pd.NaT
     assert row["sector_recovery_state"] == "unknown"
     assert row["sector_gate_status"] == "blocked"
+
+
+def test_future_duplicate_metadata_does_not_change_anchor_sector_mapping():
+    anchor = date(2026, 7, 3)
+    history = _bars_for([100.0, 96.0, 92.0, 88.0, 84.0, 86.0], anchor=anchor)
+    future = history.iloc[[-1]].copy()
+    future["trade_date"] = anchor + timedelta(days=1)
+    future["industry_name"] = "Future-only name"
+    with_future = pd.concat([history, future], ignore_index=True)
+
+    base = score_sector_states(
+        history,
+        membership=_membership("I1"),
+        market_regime={"market_regime": "neutral"},
+        anchor_date=anchor,
+    ).iloc[0]
+    changed = score_sector_states(
+        with_future,
+        membership=_membership("I1"),
+        market_regime={"market_regime": "neutral"},
+        anchor_date=anchor,
+    ).iloc[0]
+
+    assert changed["sector_name"] == base["sector_name"] == "Industry one"
+    assert changed["sector_mapping_valid"]
+    assert changed["sector_mapping_reason"] == base["sector_mapping_reason"] == ""
+    assert changed["sector_recovery_state"] == base["sector_recovery_state"]
+    assert changed["sector_gate_status"] == base["sector_gate_status"]
+
+
+def test_sector_duplicate_rows_are_permutation_invariant():
+    anchor = date(2026, 7, 3)
+    bars = _bars_for([100.0, 96.0, 92.0, 88.0, 84.0, 86.0], anchor=anchor)
+    bars["fundamental_quality_score"] = 50.0
+    duplicate = bars.iloc[[-1]].copy()
+    duplicate["close"] = 85.0
+    duplicate["amount"] = 200.0
+    duplicate["fundamental_quality_score"] = 80.0
+    with_duplicate = pd.concat([bars, duplicate], ignore_index=True)
+    membership = _membership("I1")
+
+    first = score_sector_states(
+        with_duplicate,
+        membership=membership,
+        market_regime={"market_regime": "neutral"},
+        anchor_date=anchor,
+    ).iloc[0]
+    second = score_sector_states(
+        with_duplicate.sample(frac=1.0, random_state=23).reset_index(drop=True),
+        membership=membership.sample(frac=1.0, random_state=29).reset_index(drop=True),
+        market_regime={"market_regime": "neutral"},
+        anchor_date=anchor,
+    ).iloc[0]
+
+    assert first["fundamental_quality_score"] == 80.0
+    pd.testing.assert_series_equal(first.sort_index(), second.sort_index(), check_names=False)

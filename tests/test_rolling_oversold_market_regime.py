@@ -114,3 +114,39 @@ def test_market_regime_ignores_future_rows_when_a_cutoff_exists():
     assert result["data_cutoff_date"] == anchor
     assert result["breadth_below_ma20"] == 1.0
     assert result["index_return_1d"] == pytest.approx(-0.20)
+
+
+def test_market_duplicate_rows_are_permutation_invariant():
+    anchor = date(2026, 7, 3)
+    index_bars = pd.DataFrame(
+        {
+            "index_id": ["benchmark", "benchmark", "benchmark", "benchmark"],
+            "trade_date": [anchor - timedelta(days=1), anchor, anchor, anchor],
+            "close": [100.0, 80.0, 90.0, 80.0],
+            "amount": [100.0, 200.0, 150.0, 200.0],
+        }
+    )
+    stock_bars = pd.DataFrame(
+        {
+            "asset_id": ["A", "A", "A", "A"],
+            "trade_date": [anchor - timedelta(days=1), anchor, anchor, anchor],
+            "close": [100.0, 80.0, 90.0, 80.0],
+            "amount": [10.0, 20.0, 30.0, 20.0],
+            "pct_chg": [0.0, -20.0, -10.0, -20.0],
+        }
+    )
+
+    first = compute_market_regime_features(
+        {"index_bars": index_bars, "stock_bars": stock_bars}, anchor_date=anchor
+    )
+    second = compute_market_regime_features(
+        {
+            "index_bars": index_bars.sample(frac=1.0, random_state=11).reset_index(drop=True),
+            "stock_bars": stock_bars.sample(frac=1.0, random_state=19).reset_index(drop=True),
+        },
+        anchor_date=anchor,
+    )
+
+    pd.testing.assert_frame_equal(
+        pd.DataFrame([first]).sort_index(axis=1), pd.DataFrame([second]).sort_index(axis=1)
+    )

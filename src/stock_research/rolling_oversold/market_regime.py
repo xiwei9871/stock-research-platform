@@ -151,7 +151,20 @@ def _prepare_bars(frame: pd.DataFrame, *, identifier: str, anchor_date: date) ->
         & result["trade_date"].notna()
         & (result["trade_date"].dt.date <= anchor_date)
     ].copy()
-    return result.sort_values([identifier, "trade_date"], kind="stable")
+    duplicate_sort_columns = [
+        column
+        for column in ("close", "preclose", "high", "low", "amount", "volume", "pct_chg")
+        if column in result
+    ]
+    result = result.sort_values(
+        [identifier, "trade_date", *duplicate_sort_columns],
+        kind="mergesort",
+        na_position="first",
+    )
+    # Duplicate bars use the deterministic last row after nulls and values are
+    # ordered.  This makes equal inputs independent of source row ordering.
+    result = result.drop_duplicates([identifier, "trade_date"], keep="last")
+    return result.sort_values([identifier, "trade_date"], kind="mergesort")
 
 
 def _prepare_status(frame: pd.DataFrame, cutoff: date) -> pd.DataFrame:
@@ -171,7 +184,18 @@ def _prepare_status(frame: pd.DataFrame, cutoff: date) -> pd.DataFrame:
         result[column] = _as_bool(
             result.get(column), default=(column == "is_trade"), index=result.index
         )
-    return result.sort_values(["asset_id", "trade_date"], kind="stable")
+    duplicate_sort_columns = [
+        column
+        for column in ("is_trade", "is_st", "is_suspended", "is_limit_up", "is_limit_down")
+        if column in result
+    ]
+    result = result.sort_values(
+        ["asset_id", "trade_date", *duplicate_sort_columns],
+        kind="mergesort",
+        na_position="first",
+    )
+    result = result.drop_duplicates(["asset_id", "trade_date"], keep="last")
+    return result.sort_values(["asset_id", "trade_date"], kind="mergesort")
 
 
 def _latest_stock_state(bars: pd.DataFrame, status: pd.DataFrame) -> pd.DataFrame:
