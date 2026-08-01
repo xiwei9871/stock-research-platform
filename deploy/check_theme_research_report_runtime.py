@@ -31,6 +31,14 @@ _CAPABILITY_ROLES = {
     "reviewer": "theme_research_report_reviewer",
 }
 _SCHEMA_OWNER_ROLE = "theme_research_owner"
+_EXPECTED_LOGIN_ATTRIBUTES = {
+    "rolcanlogin": True,
+    "rolsuper": False,
+    "rolcreatedb": False,
+    "rolcreaterole": False,
+    "rolreplication": False,
+    "rolbypassrls": False,
+}
 _EXPECTED_PERMISSION_PROFILES = {
     "runtime": {
         "schema_usage": True,
@@ -80,24 +88,6 @@ def _schema_status(service: str) -> dict[str, Any]:
     }
 
 
-def _unique_roles(*role_groups: object) -> list[str]:
-    roles: set[str] = set()
-    for group in role_groups:
-        if isinstance(group, str):
-            values = (group,)
-        else:
-            try:
-                values = tuple(group)
-            except TypeError:
-                continue
-        roles.update(
-            str(value)
-            for value in values
-            if isinstance(value, str) and value
-        )
-    return sorted(roles)
-
-
 def _permission_status(
     service: str,
     profile: str,
@@ -112,6 +102,8 @@ def _permission_status(
                 SELECT
                     current_user::text AS current_user,
                     session_user::text AS session_user,
+                    current_setting('server_version_num')::integer
+                        AS server_version_num,
                     has_schema_privilege(current_user, 'research', 'USAGE')
                         AS schema_usage,
                     has_table_privilege(
@@ -143,102 +135,101 @@ def _permission_status(
                     has_function_privilege(current_user, %s, 'EXECUTE')
                         AS register_execute,
                     has_function_privilege(current_user, %s, 'EXECUTE')
-                        AS review_execute
+                        AS review_execute,
+                    session_role.rolcanlogin,
+                    session_role.rolsuper,
+                    session_role.rolcreatedb,
+                    session_role.rolcreaterole,
+                    session_role.rolreplication,
+                    session_role.rolbypassrls
+                FROM pg_roles session_role
+                WHERE session_role.rolname = session_user
                 """,
                 (_REGISTER_FUNCTION, _REVIEW_FUNCTION),
             )
             row = cur.fetchone()
-            sensitive_roles = _unique_roles(
-                _CAPABILITY_ROLES.values(),
-                _SCHEMA_OWNER_ROLE,
-                forbidden_roles,
+            server_version_num = int(row["server_version_num"])
+            set_privilege_check = (
+                "SET" if server_version_num >= 160000 else "MEMBER"
             )
             cur.execute(
+                "SELECT pg_has_role(session_user, %s, "
+                f"'{set_privilege_check}') AS can_set_expected",
+                (expected_capability_role,),
+            )
+            can_set_expected = bool(cur.fetchone()["can_set_expected"])
+            cur.execute(
                 """
-                WITH sensitive_roles(role_name) AS (
-                    SELECT unnest(%s::text[])
+                WITH RECURSIVE reachable(role_oid) AS (
+                    SELECT membership.roleid
+                    FROM pg_auth_members membership
+                    JOIN pg_roles member_role
+                      ON member_role.oid = membership.member
+                    WHERE member_role.rolname = session_user
+                    UNION
+                    SELECT membership.roleid
+                    FROM reachable
+                    JOIN pg_auth_members membership
+                      ON membership.member = reachable.role_oid
                 )
-                SELECT
-                    role_name,
-                    pg_has_role(session_user, role_name, 'MEMBER') AS member,
-                    pg_has_role(session_user, role_name, 'USAGE') AS usage,
-                    pg_has_role(session_user, role_name, 'SET') AS can_set,
-                    EXISTS (
-                        SELECT 1
-                        FROM pg_auth_members membership
-                        JOIN pg_roles granted_role
-                          ON granted_role.oid = membership.roleid
-                        JOIN pg_roles member_role
-                          ON member_role.oid = membership.member
-                        WHERE member_role.rolname = session_user
-                          AND granted_role.rolname = sensitive_roles.role_name
-                    ) AS direct_member
-                FROM sensitive_roles
-                ORDER BY role_name
+                SELECT role.rolname::text AS role_name
+                FROM reachable
+                JOIN pg_roles role ON role.oid = reachable.role_oid
+                ORDER BY role.rolname
                 """,
-                (sensitive_roles,),
             )
             login_role_rows = list(cur.fetchall())
-            graph_targets = _unique_roles(
-                _CAPABILITY_ROLES.values(),
-                _SCHEMA_OWNER_ROLE,
-                forbidden_roles,
-            )
             cur.execute(
                 """
-                WITH source_roles(source_role) AS (
-                    SELECT unnest(%s::text[])
-                ),
-                target_roles(target_role) AS (
-                    SELECT unnest(%s::text[])
+                WITH RECURSIVE reachable(source_oid, role_oid) AS (
+                    SELECT source_role.oid, membership.roleid
+                    FROM pg_roles source_role
+                    JOIN pg_auth_members membership
+                      ON membership.member = source_role.oid
+                    WHERE source_role.rolname = ANY(%s::text[])
+                    UNION
+                    SELECT reachable.source_oid, membership.roleid
+                    FROM reachable
+                    JOIN pg_auth_members membership
+                      ON membership.member = reachable.role_oid
                 )
                 SELECT
-                    source_role,
-                    target_role,
-                    pg_has_role(source_role, target_role, 'MEMBER') AS member,
-                    pg_has_role(source_role, target_role, 'USAGE') AS usage,
-                    pg_has_role(source_role, target_role, 'SET') AS can_set,
-                    EXISTS (
-                        SELECT 1
-                        FROM pg_auth_members membership
-                        JOIN pg_roles granted_role
-                          ON granted_role.oid = membership.roleid
-                        JOIN pg_roles member_role
-                          ON member_role.oid = membership.member
-                        WHERE member_role.rolname = source_roles.source_role
-                          AND granted_role.rolname = target_roles.target_role
-                    ) AS direct_member
-                FROM source_roles
-                CROSS JOIN target_roles
-                WHERE source_role <> target_role
-                ORDER BY source_role, target_role
+                    source_role.rolname::text AS source_role,
+                    target_role.rolname::text AS target_role
+                FROM reachable
+                JOIN pg_roles source_role
+                  ON source_role.oid = reachable.source_oid
+                JOIN pg_roles target_role
+                  ON target_role.oid = reachable.role_oid
+                ORDER BY source_role.rolname, target_role.rolname
                 """,
-                (list(_CAPABILITY_ROLES.values()), graph_targets),
+                (list(_CAPABILITY_ROLES.values()),),
             )
             capability_graph_rows = list(cur.fetchall())
     privileges = {
         key: bool(row[key])
         for key in expected
     }
+    login_attributes = {
+        key: bool(row[key])
+        for key in _EXPECTED_LOGIN_ATTRIBUTES
+    }
     session_user = str(row["session_user"])
     membership_violations: list[str] = []
-    membership_rows: dict[str, dict[str, bool]] = {}
-    for membership_row in login_role_rows:
-        role_name = str(membership_row["role_name"])
-        flags = {
-            key: bool(membership_row[key])
-            for key in ("member", "usage", "can_set", "direct_member")
-        }
-        membership_rows[role_name] = flags
-        if role_name == expected_capability_role:
-            if not flags["member"]:
-                membership_violations.append(f"{role_name}:member_missing")
-            if not flags["can_set"]:
-                membership_violations.append(f"{role_name}:set_missing")
-            continue
-        for flag_name, enabled in flags.items():
-            if enabled:
-                membership_violations.append(f"{role_name}:{flag_name}")
+    reachable_roles = sorted(
+        {str(membership_row["role_name"]) for membership_row in login_role_rows}
+    )
+    if expected_capability_role not in reachable_roles:
+        membership_violations.append(
+            f"{expected_capability_role}:member_missing"
+        )
+    if not can_set_expected:
+        membership_violations.append(f"{expected_capability_role}:set_missing")
+    membership_violations.extend(
+        f"{role_name}:extra_role"
+        for role_name in reachable_roles
+        if role_name != expected_capability_role
+    )
     if session_user in set(forbidden_roles) | set(_CAPABILITY_ROLES.values()) | {
         _SCHEMA_OWNER_ROLE
     }:
@@ -248,11 +239,9 @@ def _permission_status(
     for graph_row in capability_graph_rows:
         source_role = str(graph_row["source_role"])
         target_role = str(graph_row["target_role"])
-        for flag_name in ("member", "usage", "can_set", "direct_member"):
-            if bool(graph_row[flag_name]):
-                graph_violations.append(
-                    f"{source_role}->{target_role}:{flag_name}"
-                )
+        graph_violations.append(
+            f"{source_role}->{target_role}:extra_membership"
+        )
     role_membership = {
         "status": (
             "ok"
@@ -260,7 +249,10 @@ def _permission_status(
             else "error"
         ),
         "expected_capability_role": expected_capability_role,
-        "sensitive_roles": membership_rows,
+        "server_version_num": server_version_num,
+        "set_privilege_check": set_privilege_check,
+        "can_set_expected": can_set_expected,
+        "reachable_roles": reachable_roles,
         "violations": sorted(set(membership_violations)),
         "capability_graph_violations": sorted(set(graph_violations)),
     }
@@ -275,7 +267,9 @@ def _permission_status(
         "profile": profile,
         "current_user": str(row["current_user"]),
         "session_user": session_user,
+        "server_version_num": server_version_num,
         "privileges": privileges,
+        "login_attributes": login_attributes,
         "expected": expected,
         "role_membership": role_membership,
     }
@@ -287,6 +281,17 @@ def _service_identity_status(
 ) -> dict[str, Any]:
     session_users = {
         profile: str(result.get("session_user") or "")
+        for profile, result in service_permissions.items()
+    }
+    server_version_nums = {
+        profile: int(result.get("server_version_num") or 0)
+        for profile, result in service_permissions.items()
+    }
+    login_attributes = {
+        profile: {
+            key: bool((result.get("login_attributes") or {}).get(key))
+            for key in _EXPECTED_LOGIN_ATTRIBUTES
+        }
         for profile, result in service_permissions.items()
     }
     violations: list[str] = []
@@ -302,9 +307,16 @@ def _service_identity_status(
     for profile, user in session_users.items():
         if user in migration_identities:
             violations.append(f"{profile}:migration_identity")
+        for attribute, expected in _EXPECTED_LOGIN_ATTRIBUTES.items():
+            if login_attributes[profile][attribute] != expected:
+                violations.append(f"{profile}:{attribute}")
+        if server_version_nums[profile] <= 0:
+            violations.append(f"{profile}:server_version_num")
     return {
         "status": "ok" if not violations else "error",
         "session_users": session_users,
+        "login_attributes": login_attributes,
+        "server_version_nums": server_version_nums,
         "migration_identities": sorted(migration_identities),
         "violations": sorted(set(violations)),
     }

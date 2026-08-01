@@ -26,7 +26,16 @@ def _ok_permissions(service: str, profile: str) -> dict[str, object]:
         "profile": profile,
         "current_user": f"{profile}_login",
         "session_user": f"{profile}_login",
+        "server_version_num": 160000,
         "privileges": {},
+        "login_attributes": {
+            "rolcanlogin": True,
+            "rolsuper": False,
+            "rolcreatedb": False,
+            "rolcreaterole": False,
+            "rolreplication": False,
+            "rolbypassrls": False,
+        },
     }
 
 
@@ -225,13 +234,74 @@ def test_schema_only_rejects_three_aliases_backed_by_same_login(monkeypatch, cap
     }
 
 
-def test_permission_probe_rejects_hidden_indirect_cross_capability_membership(
+@pytest.mark.parametrize(
+    ("attribute", "unsafe_value"),
+    [
+        ("rolcanlogin", False),
+        ("rolsuper", True),
+        ("rolcreatedb", True),
+        ("rolcreaterole", True),
+        ("rolreplication", True),
+        ("rolbypassrls", True),
+    ],
+)
+def test_service_identity_rejects_privileged_or_non_login_session_role(
+    attribute, unsafe_value
+):
+    module = _load_module()
+    permissions = {
+        profile: _ok_permissions(f"{profile}-service", profile)
+        for profile in ("runtime", "indexer", "reviewer")
+    }
+    permissions["runtime"]["login_attributes"][attribute] = unsafe_value
+
+    result = module._service_identity_status(
+        permissions,
+        {
+            "current_user": "theme_research_owner",
+            "session_user": "migration_login",
+        },
+    )
+
+    assert result["status"] == "error"
+    assert f"runtime:{attribute}" in result["violations"]
+    assert result["login_attributes"]["runtime"][attribute] == unsafe_value
+
+
+def test_service_identity_rejects_missing_server_version_num():
+    module = _load_module()
+    permissions = {
+        profile: _ok_permissions(f"{profile}-service", profile)
+        for profile in ("runtime", "indexer", "reviewer")
+    }
+    permissions["runtime"]["server_version_num"] = 0
+
+    result = module._service_identity_status(
+        permissions,
+        {
+            "current_user": "theme_research_owner",
+            "session_user": "migration_login",
+        },
+    )
+
+    assert result["status"] == "error"
+    assert "runtime:server_version_num" in result["violations"]
+    assert result["server_version_nums"]["runtime"] == 0
+
+
+def _run_permission_probe(
     monkeypatch,
+    *,
+    server_version_num: int,
+    reachable_roles: list[str],
+    capability_graph: list[dict[str, str]] | None = None,
+    can_set_expected: bool = True,
 ):
     module = _load_module()
     privilege_row = {
         "current_user": "runtime_login",
         "session_user": "runtime_login",
+        "server_version_num": server_version_num,
         "schema_usage": True,
         "version_select": True,
         "review_event_select": True,
@@ -239,54 +309,14 @@ def test_permission_probe_rejects_hidden_indirect_cross_capability_membership(
         "review_event_write": False,
         "register_execute": False,
         "review_execute": False,
+        "rolcanlogin": True,
+        "rolsuper": False,
+        "rolcreatedb": False,
+        "rolcreaterole": False,
+        "rolreplication": False,
+        "rolbypassrls": False,
     }
-    login_memberships = [
-        {
-            "role_name": "theme_research_runtime",
-            "member": True,
-            "usage": True,
-            "can_set": True,
-            "direct_member": True,
-        },
-        {
-            "role_name": "theme_research_report_indexer",
-            "member": True,
-            "usage": False,
-            "can_set": False,
-            "direct_member": False,
-        },
-        {
-            "role_name": "theme_research_report_reviewer",
-            "member": False,
-            "usage": False,
-            "can_set": False,
-            "direct_member": False,
-        },
-        {
-            "role_name": "theme_research_owner",
-            "member": False,
-            "usage": False,
-            "can_set": False,
-            "direct_member": False,
-        },
-        {
-            "role_name": "migration_login",
-            "member": False,
-            "usage": False,
-            "can_set": False,
-            "direct_member": False,
-        },
-    ]
-    capability_graph = [
-        {
-            "source_role": "theme_research_runtime",
-            "target_role": "theme_research_report_indexer",
-            "member": False,
-            "usage": False,
-            "can_set": False,
-            "direct_member": False,
-        }
-    ]
+    queries: list[str] = []
 
     class Cursor:
         def __init__(self):
@@ -298,18 +328,21 @@ def test_permission_probe_rejects_hidden_indirect_cross_capability_membership(
         def __exit__(self, *_args):
             return False
 
-        def execute(self, _query, _params=None):
+        def execute(self, query, _params=None):
             self.query_index += 1
+            queries.append(query)
 
         def fetchone(self):
-            assert self.query_index == 1
-            return privilege_row
+            if self.query_index == 1:
+                return privilege_row
+            assert self.query_index == 2
+            return {"can_set_expected": can_set_expected}
 
         def fetchall(self):
-            if self.query_index == 2:
-                return login_memberships
-            assert self.query_index == 3
-            return capability_graph
+            if self.query_index == 3:
+                return [{"role_name": role} for role in reachable_roles]
+            assert self.query_index == 4
+            return capability_graph or []
 
     class Connection:
         def cursor(self):
@@ -326,12 +359,85 @@ def test_permission_probe_rejects_hidden_indirect_cross_capability_membership(
         "runtime",
         {"migration_login", "theme_research_owner"},
     )
+    return result, queries
+
+
+@pytest.mark.parametrize(
+    ("server_version_num", "expected_token"),
+    [(150000, "MEMBER"), (160000, "SET")],
+)
+def test_permission_probe_uses_version_compatible_set_role_check(
+    monkeypatch, server_version_num, expected_token
+):
+    result, queries = _run_permission_probe(
+        monkeypatch,
+        server_version_num=server_version_num,
+        reachable_roles=["theme_research_runtime"],
+    )
+
+    assert result["status"] == "ok"
+    assert result["server_version_num"] == server_version_num
+    assert result["role_membership"]["set_privilege_check"] == expected_token
+    assert f"'{expected_token}'" in queries[1]
+    if server_version_num < 160000:
+        assert "'SET'" not in queries[1]
+
+
+@pytest.mark.parametrize(
+    ("reachable_roles", "violation"),
+    [
+        (
+            ["theme_research_runtime", "unexpected_role"],
+            "unexpected_role:extra_role",
+        ),
+        (
+            ["theme_research_runtime", "intermediate_role", "indirect_role"],
+            "indirect_role:extra_role",
+        ),
+        (
+            ["theme_research_runtime", "cycle_a", "cycle_b", "cycle_a"],
+            "cycle_a:extra_role",
+        ),
+    ],
+)
+def test_permission_probe_rejects_any_extra_recursive_membership(
+    monkeypatch, reachable_roles, violation
+):
+    result, queries = _run_permission_probe(
+        monkeypatch,
+        server_version_num=160000,
+        reachable_roles=reachable_roles,
+    )
 
     assert result["status"] == "error"
     assert result["session_user"] == "runtime_login"
-    assert "theme_research_report_indexer:member" in result["role_membership"][
-        "violations"
-    ]
+    assert violation in result["role_membership"]["violations"]
+    assert "WITH RECURSIVE" in queries[2]
+    assert "UNION ALL" not in queries[2]
+
+
+def test_permission_probe_rejects_recursive_membership_from_capability_role(
+    monkeypatch,
+):
+    result, queries = _run_permission_probe(
+        monkeypatch,
+        server_version_num=160000,
+        reachable_roles=["theme_research_runtime"],
+        capability_graph=[
+            {
+                "source_role": "theme_research_runtime",
+                "target_role": "unexpected_role",
+            }
+        ],
+    )
+
+    assert result["status"] == "error"
+    assert (
+        "theme_research_runtime->unexpected_role:extra_membership"
+        in result["role_membership"]["capability_graph_violations"]
+    )
+    assert "WITH RECURSIVE" in queries[3]
+    assert "UNION ALL" not in queries[3]
 
 
 def test_permission_probe_is_read_only_and_checks_function_and_table_privileges():
@@ -343,6 +449,18 @@ def test_permission_probe_is_read_only_and_checks_function_and_table_privileges(
     assert "has_table_privilege" in source
     assert "pg_has_role" in source
     assert "pg_auth_members" in source
+    assert "current_setting('server_version_num')" in source
+    assert "WITH RECURSIVE" in source
+    assert "FROM pg_roles" in source
+    for attribute in (
+        "rolcanlogin",
+        "rolsuper",
+        "rolcreatedb",
+        "rolcreaterole",
+        "rolreplication",
+        "rolbypassrls",
+    ):
+        assert attribute in source
     assert "register_theme_research_report_pending" in source
     assert "review_theme_research_report_version" in source
     assert "INSERT INTO" not in source

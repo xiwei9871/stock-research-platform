@@ -164,7 +164,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         #!/bin/bash
         echo "ssh:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *"check_theme_research_report_runtime.py --expected-root"* ]]; then
-          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"5"},"service_permissions":{"runtime":{"status":"ok","session_user":"runtime_login"},"indexer":{"status":"ok","session_user":"index_login"},"reviewer":{"status":"ok","session_user":"review_login"}},"service_identity":{"status":"ok"},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
+          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"5"},"service_permissions":{"runtime":{"status":"ok","session_user":"runtime_login"},"indexer":{"status":"ok","session_user":"index_login"},"reviewer":{"status":"ok","session_user":"review_login"}},"service_identity":{"status":"ok","server_version_nums":{"runtime":150000,"indexer":160000,"reviewer":160000},"login_attributes":{"runtime":{"rolcanlogin":true,"rolsuper":false,"rolcreatedb":false,"rolcreaterole":false,"rolreplication":false,"rolbypassrls":false},"indexer":{"rolcanlogin":true,"rolsuper":false,"rolcreatedb":false,"rolcreaterole":false,"rolreplication":false,"rolbypassrls":false},"reviewer":{"rolcanlogin":true,"rolsuper":false,"rolcreatedb":false,"rolcreaterole":false,"rolreplication":false,"rolbypassrls":false}}},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
         fi
         """,
     )
@@ -1185,6 +1185,16 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
     assert "scheduler_index_diagnostics" in script
     assert "service_permissions" in script
     assert "service_identity" in script
+    assert "server_version_nums" in script
+    for attribute in (
+        "rolcanlogin",
+        "rolsuper",
+        "rolcreatedb",
+        "rolcreaterole",
+        "rolreplication",
+        "rolbypassrls",
+    ):
+        assert attribute in script
     assert "readonly" in script
     assert "latest_market_date" in script
     assert "runtime_provenance" in script
@@ -1294,7 +1304,25 @@ def _release_gate_env(
                     "indexer": {"status": "ok", "session_user": "index_login"},
                     "reviewer": {"status": "ok", "session_user": "review_login"},
                 },
-                "service_identity": {"status": "ok"},
+                "service_identity": {
+                    "status": "ok",
+                    "server_version_nums": {
+                        "runtime": 150000,
+                        "indexer": 160000,
+                        "reviewer": 160000,
+                    },
+                    "login_attributes": {
+                        profile: {
+                            "rolcanlogin": True,
+                            "rolsuper": False,
+                            "rolcreatedb": False,
+                            "rolcreaterole": False,
+                            "rolreplication": False,
+                            "rolbypassrls": False,
+                        }
+                        for profile in ("runtime", "indexer", "reviewer")
+                    },
+                },
                 "scheduler_index_diagnostics": {
                     "status": "ok",
                     "invalid": 0,
@@ -1362,6 +1390,25 @@ def test_release_gate_rejects_report_root_or_index_health_errors(tmp_path):
         "invalid": 1,
         "errors": [{"code": "INVALID_MANIFEST"}],
     }
+    health_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "Dashboard release check failed" in result.stderr
+
+
+def test_release_gate_rejects_missing_database_server_version(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    health_path = Path(env["THEME_RESEARCH_REPORT_HEALTH_JSON"])
+    payload = json.loads(health_path.read_text(encoding="utf-8"))
+    payload["service_identity"]["server_version_nums"]["runtime"] = 0
     health_path.write_text(json.dumps(payload), encoding="utf-8")
 
     result = subprocess.run(
@@ -1724,6 +1771,9 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
     assert "session_user" in runbook
     assert "pg_has_role" in runbook
     assert "pg_auth_members" in runbook
+    assert "PostgreSQL 15" in runbook
+    assert "server_version_num" in runbook
+    assert "no additional role membership" in runbook
     assert "唯一入口" in runbook
     assert "deploy/sync_dashboard_release.sh" in canonical
     assert "release_id" in canonical
