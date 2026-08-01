@@ -25,7 +25,7 @@ export THEME_RESEARCH_REPORT_REVIEW_SERVICE=theme_research_report_reviewer
 - 未显式设置根目录时，程序回退到 `STOCK_RESEARCH_REPORTS_ROOT/theme-research`。生产环境必须显式设置，避免 release 切换后指向不同位置。
 - 四个数值必须是正整数。上线前按实际报告上限设置，避免正常文件被拒绝，也不要无边界放大。
 - migration service 用于建表和校验 DDL；runtime service 只读，index service 只能执行登记函数，review service 只能执行审核函数，三个 service 名称必须非空且互不相同。
-- `PGSERVICEFILE` 必须定义 runtime、indexer、reviewer 三个 alias。其 LOGIN 用户分别只继承 `theme_research_runtime`、`theme_research_report_indexer`、`theme_research_report_reviewer` NOLOGIN role，或在 alias 中用 `options=-c role=...` 切换。生产建议使用三套独立 LOGIN 凭据。
+- `PGSERVICEFILE` 必须定义 runtime、indexer、reviewer 三个 alias。其 LOGIN 用户分别只继承 `theme_research_runtime`、`theme_research_report_indexer`、`theme_research_report_reviewer` NOLOGIN role，或在 alias 中用 `options=-c role=...` 切换。生产建议使用三套独立 LOGIN 凭据。canary 会同时记录 `current_user` 与 `session_user`，要求三个 `session_user` 非空且互不相同，并通过只读 `pg_has_role`/`pg_auth_members` 查询拒绝直接或间接的跨能力、owner 或 migration membership；普通基础角色 membership 不在能力白名单之外被一刀切拒绝。
 
 ## 固定目录与 manifest 合同
 

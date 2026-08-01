@@ -164,7 +164,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         #!/bin/bash
         echo "ssh:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *"check_theme_research_report_runtime.py --expected-root"* ]]; then
-          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"5"},"service_permissions":{"runtime":{"status":"ok"},"indexer":{"status":"ok"},"reviewer":{"status":"ok"}},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
+          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"5"},"service_permissions":{"runtime":{"status":"ok","session_user":"runtime_login"},"indexer":{"status":"ok","session_user":"index_login"},"reviewer":{"status":"ok","session_user":"review_login"}},"service_identity":{"status":"ok"},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
         fi
         """,
     )
@@ -1184,6 +1184,7 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
     )
     assert "scheduler_index_diagnostics" in script
     assert "service_permissions" in script
+    assert "service_identity" in script
     assert "readonly" in script
     assert "latest_market_date" in script
     assert "runtime_provenance" in script
@@ -1289,10 +1290,11 @@ def _release_gate_env(
                 },
                 "schema": {"status": "current", "schema_version": "5"},
                 "service_permissions": {
-                    "runtime": {"status": "ok"},
-                    "indexer": {"status": "ok"},
-                    "reviewer": {"status": "ok"},
+                    "runtime": {"status": "ok", "session_user": "runtime_login"},
+                    "indexer": {"status": "ok", "session_user": "index_login"},
+                    "reviewer": {"status": "ok", "session_user": "review_login"},
                 },
+                "service_identity": {"status": "ok"},
                 "scheduler_index_diagnostics": {
                     "status": "ok",
                     "invalid": 0,
@@ -1719,6 +1721,9 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
     assert "runtime, indexer, and reviewer aliases" in runbook
     assert "NOLOGIN role membership" in runbook
     assert "independent LOGIN credentials" in runbook
+    assert "session_user" in runbook
+    assert "pg_has_role" in runbook
+    assert "pg_auth_members" in runbook
     assert "唯一入口" in runbook
     assert "deploy/sync_dashboard_release.sh" in canonical
     assert "release_id" in canonical

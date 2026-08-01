@@ -193,6 +193,7 @@ report_health_matches_release() {
       and .service_permissions.runtime.status == "ok"
       and .service_permissions.indexer.status == "ok"
       and .service_permissions.reviewer.status == "ok"
+      and .service_identity.status == "ok"
       and .scheduler_index_diagnostics.status == "ok"
       and .scheduler_index_diagnostics.invalid == 0
       and .scheduler_index_diagnostics.errors == []
@@ -230,6 +231,6 @@ if [[ -s "$tmp_dir/review-queue.json" ]]; then
   jq '{requested_trade_date, trade_date, groups: [.groups[]? | {strategy_id, count, data_trade_date, freshness_status}]}' "$tmp_dir/review-queue.json" >&2 || true
 fi
 if [[ -s "$THEME_RESEARCH_REPORT_HEALTH_JSON" ]]; then
-  jq '{status, root, schema, service_permissions, scheduler_index_diagnostics}' "$THEME_RESEARCH_REPORT_HEALTH_JSON" >&2 || true
+  jq '{status, root, schema, service_permissions, service_identity, scheduler_index_diagnostics}' "$THEME_RESEARCH_REPORT_HEALTH_JSON" >&2 || true
 fi
 exit 1
