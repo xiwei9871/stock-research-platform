@@ -224,6 +224,7 @@ PYTHONPATH="$ROOT/src" "$STOCK_RESEARCH_PYTHON" -m stock_research.strategy_manif
   --target-root "$REMOTE_CONTAINER_RELEASE_ROOT" > "$manifest_snapshot"
 
 check_release_state() {
+  validate_theme_research_report_mount || return 1
   capture_theme_research_report_health "$1" "$2" || return 1
   BASE_URL="$BASE_URL" \
   DASHBOARD_AUTH="$DASHBOARD_AUTH" \
@@ -313,6 +314,18 @@ esac
 printf -v remote_env_file_q '%q' "$remote_env_file"
 printf -v pgservice_file_q '%q' "$pgservice_file"
 
+validate_theme_research_report_host_root() {
+  ssh "${ssh_opts[@]}" -- "$remote" \
+    "bash -s -- --host-only ${theme_research_report_host_root_q}" \
+    < "$ROOT/deploy/check_dashboard_report_mount.sh"
+}
+
+validate_theme_research_report_mount() {
+  ssh "${ssh_opts[@]}" -- "$remote" \
+    "bash -s -- --require-mount ${theme_research_report_host_root_q} ${api_container_q} /app/reports/theme-research" \
+    < "$ROOT/deploy/check_dashboard_report_mount.sh"
+}
+
 capture_theme_research_report_health() {
   local timeout_seconds="$1"
   local retry_seconds="$2"
@@ -331,6 +344,11 @@ capture_theme_research_report_health() {
   done
   return 1
 }
+
+if ! validate_theme_research_report_host_root >/dev/null; then
+  echo "Theme Research report host root validation failed: $THEME_RESEARCH_REPORT_HOST_ROOT" >&2
+  exit 2
+fi
 
 if check_release_state \
   "${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
@@ -363,11 +381,6 @@ fi
 echo "Preparing remote release directories"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
-if ! ssh "${ssh_opts[@]}" -- "$remote" \
-  "test -d ${theme_research_report_host_root_q} && test -r ${theme_research_report_host_root_q} && test -x ${theme_research_report_host_root_q}"; then
-  echo "Theme Research report host root must already exist as a readable directory: $THEME_RESEARCH_REPORT_HOST_ROOT" >&2
-  exit 2
-fi
 ssh "${ssh_opts[@]}" -- "$remote" \
   "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/artifacts/theme_decomposition/priority_policies ${remote_dir_q}/artifacts/theme_decomposition/tech_bottleneck_crosswalks ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
 
@@ -379,6 +392,7 @@ rsync -az -e "$rsync_rsh" -- \
   "$ROOT/deploy/dashboard-api.Dockerfile" \
   "$ROOT/deploy/dashboard-api-requirements.in" \
   "$ROOT/deploy/dashboard-api-requirements.lock" \
+  "$ROOT/deploy/check_dashboard_report_mount.sh" \
   "$ROOT/deploy/check_theme_research_report_runtime.py" \
   "$ROOT/deploy/dashboard-frontend.Dockerfile" \
   "$ROOT/deploy/dashboard-nginx.conf" \

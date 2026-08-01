@@ -53,6 +53,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "dashboard-api-requirements.lock",
         "dashboard-api-requirements.in",
         "check_dashboard_remote_host.sh",
+        "check_dashboard_report_mount.sh",
         "check_theme_research_report_runtime.py",
     ):
         source = REPO_ROOT / "deploy" / name
@@ -249,7 +250,14 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
     assert "THEME_RESEARCH_REPORT_ROOT: /app/reports/theme-research" in compose
     assert "THEME_RESEARCH_MIGRATION_SERVICE: ${THEME_RESEARCH_MIGRATION_SERVICE:-stock_research}" in compose
     assert "THEME_RESEARCH_RUNTIME_SERVICE: ${THEME_RESEARCH_RUNTIME_SERVICE:-theme_research_runtime}" in compose
-    assert "${THEME_RESEARCH_REPORT_HOST_ROOT:?required}:/app/reports/theme-research:ro" in compose
+    assert (
+        "      - type: bind\n"
+        "        source: ${THEME_RESEARCH_REPORT_HOST_ROOT:?required}\n"
+        "        target: /app/reports/theme-research\n"
+        "        read_only: true\n"
+        "        bind:\n"
+        "          create_host_path: false\n"
+    ) in compose
     assert "COPY src ./src" in api_dockerfile
     assert "COPY dashboard/dist ./dashboard/dist" in api_dockerfile
     assert "COPY dashboard/dist /usr/share/nginx/html" in frontend_dockerfile
@@ -344,15 +352,113 @@ def test_release_lock_covers_all_project_runtime_dependencies():
 
 def test_release_sync_validates_and_preserves_read_only_report_root():
     script = _read("deploy/sync_dashboard_release.sh")
+    mount_check = _read("deploy/check_dashboard_report_mount.sh")
 
     assert "THEME_RESEARCH_REPORT_HOST_ROOT" in script
     assert "must be a safe absolute path" in script
     assert "Theme Research report host root" in script
-    assert "test -d" in script and "test -r" in script and "test -x" in script
+    assert '[[ ! -d "$host_root" || ! -r "$host_root" || ! -x "$host_root" ]]' in mount_check
     assert "mkdir -p ${theme_research_report_host_root_q}" not in script
     assert "THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q}" in script
     assert "THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q}" in script
     assert "THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q}" in script
+    assert "check_dashboard_report_mount.sh" in script
+    assert "docker inspect" in mount_check
+    assert script.index("check_dashboard_report_mount.sh") < script.index("if check_release_state")
+
+
+def _report_mount_check_env(tmp_path: Path, *, source: Path, rw: bool) -> dict[str, str]:
+    fake_bin = tmp_path / "bin"
+    _write_executable(
+        fake_bin / "docker",
+        """
+        #!/bin/bash
+        printf '%s|%s|%s\n' '/app/reports/theme-research' "$FAKE_MOUNT_SOURCE" "$FAKE_MOUNT_RW"
+        """,
+    )
+    return {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "FAKE_MOUNT_SOURCE": str(source),
+        "FAKE_MOUNT_RW": "true" if rw else "false",
+    }
+
+
+def test_report_mount_check_rejects_missing_configured_host_root(tmp_path):
+    missing = tmp_path / "missing-reports"
+    env = _report_mount_check_env(tmp_path, source=missing, rw=False)
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_report_mount.sh"),
+            "--host-only",
+            str(missing),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "must already exist" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("different_source", "rw"),
+    [(True, False), (False, True)],
+)
+def test_report_mount_check_rejects_different_source_or_writable_mount(
+    tmp_path, different_source, rw
+):
+    expected = tmp_path / "expected-reports"
+    actual = tmp_path / "different-reports"
+    expected.mkdir()
+    actual.mkdir()
+    env = _report_mount_check_env(
+        tmp_path,
+        source=actual if different_source else expected,
+        rw=rw,
+    )
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_report_mount.sh"),
+            "--require-mount",
+            str(expected),
+            "stock_research_dashboard-api-1",
+            "/app/reports/theme-research",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "mount" in result.stderr.lower()
+
+
+def test_report_mount_check_accepts_matching_canonical_read_only_mount(tmp_path):
+    expected = tmp_path / "expected-reports"
+    expected.mkdir()
+    env = _report_mount_check_env(tmp_path, source=expected, rw=False)
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_report_mount.sh"),
+            "--require-mount",
+            str(expected),
+            "stock_research_dashboard-api-1",
+            "/app/reports/theme-research",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_release_sync_applies_report_schema_and_gates_runtime_health():
@@ -647,9 +753,11 @@ def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp
     commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
     assert "rsync:" not in commands
     ssh_lines = [line for line in commands.splitlines() if line.startswith("ssh:")]
-    assert len(ssh_lines) == 1
-    assert "check_theme_research_report_runtime.py --expected-root" in ssh_lines[0]
-    assert " compose " not in ssh_lines[0]
+    assert len(ssh_lines) == 3
+    assert "--host-only /srv/theme-research-reports" in ssh_lines[0]
+    assert "--require-mount /srv/theme-research-reports" in ssh_lines[1]
+    assert "check_theme_research_report_runtime.py --expected-root" in ssh_lines[2]
+    assert all(" compose " not in line for line in ssh_lines)
     assert " build" not in commands
 
 
@@ -792,6 +900,9 @@ def test_release_sync_same_project_unpublished_worker_fails_before_rsync_and_up(
         """
         #!/bin/bash
         echo "ssh:$*" >> "$FAKE_COMMAND_LOG"
+        if [[ "$*" == *"--host-only"* || "$*" == *"--require-mount"* ]]; then
+          exit 0
+        fi
         if [[ "$*" == *"bash -s --"* ]]; then
           exec /bin/bash -s -- stock_research_dashboard 8765 5174
         fi

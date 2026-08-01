@@ -17,7 +17,8 @@ export THEME_RESEARCH_MIGRATION_SERVICE=stock_research
 export THEME_RESEARCH_RUNTIME_SERVICE=theme_research_runtime
 ```
 
-- `THEME_RESEARCH_REPORT_HOST_ROOT` 必须使用跨 release 持久化的宿主机绝对目录；不得放在每次发布会替换的代码目录、临时目录或容器可写层。canonical compose 将其只读挂载为 `${THEME_RESEARCH_REPORT_HOST_ROOT}:/app/reports/theme-research:ro`，容器内固定 `THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research`。
+- `THEME_RESEARCH_REPORT_HOST_ROOT` 必须使用跨 release 持久化的宿主机绝对目录；不得放在每次发布会替换的代码目录、临时目录或容器可写层。canonical compose 使用 long-syntax bind，固定 `target: /app/reports/theme-research`、`read_only: true`、`bind.create_host_path: false`，容器内固定 `THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research`。
+- already-live 早退前会先验证宿主目录，再用 `docker inspect` 核对当前 API 容器该 target 的唯一 Mount：`Source` realpath 必须等于配置的宿主根 realpath，且 `RW=false`。目录缺失会失败关闭；当前 mount 缺失或不一致不会早退，而会进入正常重建流程。
 - 宿主目录由报告生成/运维流程预先建立。`deploy/sync_dashboard_release.sh` 只校验绝对路径、存在、目录、可读/可遍历，不会自动创建或写入报告树；重建与回滚必须复用同一个宿主目录。
 - 未显式设置根目录时，程序回退到 `STOCK_RESEARCH_REPORTS_ROOT/theme-research`。生产环境必须显式设置，避免 release 切换后指向不同位置。
 - 四个数值必须是正整数。上线前按实际报告上限设置，避免正常文件被拒绝，也不要无边界放大。
