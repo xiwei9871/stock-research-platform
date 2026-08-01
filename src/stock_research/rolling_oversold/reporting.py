@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Iterable, Sequence
 
 import pandas as pd
@@ -76,10 +77,17 @@ def write_rolling_sector_oversold_report(
     if not isinstance(snapshot, dict):
         raise TypeError("snapshot must be a dictionary")
     directory = Path(snapshot_dir).expanduser().resolve() if snapshot_dir is not None else None
+    evaluation_directory = (
+        latest_rolling_evaluation_directory(directory) if directory is not None else None
+    )
     if evaluation_detail is None and directory is not None:
-        evaluation_detail = _read_csv(directory / "evaluation_detail.csv")
+        evaluation_detail = _read_csv(
+            (evaluation_directory or directory) / "evaluation_detail.csv"
+        )
     if evaluation_summary is None and directory is not None:
-        evaluation_summary = _read_csv(directory / "evaluation_summary.csv")
+        evaluation_summary = _read_csv(
+            (evaluation_directory or directory) / "evaluation_summary.csv"
+        )
     detail = _frame(evaluation_detail)
     summary = _frame(evaluation_summary)
     sectors = _frame(snapshot.get("sector_states"))
@@ -205,6 +213,26 @@ def _read_csv(path: Path) -> pd.DataFrame:
 
 def _path_part(path: Path, prefix: str) -> str:
     return path.name.removeprefix(prefix) if path.name.startswith(prefix) else ""
+
+
+def latest_rolling_evaluation_directory(snapshot_dir: str | Path) -> Path | None:
+    """Return the newest complete evaluation sidecar directory for a snapshot."""
+
+    directory = Path(snapshot_dir).expanduser().resolve()
+    direct = directory / "evaluation_detail.csv"
+    direct_summary = directory / "evaluation_summary.csv"
+    candidates: list[tuple[int, Path]] = []
+    if direct.is_file() and direct_summary.is_file():
+        candidates.append((0, directory))
+    for revision in directory.glob("evaluation_revision=*"):
+        match = re.fullmatch(r"evaluation_revision=(\d+)", revision.name)
+        if match is None:
+            continue
+        if (revision / "evaluation_detail.csv").is_file() and (
+            revision / "evaluation_summary.csv"
+        ).is_file():
+            candidates.append((int(match.group(1)), revision))
+    return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
 def _frame(value: object) -> pd.DataFrame:

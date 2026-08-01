@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from dataclasses import asdict, replace
 from datetime import date
+import hashlib
 import json
 import math
+import os
 from pathlib import Path
+import shutil
 import tempfile
 from typing import Any, Iterable
 
@@ -30,13 +33,25 @@ from .loaders import RollingInputs, load_rolling_inputs
 from .market_regime import compute_market_regime_features
 from .outcomes import evaluate_snapshot, summarize_rolling_evaluation
 from .preflight import PreflightResult, run_rolling_preflight
-from .reporting import load_rolling_oversold_snapshot
+from .reporting import (
+    latest_rolling_evaluation_directory,
+    load_rolling_oversold_snapshot,
+)
 from .sector_scoring import score_sector_states
 from .snapshots import build_rolling_snapshot, write_rolling_snapshot
 from .stock_scoring import StockScoringDataGap, score_rolling_stock_candidates
 
 
-_STAGE_NAMES = ("load", "preflight", "regime", "sector", "stock", "snapshot", "evaluation")
+_STAGE_NAMES = (
+    "load",
+    "preflight",
+    "regime",
+    "sector",
+    "stock",
+    "snapshot",
+    "evaluation",
+    "publication",
+)
 _BACKFILL_COLUMNS = (
     "dataset",
     "asset_id",
@@ -229,16 +244,40 @@ def run_one_anchor(
 
     snapshot = dict(snapshot_probe)
     snapshot["runtime_metadata"] = _snapshot_runtime_metadata(runtime)
+    publication_metadata: dict[str, object] | None = None
+    publication_stage_closed = False
+
+    def publish_runtime_metadata() -> dict[str, object]:
+        nonlocal publication_metadata, publication_stage_closed
+        runtime.checkpoint("publication")
+        runtime.end_stage("publication")
+        publication_stage_closed = True
+        runtime.checkpoint("publication")
+        publication_metadata = runtime.metadata()
+        return publication_metadata
+
     runtime.begin_stage("publication")
     try:
         write_result = write_rolling_snapshot(
             snapshot,
             output_dir=output_dir,
             additional_artifacts=evaluation_artifacts,
+            runtime_metadata_supplier=publish_runtime_metadata,
         )
     finally:
-        runtime.end_stage("publication")
-    runtime.checkpoint("publication")
+        if not publication_stage_closed:
+            try:
+                runtime.end_stage("publication")
+            except ValueError:
+                # The supplier may have ended the stage before a budget or
+                # publication error was raised.
+                pass
+    if publication_metadata is None:
+        candidate_metadata = write_result.get("runtime_metadata")
+        publication_metadata = (
+            candidate_metadata if isinstance(candidate_metadata, dict) else runtime.metadata()
+        )
+    snapshot["runtime_metadata"] = publication_metadata
     manifest_path = Path(str(write_result["manifest_path"]))
     snapshot_dir = manifest_path.parent
     evaluation_path = snapshot_dir / "evaluation_detail.csv"
@@ -914,6 +953,122 @@ def _evaluation_artifact_bytes(
     }
 
 
+def _evaluation_cutoff_from_directory(directory: Path | None) -> date | None:
+    if directory is None:
+        return None
+    manifest_path = directory / "evaluation_manifest.json"
+    if manifest_path.is_file():
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            value = payload.get("evaluation_cutoff")
+            if value:
+                return _as_date(value, "evaluation_cutoff")
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            pass
+    detail_path = directory / "evaluation_detail.csv"
+    if not detail_path.is_file() or detail_path.stat().st_size == 0:
+        return None
+    try:
+        detail = pd.read_csv(detail_path, usecols=["evaluation_cutoff"])
+    except (OSError, ValueError, pd.errors.EmptyDataError):
+        return None
+    values = pd.to_datetime(detail["evaluation_cutoff"], errors="coerce").dropna()
+    return values.max().date() if not values.empty else None
+
+
+def _evaluation_runtime_metadata_from_directory(
+    directory: Path | None,
+) -> dict[str, object] | None:
+    if directory is None:
+        return None
+    manifest_path = directory / "evaluation_manifest.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    runtime_metadata = payload.get("runtime_metadata")
+    return dict(runtime_metadata) if isinstance(runtime_metadata, dict) else None
+
+
+def _persist_evaluation_revision(
+    *,
+    snapshot: dict[str, object],
+    snapshot_dir: Path,
+    detail: pd.DataFrame,
+    summary: pd.DataFrame,
+    evaluation_cutoff: date,
+    runtime_metadata_supplier: Any | None = None,
+) -> dict[str, object]:
+    existing_revisions: list[int] = []
+    for revision_dir in snapshot_dir.glob("evaluation_revision=*"):
+        match = revision_dir.name.removeprefix("evaluation_revision=")
+        if match.isdigit():
+            existing_revisions.append(int(match))
+    revision = max(existing_revisions, default=0) + 1
+    destination = snapshot_dir / f"evaluation_revision={revision:04d}"
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".evaluation_revision={revision:04d}.", dir=snapshot_dir)
+    )
+    artifacts = _evaluation_artifact_bytes(detail, summary)
+    artifact_hashes = {
+        name: hashlib.sha256(contents).hexdigest()
+        for name, contents in artifacts.items()
+    }
+    published = False
+    try:
+        for name, contents in artifacts.items():
+            path = staging / name
+            path.write_bytes(contents)
+            with path.open("rb") as handle:
+                os.fsync(handle.fileno())
+        _fsync_directory(staging)
+        runtime_metadata = (
+            runtime_metadata_supplier() if runtime_metadata_supplier is not None else {}
+        )
+        manifest = {
+            "snapshot_id": snapshot.get("snapshot_id", ""),
+            "anchor_date": snapshot.get("anchor_date", ""),
+            "score_version": snapshot.get("score_version", ""),
+            "evaluation_cutoff": evaluation_cutoff.isoformat(),
+            "revision": revision,
+            "runtime_metadata": runtime_metadata,
+            "artifact_hashes": artifact_hashes,
+        }
+        manifest_path = staging / "evaluation_manifest.json"
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        with manifest_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        _fsync_directory(staging)
+        if destination.exists():
+            raise ValueError(f"evaluation revision already exists at {destination}")
+        os.replace(staging, destination)
+        published = True
+        _fsync_directory(snapshot_dir)
+        return {
+            "revision": revision,
+            "evaluation": destination / "evaluation_detail.csv",
+            "evaluation_summary": destination / "evaluation_summary.csv",
+            "evaluation_manifest": destination / "evaluation_manifest.json",
+            "runtime_metadata": runtime_metadata,
+        }
+    finally:
+        if not published and staging.exists():
+            shutil.rmtree(staging)
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _snapshot_asset_ids(snapshot: dict[str, object]) -> list[str]:
     candidates = snapshot.get("stock_candidates")
     if not isinstance(candidates, pd.DataFrame) or candidates.empty or "asset_id" not in candidates:
@@ -1107,6 +1262,7 @@ def _snapshot_paths(
         "stock_candidates": str(snapshot_dir / "stock_candidates.csv"),
         "evaluation": str(evaluation_path),
         "evaluation_summary": str(evaluation_summary_path),
+        "evaluation_manifest": None,
         "preflight": str(snapshot_dir / "preflight.json"),
         "backfill_requests": str(snapshot_dir / "backfill_requests.csv"),
         "backfill_policy": None,
@@ -1299,39 +1455,127 @@ def _existing_snapshot_result(
         score_version=score_version,
     )
     manifest_path = snapshot_dir / "manifest.json"
-    detail_path = snapshot_dir / "evaluation_detail.csv"
-    summary_path = snapshot_dir / "evaluation_summary.csv"
-    if not detail_path.is_file() or not summary_path.is_file():
-        raise ValueError(
-            "existing rolling snapshot lacks coordinated evaluation artifacts; "
-            "rerun into a new output directory"
-        )
+    latest_directory = latest_rolling_evaluation_directory(snapshot_dir)
+    evaluation_cutoff = config.anchor_end_date or anchor
+    latest_cutoff = _evaluation_cutoff_from_directory(latest_directory)
+    needs_refresh = bool(_snapshot_asset_ids(snapshot)) and (
+        latest_directory is None
+        or latest_cutoff is None
+        or latest_cutoff < evaluation_cutoff
+    )
+    revision_result: dict[str, object] | None = None
+    if needs_refresh:
+        runtime.begin_stage("evaluation")
+        try:
+            evaluation_bars = _load_evaluation_bars(
+                asset_ids=_snapshot_asset_ids(snapshot),
+                anchor_date=anchor,
+                evaluation_cutoff=evaluation_cutoff,
+                adjust_type=config.adjust_type,
+                service=service,
+            )
+            detail = evaluate_snapshot(
+                snapshot,
+                bars=_evaluation_bars(evaluation_bars, config.adjust_type),
+                evaluation_cutoff=evaluation_cutoff,
+                horizons=config.forecast_horizons,
+            )
+            summary = summarize_rolling_evaluation(detail)
+        finally:
+            runtime.end_stage("evaluation")
+
+        publication_metadata: dict[str, object] | None = None
+        publication_stage_closed = False
+
+        def publish_revision_metadata() -> dict[str, object]:
+            nonlocal publication_metadata, publication_stage_closed
+            runtime.checkpoint("publication")
+            runtime.end_stage("publication")
+            publication_stage_closed = True
+            runtime.checkpoint("publication")
+            publication_metadata = runtime.metadata()
+            return publication_metadata
+
+        runtime.begin_stage("publication")
+        try:
+            revision_result = _persist_evaluation_revision(
+                snapshot=snapshot,
+                snapshot_dir=snapshot_dir,
+                detail=detail,
+                summary=summary,
+                evaluation_cutoff=evaluation_cutoff,
+                runtime_metadata_supplier=publish_revision_metadata,
+            )
+        finally:
+            if not publication_stage_closed:
+                try:
+                    runtime.end_stage("publication")
+                except ValueError:
+                    pass
+
+    if revision_result is not None:
+        detail_path = Path(str(revision_result["evaluation"]))
+        summary_path = Path(str(revision_result["evaluation_summary"]))
+        evaluation_manifest_path = Path(str(revision_result["evaluation_manifest"]))
+        runtime_metadata = revision_result.get("runtime_metadata", runtime.metadata())
+        evaluation_revision = revision_result.get("revision")
+    elif latest_directory is not None:
+        detail_path = latest_directory / "evaluation_detail.csv"
+        summary_path = latest_directory / "evaluation_summary.csv"
+        evaluation_manifest_path = latest_directory / "evaluation_manifest.json"
+        manifest = snapshot.get("manifest", {})
+        persisted_metadata = manifest.get("runtime_metadata", {}) if isinstance(manifest, dict) else {}
+        runtime_metadata = _evaluation_runtime_metadata_from_directory(latest_directory)
+        if runtime_metadata is None:
+            runtime_metadata = persisted_metadata if isinstance(persisted_metadata, dict) else {}
+        evaluation_revision = _path_revision(latest_directory)
+    else:
+        detail_path = snapshot_dir / "evaluation_detail.csv"
+        summary_path = snapshot_dir / "evaluation_summary.csv"
+        evaluation_manifest_path = snapshot_dir / "evaluation_manifest.json"
+        runtime_metadata = {}
+        evaluation_revision = None
+
     manifest = snapshot.get("manifest", {})
-    persisted_metadata = manifest.get("runtime_metadata", {}) if isinstance(manifest, dict) else {}
-    if not isinstance(persisted_metadata, dict):
-        persisted_metadata = {}
-    runtime_metadata = dict(persisted_metadata)
-    runtime_metadata["snapshot_runtime_metadata"] = persisted_metadata
+    if not isinstance(runtime_metadata, dict):
+        runtime_metadata = {}
+    runtime_metadata = dict(runtime_metadata)
+    runtime_metadata["snapshot_runtime_metadata"] = (
+        manifest.get("runtime_metadata", {}) if isinstance(manifest, dict) else {}
+    )
     candidates = snapshot.get("stock_candidates")
     count = int(len(candidates)) if isinstance(candidates, pd.DataFrame) else 0
-    return {
+    paths = _snapshot_paths(
+        snapshot_dir,
+        manifest_path=manifest_path,
+        evaluation_path=detail_path,
+        evaluation_summary_path=summary_path,
+    )
+    paths["evaluation_manifest"] = str(evaluation_manifest_path) if evaluation_manifest_path.is_file() else None
+    result = {
         "blocked": False,
         "blocked_reason": "",
         "anchor_date": anchor.isoformat(),
         "data_cutoff_date": str(snapshot.get("data_cutoff_date") or ""),
         "snapshot_id": snapshot.get("snapshot_id"),
         "snapshot": snapshot,
-        "paths": _snapshot_paths(
-            snapshot_dir,
-            manifest_path=manifest_path,
-            evaluation_path=detail_path,
-            evaluation_summary_path=summary_path,
-        ),
+        "paths": paths,
         "stock_candidate_count": count,
         "runtime_seconds": runtime_metadata.get("runtime_seconds", 0.0),
         "runtime_metadata": runtime_metadata,
         "future_rows_used_for_scoring": 0,
     }
+    if evaluation_revision is not None:
+        result["evaluation_revision"] = evaluation_revision
+    return result
+
+
+def _path_revision(directory: Path) -> int | None:
+    prefix = "evaluation_revision="
+    if not directory.name.startswith(prefix):
+        return None
+    value = directory.name.removeprefix(prefix)
+    return int(value) if value.isdigit() else None
 
 
 def _blocked_artifact_dir(

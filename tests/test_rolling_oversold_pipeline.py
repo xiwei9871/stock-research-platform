@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ast
-from datetime import date
+from datetime import date, timedelta
 import inspect
 import json
 from pathlib import Path
@@ -299,12 +299,23 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
             "runtime_metadata": kwargs["runtime_metadata"],
         }
 
-    def fake_write(snapshot, *, output_dir, additional_artifacts=None):
+    def fake_write(
+        snapshot,
+        *,
+        output_dir,
+        additional_artifacts=None,
+        runtime_metadata_supplier=None,
+    ):
         destination = Path(output_dir) / "snapshot"
         destination.mkdir(parents=True)
         manifest = destination / "manifest.json"
+        runtime_metadata = (
+            runtime_metadata_supplier()
+            if runtime_metadata_supplier is not None
+            else snapshot["runtime_metadata"]
+        )
         manifest.write_text(
-            json.dumps({"runtime_metadata": snapshot["runtime_metadata"]}) + "\n",
+            json.dumps({"runtime_metadata": runtime_metadata}) + "\n",
             encoding="utf-8",
         )
         for name, contents in (additional_artifacts or {}).items():
@@ -370,9 +381,141 @@ def test_run_one_passes_runtime_metadata_and_frozen_prices_to_snapshot_builder(
     persisted_timings = persisted_metadata["stage_timings_seconds"]
     assert persisted_timings["snapshot"] > 0.0
     assert persisted_timings["evaluation"] > 0.0
+    assert persisted_timings["publication"] > 0.0
     assert result["runtime_metadata"]["stage_timings_seconds"]["publication"] > 0.0
     assert Path(result["paths"]["evaluation"]).is_file()
     assert Path(result["paths"]["evaluation_summary"]).is_file()
+
+
+def test_existing_snapshot_refreshes_delayed_evaluation_as_versioned_revision(
+    monkeypatch, tmp_path
+):
+    anchor = date(2026, 7, 21)
+    evaluation_cutoff = date(2026, 7, 28)
+    config = RollingOversoldConfig(
+        anchor_start_date=anchor,
+        anchor_end_date=evaluation_cutoff,
+        adjust_type="qfq",
+    )
+    score_version = config.score_version
+    snapshot_dir = (
+        tmp_path
+        / "rolling_sector_oversold"
+        / f"anchor={anchor.isoformat()}"
+        / f"version={score_version}"
+    )
+    snapshot_dir.mkdir(parents=True)
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "000001",
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Industry one",
+                "sector_gate_status": "confirmed",
+                "sector_recovery_state": "repairing",
+                "stock_lifecycle": "expected_repair",
+                "stock_rank": 1,
+                "stock_score": 90.0,
+                "anchor_close": 10.0,
+                "adjusted_close_source": "qfq",
+            }
+        ]
+    )
+    snapshot = {
+        "snapshot_id": f"{score_version}|{anchor.isoformat()}",
+        "anchor_date": anchor.isoformat(),
+        "data_cutoff_date": anchor.isoformat(),
+        "score_version": score_version,
+        "previous_snapshot_id": None,
+        "market_regime": {"market_regime": "neutral"},
+        "sector_states": pd.DataFrame(),
+        "stock_candidates": candidates,
+        "preflight": {},
+        "backfill_requests": pd.DataFrame(),
+        "manifest": {
+            "runtime_metadata": {
+                "runtime_budget_seconds": float(config.runtime_budget_seconds),
+                "runtime_seconds": 0.01,
+                "stage_timings_seconds": {},
+            }
+        },
+    }
+    immutable_manifest = {
+        "snapshot_id": snapshot["snapshot_id"],
+        "anchor_date": anchor.isoformat(),
+        "data_cutoff_date": anchor.isoformat(),
+        "score_version": score_version,
+        "previous_snapshot_id": None,
+        "runtime_metadata": snapshot["manifest"]["runtime_metadata"],
+    }
+    manifest_path = snapshot_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(immutable_manifest, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    original_manifest = manifest_path.read_bytes()
+
+    pending_detail = pipeline.evaluate_snapshot(
+        snapshot,
+        bars=pd.DataFrame(columns=["asset_id", "trade_date", "qfq_close"]),
+        evaluation_cutoff=anchor,
+        horizons=config.forecast_horizons,
+    )
+    pending_detail.to_csv(snapshot_dir / "evaluation_detail.csv", index=False)
+    pipeline.summarize_rolling_evaluation(pending_detail).to_csv(
+        snapshot_dir / "evaluation_summary.csv", index=False
+    )
+
+    monkeypatch.setattr(pipeline, "_load_existing_snapshot", lambda **kwargs: snapshot)
+    monkeypatch.setattr(
+        pipeline,
+        "_load_evaluation_bars",
+        lambda **kwargs: pd.DataFrame(
+            [
+                {
+                    "asset_id": "000001",
+                    "trade_date": (anchor + timedelta(days=offset)).isoformat(),
+                    "close": 10.0 + offset,
+                }
+                for offset in range(1, 6)
+            ]
+        ),
+    )
+
+    result = pipeline.run_one_anchor(
+        anchor_date=anchor,
+        previous_snapshot=None,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+
+    revision_dir = snapshot_dir / "evaluation_revision=0001"
+    assert result["blocked"] is False
+    assert result["evaluation_revision"] == 1
+    assert Path(result["paths"]["evaluation"]) == revision_dir / "evaluation_detail.csv"
+    assert revision_dir.is_dir()
+    refreshed = pd.read_csv(revision_dir / "evaluation_detail.csv")
+    assert refreshed["evaluation_status"].eq("complete").all()
+    assert pd.read_csv(snapshot_dir / "evaluation_detail.csv")["evaluation_status"].eq("pending").all()
+    assert manifest_path.read_bytes() == original_manifest
+
+    evaluation_manifest = json.loads(
+        (revision_dir / "evaluation_manifest.json").read_text(encoding="utf-8")
+    )
+    assert evaluation_manifest["snapshot_id"] == snapshot["snapshot_id"]
+    assert evaluation_manifest["evaluation_cutoff"] == evaluation_cutoff.isoformat()
+    assert evaluation_manifest["runtime_metadata"]["stage_timings_seconds"]["publication"] > 0.0
+
+    report = write_rolling_sector_oversold_report(
+        snapshot=snapshot,
+        snapshot_dir=snapshot_dir,
+        output_dir=tmp_path / "report",
+    )
+    report_text = report.read_text(encoding="utf-8")
+    assert "1d: completed=1; pending=0" in report_text
+    assert "3d: completed=1; pending=0" in report_text
+    assert "5d: completed=1; pending=0" in report_text
 
 
 def test_stock_scoring_gap_returns_blocked_policy_artifacts(monkeypatch, tmp_path):

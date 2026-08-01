@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import pandas as pd
 
@@ -176,6 +176,7 @@ def write_rolling_snapshot(
     *,
     output_dir: str | Path,
     additional_artifacts: Mapping[str, bytes] | None = None,
+    runtime_metadata_supplier: Callable[[], Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
     """Write one anchor directory without replacing an existing different snapshot."""
 
@@ -202,12 +203,15 @@ def write_rolling_snapshot(
             name: hashlib.sha256(contents).hexdigest() for name, contents in artifact_bytes.items()
         },
     }
-    manifest_bytes = _json_bytes(manifest)
     manifest_path = destination / "manifest.json"
 
     if destination.exists():
         if _is_identical_existing_snapshot(destination, manifest, artifact_bytes):
-            return {"status": "already_exists_identical", "manifest_path": str(manifest_path)}
+            return {
+                "status": "already_exists_identical",
+                "manifest_path": str(manifest_path),
+                "runtime_metadata": manifest["runtime_metadata"],
+            }
         raise ValueError(f"immutable rolling snapshot already exists at {destination}")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -218,21 +222,38 @@ def write_rolling_snapshot(
     try:
         for name in artifact_names:
             _atomic_write_new(staging / name, artifact_bytes[name])
+        _fsync_directory(staging)
+        if runtime_metadata_supplier is not None:
+            supplied_metadata = runtime_metadata_supplier()
+            manifest["runtime_metadata"] = _normalize_runtime_metadata(supplied_metadata)
+        manifest_bytes = _json_bytes(manifest)
         _atomic_write_new(staging / "manifest.json", manifest_bytes)
         _fsync_directory(staging)
         # The final path is checked immediately before publication.  A second
         # writer that wins a race is handled below without replacing its files.
         if destination.exists():
             if _is_identical_existing_snapshot(destination, manifest, artifact_bytes):
-                return {"status": "already_exists_identical", "manifest_path": str(manifest_path)}
+                return {
+                    "status": "already_exists_identical",
+                    "manifest_path": str(manifest_path),
+                    "runtime_metadata": manifest["runtime_metadata"],
+                }
             raise ValueError(f"immutable rolling snapshot already exists at {destination}")
         os.replace(staging, destination)
         published = True
         _fsync_directory(destination.parent)
-        return {"status": "created", "manifest_path": str(manifest_path)}
+        return {
+            "status": "created",
+            "manifest_path": str(manifest_path),
+            "runtime_metadata": manifest["runtime_metadata"],
+        }
     except Exception:
         if destination.exists() and _is_identical_existing_snapshot(destination, manifest, artifact_bytes):
-            return {"status": "already_exists_identical", "manifest_path": str(manifest_path)}
+            return {
+                "status": "already_exists_identical",
+                "manifest_path": str(manifest_path),
+                "runtime_metadata": manifest["runtime_metadata"],
+            }
         if destination.exists():
             raise ValueError(f"immutable rolling snapshot already exists at {destination}") from None
         raise

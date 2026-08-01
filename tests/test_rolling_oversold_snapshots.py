@@ -343,6 +343,23 @@ def test_write_snapshot_publishes_evaluation_sidecars_with_manifest(tmp_path):
     ).hexdigest()
 
 
+def test_write_snapshot_supplier_abort_leaves_no_published_manifest(tmp_path):
+    snapshot = _build()
+
+    def abort_before_publish():
+        raise RuntimeError("runtime budget exceeded")
+
+    with pytest.raises(RuntimeError, match="runtime budget exceeded"):
+        write_rolling_snapshot(
+            snapshot,
+            output_dir=tmp_path,
+            runtime_metadata_supplier=abort_before_publish,
+        )
+
+    destination = tmp_path / "rolling_sector_oversold" / "anchor=2026-07-21" / f"version={VERSION}"
+    assert not destination.exists()
+
+
 def test_empty_snapshot_uses_stable_schemas_and_required_artifact_names(tmp_path):
     snapshot = _build(stocks=pd.DataFrame(), sectors=pd.DataFrame())
     assert snapshot["stock_candidates"].empty
