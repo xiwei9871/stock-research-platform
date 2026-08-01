@@ -95,7 +95,7 @@ def run_rolling_preflight(
     coverage.append(_coverage("market_daily_bar", expected=len(assets), actual=stock_actual))
     coverage.append(_coverage("core.asset_status_daily", expected=len(assets), actual=status_actual))
 
-    finance_actual = _check_pit_records(gaps, frames["finance"], assets, cutoff, "announcement_date", "finance_history")
+    finance_actual = _check_pit_records(gaps, frames["finance"], assets, anchor_date, "announcement_date", "finance_history")
     valuation_actual = _check_pit_records(gaps, frames["valuation"], assets, cutoff, "valuation_date", "valuation_history")
     coverage.append(_coverage("finance_history", expected=len(assets), actual=finance_actual))
     coverage.append(_coverage("valuation_history", expected=len(assets), actual=valuation_actual))

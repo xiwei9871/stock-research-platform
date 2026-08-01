@@ -308,6 +308,25 @@ def test_preflight_rejects_anchor_mismatch(tmp_path):
         )
 
 
+def test_preflight_uses_anchor_clock_for_finance_on_non_trading_anchor(tmp_path):
+    inputs = _inputs()
+    anchor = date(2026, 8, 1)
+    inputs = replace(
+        inputs,
+        anchor_date=anchor,
+        finance=pd.DataFrame(
+            {"asset_id": ["A"], "announcement_date": [anchor]}
+        ),
+    )
+
+    result = preflight.run_rolling_preflight(
+        inputs, anchor_date=anchor, output_dir=tmp_path
+    )
+
+    assert result.blocked is False
+    assert not any(gap.dataset == "finance_history" for gap in result.gaps)
+
+
 def test_loader_module_has_no_external_ingestion_imports():
     source = Path(loaders.__file__).read_text(encoding="utf-8")
     imports = [
