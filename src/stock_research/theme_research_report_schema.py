@@ -17,16 +17,31 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_report_indexer'
     ) THEN
-        CREATE ROLE theme_research_report_indexer NOLOGIN;
+        CREATE ROLE theme_research_report_indexer
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+            NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0;
     ELSE
-        ALTER ROLE theme_research_report_indexer NOLOGIN;
+        ALTER ROLE theme_research_report_indexer
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+            NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0;
     END IF;
     IF NOT EXISTS (
         SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_report_reviewer'
     ) THEN
-        CREATE ROLE theme_research_report_reviewer NOLOGIN;
+        CREATE ROLE theme_research_report_reviewer
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+            NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0;
     ELSE
-        ALTER ROLE theme_research_report_reviewer NOLOGIN;
+        ALTER ROLE theme_research_report_reviewer
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+            NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_runtime'
+    ) THEN
+        ALTER ROLE theme_research_runtime
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT
+            NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0;
     END IF;
 END;
 $$;
@@ -451,6 +466,7 @@ BEGIN
         EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_version FROM theme_research_runtime';
         EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_review_event FROM theme_research_runtime';
         EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_runtime';
+        EXECUTE 'REVOKE CREATE ON SCHEMA research FROM theme_research_runtime';
         EXECUTE 'GRANT SELECT ON research.theme_research_report_version TO theme_research_runtime';
         EXECUTE 'GRANT SELECT ON research.theme_research_report_review_event TO theme_research_runtime';
         EXECUTE 'REVOKE ALL ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) FROM theme_research_runtime';
@@ -459,6 +475,8 @@ BEGIN
 
     EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_report_indexer';
     EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_report_reviewer';
+    EXECUTE 'REVOKE CREATE ON SCHEMA research FROM theme_research_report_indexer';
+    EXECUTE 'REVOKE CREATE ON SCHEMA research FROM theme_research_report_reviewer';
     EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_version FROM theme_research_report_indexer, theme_research_report_reviewer';
     EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_review_event FROM theme_research_report_indexer, theme_research_report_reviewer';
     EXECUTE 'REVOKE ALL ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) FROM theme_research_report_indexer, theme_research_report_reviewer';
@@ -705,6 +723,38 @@ _EXPECTED_REPORT_ROLES = (
     "theme_research_report_indexer",
     "theme_research_report_reviewer",
 )
+_EXPECTED_SERVICE_ROLE_ATTRIBUTES = {
+    "theme_research_runtime": {
+        "rolcanlogin": False,
+        "rolsuper": False,
+        "rolcreatedb": False,
+        "rolcreaterole": False,
+        "rolinherit": True,
+        "rolreplication": False,
+        "rolbypassrls": False,
+        "rolconnlimit": 0,
+    },
+    "theme_research_report_indexer": {
+        "rolcanlogin": False,
+        "rolsuper": False,
+        "rolcreatedb": False,
+        "rolcreaterole": False,
+        "rolinherit": False,
+        "rolreplication": False,
+        "rolbypassrls": False,
+        "rolconnlimit": 0,
+    },
+    "theme_research_report_reviewer": {
+        "rolcanlogin": False,
+        "rolsuper": False,
+        "rolcreatedb": False,
+        "rolcreaterole": False,
+        "rolinherit": False,
+        "rolreplication": False,
+        "rolbypassrls": False,
+        "rolconnlimit": 0,
+    },
+}
 _EXPECTED_SECURITY_DEFINER_FUNCTIONS = {
     "register_theme_research_report_pending": {
         "identity_arguments": (
@@ -939,10 +989,11 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
 
     cur.execute(
         """
-        SELECT rolname, rolcanlogin FROM pg_roles
+        SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
+               rolinherit, rolreplication, rolbypassrls, rolconnlimit
+        FROM pg_roles
         WHERE rolname = ANY(%s)
-        """
-        ,
+        """,
         (list(_EXPECTED_REPORT_ROLES),),
     )
     role_rows = cur.fetchall()
@@ -950,13 +1001,25 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
     for role_name in _EXPECTED_REPORT_ROLES:
         if role_name not in roles:
             missing.append(f"role:{role_name}")
+    role_attribute_fields = (
+        "rolcanlogin",
+        "rolsuper",
+        "rolcreatedb",
+        "rolcreaterole",
+        "rolinherit",
+        "rolreplication",
+        "rolbypassrls",
+        "rolconnlimit",
+    )
     for row in role_rows:
         role_name = str(_row_value(row, "rolname", 0))
-        if role_name in {
-            "theme_research_report_indexer",
-            "theme_research_report_reviewer",
-        } and bool(_row_value(row, "rolcanlogin", 1)):
-            missing.append(f"role_login:{role_name}")
+        expected_attributes = _EXPECTED_SERVICE_ROLE_ATTRIBUTES.get(role_name)
+        if expected_attributes is None:
+            continue
+        for index, field_name in enumerate(role_attribute_fields, start=1):
+            actual = _row_value(row, field_name, index)
+            if actual != expected_attributes[field_name]:
+                missing.append(f"role_attribute:{role_name}.{field_name}")
     if set(_EXPECTED_REPORT_ROLES).issubset(roles):
         cur.execute(
             """
@@ -1271,20 +1334,19 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
 
         cur.execute(
             """
-            SELECT
-                has_schema_privilege(
-                    'theme_research_runtime', 'research', 'USAGE'
-                ) AS can_use,
-                has_schema_privilege(
-                    'theme_research_runtime', 'research', 'CREATE'
-                ) AS can_create
-            """
+            SELECT role_name,
+                   has_schema_privilege(role_name, 'research', 'USAGE') AS can_use,
+                   has_schema_privilege(role_name, 'research', 'CREATE') AS can_create
+            FROM unnest(%s::text[]) AS role_name
+            """,
+            (list(_EXPECTED_SERVICE_ROLE_ATTRIBUTES),),
         )
-        schema_privileges = cur.fetchone()
-        if not bool(_row_value(schema_privileges, "can_use", 0)):
-            missing.append("privilege:research_schema_usage")
-        if bool(_row_value(schema_privileges, "can_create", 1)):
-            missing.append("privilege:research_schema_create")
+        for row in cur.fetchall():
+            role_name = str(_row_value(row, "role_name", 0))
+            if not bool(_row_value(row, "can_use", 1)):
+                missing.append(f"privilege:research_schema_usage.{role_name}")
+            if bool(_row_value(row, "can_create", 2)):
+                missing.append(f"privilege:research_schema_create.{role_name}")
 
     return {
         "status": "drifted" if missing else "current",
@@ -1301,7 +1363,7 @@ def apply_theme_research_report_schema(
             inspection = inspect_theme_research_report_schema(cur)
             repairable_prefixes = (
                 "role:",
-                "role_login:",
+                "role_attribute:",
                 "owner:",
                 "privilege:",
                 "public_privilege:",

@@ -172,6 +172,10 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
     assert "GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version" in sql
     assert "theme_research_report_indexer" in sql
     assert "theme_research_report_reviewer" in sql
+    assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT" in sql
+    assert "NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0" in sql
+    assert "REVOKE CREATE ON SCHEMA research FROM theme_research_report_indexer" in sql
+    assert "REVOKE CREATE ON SCHEMA research FROM theme_research_report_reviewer" in sql
     assert "GRANT SELECT ON research.theme_research_report_version" in sql
     assert "GRANT SELECT ON research.theme_research_report_review_event" in sql
     assert "GRANT SELECT, INSERT" not in sql
@@ -1550,6 +1554,84 @@ def test_postgres_apply_replaces_missing_expected_function_and_drops_rogue_overl
         verified.close()
 
 
+def test_postgres_apply_repairs_report_role_attributes_and_schema_create(
+    postgres_conn,
+) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    try:
+        connection = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            connection.execute(
+                """
+                ALTER ROLE theme_research_report_indexer
+                CREATEDB CREATEROLE INHERIT REPLICATION BYPASSRLS CONNECTION LIMIT 5
+                """
+            )
+            connection.execute(
+                "GRANT CREATE ON SCHEMA research TO theme_research_report_indexer"
+            )
+            connection.commit()
+
+            inspection = inspect_theme_research_report_schema(connection.cursor())
+
+            assert inspection["status"] == "drifted"
+            assert any(
+                item.startswith("role_attribute:theme_research_report_indexer.")
+                for item in inspection["missing"]
+            )
+            assert (
+                "privilege:research_schema_create.theme_research_report_indexer"
+                in inspection["missing"]
+            )
+        finally:
+            connection.close()
+
+        apply_theme_research_report_schema(service=TEST_SERVICE)
+        verified = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            assert verified.execute(
+                """
+                SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
+                       rolinherit, rolreplication, rolbypassrls, rolconnlimit
+                FROM pg_roles
+                WHERE rolname = 'theme_research_report_indexer'
+                """
+            ).fetchone() == (False, False, False, False, False, False, False, 0)
+            assert verified.execute(
+                """
+                SELECT has_schema_privilege(
+                    'theme_research_report_indexer', 'research', 'USAGE'
+                ), has_schema_privilege(
+                    'theme_research_report_indexer', 'research', 'CREATE'
+                )
+                """
+            ).fetchone() == (True, False)
+            assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+        finally:
+            verified.close()
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                """
+                ALTER ROLE theme_research_report_indexer
+                NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+                NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0
+                """
+            )
+            cleanup.execute(
+                "REVOKE CREATE ON SCHEMA research FROM theme_research_report_indexer"
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
 def test_postgres_apply_migrates_v2_actor_fk_to_internal_system_subject(
     postgres_conn,
 ) -> None:
@@ -2563,6 +2645,7 @@ def test_postgres_rejects_conflicting_immutable_report_identity(
 
 def test_postgres_rejects_unknown_theme_without_partial_rows(postgres_conn, tmp_path) -> None:
     manifest = _validated_manifest(tmp_path, theme_id="missing-report-theme")
+    expected_report_id = report_version_id(manifest.theme_id, manifest.version)
     _insert_user(postgres_conn, "system")
     postgres_conn.commit()
 
@@ -2571,10 +2654,12 @@ def test_postgres_rejects_unknown_theme_without_partial_rows(postgres_conn, tmp_
 
     assert exc_info.value.code == "THEME_REPORT_THEME_NOT_FOUND"
     assert postgres_conn.execute(
-        "SELECT count(*) FROM research.theme_research_report_version"
+        "SELECT count(*) FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (expected_report_id,),
     ).fetchone()[0] == 0
     assert postgres_conn.execute(
-        "SELECT count(*) FROM research.theme_research_report_review_event"
+        "SELECT count(*) FROM research.theme_research_report_review_event WHERE report_version_id = %s",
+        (expected_report_id,),
     ).fetchone()[0] == 0
 
 
@@ -2655,6 +2740,7 @@ def test_postgres_event_failure_rolls_back_report_version(postgres_conn, tmp_pat
     )
 
     manifest = _validated_manifest(tmp_path)
+    expected_report_id = report_version_id(manifest.theme_id, manifest.version)
     _seed_report_store(postgres_conn, manifest.theme_id)
     postgres_conn.execute(
         """
@@ -2674,10 +2760,12 @@ def test_postgres_event_failure_rolls_back_report_version(postgres_conn, tmp_pat
         assert isinstance(exc_info.value.__cause__, psycopg.errors.CheckViolation)
 
         assert postgres_conn.execute(
-            "SELECT count(*) FROM research.theme_research_report_version"
+            "SELECT count(*) FROM research.theme_research_report_version WHERE report_version_id = %s",
+            (expected_report_id,),
         ).fetchone()[0] == 0
         assert postgres_conn.execute(
-            "SELECT count(*) FROM research.theme_research_report_review_event"
+            "SELECT count(*) FROM research.theme_research_report_review_event WHERE report_version_id = %s",
+            (expected_report_id,),
         ).fetchone()[0] == 0
     finally:
         postgres_conn.rollback()
