@@ -164,7 +164,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         #!/bin/bash
         echo "ssh:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *"check_theme_research_report_runtime.py --expected-root"* ]]; then
-          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"4"},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
+          printf '%s\n' '{"status":"ok","root":{"path":"/app/reports/theme-research","exists":true,"readable":true,"readonly":true},"schema":{"status":"current","schema_version":"5"},"service_permissions":{"runtime":{"status":"ok"},"indexer":{"status":"ok"},"reviewer":{"status":"ok"}},"scheduler_index_diagnostics":{"status":"ok","invalid":0,"errors":[]}}'
         fi
         """,
     )
@@ -250,6 +250,8 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
     assert "THEME_RESEARCH_REPORT_ROOT: /app/reports/theme-research" in compose
     assert "THEME_RESEARCH_MIGRATION_SERVICE: ${THEME_RESEARCH_MIGRATION_SERVICE:-stock_research}" in compose
     assert "THEME_RESEARCH_RUNTIME_SERVICE: ${THEME_RESEARCH_RUNTIME_SERVICE:-theme_research_runtime}" in compose
+    assert "THEME_RESEARCH_REPORT_INDEX_SERVICE: ${THEME_RESEARCH_REPORT_INDEX_SERVICE:-theme_research_report_indexer}" in compose
+    assert "THEME_RESEARCH_REPORT_REVIEW_SERVICE: ${THEME_RESEARCH_REPORT_REVIEW_SERVICE:-theme_research_report_reviewer}" in compose
     assert (
         "      - type: bind\n"
         "        source: ${THEME_RESEARCH_REPORT_HOST_ROOT:?required}\n"
@@ -362,6 +364,8 @@ def test_release_sync_validates_and_preserves_read_only_report_root():
     assert "THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q}" in script
     assert "THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q}" in script
     assert "THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q}" in script
+    assert "THEME_RESEARCH_REPORT_INDEX_SERVICE=${theme_research_report_index_service_q}" in script
+    assert "THEME_RESEARCH_REPORT_REVIEW_SERVICE=${theme_research_report_review_service_q}" in script
     assert "check_dashboard_report_mount.sh" in script
     assert 'bash "$ROOT/deploy/check_dashboard_report_mount.sh" --validate-path' in script
     assert "docker inspect" in mount_check
@@ -545,11 +549,17 @@ def test_report_mount_check_accepts_matching_canonical_read_only_mount(tmp_path)
 
 def test_release_sync_applies_report_schema_and_gates_runtime_health():
     script = _read("deploy/sync_dashboard_release.sh")
+    checker = _read("deploy/check_theme_research_report_runtime.py")
 
     assert "stock_research.theme_research_report_schema --apply" in script
     assert "THEME_RESEARCH_MIGRATION_SERVICE" in script
+    assert "--runtime-service ${theme_research_runtime_service_q}" in script
+    assert "--index-service ${theme_research_report_index_service_q}" in script
+    assert "--review-service ${theme_research_report_review_service_q}" in script
     assert "check_theme_research_report_runtime.py --schema-only" in script
     assert "check_theme_research_report_runtime.py --expected-root" in script
+    assert "has_function_privilege" in checker
+    assert "has_table_privilege" in checker
     assert script.index("theme_research_report_schema --apply") < script.index("up -d --force-recreate")
     assert script.index("check_theme_research_report_runtime.py --expected-root") < script.index("Running bounded external release gate")
 
@@ -869,6 +879,39 @@ def test_release_sync_rejects_broad_report_roots_before_remote_access(
     assert "rsync:" not in commands
 
 
+@pytest.mark.parametrize(
+    ("runtime_service", "index_service", "review_service"),
+    [
+        ("shared", "shared", "reviewer"),
+        ("shared", "indexer", "shared"),
+        ("runtime", "shared", "shared"),
+        ("", "indexer", "reviewer"),
+    ],
+)
+def test_release_sync_rejects_empty_or_duplicate_capability_services_before_remote_access(
+    tmp_path, runtime_service, index_service, review_service
+):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["THEME_RESEARCH_RUNTIME_SERVICE"] = runtime_service
+    env["THEME_RESEARCH_REPORT_INDEX_SERVICE"] = index_service
+    env["THEME_RESEARCH_REPORT_REVIEW_SERVICE"] = review_service
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "distinct non-empty" in result.stderr
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
+
+
 def test_release_sync_invalid_strategy_contract_fails_before_remote_or_restart(tmp_path):
     _root, env, log_file = _release_fixture(tmp_path, valid_manifest=False)
 
@@ -1140,6 +1183,7 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
         "deploy/sync_dashboard_release.sh"
     )
     assert "scheduler_index_diagnostics" in script
+    assert "service_permissions" in script
     assert "readonly" in script
     assert "latest_market_date" in script
     assert "runtime_provenance" in script
@@ -1243,7 +1287,12 @@ def _release_gate_env(
                     "readable": True,
                     "readonly": True,
                 },
-                "schema": {"status": "current", "schema_version": "4"},
+                "schema": {"status": "current", "schema_version": "5"},
+                "service_permissions": {
+                    "runtime": {"status": "ok"},
+                    "indexer": {"status": "ok"},
+                    "reviewer": {"status": "ok"},
+                },
                 "scheduler_index_diagnostics": {
                     "status": "ok",
                     "invalid": 0,
@@ -1654,6 +1703,8 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
         "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
         "DASHBOARD_AUTH",
         "THEME_RESEARCH_REPORT_HOST_ROOT",
+        "THEME_RESEARCH_REPORT_INDEX_SERVICE",
+        "THEME_RESEARCH_REPORT_REVIEW_SERVICE",
         "/srv/stock-research/theme-research-reports",
         "THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research",
         "theme_research_report_schema --apply",
@@ -1664,6 +1715,9 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
     assert "depth 3" in runbook
     assert "0600 temporary curl configuration" in runbook
     assert "process arguments" in runbook
+    assert "runtime, indexer, and reviewer aliases" in runbook
+    assert "NOLOGIN role membership" in runbook
+    assert "independent LOGIN credentials" in runbook
     assert "唯一入口" in runbook
     assert "deploy/sync_dashboard_release.sh" in canonical
     assert "release_id" in canonical

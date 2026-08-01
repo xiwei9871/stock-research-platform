@@ -56,6 +56,9 @@ def test_systemd_and_env_examples_keep_api_local_and_secrets_server_side():
     assert "DASHBOARD_API_BIND_HOST=127.0.0.1" in env
     assert "DASHBOARD_API_BIND_PORT=8765" in env
     assert "PGSERVICEFILE=" in env
+    assert "THEME_RESEARCH_RUNTIME_SERVICE=theme_research_runtime" in env
+    assert "THEME_RESEARCH_REPORT_INDEX_SERVICE=theme_research_report_indexer" in env
+    assert "THEME_RESEARCH_REPORT_REVIEW_SERVICE=theme_research_report_reviewer" in env
     assert "DASHBOARD_WRITE_TOKEN=" in env
     assert "server-only" in env
     assert "frontend bundle" in env

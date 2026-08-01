@@ -11,7 +11,7 @@ EXPECTED_STRATEGY_ARTIFACT_DATE="${EXPECTED_STRATEGY_ARTIFACT_DATE:-$EXPECTED_TR
 EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="${EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT:-${EXPECTED_REMOTE_SOURCE_ROOT:+$EXPECTED_REMOTE_SOURCE_ROOT/src/stock_research}}"
 EXPECTED_API_BASE_IMAGE="${EXPECTED_API_BASE_IMAGE:-python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7}"
 EXPECTED_FRONTEND_BASE_IMAGE="${EXPECTED_FRONTEND_BASE_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}"
-EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="${EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION:-4}"
+EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="${EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION:-5}"
 THEME_RESEARCH_REPORT_HEALTH_JSON="${THEME_RESEARCH_REPORT_HEALTH_JSON:?THEME_RESEARCH_REPORT_HEALTH_JSON is required}"
 EXPECTED_THEME_RESEARCH_REPORT_ROOT="${EXPECTED_THEME_RESEARCH_REPORT_ROOT:-/app/reports/theme-research}"
 RELEASE_CHECK_TIMEOUT_SECONDS="${RELEASE_CHECK_TIMEOUT_SECONDS:-120}"
@@ -190,6 +190,9 @@ report_health_matches_release() {
       and .root.readonly == true
       and .schema.status == "current"
       and .schema.schema_version == $schema_version
+      and .service_permissions.runtime.status == "ok"
+      and .service_permissions.indexer.status == "ok"
+      and .service_permissions.reviewer.status == "ok"
       and .scheduler_index_diagnostics.status == "ok"
       and .scheduler_index_diagnostics.invalid == 0
       and .scheduler_index_diagnostics.errors == []
@@ -227,6 +230,6 @@ if [[ -s "$tmp_dir/review-queue.json" ]]; then
   jq '{requested_trade_date, trade_date, groups: [.groups[]? | {strategy_id, count, data_trade_date, freshness_status}]}' "$tmp_dir/review-queue.json" >&2 || true
 fi
 if [[ -s "$THEME_RESEARCH_REPORT_HEALTH_JSON" ]]; then
-  jq '{status, root, schema, scheduler_index_diagnostics}' "$THEME_RESEARCH_REPORT_HEALTH_JSON" >&2 || true
+  jq '{status, root, schema, service_permissions, scheduler_index_diagnostics}' "$THEME_RESEARCH_REPORT_HEALTH_JSON" >&2 || true
 fi
 exit 1
