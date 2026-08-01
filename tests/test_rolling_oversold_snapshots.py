@@ -153,6 +153,46 @@ def test_snapshot_revisions_link_ranks_and_keep_absent_asset_as_invalidated_row(
     assert removed["score_reason"] == "sector_gate_or_data_change"
 
 
+def test_snapshot_build_preserves_invalidated_historical_sector_context_when_sector_changes(tmp_path):
+    previous = _build()
+    current_sectors = _sectors().copy()
+    current_sectors.loc[
+        current_sectors["sector_code"].eq("I1"),
+        [
+            "sector_oversold_score",
+            "sector_repairability_score",
+            "sector_direction_score",
+            "sector_recovery_state",
+            "sector_gate_status",
+        ],
+    ] = [91.0, 73.0, 61.0, "repairing", "confirmed"]
+
+    current = _build(
+        stocks=_stocks().iloc[[0]].copy(),
+        sectors=current_sectors,
+        previous=previous,
+    )
+
+    invalidated = current["stock_candidates"].loc[
+        current["stock_candidates"]["asset_id"].eq("000001")
+    ].iloc[0]
+    current_sector = current["sector_states"].loc[
+        current["sector_states"]["sector_code"].eq("I1")
+    ].iloc[0]
+    assert invalidated["stock_lifecycle"] == "invalidated"
+    assert invalidated["sector_oversold_score"] == 78.0
+    assert current_sector["sector_oversold_score"] == 91.0
+    assert write_rolling_snapshot(current, output_dir=tmp_path)["status"] == "created"
+
+
+def test_build_rejects_active_stock_rows_with_conflicting_sector_context():
+    stocks = _stocks().copy()
+    stocks.loc[:, "sector_name"] = "Tampered sector name"
+
+    with pytest.raises(ValueError, match="sector context conflicts.*sector_name"):
+        _build(stocks=stocks)
+
+
 def test_snapshot_revisions_compute_previous_rank_minus_current_rank():
     previous = _build(stocks=_stocks().assign(stock_rank=[3, 2]))
     current = _build(stocks=_stocks().iloc[[0]].assign(stock_rank=1), previous=previous)
@@ -369,7 +409,7 @@ def test_write_rejects_conflicting_sector_previous_snapshot_id(tmp_path):
         write_rolling_snapshot(tampered, output_dir=tmp_path)
 
 
-def test_write_allows_explicit_unknown_stock_metadata_only_for_blocked_rows(tmp_path):
+def test_write_allows_blocked_stock_rows_with_missing_scores_when_root_metadata_is_preserved(tmp_path):
     blocked_stocks = _stocks().iloc[[0]].copy()
     blocked_stocks.loc[:, "sector_gate_status"] = "blocked"
     blocked_stocks.loc[:, "sector_recovery_state"] = "unknown"
@@ -379,7 +419,46 @@ def test_write_allows_explicit_unknown_stock_metadata_only_for_blocked_rows(tmp_
     blocked_sectors.loc[:, "sector_recovery_state"] = "unknown"
     blocked_sectors.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
     snapshot = _build(stocks=blocked_stocks, sectors=blocked_sectors)
-    snapshot["stock_candidates"].loc[:, "market_regime"] = "unknown"
-    snapshot["stock_candidates"].loc[:, "previous_snapshot_id"] = pd.NA
 
     assert write_rolling_snapshot(snapshot, output_dir=tmp_path)["status"] == "created"
+
+
+def test_write_rejects_blocked_rows_with_conflicting_root_metadata(tmp_path):
+    blocked_stocks = _stocks().iloc[[0]].copy()
+    blocked_stocks.loc[:, "sector_gate_status"] = "blocked"
+    blocked_stocks.loc[:, "sector_recovery_state"] = "unknown"
+    blocked_stocks.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    blocked_sectors = _sectors().iloc[[0]].copy()
+    blocked_sectors.loc[:, "sector_gate_status"] = "blocked"
+    blocked_sectors.loc[:, "sector_recovery_state"] = "unknown"
+    blocked_sectors.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    snapshot = _build(stocks=blocked_stocks, sectors=blocked_sectors, previous=_build())
+
+    regime_tampered = dict(snapshot)
+    regime_tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    regime_tampered["stock_candidates"].loc[:, "market_regime"] = "unknown"
+    with pytest.raises(ValueError, match="market_regime"):
+        write_rolling_snapshot(regime_tampered, output_dir=tmp_path)
+
+    lineage_tampered = dict(snapshot)
+    lineage_tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    lineage_tampered["stock_candidates"].loc[:, "previous_snapshot_id"] = pd.NA
+    with pytest.raises(ValueError, match="previous_snapshot_id"):
+        write_rolling_snapshot(lineage_tampered, output_dir=tmp_path)
+
+
+def test_write_rejects_invalidated_rows_with_conflicting_root_metadata(tmp_path):
+    snapshot = _build(stocks=_stocks().iloc[[0]].copy(), previous=_build())
+    invalidated = snapshot["stock_candidates"]["stock_lifecycle"].eq("invalidated")
+
+    regime_tampered = dict(snapshot)
+    regime_tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    regime_tampered["stock_candidates"].loc[invalidated, "market_regime"] = "unknown"
+    with pytest.raises(ValueError, match="market_regime"):
+        write_rolling_snapshot(regime_tampered, output_dir=tmp_path)
+
+    lineage_tampered = dict(snapshot)
+    lineage_tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    lineage_tampered["stock_candidates"].loc[invalidated, "previous_snapshot_id"] = pd.NA
+    with pytest.raises(ValueError, match="previous_snapshot_id"):
+        write_rolling_snapshot(lineage_tampered, output_dir=tmp_path)

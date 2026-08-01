@@ -148,6 +148,7 @@ def build_rolling_snapshot(
         score_version=score_version,
         market_state=regime["market_regime"],
     )
+    _validate_stock_sector_context(stocks, sectors)
 
     preflight = _normalize_preflight(regime.pop("preflight", None))
     backfill_requests = _normalize_backfill(regime.pop("backfill_requests", None))
@@ -605,26 +606,19 @@ def _validate_stock_cross_artifact_metadata(
     market_state: str,
     previous_snapshot_id: str | None,
 ) -> None:
-    blocked_or_unknown = _allow_missing_sector_scores(frame)
     row_regimes = frame["market_regime"].astype("string").str.strip().replace("", pd.NA)
     missing_regime = row_regimes.isna()
-    allowed_unknown = blocked_or_unknown & row_regimes.eq("unknown")
-    conflicting_regime = (
-        row_regimes.notna()
-        & ~row_regimes.eq(market_state)
-        & ~allowed_unknown
-    )
-    if conflicting_regime.any() or ((~blocked_or_unknown) & missing_regime).any():
+    conflicting_regime = row_regimes.notna() & ~row_regimes.eq(market_state)
+    if conflicting_regime.any() or missing_regime.any():
         raise ValueError("stock_candidates market_regime conflicts with snapshot market_regime")
     frame["market_regime"] = row_regimes
 
     row_previous = frame["previous_snapshot_id"].astype("string").str.strip().replace("", pd.NA)
-    missing_previous = row_previous.isna()
     if previous_snapshot_id is None:
         conflicting_previous = row_previous.notna()
     else:
         conflicting_previous = row_previous.notna() & ~row_previous.eq(previous_snapshot_id)
-        conflicting_previous |= (~blocked_or_unknown) & missing_previous
+        conflicting_previous |= row_previous.isna()
     if conflicting_previous.any():
         raise ValueError(
             "stock_candidates previous_snapshot_id conflicts with snapshot previous_snapshot_id"
@@ -676,14 +670,12 @@ def _validate_sector_snapshot_rows(
 def _validate_sector_cross_artifact_metadata(
     frame: pd.DataFrame, *, previous_snapshot_id: str | None
 ) -> None:
-    blocked_or_unknown = _allow_missing_sector_scores(frame)
     row_previous = frame["previous_snapshot_id"].astype("string").str.strip().replace("", pd.NA)
-    missing_previous = row_previous.isna()
     if previous_snapshot_id is None:
         conflicting_previous = row_previous.notna()
     else:
         conflicting_previous = row_previous.notna() & ~row_previous.eq(previous_snapshot_id)
-        conflicting_previous |= (~blocked_or_unknown) & missing_previous
+        conflicting_previous |= row_previous.isna()
     if conflicting_previous.any():
         raise ValueError(
             "sector_states previous_snapshot_id conflicts with snapshot previous_snapshot_id"
@@ -708,6 +700,8 @@ def _validate_stock_sector_context(
                 "stock_candidates references missing sector state "
                 f"{identity[0]}/{identity[1]}"
             )
+        if stock["stock_lifecycle"] == "invalidated":
+            continue
         sector = sectors_by_identity.loc[identity]
         conflicting_columns = [
             column
