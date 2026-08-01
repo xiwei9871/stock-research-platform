@@ -101,8 +101,8 @@ if [[ ! "$DASHBOARD_REMOTE_ENV_FILE" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ ! "$DASHBOAR
   echo "DASHBOARD_REMOTE_ENV_FILE or DASHBOARD_PGSERVICE_FILE contains unsupported characters" >&2
   exit 2
 fi
-if [[ ! "$THEME_RESEARCH_REPORT_HOST_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-  echo "THEME_RESEARCH_REPORT_HOST_ROOT must be a safe absolute path" >&2
+if ! bash "$ROOT/deploy/check_dashboard_report_mount.sh" --validate-path "$THEME_RESEARCH_REPORT_HOST_ROOT" >/dev/null; then
+  echo "THEME_RESEARCH_REPORT_HOST_ROOT must be a safe dedicated path" >&2
   exit 2
 fi
 if [[ ! "$THEME_RESEARCH_MIGRATION_SERVICE" =~ ^[A-Za-z0-9._-]+$ ]] \

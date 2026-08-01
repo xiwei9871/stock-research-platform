@@ -26,7 +26,7 @@ def _sync_env(release_root: Path) -> dict[str, str]:
         "REMOTE_USER": "deploy",
         "REMOTE_HOST": "example.invalid",
         "REMOTE_DIR": "/srv/stock-research",
-        "THEME_RESEARCH_REPORT_HOST_ROOT": "/srv/theme-research-reports",
+        "THEME_RESEARCH_REPORT_HOST_ROOT": "/srv/stock-research/theme-research-reports",
     }
 
 
@@ -205,7 +205,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "FAKE_COMMAND_LOG": str(log_file),
         "FAKE_RELEASE_GATE_LOG": str(tmp_path / "release-gates.log"),
         "FAKE_RELEASE_GATE_COUNT": str(tmp_path / "release-gates.count"),
-        "THEME_RESEARCH_REPORT_HOST_ROOT": "/srv/theme-research-reports",
+        "THEME_RESEARCH_REPORT_HOST_ROOT": "/srv/stock-research/theme-research-reports",
     }
     env.pop("EXPECTED_TRADE_DATE", None)
     return root, env, log_file
@@ -363,6 +363,7 @@ def test_release_sync_validates_and_preserves_read_only_report_root():
     assert "THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q}" in script
     assert "THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q}" in script
     assert "check_dashboard_report_mount.sh" in script
+    assert 'bash "$ROOT/deploy/check_dashboard_report_mount.sh" --validate-path' in script
     assert "docker inspect" in mount_check
     assert script.index("check_dashboard_report_mount.sh") < script.index("if check_release_state")
 
@@ -385,7 +386,7 @@ def _report_mount_check_env(tmp_path: Path, *, source: Path, rw: bool) -> dict[s
 
 
 def test_report_mount_check_rejects_missing_configured_host_root(tmp_path):
-    missing = tmp_path / "missing-reports"
+    missing = tmp_path / "stock-research" / "theme-research-reports"
     env = _report_mount_check_env(tmp_path, source=missing, rw=False)
 
     result = subprocess.run(
@@ -405,16 +406,97 @@ def test_report_mount_check_rejects_missing_configured_host_root(tmp_path):
 
 
 @pytest.mark.parametrize(
+    "unsafe_root",
+    [
+        "/",
+        "/bin",
+        "/boot",
+        "/dev",
+        "/etc",
+        "/home",
+        "/lib",
+        "/lib64",
+        "/media",
+        "/mnt",
+        "/opt",
+        "/proc",
+        "/root",
+        "/run",
+        "/sbin",
+        "/srv",
+        "/sys",
+        "/tmp",
+        "/usr",
+        "/var",
+        "/srv/theme-research",
+        "/srv/stock-research/reports",
+    ],
+)
+def test_report_mount_path_validation_rejects_system_or_non_dedicated_roots(unsafe_root):
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_report_mount.sh"),
+            "--validate-path",
+            unsafe_root,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert any(
+        marker in result.stderr.lower()
+        for marker in ("dedicated", "safe", "system root")
+    )
+
+
+def test_report_mount_path_validation_accepts_recommended_dedicated_root():
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_report_mount.sh"),
+            "--validate-path",
+            "/srv/stock-research/theme-research-reports",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_report_mount_check_rejects_dedicated_name_symlinked_to_system_root(tmp_path):
+    disguised = tmp_path / "stock-research" / "theme-research-reports"
+    disguised.parent.mkdir()
+    disguised.symlink_to("/etc", target_is_directory=True)
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_report_mount.sh"),
+            "--host-only",
+            str(disguised),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "resolved" in result.stderr.lower() or "dedicated" in result.stderr.lower()
+
+
+@pytest.mark.parametrize(
     ("different_source", "rw"),
     [(True, False), (False, True)],
 )
 def test_report_mount_check_rejects_different_source_or_writable_mount(
     tmp_path, different_source, rw
 ):
-    expected = tmp_path / "expected-reports"
-    actual = tmp_path / "different-reports"
-    expected.mkdir()
-    actual.mkdir()
+    expected = tmp_path / "expected" / "theme-research-reports"
+    actual = tmp_path / "different" / "theme-research-reports"
+    expected.mkdir(parents=True)
+    actual.mkdir(parents=True)
     env = _report_mount_check_env(
         tmp_path,
         source=actual if different_source else expected,
@@ -440,8 +522,8 @@ def test_report_mount_check_rejects_different_source_or_writable_mount(
 
 
 def test_report_mount_check_accepts_matching_canonical_read_only_mount(tmp_path):
-    expected = tmp_path / "expected-reports"
-    expected.mkdir()
+    expected = tmp_path / "expected" / "theme-research-reports"
+    expected.mkdir(parents=True)
     env = _report_mount_check_env(tmp_path, source=expected, rw=False)
 
     result = subprocess.run(
@@ -754,11 +836,37 @@ def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp
     assert "rsync:" not in commands
     ssh_lines = [line for line in commands.splitlines() if line.startswith("ssh:")]
     assert len(ssh_lines) == 3
-    assert "--host-only /srv/theme-research-reports" in ssh_lines[0]
-    assert "--require-mount /srv/theme-research-reports" in ssh_lines[1]
+    assert "--host-only /srv/stock-research/theme-research-reports" in ssh_lines[0]
+    assert "--require-mount /srv/stock-research/theme-research-reports" in ssh_lines[1]
     assert "check_theme_research_report_runtime.py --expected-root" in ssh_lines[2]
     assert all(" compose " not in line for line in ssh_lines)
     assert " build" not in commands
+
+
+@pytest.mark.parametrize(
+    "unsafe_root",
+    ["/", "/etc", "/home", "/root", "/usr", "/var", "/opt", "/srv"],
+)
+def test_release_sync_rejects_broad_report_roots_before_remote_access(
+    tmp_path, unsafe_root
+):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["THEME_RESEARCH_REPORT_HOST_ROOT"] = unsafe_root
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "safe dedicated path" in result.stderr
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
 
 
 def test_release_sync_invalid_strategy_contract_fails_before_remote_or_restart(tmp_path):
@@ -1042,6 +1150,12 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
     assert "data_trade_date" in script
     assert "count == 5" in script
     assert "freshness_status == \"current\"" in script
+    assert '-u "$DASHBOARD_AUTH"' not in script
+    assert "curl_auth=(-u" not in script
+    assert "umask 077" in script
+    assert "chmod 600" in script
+    assert "trap 'rm -rf \"$tmp_dir\"' EXIT" in script
+    assert '--config "$curl_config"' in script
     for strategy_id in ("lhb_shortline", "mid_trend", "tech_bottleneck"):
         assert strategy_id in script
 
@@ -1061,16 +1175,28 @@ def _release_gate_env(
         """
         #!/bin/bash
         [[ -n "${FAKE_CURL_LOG:-}" ]] && printf 'curl\n' >> "$FAKE_CURL_LOG"
+        [[ -n "${FAKE_CURL_ARGV_LOG:-}" ]] && printf '%s\n' "$*" >> "$FAKE_CURL_ARGV_LOG"
         output=''
         url=''
+        config=''
         while (( $# )); do
           case "$1" in
             -o) output="$2"; shift 2 ;;
+            --config) config="$2"; shift 2 ;;
             -w|--connect-timeout|--max-time|-u) shift 2 ;;
             -*) shift ;;
             *) url="$1"; shift ;;
           esac
         done
+        if [[ -n "${FAKE_CURL_CONFIG_CAPTURE:-}" ]]; then
+          [[ -n "$config" && -f "$config" ]] || exit 90
+          cp "$config" "$FAKE_CURL_CONFIG_CAPTURE"
+          if stat -f '%Lp' "$config" >/dev/null 2>&1; then
+            stat -f '%Lp' "$config" > "$FAKE_CURL_CONFIG_MODE"
+          else
+            stat -c '%a' "$config" > "$FAKE_CURL_CONFIG_MODE"
+          fi
+        fi
         if [[ "$url" == */api/platform/readiness ]]; then
           printf '%s\n' "$FAKE_READINESS_JSON" > "$output"
         elif [[ "$url" == */release.json ]]; then
@@ -1140,8 +1266,39 @@ def _release_gate_env(
         "FAKE_READINESS_JSON": json.dumps(readiness),
         "FAKE_QUEUE_JSON": json.dumps(queue),
         "FAKE_CURL_LOG": str(tmp_path / "curl.log"),
+        "FAKE_CURL_ARGV_LOG": str(tmp_path / "curl-argv.log"),
         "THEME_RESEARCH_REPORT_HEALTH_JSON": str(report_health_path),
     }
+
+
+def test_release_gate_keeps_basic_auth_secret_out_of_curl_argv(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    auth = 'deploy:p@ ss#\"\\word'
+    capture = tmp_path / "curl-auth.conf"
+    mode = tmp_path / "curl-auth.mode"
+    env.update(
+        {
+            "DASHBOARD_AUTH": auth,
+            "FAKE_CURL_CONFIG_CAPTURE": str(capture),
+            "FAKE_CURL_CONFIG_MODE": str(mode),
+        }
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = Path(env["FAKE_CURL_ARGV_LOG"]).read_text(encoding="utf-8")
+    assert auth not in argv
+    assert "-u " not in argv
+    assert "--config " in argv
+    assert capture.read_text(encoding="utf-8") == 'user = "deploy:p@ ss#\\\"\\\\word"\n'
+    assert mode.read_text(encoding="utf-8").strip() == "600"
 
 
 def test_release_gate_rejects_report_root_or_index_health_errors(tmp_path):
@@ -1497,12 +1654,16 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
         "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
         "DASHBOARD_AUTH",
         "THEME_RESEARCH_REPORT_HOST_ROOT",
+        "/srv/stock-research/theme-research-reports",
         "THEME_RESEARCH_REPORT_ROOT=/app/reports/theme-research",
         "theme_research_report_schema --apply",
         "report-index/status",
         "回滚",
     ):
         assert expected in runbook
+    assert "depth 3" in runbook
+    assert "0600 temporary curl configuration" in runbook
+    assert "process arguments" in runbook
     assert "唯一入口" in runbook
     assert "deploy/sync_dashboard_release.sh" in canonical
     assert "release_id" in canonical

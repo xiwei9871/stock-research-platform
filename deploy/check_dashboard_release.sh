@@ -61,13 +61,19 @@ if [[ ! "$RELEASE_CHECK_RETRY_SECONDS" =~ ^[0-9]+$ ]] || (( RELEASE_CHECK_RETRY_
   exit 2
 fi
 
-curl_auth=()
-if [[ -n "$DASHBOARD_AUTH" ]]; then
-  curl_auth=(-u "$DASHBOARD_AUTH")
-fi
-
+umask 077
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+curl_config="$tmp_dir/curl.conf"
+: > "$curl_config"
+chmod 600 "$curl_config"
+if [[ -n "$DASHBOARD_AUTH" ]]; then
+  curl_auth_escaped="${DASHBOARD_AUTH//\\/\\\\}"
+  curl_auth_escaped="${curl_auth_escaped//\"/\\\"}"
+  curl_auth_escaped="${curl_auth_escaped//$'\n'/\\n}"
+  curl_auth_escaped="${curl_auth_escaped//$'\r'/\\r}"
+  printf 'user = "%s"\n' "$curl_auth_escaped" > "$curl_config"
+fi
 deadline=$((SECONDS + RELEASE_CHECK_TIMEOUT_SECONDS))
 
 fetch_json() {
@@ -83,11 +89,7 @@ fetch_json() {
   if (( remaining > 15 )); then
     remaining=15
   fi
-  if (( ${#curl_auth[@]} )); then
-    status="$(curl -sS --connect-timeout 5 --max-time "$remaining" "${curl_auth[@]}" -o "$output" -w '%{http_code}' "$url" || true)"
-  else
-    status="$(curl -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
-  fi
+  status="$(curl --config "$curl_config" -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
   [[ "$status" == "200" ]] && jq -e . "$output" >/dev/null 2>&1
 }
 

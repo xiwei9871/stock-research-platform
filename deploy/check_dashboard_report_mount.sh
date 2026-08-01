@@ -4,13 +4,45 @@ set -euo pipefail
 mode="${1:-}"
 host_root="${2:-}"
 
-if [[ "$mode" != "--host-only" && "$mode" != "--require-mount" ]]; then
-  echo "usage: $0 --host-only HOST_ROOT | --require-mount HOST_ROOT CONTAINER TARGET" >&2
+if [[ "$mode" != "--validate-path" && "$mode" != "--host-only" && "$mode" != "--require-mount" ]]; then
+  echo "usage: $0 --validate-path HOST_ROOT | --host-only HOST_ROOT | --require-mount HOST_ROOT CONTAINER TARGET" >&2
   exit 2
 fi
-if [[ ! "$host_root" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-  echo "Theme Research report host root must be a safe absolute path" >&2
-  exit 2
+
+validate_host_root_path() {
+  local candidate="$1"
+  local relative
+  local basename
+  local -a components
+
+  if [[ ! "$candidate" =~ ^/[A-Za-z0-9._/-]+$ ]] \
+    || [[ "$candidate" == *"//"* ]] \
+    || [[ "$candidate" == *"/./"* || "$candidate" == */. ]] \
+    || [[ "$candidate" == *"/../"* || "$candidate" == */.. ]] \
+    || [[ "$candidate" == */ ]]; then
+    echo "Theme Research report host root must be a safe absolute path" >&2
+    return 2
+  fi
+  case "$candidate" in
+    /|/bin|/boot|/dev|/etc|/home|/lib|/lib64|/media|/mnt|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var)
+      echo "Theme Research report host root must not be a system root" >&2
+      return 2
+      ;;
+  esac
+
+  relative="${candidate#/}"
+  IFS='/' read -r -a components <<< "$relative"
+  basename="${candidate##*/}"
+  if (( ${#components[@]} < 3 )) || [[ "$basename" != *theme-research* ]]; then
+    echo "Theme Research report host root must be a dedicated theme-research directory at depth 3 or greater" >&2
+    return 2
+  fi
+}
+
+validate_host_root_path "$host_root"
+if [[ "$mode" == "--validate-path" ]]; then
+  printf '%s\n' "$host_root"
+  exit 0
 fi
 if [[ ! -d "$host_root" || ! -r "$host_root" || ! -x "$host_root" ]]; then
   echo "Theme Research report host root must already exist as a readable directory: $host_root" >&2
@@ -18,6 +50,10 @@ if [[ ! -d "$host_root" || ! -r "$host_root" || ! -x "$host_root" ]]; then
 fi
 
 host_root_real="$(cd "$host_root" && pwd -P)"
+if ! validate_host_root_path "$host_root_real"; then
+  echo "Resolved Theme Research report host root is not a safe dedicated path" >&2
+  exit 2
+fi
 if [[ "$mode" == "--host-only" ]]; then
   printf '%s\n' "$host_root_real"
   exit 0
