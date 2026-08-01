@@ -280,12 +280,12 @@ def _safe_document(record: dict[str, Any], *, html: str, admin: bool) -> dict[st
         "summary": record.get("summary"),
         "status": record.get("status"),
         "generated_at": record.get("generated_at"),
-        "indexed_at": record.get("indexed_at"),
         "published_at": record.get("published_at"),
         "has_pdf": record.get("pdf_relative_path") is not None,
         "html": html,
     }
     if admin:
+        result["indexed_at"] = record.get("indexed_at")
         result["generator_name"] = record.get("generator_name")
         result["generator_version"] = record.get("generator_version")
     return result

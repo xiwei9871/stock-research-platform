@@ -123,6 +123,9 @@ class ReportScanResult:
     errors: Sequence[Mapping[str, Any]]
     started_at: datetime
     completed_at: datetime
+    root_exists: bool = True
+    root_readable: bool = True
+    error_code: str | None = None
 
     def __post_init__(self) -> None:
         counts = (self.discovered, self.indexed, self.unchanged, self.invalid)
@@ -142,6 +145,16 @@ class ReportScanResult:
             raise ValueError("scan result timestamps must be timezone aware")
         if self.completed_at < self.started_at:
             raise ValueError("completed_at must not precede started_at")
+        if not isinstance(self.root_exists, bool) or not isinstance(
+            self.root_readable, bool
+        ):
+            raise ValueError("root health flags must be booleans")
+        if self.root_readable and not self.root_exists:
+            raise ValueError("a missing root cannot be readable")
+        if self.error_code is not None and (
+            not isinstance(self.error_code, str) or not self.error_code
+        ):
+            raise ValueError("error_code must be a non-empty string or None")
         object.__setattr__(self, "errors", tuple(_freeze_error(error) for error in self.errors))
 
     def to_dict(self) -> dict[str, Any]:
@@ -153,6 +166,9 @@ class ReportScanResult:
             "errors": [dict(error) for error in self.errors],
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat(),
+            "root_exists": self.root_exists,
+            "root_readable": self.root_readable,
+            "error_code": self.error_code,
         }
 
 
@@ -287,11 +303,61 @@ def scan_theme_research_report_root(
         root_fd = os.open(report_root, _directory_open_flags())
     except FileNotFoundError as exc:
         _raise_if_resource_exhausted(exc)
-        return ReportScanResult(0, 0, 0, 0, (), started_at, datetime.now(timezone.utc))
+        return ReportScanResult(
+            0,
+            0,
+            0,
+            0,
+            (),
+            started_at,
+            datetime.now(timezone.utc),
+            root_exists=False,
+            root_readable=False,
+            error_code="REPORT_ROOT_MISSING",
+        )
+    except NotADirectoryError as exc:
+        _raise_if_resource_exhausted(exc)
+        return ReportScanResult(
+            0,
+            0,
+            0,
+            0,
+            (),
+            started_at,
+            datetime.now(timezone.utc),
+            root_exists=True,
+            root_readable=False,
+            error_code="REPORT_ROOT_NOT_DIRECTORY",
+        )
+    except PermissionError as exc:
+        _raise_if_resource_exhausted(exc)
+        return ReportScanResult(
+            0,
+            0,
+            0,
+            0,
+            (),
+            started_at,
+            datetime.now(timezone.utc),
+            root_exists=True,
+            root_readable=False,
+            error_code="REPORT_ROOT_UNREADABLE",
+        )
     except (OSError, TypeError, ValueError) as exc:
         _raise_if_resource_exhausted(exc)
         _append_error(errors, {"code": "REPORT_ROOT_INVALID"})
-        return ReportScanResult(0, 0, 0, 1, errors, started_at, datetime.now(timezone.utc))
+        return ReportScanResult(
+            0,
+            0,
+            0,
+            1,
+            errors,
+            started_at,
+            datetime.now(timezone.utc),
+            root_exists=True,
+            root_readable=False,
+            error_code="REPORT_ROOT_INVALID",
+        )
 
     try:
         try:
@@ -307,6 +373,9 @@ def scan_theme_research_report_root(
                 errors,
                 started_at,
                 datetime.now(timezone.utc),
+                root_exists=True,
+                root_readable=False,
+                error_code="REPORT_DISCOVERY_ERROR",
             )
 
         for theme_id in theme_names:
@@ -561,6 +630,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise
         return _print_cli_error("REPORT_INDEX_RESOURCE_EXHAUSTED")
     print(json.dumps(result.to_dict(), ensure_ascii=False, sort_keys=True))
+    if result.error_code is not None:
+        return 3
     if result.invalid == 0:
         return 0
     if any(

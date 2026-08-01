@@ -95,11 +95,36 @@ def test_published_document_loads_safe_markdown(monkeypatch, tmp_path, status) -
         "summary": "Safe summary",
         "status": status,
         "generated_at": NOW,
-        "indexed_at": NOW,
         "published_at": NOW,
         "has_pdf": False,
         "html": "<h1>Heading</h1>\n<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n",
     }
+
+
+def test_published_document_omits_internal_review_and_concurrency_fields(
+    monkeypatch, tmp_path
+) -> None:
+    record = _record(tmp_path)
+    record.update(
+        published_by_user_id="admin",
+        row_version=7,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    _install_store(monkeypatch, record)
+
+    result = reports.load_published_report_document(
+        "theme-a", "report-id", report_root=tmp_path, service="runtime"
+    )
+
+    assert {
+        "indexed_at",
+        "published_by_user_id",
+        "row_version",
+        "metadata",
+        "created_at",
+        "updated_at",
+    }.isdisjoint(result)
 
 
 @pytest.mark.parametrize("status", ["pending_review", "rejected"])
@@ -857,7 +882,43 @@ def _scan_result(*, indexed: int = 1, invalid: int = 0) -> ReportScanResult:
         ),
         started_at=now,
         completed_at=now,
+        root_exists=True,
+        root_readable=True,
     )
+
+
+def test_theme_report_scheduler_reports_unhealthy_root_as_error(tmp_path) -> None:
+    from stock_research.dashboard.theme_research_report_scheduler import (
+        ThemeResearchReportScheduler,
+    )
+
+    async def exercise() -> None:
+        now = datetime.now(UTC)
+        missing = ReportScanResult(
+            0,
+            0,
+            0,
+            0,
+            (),
+            now,
+            now,
+            root_exists=False,
+            root_readable=False,
+            error_code="REPORT_ROOT_MISSING",
+        )
+        scheduler = ThemeResearchReportScheduler(
+            tmp_path, object(), "runtime", 60, scan_fn=lambda *args, **kwargs: missing
+        )
+
+        await scheduler.run_once()
+
+        diagnostics = scheduler.diagnostics()
+        assert diagnostics["status"] == "error"
+        assert diagnostics["last_result"]["root_exists"] is False
+        assert diagnostics["last_result"]["root_readable"] is False
+        assert diagnostics["last_result"]["error_code"] == "REPORT_ROOT_MISSING"
+
+    asyncio.run(exercise())
 
 
 def test_theme_report_scheduler_starts_immediately_periodically_and_without_overlap(

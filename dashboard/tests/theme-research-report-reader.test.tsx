@@ -27,13 +27,8 @@ const reports = {
       summary: '第二版摘要',
       status: 'published',
       generated_at: '2026-07-30T08:00:00+08:00',
-      indexed_at: '2026-07-30T09:00:00+08:00',
       published_at: '2026-07-31T10:00:00+08:00',
-      published_by_user_id: 'admin',
-      row_version: 4,
-      metadata: {},
-      created_at: '2026-07-30T08:00:00+08:00',
-      updated_at: '2026-07-31T10:00:00+08:00'
+      has_pdf: true
     },
     {
       report_version_id: 'report-v1',
@@ -43,13 +38,8 @@ const reports = {
       summary: '第一版摘要',
       status: 'archived',
       generated_at: '2026-07-20T08:00:00+08:00',
-      indexed_at: '2026-07-20T09:00:00+08:00',
       published_at: '2026-07-21T10:00:00+08:00',
-      published_by_user_id: 'admin',
-      row_version: 5,
-      metadata: {},
-      created_at: '2026-07-20T08:00:00+08:00',
-      updated_at: '2026-07-31T10:00:00+08:00'
+      has_pdf: false
     }
   ]
 };
@@ -63,7 +53,6 @@ function documentFor(reportVersionId: string, title = 'AI 供电主题研究（�
     summary: '研究摘要',
     status: reportVersionId === 'report-v1' ? 'archived' : 'published',
     generated_at: '2026-07-30T08:00:00+08:00',
-    indexed_at: '2026-07-30T09:00:00+08:00',
     published_at: '2026-07-31T10:00:00+08:00',
     has_pdf: true,
     html: '<h2>核心结论</h2><p>服务器电源价值量提升。</p><table><tbody><tr><td>液冷</td></tr></tbody></table>'

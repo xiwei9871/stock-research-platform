@@ -60,7 +60,7 @@ def _error_codes(result: report_index.ReportScanResult) -> list[str]:
     return [error["code"] for error in result.errors]
 
 
-def test_missing_root_is_valid_empty_state_without_absolute_path(tmp_path: Path) -> None:
+def test_missing_root_is_explicit_configuration_error_without_absolute_path(tmp_path: Path) -> None:
     root = tmp_path / "missing-secret-root"
 
     result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
@@ -68,7 +68,49 @@ def test_missing_root_is_valid_empty_state_without_absolute_path(tmp_path: Path)
     assert result.to_dict()["discovered"] == 0
     assert (result.indexed, result.unchanged, result.invalid) == (0, 0, 0)
     assert result.errors == ()
+    assert result.root_exists is False
+    assert result.root_readable is False
+    assert result.error_code == "REPORT_ROOT_MISSING"
     assert str(root) not in json.dumps(result.to_dict())
+
+
+def test_empty_root_is_healthy_and_readable(tmp_path: Path) -> None:
+    result = report_index.scan_theme_research_report_root(tmp_path, limits=LIMITS)
+
+    assert (result.discovered, result.indexed, result.unchanged, result.invalid) == (0, 0, 0, 0)
+    assert result.errors == ()
+    assert result.root_exists is True
+    assert result.root_readable is True
+    assert result.error_code is None
+
+
+def test_non_directory_root_is_explicit_configuration_error(tmp_path: Path) -> None:
+    root = tmp_path / "report-root"
+    root.write_text("not a directory", encoding="utf-8")
+
+    result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
+
+    assert result.root_exists is True
+    assert result.root_readable is False
+    assert result.error_code == "REPORT_ROOT_NOT_DIRECTORY"
+    assert str(root) not in json.dumps(result.to_dict())
+
+
+def test_unreadable_root_is_explicit_configuration_error(tmp_path: Path, monkeypatch) -> None:
+    real_open = os.open
+
+    def deny_root(path, flags, *args, **kwargs):
+        if Path(path) == tmp_path:
+            raise PermissionError(errno.EACCES, "secret root")
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", deny_root)
+    result = report_index.scan_theme_research_report_root(tmp_path, limits=LIMITS)
+
+    assert result.root_exists is True
+    assert result.root_readable is False
+    assert result.error_code == "REPORT_ROOT_UNREADABLE"
+    assert str(tmp_path) not in json.dumps(result.to_dict())
 
 
 def test_valid_reports_are_registered_in_posix_relative_path_order(tmp_path: Path, monkeypatch) -> None:
@@ -213,8 +255,11 @@ def test_invalid_root_is_reported_stably(tmp_path: Path, kind: str) -> None:
 
     result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
 
-    assert (result.discovered, result.invalid) == (0, 1)
-    assert result.errors == ({"code": "REPORT_ROOT_INVALID"},)
+    assert (result.discovered, result.invalid) == (0, 0)
+    assert result.errors == ()
+    assert result.root_exists is True
+    assert result.root_readable is False
+    assert result.error_code == "REPORT_ROOT_NOT_DIRECTORY"
     assert str(root) not in json.dumps(result.to_dict())
 
 
@@ -426,6 +471,26 @@ def test_cli_prints_json_and_uses_requested_root_service(monkeypatch, tmp_path: 
     )
 
 
+def test_cli_returns_configuration_error_for_missing_root(monkeypatch, capsys) -> None:
+    now = datetime.now(timezone.utc)
+    result = report_index.ReportScanResult(
+        0,
+        0,
+        0,
+        0,
+        (),
+        now,
+        now,
+        root_exists=False,
+        root_readable=False,
+        error_code="REPORT_ROOT_MISSING",
+    )
+    monkeypatch.setattr(report_index, "scan_theme_research_report_root", lambda *args, **kwargs: result)
+
+    assert report_index.main([]) == 3
+    assert json.loads(capsys.readouterr().out)["error_code"] == "REPORT_ROOT_MISSING"
+
+
 @pytest.mark.parametrize(("code", "expected_exit"), [("MANIFEST_INVALID_JSON", 2), ("REPORT_ROOT_INVALID", 3)])
 def test_cli_exit_codes_are_stable_and_stdout_has_no_traceback(monkeypatch, capsys, code: str, expected_exit: int) -> None:
     now = datetime.now(timezone.utc)
@@ -497,7 +562,7 @@ def test_module_cli_invalid_environment_returns_safe_json_exit_three(tmp_path: P
     assert str(secret_root) not in combined
 
 
-def test_module_cli_missing_root_still_returns_empty_json_exit_zero(tmp_path: Path) -> None:
+def test_module_cli_missing_root_returns_safe_json_exit_three(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     missing_root = tmp_path / "missing-root"
     environment = os.environ.copy()
@@ -519,11 +584,14 @@ def test_module_cli_missing_root_still_returns_empty_json_exit_zero(tmp_path: Pa
         check=False,
     )
 
-    assert completed.returncode == 0
+    assert completed.returncode == 3
     payload = json.loads(completed.stdout)
     assert payload["discovered"] == 0
     assert payload["invalid"] == 0
     assert payload["errors"] == []
+    assert payload["root_exists"] is False
+    assert payload["root_readable"] is False
+    assert payload["error_code"] == "REPORT_ROOT_MISSING"
     assert completed.stderr == ""
 
 

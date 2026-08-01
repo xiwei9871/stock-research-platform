@@ -118,13 +118,8 @@ describe('dashboard API client', () => {
       summary: 'Summary',
       status: 'published',
       generated_at: '2026-08-01T08:00:00+08:00',
-      indexed_at: '2026-08-01T08:05:00+08:00',
       published_at: '2026-08-01T09:30:00+08:00',
-      published_by_user_id: 'user:admin',
-      row_version: 2,
-      metadata: {},
-      created_at: '2026-08-01T08:05:00+08:00',
-      updated_at: '2026-08-01T09:30:00+08:00'
+      has_pdf: true
     };
     const document: ThemeResearchReportDocument = {
       report_version_id: 'report-1',
@@ -134,7 +129,6 @@ describe('dashboard API client', () => {
       summary: 'Summary',
       status: 'published',
       generated_at: '2026-08-01T08:00:00+08:00',
-      indexed_at: '2026-08-01T08:05:00+08:00',
       published_at: '2026-08-01T09:30:00+08:00',
       has_pdf: true,
       html: '<h1>Title</h1>'
@@ -143,7 +137,7 @@ describe('dashboard API client', () => {
     expect(summary.status).toBe('published');
     expect(publishWithoutComment.idempotency_key).toBe('publish-1');
     expect(researchingTheme.analysis_report.status).toBe('researching');
-    expect(version.metadata).toEqual({});
+    expect(version.has_pdf).toBe(true);
     expect(document.html).toContain('Title');
   });
 

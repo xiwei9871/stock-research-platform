@@ -7,7 +7,7 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect
 
 
-THEME_RESEARCH_REPORT_SCHEMA_VERSION = "3"
+THEME_RESEARCH_REPORT_SCHEMA_VERSION = "4"
 
 THEME_RESEARCH_REPORT_SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS research;
@@ -90,8 +90,251 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_theme_research_report_review_actor_idempote
     ON research.theme_research_report_review_event (actor_user_id, idempotency_key)
     WHERE idempotency_key <> '';
 
+CREATE OR REPLACE FUNCTION research.register_theme_research_report_pending(
+    p_report_version_id text,
+    p_theme_id text,
+    p_version text,
+    p_title text,
+    p_summary text,
+    p_markdown_relative_path text,
+    p_markdown_sha256 text,
+    p_pdf_relative_path text,
+    p_pdf_sha256 text,
+    p_manifest_relative_path text,
+    p_manifest_sha256 text,
+    p_generator_name text,
+    p_generator_version text,
+    p_generator_metadata jsonb,
+    p_generated_at timestamptz,
+    p_metadata jsonb,
+    p_event_id text,
+    p_request_id text,
+    p_idempotency_key text
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+BEGIN
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtextextended(
+            'theme-research-report-register-lock' || E'\\x1f' ||
+            p_theme_id || E'\\x1f' || p_version,
+            0
+        )
+    );
+    INSERT INTO research.theme_research_report_version (
+        report_version_id, theme_id, version, title, summary, status,
+        markdown_relative_path, markdown_sha256,
+        pdf_relative_path, pdf_sha256,
+        manifest_relative_path, manifest_sha256,
+        generator_name, generator_version, generator_metadata,
+        generated_at, metadata, row_version
+    ) VALUES (
+        p_report_version_id, p_theme_id, p_version, p_title, p_summary,
+        'pending_review', p_markdown_relative_path, p_markdown_sha256,
+        p_pdf_relative_path, p_pdf_sha256, p_manifest_relative_path,
+        p_manifest_sha256, p_generator_name, p_generator_version,
+        p_generator_metadata, p_generated_at, p_metadata, 1
+    )
+    ON CONFLICT (theme_id, version) DO NOTHING;
+
+    IF NOT FOUND THEN
+        RETURN false;
+    END IF;
+
+    INSERT INTO research.theme_research_report_review_event (
+        event_id, report_version_id, from_status, to_status,
+        actor_user_id, comment, request_id, idempotency_key
+    ) VALUES (
+        p_event_id, p_report_version_id, NULL, 'pending_review',
+        'system', '', p_request_id, p_idempotency_key
+    );
+    RETURN true;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION research.review_theme_research_report_version(
+    p_action text,
+    p_report_version_id text,
+    p_expected_row_version bigint,
+    p_actor_user_id text,
+    p_comment text,
+    p_request_id text,
+    p_idempotency_key text,
+    p_event_id text
+) RETURNS TABLE (
+    replayed boolean,
+    event_to_status text,
+    event_created_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+DECLARE
+    v_theme_id text;
+    v_status text;
+    v_row_version bigint;
+    v_to_status text;
+    v_previous record;
+    v_archived record;
+    v_archive_event_id text;
+BEGIN
+    IF p_action IS NULL OR p_action NOT IN ('publish', 'reject')
+       OR p_expected_row_version IS NULL OR p_expected_row_version < 1
+       OR p_report_version_id IS NULL OR p_report_version_id = ''
+       OR p_report_version_id <> pg_catalog.btrim(p_report_version_id)
+       OR pg_catalog.char_length(p_report_version_id) > 200
+       OR p_actor_user_id IS NULL OR p_actor_user_id = ''
+       OR p_actor_user_id <> pg_catalog.btrim(p_actor_user_id)
+       OR pg_catalog.char_length(p_actor_user_id) > 200
+       OR p_request_id IS NULL OR p_request_id = ''
+       OR p_request_id <> pg_catalog.btrim(p_request_id)
+       OR pg_catalog.char_length(p_request_id) > 200
+       OR p_idempotency_key IS NULL OR p_idempotency_key = ''
+       OR p_idempotency_key <> pg_catalog.btrim(p_idempotency_key)
+       OR pg_catalog.char_length(p_idempotency_key) > 200
+       OR p_event_id IS NULL OR p_event_id = ''
+       OR p_comment IS NULL
+       OR (p_action = 'publish' AND pg_catalog.char_length(p_comment) > 2000)
+       OR (
+           p_action = 'reject'
+           AND (
+               pg_catalog.btrim(p_comment) = ''
+               OR p_comment <> pg_catalog.btrim(p_comment)
+               OR pg_catalog.char_length(p_comment) > 4000
+           )
+       ) THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_REVIEW_REQUEST_INVALID';
+    END IF;
+    v_to_status := CASE p_action WHEN 'publish' THEN 'published' ELSE 'rejected' END;
+
+    SELECT report.theme_id
+    INTO v_theme_id
+    FROM research.theme_research_report_version AS report
+    WHERE report.report_version_id = p_report_version_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_NOT_FOUND';
+    END IF;
+
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtextextended(
+            'theme-research-report-review-lock' || E'\\x1f' || v_theme_id,
+            0
+        )
+    );
+
+    SELECT report.status, report.row_version
+    INTO v_status, v_row_version
+    FROM research.theme_research_report_version AS report
+    WHERE report.report_version_id = p_report_version_id
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_NOT_FOUND';
+    END IF;
+
+    SELECT event.report_version_id, event.to_status, event.created_at
+    INTO v_previous
+    FROM research.theme_research_report_review_event AS event
+    WHERE event.actor_user_id = p_actor_user_id
+      AND event.idempotency_key = p_idempotency_key;
+    IF FOUND THEN
+        IF v_previous.report_version_id <> p_report_version_id
+           OR v_previous.to_status <> v_to_status THEN
+            RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_IDEMPOTENCY_CONFLICT';
+        END IF;
+        RETURN QUERY SELECT true, v_previous.to_status, v_previous.created_at;
+        RETURN;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM identity.user_account AS actor
+        WHERE actor.user_id = p_actor_user_id
+          AND actor.role = 'admin'
+          AND actor.is_active
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_ACTOR_NOT_FOUND';
+    END IF;
+    IF v_status <> 'pending_review' THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_STATE_CONFLICT';
+    END IF;
+    IF v_row_version <> p_expected_row_version THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'THEME_REPORT_VERSION_CONFLICT';
+    END IF;
+
+    IF p_action = 'publish' THEN
+        FOR v_archived IN
+            UPDATE research.theme_research_report_version AS report
+            SET status = 'archived', row_version = report.row_version + 1,
+                updated_at = pg_catalog.now()
+            WHERE report.theme_id = v_theme_id
+              AND report.status = 'published'
+              AND report.report_version_id <> p_report_version_id
+            RETURNING report.report_version_id
+        LOOP
+            v_archive_event_id := pg_catalog.encode(
+                pg_catalog.sha256(
+                    pg_catalog.convert_to('theme-research-report-review-event', 'UTF8') ||
+                    pg_catalog.decode('00', 'hex') ||
+                    pg_catalog.convert_to('archive', 'UTF8') ||
+                    pg_catalog.decode('00', 'hex') ||
+                    pg_catalog.convert_to(p_actor_user_id, 'UTF8') ||
+                    pg_catalog.decode('00', 'hex') ||
+                    pg_catalog.convert_to(
+                        p_idempotency_key || ':archive:' || v_archived.report_version_id,
+                        'UTF8'
+                    )
+                ),
+                'hex'
+            );
+            INSERT INTO research.theme_research_report_review_event (
+                event_id, report_version_id, from_status, to_status,
+                actor_user_id, comment, request_id, idempotency_key
+            ) VALUES (
+                v_archive_event_id, v_archived.report_version_id,
+                'published', 'archived', p_actor_user_id,
+                'superseded by ' || p_report_version_id, p_request_id, ''
+            );
+        END LOOP;
+
+        UPDATE research.theme_research_report_version AS report
+        SET status = 'published', published_at = pg_catalog.now(),
+            published_by_user_id = p_actor_user_id,
+            row_version = report.row_version + 1,
+            updated_at = pg_catalog.now()
+        WHERE report.report_version_id = p_report_version_id;
+    ELSE
+        UPDATE research.theme_research_report_version AS report
+        SET status = 'rejected', rejected_at = pg_catalog.now(),
+            rejected_by_user_id = p_actor_user_id,
+            rejection_reason = p_comment,
+            row_version = report.row_version + 1,
+            updated_at = pg_catalog.now()
+        WHERE report.report_version_id = p_report_version_id;
+    END IF;
+
+    INSERT INTO research.theme_research_report_review_event (
+        event_id, report_version_id, from_status, to_status,
+        actor_user_id, comment, request_id, idempotency_key
+    ) VALUES (
+        p_event_id, p_report_version_id, 'pending_review', v_to_status,
+        p_actor_user_id, p_comment, p_request_id, p_idempotency_key
+    );
+    RETURN QUERY SELECT false, v_to_status, pg_catalog.now();
+END;
+$$;
+
 REVOKE ALL ON TABLE research.theme_research_report_version FROM PUBLIC;
 REVOKE ALL ON TABLE research.theme_research_report_review_event FROM PUBLIC;
+REVOKE ALL ON FUNCTION research.register_theme_research_report_pending(
+    text, text, text, text, text, text, text, text, text, text,
+    text, text, text, jsonb, timestamptz, jsonb, text, text, text
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION research.review_theme_research_report_version(
+    text, text, bigint, text, text, text, text, text
+) FROM PUBLIC;
 
 DO $$
 DECLARE
@@ -100,26 +343,23 @@ DECLARE
     grantee_name text;
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_owner') THEN
+        EXECUTE 'GRANT USAGE, CREATE ON SCHEMA research TO theme_research_owner';
+        EXECUTE 'GRANT USAGE ON SCHEMA identity TO theme_research_owner';
+        EXECUTE 'GRANT SELECT (user_id, role, is_active) ON identity.user_account TO theme_research_owner';
         EXECUTE 'ALTER TABLE research.theme_research_report_version OWNER TO theme_research_owner';
         EXECUTE 'ALTER TABLE research.theme_research_report_review_event OWNER TO theme_research_owner';
+        EXECUTE 'ALTER FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) OWNER TO theme_research_owner';
+        EXECUTE 'ALTER FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) OWNER TO theme_research_owner';
     END IF;
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_runtime') THEN
         EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_version FROM theme_research_runtime';
         EXECUTE 'REVOKE ALL ON TABLE research.theme_research_report_review_event FROM theme_research_runtime';
         EXECUTE 'GRANT USAGE ON SCHEMA research TO theme_research_runtime';
-        EXECUTE 'GRANT SELECT, INSERT ON research.theme_research_report_version TO theme_research_runtime';
-        EXECUTE 'GRANT UPDATE (
-            status,
-            published_at,
-            published_by_user_id,
-            rejected_at,
-            rejected_by_user_id,
-            rejection_reason,
-            row_version,
-            updated_at
-        ) ON research.theme_research_report_version TO theme_research_runtime';
-        EXECUTE 'GRANT SELECT, INSERT ON research.theme_research_report_review_event TO theme_research_runtime';
+        EXECUTE 'GRANT SELECT ON research.theme_research_report_version TO theme_research_runtime';
+        EXECUTE 'GRANT SELECT ON research.theme_research_report_review_event TO theme_research_runtime';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending(text, text, text, text, text, text, text, text, text, text, text, text, text, jsonb, timestamptz, jsonb, text, text, text) TO theme_research_runtime';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(text, text, bigint, text, text, text, text, text) TO theme_research_runtime';
     END IF;
 
     FOR relation_name IN
@@ -289,15 +529,10 @@ _EXPECTED_INDEX_DEFINITIONS = {
     ),
 }
 
-_ALLOWED_RUNTIME_UPDATE_COLUMNS = {
-    "status",
-    "published_at",
-    "published_by_user_id",
-    "rejected_at",
-    "rejected_by_user_id",
-    "rejection_reason",
-    "row_version",
-    "updated_at",
+_ALLOWED_RUNTIME_UPDATE_COLUMNS: set[str] = set()
+_EXPECTED_SECURITY_DEFINER_FUNCTIONS = {
+    "register_theme_research_report_pending",
+    "review_theme_research_report_version",
 }
 
 
@@ -509,6 +744,52 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
     for role_name in ("theme_research_owner", "theme_research_runtime"):
         if role_name not in roles:
             missing.append(f"role:{role_name}")
+    if {"theme_research_owner", "theme_research_runtime"}.issubset(roles):
+        cur.execute(
+            """
+            SELECT
+                routine.proname AS function_name,
+                routine.prosecdef AS security_definer,
+                pg_get_userbyid(routine.proowner) AS owner_name,
+                routine.proconfig AS configuration,
+                EXISTS (
+                    SELECT 1
+                    FROM aclexplode(
+                        COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                    ) AS privilege
+                    WHERE privilege.grantee = 0
+                      AND privilege.privilege_type = 'EXECUTE'
+                ) AS public_execute,
+                has_function_privilege(
+                    'theme_research_runtime', routine.oid, 'EXECUTE'
+                ) AS runtime_execute
+            FROM pg_proc routine
+            JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+            WHERE namespace.nspname = 'research'
+              AND routine.proname = ANY(%s)
+            """,
+            (list(_EXPECTED_SECURITY_DEFINER_FUNCTIONS),),
+        )
+        function_rows = {
+            str(_row_value(row, "function_name", 0)): row
+            for row in cur.fetchall()
+        }
+        for function_name in sorted(_EXPECTED_SECURITY_DEFINER_FUNCTIONS):
+            row = function_rows.get(function_name)
+            if row is None:
+                missing.append(f"migration:v3_function:{function_name}")
+                continue
+            if not bool(_row_value(row, "security_definer", 1)):
+                missing.append(f"function_security:{function_name}")
+            if str(_row_value(row, "owner_name", 2)) != "theme_research_owner":
+                missing.append(f"function_owner:{function_name}")
+            configuration = _row_value(row, "configuration", 3)
+            if list(configuration or []) != ["search_path=pg_catalog"]:
+                missing.append(f"function_config:{function_name}")
+            if bool(_row_value(row, "public_execute", 4)):
+                missing.append(f"public_privilege:function.{function_name}")
+            if not bool(_row_value(row, "runtime_execute", 5)):
+                missing.append(f"function_privilege:{function_name}")
     cur.execute(
         """
         SELECT
@@ -568,8 +849,8 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             continue
         if grantee_name == "theme_research_runtime":
             allowed = {
-                "theme_research_report_version": {"SELECT", "INSERT"},
-                "theme_research_report_review_event": {"SELECT", "INSERT"},
+                "theme_research_report_version": {"SELECT"},
+                "theme_research_report_review_event": {"SELECT"},
             }[table_name]
             if privilege_type in allowed and not is_grantable:
                 continue
@@ -632,7 +913,7 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
         expected_privileges = {
             "theme_research_report_version": (
                 True,
-                True,
+                False,
                 False,
                 False,
                 False,
@@ -641,7 +922,7 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             ),
             "theme_research_report_review_event": (
                 True,
-                True,
+                False,
                 False,
                 False,
                 False,
@@ -747,6 +1028,11 @@ def apply_theme_research_report_schema(
                 "public_privilege:",
                 "column_privilege:",
                 "acl:",
+                "migration:v3_function:",
+                "function_security:",
+                "function_owner:",
+                "function_config:",
+                "function_privilege:",
             )
             repairable_items = {
                 "migration:v2_actor_fk",

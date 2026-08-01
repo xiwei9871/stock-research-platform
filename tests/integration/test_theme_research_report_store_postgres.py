@@ -118,7 +118,7 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
 
     sql = schema.THEME_RESEARCH_REPORT_SCHEMA_SQL
 
-    assert schema.THEME_RESEARCH_REPORT_SCHEMA_VERSION == "3"
+    assert schema.THEME_RESEARCH_REPORT_SCHEMA_VERSION == "4"
     assert "CREATE TABLE IF NOT EXISTS research.theme_research_report_version" in sql
     assert "REFERENCES research.theme_research_theme(theme_id)" in sql
     assert "\n    version text NOT NULL," in sql
@@ -150,10 +150,18 @@ def test_report_schema_ddl_contains_required_constraints_and_indexes() -> None:
     assert "REVOKE ALL ON TABLE research.theme_research_report_version FROM PUBLIC" in sql
     assert "REVOKE ALL ON TABLE research.theme_research_report_review_event FROM PUBLIC" in sql
     assert "ALTER TABLE research.theme_research_report_version OWNER TO theme_research_owner" in sql
-    assert "GRANT SELECT, INSERT ON research.theme_research_report_version" in sql
-    assert "GRANT UPDATE (" in sql
-    assert "rejection_reason" in sql
-    assert "GRANT SELECT, INSERT ON research.theme_research_report_review_event" in sql
+    assert "CREATE OR REPLACE FUNCTION research.register_theme_research_report_pending" in sql
+    assert "CREATE OR REPLACE FUNCTION research.review_theme_research_report_version" in sql
+    assert sql.count("SECURITY DEFINER") == 2
+    assert sql.count("SET search_path = pg_catalog") == 2
+    assert "REVOKE ALL ON FUNCTION research.register_theme_research_report_pending" in sql
+    assert "REVOKE ALL ON FUNCTION research.review_theme_research_report_version" in sql
+    assert "GRANT EXECUTE ON FUNCTION research.register_theme_research_report_pending" in sql
+    assert "GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version" in sql
+    assert "GRANT SELECT ON research.theme_research_report_version" in sql
+    assert "GRANT SELECT ON research.theme_research_report_review_event" in sql
+    assert "GRANT SELECT, INSERT" not in sql
+    assert "GRANT UPDATE (" not in sql
     assert "TO theme_research_runtime" in sql
 
 
@@ -1043,62 +1051,98 @@ def test_postgres_report_tables_follow_owner_and_runtime_permissions(postgres_co
         "theme_research_owner",
         "theme_research_owner",
         True,
+        False,
+        False,
+        False,
+        False,
+        False,
+        False,
+        False,
+        False,
         True,
         False,
-        False,
-        False,
-        False,
-        False,
-        True,
-        False,
-        True,
-        True,
         False,
         False,
         True,
         True,
     )
 
+    functions = postgres_conn.execute(
+        """
+        SELECT proname, prosecdef, pg_get_userbyid(proowner), proconfig,
+               has_function_privilege('theme_research_runtime', oid, 'EXECUTE'),
+               has_function_privilege('public', oid, 'EXECUTE')
+        FROM pg_proc
+        WHERE pronamespace = 'research'::regnamespace
+          AND proname IN (
+              'register_theme_research_report_pending',
+              'review_theme_research_report_version'
+          )
+        ORDER BY proname
+        """
+    ).fetchall()
+    assert functions == [
+        (
+            "register_theme_research_report_pending",
+            True,
+            "theme_research_owner",
+            ["search_path=pg_catalog"],
+            True,
+            False,
+        ),
+        (
+            "review_theme_research_report_version",
+            True,
+            "theme_research_owner",
+            ["search_path=pg_catalog"],
+            True,
+            False,
+        ),
+    ]
+
     postgres_conn.execute("SET LOCAL ROLE theme_research_runtime")
+    postgres_conn.execute("SAVEPOINT runtime_published_insert")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        _insert_report(
+            postgres_conn,
+            "runtime-report-version",
+            theme_id,
+            "runtime-v1",
+            status="published",
+        )
+    postgres_conn.execute("ROLLBACK TO SAVEPOINT runtime_published_insert")
+    postgres_conn.execute("RESET ROLE")
     _insert_report(postgres_conn, "runtime-report-version", theme_id, "runtime-v1")
-    postgres_conn.execute(
-        """
-        UPDATE research.theme_research_report_version
-        SET status = 'rejected', rejection_reason = 'runtime update'
-        WHERE report_version_id = 'runtime-report-version'
-        """
-    )
-    assert postgres_conn.execute(
-        """
-        SELECT status FROM research.theme_research_report_version
-        WHERE report_version_id = 'runtime-report-version'
-        """
-    ).fetchone()[0] == "rejected"
-    postgres_conn.execute("SAVEPOINT runtime_immutable_update")
+    postgres_conn.execute("SET LOCAL ROLE theme_research_runtime")
+    postgres_conn.execute("SAVEPOINT runtime_status_update")
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         postgres_conn.execute(
             """
             UPDATE research.theme_research_report_version
-            SET summary = 'forbidden mutation'
+            SET status = 'published', published_by_user_id = %s
             WHERE report_version_id = 'runtime-report-version'
+            """,
+            (user_id,),
+        )
+    postgres_conn.execute("ROLLBACK TO SAVEPOINT runtime_status_update")
+    postgres_conn.execute("SAVEPOINT runtime_event_insert")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        postgres_conn.execute(
             """
+            INSERT INTO research.theme_research_report_review_event (
+                event_id, report_version_id, from_status, to_status,
+                actor_user_id, idempotency_key
+            ) VALUES (
+                'runtime-review-event', 'runtime-report-version', 'pending_review',
+                'published', %s, 'runtime-review'
+            )
+            """,
+            (user_id,),
         )
-    postgres_conn.execute("ROLLBACK TO SAVEPOINT runtime_immutable_update")
-    postgres_conn.execute(
-        """
-        INSERT INTO research.theme_research_report_review_event (
-            event_id, report_version_id, from_status, to_status,
-            actor_user_id, idempotency_key
-        ) VALUES (
-            'runtime-review-event', 'runtime-report-version', 'pending_review',
-            'published', %s, 'runtime-review'
-        )
-        """,
-        (user_id,),
-    )
+    postgres_conn.execute("ROLLBACK TO SAVEPOINT runtime_event_insert")
 
 
-def test_postgres_runtime_service_can_write_report_workflow(postgres_conn) -> None:
+def test_postgres_runtime_service_cannot_bypass_report_workflow(postgres_conn) -> None:
     if not TEST_RUNTIME_SERVICE:
         pytest.skip("dedicated runtime test service is required")
 
@@ -1107,6 +1151,10 @@ def test_postgres_runtime_service_can_write_report_workflow(postgres_conn) -> No
     postgres_conn.rollback()
     migration = psycopg.connect(f"service={TEST_SERVICE}")
     try:
+        migration.execute(
+            "DELETE FROM research.theme_research_report_version WHERE report_version_id = %s",
+            ("runtime-service-report",),
+        )
         _insert_theme(migration, theme_id)
         _insert_user(migration, user_id)
         migration.commit()
@@ -1118,55 +1166,48 @@ def test_postgres_runtime_service_can_write_report_workflow(postgres_conn) -> No
         database_name = runtime.execute("SELECT current_database()").fetchone()[0]
         if not database_name.endswith("_test"):
             pytest.fail(f"refusing to run integration tests against {database_name}")
-        _insert_report(runtime, "runtime-service-report", theme_id, "runtime-service-v1")
-        runtime.execute("SAVEPOINT runtime_status_update")
-        runtime.execute(
-            """
-            UPDATE research.theme_research_report_version
-            SET status = 'rejected', rejection_reason = 'runtime service update'
-            WHERE report_version_id = 'runtime-service-report'
-            """
-        )
-        assert runtime.execute(
-            """
-            SELECT status FROM research.theme_research_report_version
-            WHERE report_version_id = 'runtime-service-report'
-            """
-        ).fetchone()[0] == "rejected"
-        runtime.execute("SAVEPOINT runtime_immutable_update")
+        runtime.execute("SAVEPOINT runtime_insert")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            _insert_report(
+                runtime,
+                "runtime-service-report",
+                theme_id,
+                "runtime-service-v1",
+                status="published",
+            )
+        runtime.execute("ROLLBACK TO SAVEPOINT runtime_insert")
+        runtime.rollback()
+        migration = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            _insert_report(
+                migration,
+                "runtime-service-report",
+                theme_id,
+                "runtime-service-v1",
+            )
+            migration.commit()
+        finally:
+            migration.close()
+        runtime.execute("SAVEPOINT runtime_update")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             runtime.execute(
                 """
                 UPDATE research.theme_research_report_version
-                SET summary = 'forbidden mutation'
+                SET status = 'published', published_by_user_id = %s
                 WHERE report_version_id = 'runtime-service-report'
-                """
+                """,
+                (user_id,),
             )
-        runtime.execute("ROLLBACK TO SAVEPOINT runtime_immutable_update")
-        runtime.execute(
-            """
-            INSERT INTO research.theme_research_report_review_event (
-                event_id, report_version_id, from_status, to_status,
-                actor_user_id, idempotency_key
-            ) VALUES (
-                'runtime-service-review', 'runtime-service-report',
-                'pending_review', 'published', %s, 'runtime-service-review'
-            )
-            """,
-            (user_id,),
-        )
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            runtime.execute(
-                """
-                DELETE FROM research.theme_research_report_version
-                WHERE report_version_id = 'runtime-service-report'
-                """
-            )
+        runtime.execute("ROLLBACK TO SAVEPOINT runtime_update")
     finally:
         runtime.rollback()
         runtime.close()
         cleanup = psycopg.connect(f"service={TEST_SERVICE}")
         try:
+            cleanup.execute(
+                "DELETE FROM research.theme_research_report_version WHERE report_version_id = %s",
+                ("runtime-service-report",),
+            )
             cleanup.execute(
                 "DELETE FROM research.theme_research_theme WHERE theme_id = %s",
                 (theme_id,),
@@ -1203,6 +1244,47 @@ def test_postgres_inspection_detects_unexpected_column_update_grant(postgres_con
             "column_privilege:theme_research_report_version.title"
             in inspection["missing"]
         )
+    finally:
+        connection.close()
+
+    apply_theme_research_report_schema(service=TEST_SERVICE)
+    verified = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        assert inspect_theme_research_report_schema(verified.cursor())["status"] == "current"
+    finally:
+        verified.close()
+
+
+def test_postgres_inspection_repairs_report_function_security_drift(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        apply_theme_research_report_schema,
+        inspect_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            ALTER FUNCTION research.review_theme_research_report_version(
+                text, text, bigint, text, text, text, text, text
+            ) SECURITY INVOKER
+            """
+        )
+        connection.execute(
+            """
+            GRANT EXECUTE ON FUNCTION research.review_theme_research_report_version(
+                text, text, bigint, text, text, text, text, text
+            ) TO PUBLIC
+            """
+        )
+        connection.commit()
+
+        inspection = inspect_theme_research_report_schema(connection.cursor())
+
+        assert inspection["status"] == "drifted"
+        assert "function_security:review_theme_research_report_version" in inspection["missing"]
+        assert "public_privilege:function.review_theme_research_report_version" in inspection["missing"]
     finally:
         connection.close()
 
@@ -2423,6 +2505,40 @@ def test_postgres_runtime_service_can_publish_with_minimum_permissions(
     ).fetchone() == ("published", 2)
 
 
+def test_postgres_review_function_rejects_null_concurrency_guard(postgres_conn) -> None:
+    if not TEST_RUNTIME_SERVICE:
+        pytest.skip("dedicated runtime test service is required")
+    theme_id = "report-runtime-null-version-theme"
+    actor_id = "report-runtime-null-version-admin"
+    report_id = "report-runtime-null-version-report"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, report_id, theme_id, "v1")
+    postgres_conn.commit()
+
+    with psycopg.connect(f"service={TEST_RUNTIME_SERVICE}") as runtime_conn:
+        with pytest.raises(psycopg.errors.RaiseException) as exc_info:
+            runtime_conn.execute(
+                """
+                SELECT *
+                FROM research.review_theme_research_report_version(
+                    'publish', %s, NULL, %s, '', 'request', 'key', 'event'
+                )
+                """,
+                (report_id, actor_id),
+            )
+        assert exc_info.value.diag.message_primary == "THEME_REPORT_REVIEW_REQUEST_INVALID"
+
+    assert postgres_conn.execute(
+        """
+        SELECT status, row_version
+        FROM research.theme_research_report_version
+        WHERE report_version_id = %s
+        """,
+        (report_id,),
+    ).fetchone() == ("pending_review", 1)
+
+
 def test_postgres_publish_archives_current_and_exposes_safe_read_models(
     postgres_conn,
 ) -> None:
@@ -2530,6 +2646,17 @@ def test_postgres_publish_archives_current_and_exposes_safe_read_models(
         )
         for item in approved["items"]
         for key in item
+    )
+    assert all(
+        {
+            "indexed_at",
+            "published_by_user_id",
+            "row_version",
+            "metadata",
+            "created_at",
+            "updated_at",
+        }.isdisjoint(item)
+        for item in approved["items"]
     )
     assert report_store.get_approved_report_version(theme_id, new_id, service=TEST_SERVICE) == approved["items"][0]
     artifact = report_store.get_approved_report_artifact_record(theme_id, new_id, service=TEST_SERVICE)
@@ -3287,7 +3414,7 @@ def test_postgres_safe_read_models_sanitize_nested_internal_metadata(
         service=TEST_SERVICE,
     )
 
-    assert approved["metadata"] == {}
+    assert "metadata" not in approved
     pending_safe = next(
         item
         for item in admin_safe["items"]

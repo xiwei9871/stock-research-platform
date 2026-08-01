@@ -111,7 +111,7 @@ class ThemeResearchReportScheduler:
             status = "fatal"
         elif self._last_result is None:
             status = "never_run"
-        elif "error_code" in self._last_result:
+        elif self._last_result.get("error_code"):
             status = "error"
         else:
             status = "ok"
@@ -174,6 +174,17 @@ def _safe_scan_result(result: Any) -> dict[str, Any]:
     for field in ("started_at", "completed_at"):
         value = result.get(field)
         safe[field] = value if isinstance(value, str) else None
+    for field in ("root_exists", "root_readable"):
+        value = result.get(field)
+        if not isinstance(value, bool):
+            raise ValueError("scan root health flags must be booleans")
+        safe[field] = value
+    error_code = result.get("error_code")
+    if error_code is not None and (
+        not isinstance(error_code, str) or not error_code
+    ):
+        raise ValueError("scan error_code must be a non-empty string or None")
+    safe["error_code"] = error_code
     return safe
 
 

@@ -432,13 +432,8 @@ export type ThemeResearchReportVersion = {
   summary: string;
   status: ThemeResearchReportStatus;
   generated_at: string;
-  indexed_at: string;
   published_at: string;
-  published_by_user_id: string;
-  row_version: number;
-  metadata: Record<string, never>;
-  created_at: string;
-  updated_at: string;
+  has_pdf: boolean;
 };
 
 export type ThemeResearchReportDocument = {
@@ -449,7 +444,6 @@ export type ThemeResearchReportDocument = {
   summary: string;
   status: ThemeResearchReportStatus;
   generated_at: string;
-  indexed_at: string;
   published_at: string;
   has_pdf: boolean;
   html: string;
@@ -466,24 +460,38 @@ export type AdminThemeResearchReportStatus =
   | 'published'
   | 'archived';
 
-export type AdminThemeResearchReport = Omit<
-  ThemeResearchReportVersion,
-  'status' | 'published_at' | 'published_by_user_id'
-> & {
+export type AdminThemeResearchReport = {
+  report_version_id: string;
+  theme_id: string;
+  version: string;
+  title: string;
+  summary: string;
   status: AdminThemeResearchReportStatus;
+  generated_at: string;
+  indexed_at: string;
   published_at: string | null;
   published_by_user_id: string | null;
+  row_version: number;
+  metadata: Record<string, never>;
+  created_at: string;
+  updated_at: string;
   rejected_at: string | null;
   rejected_by_user_id: string | null;
   rejection_reason: string | null;
 };
 
-export type AdminThemeResearchReportDocument = Omit<
-  ThemeResearchReportDocument,
-  'status' | 'published_at'
-> & {
+export type AdminThemeResearchReportDocument = {
+  report_version_id: string;
+  theme_id: string;
+  version: string;
+  title: string;
+  summary: string;
   status: AdminThemeResearchReportStatus;
+  generated_at: string;
+  indexed_at: string;
   published_at: string | null;
+  has_pdf: boolean;
+  html: string;
   generator_name: string;
   generator_version: string;
 };
