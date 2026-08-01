@@ -517,17 +517,24 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     missing_sector_schema = sorted(set(_SECTOR_COLUMNS) - set(snapshot["sector_states"].columns))
     if missing_sector_schema:
         raise ValueError("sector snapshot rows missing canonical columns: " + ", ".join(missing_sector_schema))
+    previous_id = snapshot["previous_snapshot_id"]
+    if previous_id is not None and not isinstance(previous_id, str):
+        raise ValueError("snapshot previous_snapshot_id must be a string or null")
+    market_regime = _normalize_mapping(snapshot["market_regime"])
+    market_state = market_regime.get("market_regime")
+    if not isinstance(market_state, str) or not market_state.strip():
+        raise ValueError("snapshot market_regime must include a non-empty market_regime value")
+    market_regime["market_regime"] = market_state.strip()
     stock_rows = _validate_stock_snapshot_rows(
         snapshot["stock_candidates"],
         snapshot_id=expected_id,
         anchor_date=anchor.isoformat(),
         data_cutoff_date=cutoff.isoformat(),
         score_version=version,
+        market_state=market_state.strip(),
+        previous_snapshot_id=previous_id,
     )
     sector_rows = _validate_sector_snapshot_rows(snapshot["sector_states"])
-    previous_id = snapshot["previous_snapshot_id"]
-    if previous_id is not None and not isinstance(previous_id, str):
-        raise ValueError("snapshot previous_snapshot_id must be a string or null")
     expected_row_counts = {
         "sector_states": int(len(sector_rows)),
         "stock_candidates": int(len(stock_rows)),
@@ -539,15 +546,12 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         "anchor_date": anchor.isoformat(),
         "data_cutoff_date": cutoff.isoformat(),
         "score_version": version,
-        "market_regime": _normalize_mapping(snapshot["market_regime"]),
+        "market_regime": market_regime,
         "previous_snapshot_id": previous_id,
         "preflight": _normalize_preflight(snapshot["preflight"]),
         "backfill_requests": _normalize_backfill(snapshot["backfill_requests"]),
         "runtime_metadata": _normalize_runtime_metadata(snapshot.get("runtime_metadata")),
     }
-    market_state = normalized["market_regime"].get("market_regime")
-    if not isinstance(market_state, str) or not market_state.strip():
-        raise ValueError("snapshot market_regime must include a non-empty market_regime value")
     normalized["sector_states"] = _ordered_frame(
         sector_rows, _SECTOR_COLUMNS,
         sort_columns=("sector_rank", "sector_system", "sector_code"),
@@ -570,6 +574,8 @@ def _validate_stock_snapshot_rows(
     anchor_date: str,
     data_cutoff_date: str,
     score_version: str,
+    market_state: str,
+    previous_snapshot_id: str | None,
 ) -> pd.DataFrame:
     result = _normalize_stock_rows(frame, allow_revision_rows=True)
     for column, expected in (
@@ -579,7 +585,45 @@ def _validate_stock_snapshot_rows(
         ("score_version", score_version),
     ):
         _require_exact_column(result, column, expected, "stock_candidates")
+    _validate_stock_cross_artifact_metadata(
+        result,
+        market_state=market_state,
+        previous_snapshot_id=previous_snapshot_id,
+    )
     return result
+
+
+def _validate_stock_cross_artifact_metadata(
+    frame: pd.DataFrame,
+    *,
+    market_state: str,
+    previous_snapshot_id: str | None,
+) -> None:
+    blocked_or_unknown = _allow_missing_sector_scores(frame)
+    row_regimes = frame["market_regime"].astype("string").str.strip().replace("", pd.NA)
+    missing_regime = row_regimes.isna()
+    allowed_unknown = blocked_or_unknown & row_regimes.eq("unknown")
+    conflicting_regime = (
+        row_regimes.notna()
+        & ~row_regimes.eq(market_state)
+        & ~allowed_unknown
+    )
+    if conflicting_regime.any() or ((~blocked_or_unknown) & missing_regime).any():
+        raise ValueError("stock_candidates market_regime conflicts with snapshot market_regime")
+    frame["market_regime"] = row_regimes
+
+    row_previous = frame["previous_snapshot_id"].astype("string").str.strip().replace("", pd.NA)
+    missing_previous = row_previous.isna()
+    if previous_snapshot_id is None:
+        conflicting_previous = row_previous.notna()
+    else:
+        conflicting_previous = row_previous.notna() & ~row_previous.eq(previous_snapshot_id)
+        conflicting_previous |= (~blocked_or_unknown) & missing_previous
+    if conflicting_previous.any():
+        raise ValueError(
+            "stock_candidates previous_snapshot_id conflicts with snapshot previous_snapshot_id"
+        )
+    frame["previous_snapshot_id"] = row_previous
 
 
 def _validate_sector_snapshot_rows(frame: pd.DataFrame) -> pd.DataFrame:

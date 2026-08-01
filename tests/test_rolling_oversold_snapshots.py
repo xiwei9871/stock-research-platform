@@ -298,3 +298,32 @@ def test_write_revalidates_pit_and_hand_built_frame_schema(tmp_path):
     invalid_frame["stock_candidates"].loc[:, "stock_score"] = "not-a-score"
     with pytest.raises(ValueError, match="stock_candidates"):
         write_rolling_snapshot(invalid_frame, output_dir=tmp_path)
+
+
+def test_write_rejects_conflicting_stock_cross_artifact_metadata(tmp_path):
+    snapshot = _build()
+
+    regime_tampered = dict(snapshot)
+    regime_tampered["stock_candidates"] = snapshot["stock_candidates"].copy(deep=True)
+    regime_tampered["stock_candidates"].loc[:, "market_regime"] = "risk_on"
+    with pytest.raises(ValueError, match="market_regime"):
+        write_rolling_snapshot(regime_tampered, output_dir=tmp_path)
+
+    linked = _build(previous=_build())
+    previous_link_tampered = dict(linked)
+    previous_link_tampered["stock_candidates"] = linked["stock_candidates"].copy(deep=True)
+    previous_link_tampered["stock_candidates"].loc[:, "previous_snapshot_id"] = "other|2026-07-20"
+    with pytest.raises(ValueError, match="previous_snapshot_id"):
+        write_rolling_snapshot(previous_link_tampered, output_dir=tmp_path)
+
+
+def test_write_allows_explicit_unknown_stock_metadata_only_for_blocked_rows(tmp_path):
+    blocked_stocks = _stocks().iloc[[0]].copy()
+    blocked_stocks.loc[:, "sector_gate_status"] = "blocked"
+    blocked_stocks.loc[:, "sector_recovery_state"] = "unknown"
+    blocked_stocks.loc[:, ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]] = pd.NA
+    snapshot = _build(stocks=blocked_stocks)
+    snapshot["stock_candidates"].loc[:, "market_regime"] = "unknown"
+    snapshot["stock_candidates"].loc[:, "previous_snapshot_id"] = pd.NA
+
+    assert write_rolling_snapshot(snapshot, output_dir=tmp_path)["status"] == "created"
