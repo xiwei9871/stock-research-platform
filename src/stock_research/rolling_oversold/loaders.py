@@ -85,7 +85,9 @@ def load_rolling_inputs(
                 "no complete open trading session exists on or before anchor_date"
             )
         cutoff = max(history_dates)
+        history_start = min(history_dates)
         cutoff_text = cutoff.isoformat()
+        history_start_text = history_start.isoformat()
         future_rows = fetch_all(
             conn,
             """
@@ -104,10 +106,10 @@ def load_rolling_inputs(
             SELECT index_id, trade_date, close, preclose, volume, amount
             FROM market.index_daily_bar
             WHERE index_id = ANY(%s)
-              AND trade_date <= %s
+              AND trade_date BETWEEN %s AND %s
             ORDER BY index_id, trade_date
             """,
-            [list(config.index_ids), cutoff_text],
+            [list(config.index_ids), history_start_text, cutoff_text],
         )
         stock_rows = fetch_all(
             conn,
@@ -115,19 +117,20 @@ def load_rolling_inputs(
             SELECT asset_id, trade_date, close, high, low, pct_chg, volume, amount
             FROM market_daily_bar
             WHERE adjust_type = %s
-              AND trade_date <= %s
+              AND trade_date BETWEEN %s AND %s
             ORDER BY asset_id, trade_date
             """,
-            [config.adjust_type, cutoff_text],
+            [config.adjust_type, history_start_text, cutoff_text],
         )
         status_rows = fetch_all(
             conn,
             """
-            SELECT asset_id, trade_date, is_trade, is_st, is_suspended,
+            SELECT DISTINCT ON (asset_id)
+                   asset_id, trade_date, is_trade, is_st, is_suspended,
                    is_limit_up, is_limit_down
             FROM core.asset_status_daily
             WHERE trade_date <= %s
-            ORDER BY asset_id, trade_date
+            ORDER BY asset_id, trade_date DESC
             """,
             [cutoff_text],
         )
@@ -144,12 +147,20 @@ def load_rolling_inputs(
         industry_rows = fetch_all(
             conn,
             _sector_bar_sql("industry", config.industry_systems),
-            _sector_bar_params(cutoff_text, config.industry_systems),
+            _sector_bar_params(
+                history_start_text,
+                cutoff_text,
+                config.industry_systems,
+            ),
         )
         concept_rows = fetch_all(
             conn,
             _sector_bar_sql("concept", config.concept_systems),
-            _sector_bar_params(cutoff_text, config.concept_systems),
+            _sector_bar_params(
+                history_start_text,
+                cutoff_text,
+                config.concept_systems,
+            ),
         )
 
     future_dates = _dates_from_rows(future_rows)
@@ -225,19 +236,24 @@ def _membership_params(cutoff: str, systems: tuple[str, ...] | None) -> list[Any
     return [cutoff, cutoff, *([list(systems)] if systems is not None else [])]
 
 
-def _sector_bar_sql(prefix: str, systems: tuple[str, ...] | None) -> str:
+def _sector_bar_sql(
+    prefix: str,
+    systems: tuple[str, ...] | None,
+) -> str:
     system_clause = f"\n      AND {prefix}_system = ANY(%s)" if systems is not None else ""
     return f"""
     SELECT {prefix}_system, {prefix}_code, {prefix}_name,
            trade_date, close, preclose, volume, amount
     FROM market.{prefix}_daily_bar
-    WHERE trade_date <= %s{system_clause}
+    WHERE trade_date BETWEEN %s AND %s{system_clause}
     ORDER BY {prefix}_system, {prefix}_code, trade_date
     """
 
 
-def _sector_bar_params(cutoff: str, systems: tuple[str, ...] | None) -> list[Any]:
-    return [cutoff, *([list(systems)] if systems is not None else [])]
+def _sector_bar_params(
+    history_start: str, cutoff: str, systems: tuple[str, ...] | None
+) -> list[Any]:
+    return [history_start, cutoff, *([list(systems)] if systems is not None else [])]
 
 
 def _dates_from_rows(rows: list[dict[str, Any]]) -> list[date]:

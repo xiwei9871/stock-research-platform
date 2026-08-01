@@ -109,7 +109,34 @@ def test_loader_uses_anchor_cutoff_and_point_in_time_membership_predicates(monke
         (sql, params) for sql, params in calls if "FROM market_daily_bar" in sql
     )
     assert "adjust_type = %s" in stock_sql
-    assert stock_params == ["qfq", "2026-07-29"]
+    assert "trade_date BETWEEN %s AND %s" in stock_sql
+    assert stock_params == ["qfq", "2026-07-28", "2026-07-29"]
+
+
+def test_loader_bounds_history_frames_and_keeps_latest_status_as_of_cutoff(monkeypatch):
+    calls = _install_db(monkeypatch)
+
+    inputs = load_rolling_inputs(
+        anchor_date=date(2026, 7, 29), config=_config(), service="research-test"
+    )
+
+    assert inputs.data_cutoff_date == date(2026, 7, 29)
+    index_sql, index_params = next(
+        (sql, params) for sql, params in calls if "market.index_daily_bar" in sql
+    )
+    assert "trade_date BETWEEN %s AND %s" in index_sql
+    assert index_params == [["IDX"], "2026-07-28", "2026-07-29"]
+    for table in ("market.industry_daily_bar", "market.concept_daily_bar"):
+        sql, params = next((sql, params) for sql, params in calls if table in sql)
+        assert "trade_date BETWEEN %s AND %s" in sql
+        assert params[:2] == ["2026-07-28", "2026-07-29"]
+
+    status_sql, status_params = next(
+        (sql, params) for sql, params in calls if "core.asset_status_daily" in sql
+    )
+    assert "SELECT DISTINCT ON (asset_id)" in status_sql
+    assert "ORDER BY asset_id, trade_date DESC" in status_sql
+    assert status_params == ["2026-07-29"]
 
 
 def test_loader_uses_original_non_trading_anchor_for_pit_memberships(monkeypatch):
