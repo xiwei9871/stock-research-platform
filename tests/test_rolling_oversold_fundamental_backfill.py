@@ -216,9 +216,10 @@ def test_execute_uses_only_scoped_assets_and_visible_rows(monkeypatch, tmp_path:
         finance_adapter=fake_adapter,
     )
 
-    assert len(calls) == 5
+    assert len(calls) == 6
     assert all(call["asset_ids"] == ["CN:SZ:000001"] for call in calls)
     assert all(call["cutoff"] == date(2026, 7, 31) for call in calls)
+    assert result["finance"]["requested_periods"][-1] == "2025-03-31"
     assert result["finance"]["visible_report_periods"]["CN:SZ:000001"] >= 5
 
 

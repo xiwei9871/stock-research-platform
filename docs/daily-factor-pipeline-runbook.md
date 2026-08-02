@@ -93,9 +93,10 @@ database:
 
 The fundamentals task keeps only `finance_backfill`/`valuation_backfill`
 rows, excludes `invalid_membership` and `CN:BJ:*`, and never fills missing
-financial or valuation values with zero.  Finance requests cover at least five
-disclosed report periods so cumulative TTM calculations can use the prior
-fiscal year and prior same quarter.  All PIT rows must satisfy
+financial or valuation values with zero.  Finance requests cover six quarter
+ends so a not-yet-disclosed current quarter still leaves at least five visible
+report periods for cumulative TTM calculations, including the prior fiscal
+year and prior same quarter.  All PIT rows must satisfy
 `announcement_date <= anchor_date`; valuation output is restricted to
 `pe_ttm`, `ps_ttm`, and `ev_ebitda` with a non-empty calculation version.
 

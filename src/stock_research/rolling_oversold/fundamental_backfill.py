@@ -30,6 +30,8 @@ FINANCE_CALC_VERSION = "baostock_v1"
 VALUATION_CALC_VERSION = "rolling_oversold_valuation_v1"
 WORKPLAN_FINANCE_BUCKET = "finance_backfill"
 WORKPLAN_VALUATION_BUCKET = "valuation_backfill"
+MIN_VISIBLE_FINANCE_PERIODS = 5
+FINANCE_REQUEST_PERIODS = 6
 
 
 def load_fundamental_scope(path: str | Path) -> dict[str, list[str]]:
@@ -293,7 +295,9 @@ def run_fundamental_backfill(
     scope = load_fundamental_scope(gap_workplan)
     finance_assets = scope["finance_assets"]
     valuation_assets = scope["valuation_assets"]
-    finance_rows = build_finance_backfill_rows(finance_assets, end)
+    finance_rows = build_finance_backfill_rows(
+        finance_assets, end, min_report_periods=FINANCE_REQUEST_PERIODS
+    )
     valuation_rows = build_valuation_backfill_rows(valuation_assets, start, end)
     report: dict[str, Any] = {
         "schema_version": "rolling_oversold_fundamental_backfill_v1",
@@ -304,7 +308,7 @@ def run_fundamental_backfill(
         "finance": {
             "assets": finance_assets,
             "requested_periods": [
-                value.isoformat() for value in _quarter_periods(end, 5)
+                value.isoformat() for value in _quarter_periods(end, FINANCE_REQUEST_PERIODS)
             ],
             "requested_rows": len(finance_rows),
             "visible_rows": 0,
@@ -327,7 +331,7 @@ def run_fundamental_backfill(
 
     if not dry_run:
         adapter = finance_adapter or sync_finance_for_assets
-        for report_period in _quarter_periods(end, 5):
+        for report_period in _quarter_periods(end, FINANCE_REQUEST_PERIODS):
             result = _call_finance_adapter(
                 adapter,
                 asset_ids=finance_assets,
@@ -361,7 +365,7 @@ def run_fundamental_backfill(
         report["finance"]["incomplete_assets"] = [
             asset_id
             for asset_id, period_count in report["finance"]["visible_report_periods"].items()
-            if period_count < 5
+            if period_count < MIN_VISIBLE_FINANCE_PERIODS
         ]
         visible_valuation = build_valuation_backfill_rows(
             valuation_assets, start, end, source_rows=source_valuation_rows
@@ -482,7 +486,7 @@ def _load_finance_rows(
         asset_ids,
         cutoff.isoformat(),
         service=service,
-        max_report_periods=5,
+            max_report_periods=FINANCE_REQUEST_PERIODS,
     )
     return frame.to_dict("records")
 
