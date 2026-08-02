@@ -421,7 +421,13 @@ def sync_finance_for_assets(
     gap workplan never expands into a full-market finance download.
     """
 
-    normalized = sorted({str(asset_id).strip().upper() for asset_id in asset_ids if str(asset_id).strip()})
+    normalized = sorted(
+        {
+            str(asset_id).strip().upper()
+            for asset_id in asset_ids
+            if str(asset_id).strip() and not str(asset_id).strip().upper().startswith("CN:BJ:")
+        }
+    )
     if not normalized:
         return {
             "indicator_quarter": 0,
