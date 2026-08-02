@@ -211,7 +211,7 @@ def test_loader_passes_original_anchor_to_finance_and_valuation_loaders(monkeypa
         anchor_date=date(2026, 8, 1), config=_config(), service="research-test"
     )
 
-    assert finance_dates == [("2026-08-01", 5)]
+    assert finance_dates == [("2026-08-01", 10)]
     assert valuation_dates == [("2026-08-01", True)]
 
 

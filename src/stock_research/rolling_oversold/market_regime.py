@@ -28,7 +28,7 @@ def compute_market_regime_features(source: Any, *, anchor_date: date) -> dict[st
         raise ValueError("no usable index row exists on or before anchor_date")
 
     cutoff = index_bars["trade_date"].max().date()
-    index_bars = index_bars.loc[index_bars["trade_date"].dt.date <= cutoff].copy()
+    index_bars = index_bars.loc[index_bars["trade_date"] <= pd.Timestamp(cutoff)].copy()
     stock_bars = _prepare_bars(
         _as_frame(_source_value(source, "stock_bars", pd.DataFrame()), "stock_bars"),
         identifier="asset_id",
@@ -149,7 +149,7 @@ def _prepare_bars(frame: pd.DataFrame, *, identifier: str, anchor_date: date) ->
     result = result.loc[
         result[identifier].notna()
         & result["trade_date"].notna()
-        & (result["trade_date"].dt.date <= anchor_date)
+        & (result["trade_date"] <= pd.Timestamp(anchor_date))
     ].copy()
     duplicate_sort_columns = [
         column
@@ -178,7 +178,7 @@ def _prepare_status(frame: pd.DataFrame, cutoff: date) -> pd.DataFrame:
     result = result.loc[
         result["asset_id"].notna()
         & result["trade_date"].notna()
-        & (result["trade_date"].dt.date <= cutoff)
+        & (result["trade_date"] <= pd.Timestamp(cutoff))
     ].copy()
     for column in ("is_trade", "is_st", "is_suspended", "is_limit_up", "is_limit_down"):
         result[column] = _as_bool(
@@ -269,7 +269,7 @@ def _dispersion_20d(bars: pd.DataFrame) -> float:
 def _recent_down_breadth(bars: pd.DataFrame, cutoff: date) -> float:
     if bars.empty:
         return float("nan")
-    eligible = bars.loc[bars["trade_date"].dt.date <= cutoff]
+    eligible = bars.loc[bars["trade_date"] <= pd.Timestamp(cutoff)]
     recent_dates = eligible["trade_date"].drop_duplicates().sort_values().tail(5)
     recent = eligible.loc[eligible["trade_date"].isin(recent_dates)]
     if recent.empty:

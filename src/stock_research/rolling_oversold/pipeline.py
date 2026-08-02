@@ -688,6 +688,11 @@ def _build_stock_features(
         str(asset_id): frame
         for asset_id, frame in prepared_bars.groupby("asset_id", sort=False)
     }
+    finance_field_maps = _latest_pit_field_maps(
+        getattr(inputs, "finance", pd.DataFrame()),
+        fields=("roe", "total_share"),
+        cutoff=anchor_date,
+    )
     rows: list[dict[str, object]] = []
     for membership in memberships.to_dict(orient="records"):
         asset_id = str(membership["asset_id"])
@@ -706,13 +711,20 @@ def _build_stock_features(
         valuation_row = valuation.get(asset_id)
         roe = _finite_row_value(finance_row, "roe")
         total_share = _finite_row_value(finance_row, "total_share")
+        if roe is None:
+            roe = finance_field_maps.get("roe", {}).get(asset_id)
+        if total_share is None:
+            total_share = finance_field_maps.get("total_share", {}).get(asset_id)
         pe_ttm = _finite_row_value(valuation_row, "pe_ttm")
+        valuation_multiple = _valuation_multiple(valuation_row)
         if roe is None:
             _raise_stock_gap(asset_id, anchor_date, "finance_history", "missing_roe")
         if total_share is None or total_share <= 0:
             _raise_stock_gap(asset_id, anchor_date, "finance_history", "missing_total_share")
-        if pe_ttm is None:
-            _raise_stock_gap(asset_id, anchor_date, "valuation_history", "missing_pe_ttm")
+        if valuation_multiple is None:
+            _raise_stock_gap(
+                asset_id, anchor_date, "valuation_history", "missing_pe_or_ps_ttm"
+            )
         latest_close = float(closes.iloc[-1])
         trailing = closes.tail(252)
         low = float(trailing.tail(60).min())
@@ -734,7 +746,7 @@ def _build_stock_features(
                 "stock_excess_return": return_20d,
                 "activity": float(amounts.tail(20).mean()),
                 "quality": max(0.0, min(100.0, quality)),
-                "valuation": max(0.0, min(100.0, 100.0 - pe_ttm)),
+                "valuation": max(0.0, min(100.0, 100.0 - valuation_multiple)),
                 "size_elasticity": latest_close * total_share,
                 "anchor_close": latest_close,
                 "adjusted_close_source": config.adjust_type,
@@ -752,12 +764,13 @@ def _stock_memberships(inputs: RollingInputs | Any, *, anchor_date: date) -> pd.
         if not isinstance(source, pd.DataFrame) or source.empty or "asset_id" not in source:
             continue
         frame = source.copy(deep=True)
+        anchor_timestamp = pd.Timestamp(anchor_date)
         if "start_date" in frame:
             starts = pd.to_datetime(frame["start_date"], errors="coerce")
-            frame = frame.loc[starts.isna() | starts.dt.date.le(anchor_date)]
+            frame = frame.loc[starts.isna() | starts.le(anchor_timestamp)]
         if "end_date" in frame:
             ends = pd.to_datetime(frame["end_date"], errors="coerce")
-            frame = frame.loc[ends.isna() | ends.dt.date.gt(anchor_date)]
+            frame = frame.loc[ends.isna() | ends.gt(anchor_timestamp)]
         frame = frame.assign(
             asset_id=frame["asset_id"].astype("string").str.strip(),
             sector_system=frame.get(system, pd.Series(pd.NA, index=frame.index)).astype("string").str.strip(),
@@ -823,7 +836,7 @@ def _prepared_bars(frame: pd.DataFrame, *, anchor_date: date) -> pd.DataFrame:
     result["trade_date"] = pd.to_datetime(result["trade_date"], errors="coerce")
     result["close"] = pd.to_numeric(result["close"], errors="coerce")
     result["amount"] = pd.to_numeric(result.get("amount"), errors="coerce")
-    result = result.loc[result["trade_date"].notna() & result["trade_date"].dt.date.le(anchor_date)]
+    result = result.loc[result["trade_date"].notna() & result["trade_date"].le(pd.Timestamp(anchor_date))]
     return result.sort_values(["asset_id", "trade_date"], kind="mergesort").drop_duplicates(
         ["asset_id", "trade_date"], keep="last"
     )
@@ -835,7 +848,7 @@ def _latest_status(frame: object, *, anchor_date: date) -> dict[str, dict[str, o
     result = frame.copy(deep=True)
     result["asset_id"] = result["asset_id"].astype("string").str.strip()
     result["trade_date"] = pd.to_datetime(result["trade_date"], errors="coerce")
-    result = result.loc[result["trade_date"].notna() & result["trade_date"].dt.date.le(anchor_date)]
+    result = result.loc[result["trade_date"].notna() & result["trade_date"].le(pd.Timestamp(anchor_date))]
     result = result.sort_values(["asset_id", "trade_date"], kind="mergesort").drop_duplicates("asset_id", keep="last")
     return {str(row["asset_id"]): row for row in result.to_dict(orient="records")}
 
@@ -846,9 +859,72 @@ def _latest_pit_frame(frame: object, *, date_column: str, cutoff: date) -> dict[
     result = frame.copy(deep=True)
     result["asset_id"] = result["asset_id"].astype("string").str.strip()
     result[date_column] = pd.to_datetime(result[date_column], errors="coerce")
-    result = result.loc[result[date_column].notna() & result[date_column].dt.date.le(cutoff)]
+    result = result.loc[result[date_column].notna() & result[date_column].le(pd.Timestamp(cutoff))]
     result = result.sort_values(["asset_id", date_column], kind="mergesort").drop_duplicates("asset_id", keep="last")
     return {str(row["asset_id"]): row for row in result.to_dict(orient="records")}
+
+
+def _latest_pit_field(
+    frame: object,
+    *,
+    asset_id: str,
+    date_column: str,
+    field: str,
+    cutoff: date,
+) -> float | None:
+    if not isinstance(frame, pd.DataFrame):
+        return None
+    required = {"asset_id", date_column, field}
+    if not required.issubset(frame.columns):
+        return None
+    result = frame.copy(deep=True)
+    result["asset_id"] = result["asset_id"].astype("string").str.strip()
+    result[date_column] = pd.to_datetime(result[date_column], errors="coerce")
+    result[field] = pd.to_numeric(result[field], errors="coerce")
+    result = result.loc[
+        result["asset_id"].eq(asset_id)
+        & result[date_column].notna()
+        & result[date_column].le(pd.Timestamp(cutoff))
+        & result[field].notna()
+    ].sort_values(date_column, ascending=False, kind="mergesort")
+    if result.empty:
+        return None
+    value = result.iloc[0][field]
+    return float(value) if pd.notna(value) else None
+
+
+def _latest_pit_field_maps(
+    frame: object,
+    *,
+    fields: tuple[str, ...],
+    cutoff: date,
+) -> dict[str, dict[str, float]]:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return {field: {} for field in fields}
+    required = {"asset_id", "announcement_date", *fields}
+    if not required.issubset(frame.columns):
+        return {field: {} for field in fields}
+    result = frame.loc[:, list(required)].copy()
+    result["asset_id"] = result["asset_id"].astype("string").str.strip()
+    result["announcement_date"] = pd.to_datetime(
+        result["announcement_date"], errors="coerce"
+    )
+    result = result.loc[
+        result["asset_id"].notna()
+        & result["announcement_date"].notna()
+        & result["announcement_date"].le(pd.Timestamp(cutoff))
+    ].sort_values("announcement_date", ascending=False, kind="mergesort")
+    maps: dict[str, dict[str, float]] = {}
+    for field in fields:
+        values = pd.to_numeric(result[field], errors="coerce")
+        selected = result.loc[values.notna(), ["asset_id"]].copy()
+        selected["value"] = values.loc[selected.index].astype(float)
+        selected = selected.drop_duplicates("asset_id", keep="first")
+        maps[field] = {
+            str(row["asset_id"]): float(row["value"])
+            for row in selected.to_dict(orient="records")
+        }
+    return maps
 
 
 def _is_ineligible_status(row: dict[str, object] | None) -> bool:
@@ -877,6 +953,18 @@ def _finite_row_value(row: dict[str, object] | None, column: str) -> float | Non
         return None
     number = float(value)
     return number if math.isfinite(number) else None
+
+
+def _valuation_multiple(row: dict[str, object] | None) -> float | None:
+    """Select PE first, then a positive PS fallback for loss-making firms."""
+
+    pe = _finite_row_value(row, "pe_ttm")
+    if pe is not None and pe > 0.0:
+        return pe
+    ps = _finite_row_value(row, "ps_ttm")
+    if ps is not None and ps > 0.0:
+        return ps
+    return None
 
 
 def _period_return(closes: pd.Series, periods: int) -> float:

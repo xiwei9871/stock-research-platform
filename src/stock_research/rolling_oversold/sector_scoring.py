@@ -109,7 +109,7 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
         if column in result:
             result[column] = pd.to_numeric(result[column], errors="coerce")
     result["_usable_bar"] = (
-        result["trade_date"].notna() & (result["trade_date"].dt.date <= anchor_date)
+        result["trade_date"].notna() & (result["trade_date"] <= pd.Timestamp(anchor_date))
     )
     duplicate_sort_columns = [
         column
@@ -135,12 +135,13 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
 
 def _active_membership(frame: pd.DataFrame, anchor_date: date) -> pd.DataFrame:
     result = frame.copy()
+    anchor_timestamp = pd.Timestamp(anchor_date)
     if "start_date" in result:
         starts = pd.to_datetime(result["start_date"], errors="coerce")
-        result = result.loc[starts.isna() | (starts.dt.date <= anchor_date)]
+        result = result.loc[starts.isna() | (starts <= anchor_timestamp)]
     if "end_date" in result:
         ends = pd.to_datetime(result["end_date"], errors="coerce")
-        result = result.loc[ends.isna() | (ends.dt.date > anchor_date)]
+        result = result.loc[ends.isna() | (ends > anchor_timestamp)]
     return result
 
 

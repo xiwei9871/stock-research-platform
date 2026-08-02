@@ -69,6 +69,33 @@ def test_valuation_backfill_keeps_factor_names_and_version():
     assert all(row["calc_version"] for row in rows)
 
 
+def test_derived_valuation_rows_are_point_in_time_and_never_zero_filled():
+    rows = fundamental_backfill.build_derived_valuation_rows(
+        asset_ids=["CN:SZ:000001"],
+        market_rows=[
+            {"asset_id": "CN:SZ:000001", "trade_date": "2026-07-21", "close": 10.0},
+            {"asset_id": "CN:SZ:000001", "trade_date": "2026-07-22", "close": 11.0},
+        ],
+        finance_rows=[
+            {"asset_id": "CN:SZ:000001", "report_period": "2025-03-31", "announcement_date": "2025-04-30", "np_parent": 10.0, "revenue": 100.0},
+            {"asset_id": "CN:SZ:000001", "report_period": "2025-12-31", "announcement_date": "2026-02-28", "np_parent": 40.0, "revenue": 400.0},
+            {"asset_id": "CN:SZ:000001", "report_period": "2026-03-31", "announcement_date": "2026-04-30", "np_parent": 12.0, "revenue": 120.0},
+            {"asset_id": "CN:SZ:000001", "report_period": "2026-06-30", "announcement_date": "2026-07-30", "np_parent": 14.0, "revenue": 140.0},
+        ],
+        share_rows=[
+            {"asset_id": "CN:SZ:000001", "event_date": "2025-12-31", "announcement_date": "2026-02-28", "total_share": 100.0},
+        ],
+        start_date=date(2026, 7, 21),
+        end_date=date(2026, 7, 21),
+    )
+    assert {row["trade_date"] for row in rows} == {date(2026, 7, 21)}
+    names = {row["factor_name"] for row in rows}
+    assert names == {"pe_ttm", "ps_ttm"}
+    assert all(row["factor_value"] > 0 for row in rows)
+    assert all(row["computed_at"].date() == date(2026, 7, 21) for row in rows)
+    assert all(row["factor_value"] != 0 for row in rows)
+
+
 def test_valuation_backfill_replaces_empty_version_and_keeps_nan_unwritable():
     rows = fundamental_backfill.build_valuation_backfill_rows(
         asset_ids=["CN:SZ:000001"],

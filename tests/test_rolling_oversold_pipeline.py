@@ -21,6 +21,30 @@ from stock_research.rolling_oversold.stock_scoring import StockScoringDataGap
 from stock_research.strategy_data_policy import DataGap
 
 
+def test_latest_pit_field_falls_back_when_latest_report_field_is_null():
+    frame = pd.DataFrame(
+        {
+            "asset_id": ["a", "a"],
+            "announcement_date": ["2026-04-30", "2026-03-31"],
+            "roe": [None, 0.064403],
+        }
+    )
+
+    value = pipeline._latest_pit_field(
+        frame,
+        asset_id="a",
+        date_column="announcement_date",
+        field="roe",
+        cutoff=date(2026, 7, 21),
+    )
+
+    assert value == pytest.approx(0.064403)
+
+
+def test_valuation_multiple_falls_back_to_positive_ps_when_pe_is_unavailable():
+    assert pipeline._valuation_multiple({"pe_ttm": None, "ps_ttm": 2.5}) == pytest.approx(2.5)
+
+
 def test_replay_processes_complete_sessions_ascending_and_links_previous_snapshot(
     monkeypatch, tmp_path
 ):

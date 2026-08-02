@@ -253,16 +253,16 @@ def _coverage(dataset: str, asset_id: str | None = None, *, expected: int, actua
 def _assets_at_cutoff(frame: pd.DataFrame, cutoff: date) -> set[str]:
     if not {"asset_id", "trade_date"}.issubset(frame.columns):
         return set()
-    dates = pd.to_datetime(frame["trade_date"], errors="coerce").dt.date
-    values = frame.loc[dates.eq(cutoff), "asset_id"].astype("string").str.strip()
+    dates = pd.to_datetime(frame["trade_date"], errors="coerce")
+    values = frame.loc[dates.eq(pd.Timestamp(cutoff)), "asset_id"].astype("string").str.strip()
     return {str(value) for value in values.dropna() if str(value)}
 
 
 def _pit_assets(frame: pd.DataFrame, date_column: str, cutoff: date) -> set[str]:
     if not {"asset_id", date_column}.issubset(frame.columns):
         return set()
-    dates = pd.to_datetime(frame[date_column], errors="coerce").dt.date
-    values = frame.loc[dates.le(cutoff), "asset_id"].astype("string").str.strip()
+    dates = pd.to_datetime(frame[date_column], errors="coerce")
+    values = frame.loc[dates.le(pd.Timestamp(cutoff)), "asset_id"].astype("string").str.strip()
     return {str(value) for value in values.dropna() if str(value)}
 
 
@@ -272,9 +272,9 @@ def _sector_cutoff_keys(
     required = {f"{prefix}_system", f"{prefix}_code", "trade_date"}
     if not required.issubset(frame.columns):
         return set()
-    dates = pd.to_datetime(frame["trade_date"], errors="coerce").dt.date
+    dates = pd.to_datetime(frame["trade_date"], errors="coerce")
     selected = frame.loc[
-        dates.eq(cutoff), [f"{prefix}_system", f"{prefix}_code"]
+        dates.eq(pd.Timestamp(cutoff)), [f"{prefix}_system", f"{prefix}_code"]
     ].copy()
     if selected.empty:
         return set()

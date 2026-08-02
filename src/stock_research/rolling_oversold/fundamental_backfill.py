@@ -13,14 +13,16 @@ import csv
 import inspect
 import json
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute_many, fetch_all
+from stock_research.services.finance_ttm import calc_ttm_from_cumulative_rows
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_assets
 from stock_research.consumer_oversold.loaders import load_consumer_finance_history
 
@@ -30,6 +32,7 @@ FINANCE_CALC_VERSION = "baostock_v1"
 VALUATION_CALC_VERSION = "rolling_oversold_valuation_v1"
 WORKPLAN_FINANCE_BUCKET = "finance_backfill"
 WORKPLAN_VALUATION_BUCKET = "valuation_backfill"
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
 MIN_VISIBLE_FINANCE_PERIODS = 5
 FINANCE_REQUEST_PERIODS = 6
 
@@ -268,6 +271,133 @@ def build_valuation_backfill_rows(
     return result
 
 
+def build_derived_valuation_rows(
+    *,
+    asset_ids: Sequence[str],
+    market_rows: Iterable[Mapping[str, Any]],
+    finance_rows: Iterable[Mapping[str, Any]],
+    share_rows: Iterable[Mapping[str, Any]],
+    start_date: date,
+    end_date: date,
+) -> list[dict[str, Any]]:
+    """Derive source-backed PE/PS rows from frozen database inputs.
+
+    This is deliberately limited to ratios whose inputs are present in the
+    canonical database.  EBITDA is not fabricated from EBIT, so no
+    ``ev_ebitda`` row is emitted when the source does not provide EBITDA.
+    Every row is stamped at the Shanghai end of its own trade date; the
+    rolling loader therefore cannot see a value before its PIT date.
+    """
+
+    start = _as_date(start_date, "start_date")
+    end = _as_date(end_date, "end_date")
+    if start > end:
+        raise ValueError("start_date must not be after end_date")
+    assets = set(_asset_ids(asset_ids))
+    if not assets:
+        return []
+
+    finance_by_asset: dict[str, list[dict[str, Any]]] = {}
+    for raw in _records(finance_rows):
+        asset_id = str(raw.get("asset_id") or "").strip().upper()
+        if asset_id not in assets:
+            continue
+        report_period = _optional_date(raw.get("report_period"), "report_period")
+        announcement_date = _optional_date(
+            raw.get("announcement_date"), "announcement_date"
+        )
+        if report_period is None or announcement_date is None:
+            continue
+        finance_by_asset.setdefault(asset_id, []).append(
+            {
+                **raw,
+                "asset_id": asset_id,
+                "report_period": report_period.isoformat(),
+                "announcement_date": announcement_date.isoformat(),
+            }
+        )
+
+    shares_by_asset: dict[str, list[dict[str, Any]]] = {}
+    for raw in _records(share_rows):
+        asset_id = str(raw.get("asset_id") or "").strip().upper()
+        if asset_id not in assets:
+            continue
+        event_date = _optional_date(raw.get("event_date"), "event_date")
+        announcement_date = _optional_date(
+            raw.get("announcement_date"), "announcement_date"
+        )
+        shares = _positive_float(raw.get("total_share"))
+        if event_date is None or announcement_date is None or shares is None:
+            continue
+        shares_by_asset.setdefault(asset_id, []).append(
+            {
+                "event_date": event_date,
+                "announcement_date": announcement_date,
+                "total_share": shares,
+            }
+        )
+
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, date, str]] = set()
+    for raw in _records(market_rows):
+        asset_id = str(raw.get("asset_id") or "").strip().upper()
+        if asset_id not in assets:
+            continue
+        trade_date = _optional_date(raw.get("trade_date"), "trade_date")
+        close = _positive_float(raw.get("close"))
+        if trade_date is None or not start <= trade_date <= end or close is None:
+            continue
+
+        visible_finance = [
+            row
+            for row in finance_by_asset.get(asset_id, [])
+            if str(row["announcement_date"])[:10] <= trade_date.isoformat()
+        ]
+        if not visible_finance:
+            continue
+        total_share = _latest_visible_share(
+            shares_by_asset.get(asset_id, []), trade_date
+        )
+        if total_share is None:
+            continue
+        market_cap = close * total_share
+        np_ttm = calc_ttm_from_cumulative_rows(
+            visible_finance, value_column="np_parent", trade_date=trade_date.isoformat()
+        )
+        revenue_ttm = calc_ttm_from_cumulative_rows(
+            visible_finance, value_column="revenue", trade_date=trade_date.isoformat()
+        )
+        values = {
+            "pe_ttm": _positive_ratio(market_cap, np_ttm),
+            "ps_ttm": _positive_ratio(market_cap, revenue_ttm),
+        }
+        computed_at = datetime.combine(
+            trade_date, time(23, 59, 59), tzinfo=_SHANGHAI
+        )
+        for factor_name, factor_value in values.items():
+            if factor_value is None:
+                continue
+            key = (asset_id, trade_date, factor_name)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(
+                {
+                    "asset_id": asset_id,
+                    "trade_date": trade_date,
+                    "factor_name": factor_name,
+                    "factor_group": "fundamental",
+                    "factor_value": factor_value,
+                    "calc_version": VALUATION_CALC_VERSION,
+                    "source": "derived:market_daily_bar+finance",
+                    "source_data_version": "rolling_oversold_valuation_v1",
+                    "computed_at": computed_at,
+                }
+            )
+    rows.sort(key=lambda row: (row["asset_id"], row["trade_date"], row["factor_name"]))
+    return rows
+
+
 def run_fundamental_backfill(
     *,
     start_date: date | str,
@@ -295,6 +425,7 @@ def run_fundamental_backfill(
     scope = load_fundamental_scope(gap_workplan)
     finance_assets = scope["finance_assets"]
     valuation_assets = scope["valuation_assets"]
+    support_assets = sorted(set(finance_assets) | set(valuation_assets))
     finance_rows = build_finance_backfill_rows(
         finance_assets, end, min_report_periods=FINANCE_REQUEST_PERIODS
     )
@@ -307,6 +438,7 @@ def run_fundamental_backfill(
         "dry_run": dry_run,
         "finance": {
             "assets": finance_assets,
+            "support_assets": support_assets,
             "requested_periods": [
                 value.isoformat() for value in _quarter_periods(end, FINANCE_REQUEST_PERIODS)
             ],
@@ -320,6 +452,7 @@ def run_fundamental_backfill(
         "valuation": {
             "assets": valuation_assets,
             "requested_rows": len(valuation_rows),
+            "derived_rows": 0,
             "written_rows": 0,
             "incomplete_assets": [],
         },
@@ -334,7 +467,7 @@ def run_fundamental_backfill(
         for report_period in _quarter_periods(end, FINANCE_REQUEST_PERIODS):
             result = _call_finance_adapter(
                 adapter,
-                asset_ids=finance_assets,
+                asset_ids=support_assets,
                 report_period=report_period,
                 cutoff=end,
                 service=service,
@@ -345,8 +478,13 @@ def run_fundamental_backfill(
         source_valuation_rows = _load_valuation_rows(
             valuation_assets, start, end, service=service
         )
+        derived_valuation_rows = _load_derived_valuation_rows(
+            valuation_assets, start, end, service=service
+        )
+        source_valuation_rows.extend(derived_valuation_rows)
+        report["valuation"]["derived_rows"] = len(derived_valuation_rows)
         source_finance_rows = _load_finance_rows(
-            finance_assets, end, service=service
+            support_assets, end, service=service
         )
         visible_finance = build_finance_backfill_rows(
             finance_assets, end, source_rows=source_finance_rows
@@ -380,7 +518,11 @@ def run_fundamental_backfill(
             report["valuation"]["written_rows"] = _upsert_valuation_rows(
                 writable, service=service
             )
-        writable_assets = {row["asset_id"] for row in writable}
+        writable_assets = {
+            row["asset_id"]
+            for row in writable
+            if row.get("factor_name") == "pe_ttm"
+        }
         report["valuation"]["incomplete_assets"] = [
             asset_id for asset_id in valuation_assets if asset_id not in writable_assets
         ]
@@ -438,6 +580,56 @@ def _load_valuation_rows(
     """
     with connect(service) as conn:
         return fetch_all(conn, sql, [asset_ids, start, end, end])
+
+
+def _load_derived_valuation_rows(
+    asset_ids: list[str], start: date, end: date, *, service: str
+) -> list[dict[str, Any]]:
+    if not asset_ids:
+        return []
+    with connect(service) as conn:
+        market_rows = fetch_all(
+            conn,
+            """
+            SELECT asset_id, trade_date, close
+            FROM market_daily_bar
+            WHERE asset_id = ANY(%s)
+              AND adjust_type = 'qfq'
+              AND trade_date BETWEEN %s AND %s
+            ORDER BY asset_id, trade_date
+            """,
+            [asset_ids, start, end],
+        )
+        finance_rows = fetch_all(
+            conn,
+            """
+            SELECT asset_id, report_period, announcement_date, revenue, np_parent
+            FROM finance.income_statement
+            WHERE asset_id = ANY(%s)
+              AND announcement_date <= %s
+            ORDER BY asset_id, report_period, announcement_date
+            """,
+            [asset_ids, end],
+        )
+        share_rows = fetch_all(
+            conn,
+            """
+            SELECT asset_id, event_date, announcement_date, total_share
+            FROM finance.share_capital_event
+            WHERE asset_id = ANY(%s)
+              AND announcement_date <= %s
+            ORDER BY asset_id, event_date, announcement_date
+            """,
+            [asset_ids, end],
+        )
+    return build_derived_valuation_rows(
+        asset_ids=asset_ids,
+        market_rows=market_rows,
+        finance_rows=finance_rows,
+        share_rows=share_rows,
+        start_date=start,
+        end_date=end,
+    )
 
 
 def _upsert_valuation_rows(rows: list[dict[str, Any]], *, service: str) -> int:
@@ -612,6 +804,46 @@ def _usable_factor_value(value: Any) -> bool:
         return not bool(pd.isna(value))
     except (TypeError, ValueError):
         return False
+
+
+def _positive_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return result if pd.notna(result) and result > 0.0 else None
+
+
+def _positive_ratio(numerator: float, denominator: Any) -> float | None:
+    denominator_value = _positive_float(denominator)
+    if denominator_value is None:
+        return None
+    result = numerator / denominator_value
+    return result if pd.notna(result) and result > 0.0 else None
+
+
+def _latest_visible_share(
+    rows: Sequence[Mapping[str, Any]], trade_date: date
+) -> float | None:
+    visible = [
+        row
+        for row in rows
+        if row.get("event_date") <= trade_date
+        and row.get("announcement_date") <= trade_date
+        and _positive_float(row.get("total_share")) is not None
+    ]
+    if not visible:
+        return None
+    latest = max(
+        visible,
+        key=lambda row: (
+            row.get("event_date"),
+            row.get("announcement_date"),
+        ),
+    )
+    return _positive_float(latest.get("total_share"))
 
 
 def _quarter_periods(cutoff: date, count: int) -> list[date]:

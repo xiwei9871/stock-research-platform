@@ -3,7 +3,11 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from stock_research.rolling_oversold.sector_scoring import _activity_scores, score_sector_states
+from stock_research.rolling_oversold.sector_scoring import (
+    _active_membership,
+    _activity_scores,
+    score_sector_states,
+)
 
 
 def _bars_for(closes, *, anchor, code="I1", system="sw", name="Industry one"):
@@ -50,6 +54,21 @@ def test_sector_score_marks_deep_drawdown_with_positive_repairability_as_confirm
     assert row["sector_repairability_score"] >= 60.0
     assert row["sector_gate_status"] == "confirmed"
     assert row["sector_recovery_state"] == "repairing"
+
+
+def test_active_membership_handles_pandas_datetime64_date_columns():
+    anchor = date(2026, 7, 21)
+    membership = pd.DataFrame(
+        {
+            "asset_id": ["a", "b", "c"],
+            "start_date": pd.to_datetime(["2026-07-01", "2026-07-22", None]),
+            "end_date": pd.to_datetime([None, None, "2026-07-21"]),
+        }
+    )
+
+    result = _active_membership(membership, anchor)
+
+    assert result["asset_id"].tolist() == ["a"]
 
 
 def test_sector_near_high_is_repaired_not_fresh_oversold():
