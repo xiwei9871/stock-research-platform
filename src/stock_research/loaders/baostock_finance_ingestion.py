@@ -375,7 +375,7 @@ def _baostock_codes(
         cutoff = date.fromisoformat(str(active_cutoff)[:10])
         filters.append("(list_date IS NULL OR list_date <= %s)")
         params.append(cutoff)
-        filters.append("(delist_date IS NULL OR delist_date >= %s)")
+        filters.append("(delist_date IS NULL OR delist_date > %s)")
         params.append(cutoff)
     if asset_ids is not None:
         filters.append("asset_id = ANY(%s)")
