@@ -53,6 +53,43 @@ types. The default is `raw,qfq,hfq`.
   adjust types, `expected_count` is about three times the active A-share symbol
   count.
 
+## Rolling Oversold Market-Bar Backfill
+
+Rolling-sector oversold research uses a separate, resumable backfill command for
+explicit gaps. It does not discover a universe and it does not fall back to a
+second data provider inside the strategy. First generate or review the Task1
+gap-workplan, then run a dry-run against the same database service:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_research.cli \
+  rolling-sector-oversold-backfill \
+  --dataset market_daily_bar \
+  --gap-workplan artifacts/rolling_sector_oversold/gap_workplan_2026-07-21/gap_workplan.json \
+  --start-date 2026-07-21 \
+  --end-date 2026-07-31 \
+  --adjust-types raw,qfq,hfq \
+  --source akshare \
+  --service stock_research \
+  --dry-run \
+  --output-dir outputs/research/rolling_sector_oversold_backfill
+```
+
+Only after reviewing the JSON/CSV report should an operator repeat the command
+with `--execute`. The executor queries `core.asset_master` before making any
+source request, applies list/delist PIT checks, and never requests BSE (`CN:BJ`)
+or other out-of-scope exchanges. `--include-invalid-assets` is reserved for an
+explicit historical repair where the operator has accepted those PIT checks.
+
+Each successful row writes both the canonical `market_daily_bar` record and a
+raw payload audit record. The conflict keys are
+`(asset_id, trade_date, adjust_type)` for market bars and
+`(source_service, source_table, adjust_type, trade_date, asset_id)` for raw
+payloads, so rerunning the same workplan is idempotent. Reports retain source,
+endpoint, requested date range, payload hash, attempts, and per-row status. A
+`missing` or `retryable_failure` row is reported for later retry; it is never
+filled with zero values. `out_of_scope_bse` rows are reported but are never
+sent to an external source.
+
 ## Cron
 
 Install a crontab similar to:

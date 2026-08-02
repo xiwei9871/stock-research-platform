@@ -40,6 +40,15 @@ from stock_research.auction_data import (
 )
 from stock_research.config import SETTINGS
 from stock_research.rolling_oversold.contracts import RollingOversoldConfig
+from stock_research.rolling_oversold.market_backfill import (
+    load_gap_workplan_asset_ids,
+    run_market_backfill,
+)
+
+# Keep the CLI-facing helper name explicit about the source of the asset list.
+# The compatibility alias also makes it straightforward for callers/tests to
+# replace the workplan loader without touching the backfill implementation.
+load_market_backfill_asset_ids = load_gap_workplan_asset_ids
 from stock_research.rolling_oversold.pipeline import (
     resolve_rolling_history_start,
     run_rolling_daily,
@@ -4562,6 +4571,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--adjust-type", choices=("qfq", "hfq", "raw"), default="qfq"
     )
 
+    rolling_oversold_backfill = subparsers.add_parser("rolling-sector-oversold-backfill")
+    rolling_oversold_backfill.add_argument(
+        "--dataset", choices=("market_daily_bar",), required=True
+    )
+    rolling_oversold_backfill.add_argument("--gap-workplan", required=True)
+    rolling_oversold_backfill.add_argument("--start-date", required=True)
+    rolling_oversold_backfill.add_argument("--end-date", required=True)
+    rolling_oversold_backfill.add_argument(
+        "--adjust-types", type=parse_adjust_types, required=True
+    )
+    rolling_oversold_backfill.add_argument(
+        "--source", choices=("akshare", "tushare"), required=True
+    )
+    rolling_oversold_backfill.add_argument(
+        "--service", default=SETTINGS.research_service
+    )
+    rolling_oversold_backfill.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/rolling_sector_oversold_backfill"),
+    )
+    rolling_oversold_backfill.add_argument(
+        "--include-invalid-assets", action="store_true"
+    )
+    rolling_oversold_backfill_mode = rolling_oversold_backfill.add_mutually_exclusive_group()
+    rolling_oversold_backfill_mode.add_argument(
+        "--dry-run", dest="dry_run", action="store_true"
+    )
+    rolling_oversold_backfill_mode.add_argument(
+        "--execute", dest="dry_run", action="store_false"
+    )
+    rolling_oversold_backfill.set_defaults(dry_run=True)
+
     rolling_oversold_report = subparsers.add_parser("rolling-sector-oversold-report")
     rolling_oversold_report.add_argument("--snapshot-dir", required=True)
     rolling_oversold_report.add_argument("--focus-patterns")
@@ -8453,6 +8495,35 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             service=args.service,
         )
         _print_rolling_oversold_machine_lines(result)
+    elif args.command == "rolling-sector-oversold-backfill":
+        asset_ids = load_market_backfill_asset_ids(args.gap_workplan, args.dataset)
+        result = run_market_backfill(
+            asset_ids=asset_ids,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_types=tuple(args.adjust_types),
+            source=args.source,
+            service=args.service,
+            dry_run=args.dry_run,
+            output_dir=args.output_dir,
+            include_invalid_assets=args.include_invalid_assets,
+        )
+        print(
+            "rolling_sector_oversold_backfill|report|"
+            f"{result['paths']['json']}"
+        )
+        print(
+            "rolling_sector_oversold_backfill|csv|"
+            f"{result['paths']['csv']}"
+        )
+        print(f"rolling_sector_oversold_backfill|raw_rows|{result.get('raw_rows', 0)}")
+        print(f"rolling_sector_oversold_backfill|bar_rows|{result.get('bar_rows', 0)}")
+        print(f"rolling_sector_oversold_backfill|failed|{result.get('failed', 0)}")
+        print(f"rolling_sector_oversold_backfill|missing|{result.get('missing', 0)}")
+        print(
+            "rolling_sector_oversold_backfill|out_of_scope_bse|"
+            f"{result.get('status_counts', {}).get('out_of_scope_bse', 0)}"
+        )
     elif args.command == "rolling-sector-oversold-report":
         snapshot_dir = Path(args.snapshot_dir).expanduser().resolve()
         snapshot = load_rolling_oversold_snapshot(snapshot_dir)
