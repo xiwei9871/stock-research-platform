@@ -345,6 +345,42 @@ def test_sync_concept_memberships_from_akshare_defaults_to_eastmoney_sources(mon
     ]
 
 
+def test_sync_concept_memberships_from_akshare_applies_offset_before_limit(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    def fake_board_fetcher():
+        return pd.DataFrame(
+            [
+                {"板块名称": "A", "板块代码": "BK0001"},
+                {"板块名称": "B", "板块代码": "BK0002"},
+                {"板块名称": "C", "板块代码": "BK0003"},
+            ]
+        )
+
+    seen = []
+
+    def fake_constituent_fetcher(symbol):
+        seen.append(symbol)
+        return pd.DataFrame([{"代码": "000001", "名称": symbol}])
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-21",
+        concept_system="em",
+        board_fetcher=fake_board_fetcher,
+        constituent_fetcher=fake_constituent_fetcher,
+        offset=1,
+        max_concepts=1,
+    )
+
+    assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
+    assert seen == ["B"]
+
+
 def test_sync_concept_memberships_retries_board_fetch_once(monkeypatch):
     import pandas as pd
 

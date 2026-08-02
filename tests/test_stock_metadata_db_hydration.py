@@ -203,3 +203,51 @@ def test_sync_concept_memberships_for_service_clears_proxy_env(monkeypatch) -> N
         "exit_connect",
         "exit_no_proxy",
     ]
+
+
+def test_sync_concept_memberships_for_service_forwards_paging_and_system(monkeypatch) -> None:
+    calls = []
+
+    class FakeNoProxy:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConnect:
+        def __enter__(self):
+            return "conn"
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(hydration, "no_proxy_env", lambda: FakeNoProxy())
+    monkeypatch.setattr(hydration, "connect", lambda service: FakeConnect())
+    monkeypatch.setattr(
+        hydration,
+        "sync_concept_memberships_from_akshare",
+        lambda conn, **kwargs: calls.append((conn, kwargs))
+        or {"boards": 2, "memberships": 3, "failed_concepts": []},
+    )
+
+    result = hydration.sync_concept_memberships_for_service(
+        trade_date="2026-07-21",
+        service="stock_research_test",
+        max_concepts=25,
+        offset=50,
+        concept_system="ths",
+    )
+
+    assert result["memberships"] == 3
+    assert calls == [
+        (
+            "conn",
+            {
+                "trade_date": "2026-07-21",
+                "max_concepts": 25,
+                "offset": 50,
+                "concept_system": "ths",
+            },
+        )
+    ]

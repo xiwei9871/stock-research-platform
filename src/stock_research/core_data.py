@@ -210,6 +210,7 @@ def sync_concept_memberships_from_akshare(
     board_fetcher=None,
     constituent_fetcher=None,
     max_concepts: int | None = None,
+    offset: int = 0,
 ) -> dict[str, object]:
     if ak is None and (board_fetcher is None or constituent_fetcher is None):
         raise RuntimeError("akshare is required to sync concept memberships")
@@ -233,6 +234,13 @@ def sync_concept_memberships_from_akshare(
             "memberships": 0,
             "failed_concepts": [f"board_fetch_failed: {exc}"],
         }
+    try:
+        normalized_offset = int(offset)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("offset must be a non-negative integer") from exc
+    if normalized_offset < 0:
+        raise ValueError("offset must be a non-negative integer")
+    boards = boards[normalized_offset:]
     if max_concepts is not None:
         boards = boards[: max(0, int(max_concepts))]
 

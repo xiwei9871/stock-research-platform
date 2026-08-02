@@ -134,10 +134,20 @@ def sync_concept_memberships_for_service(
     trade_date: str,
     service: str = SETTINGS.research_service,
     max_concepts: int | None = None,
+    offset: int = 0,
+    concept_system: str = "em",
 ) -> dict[str, object]:
     with no_proxy_env():
         with connect(service) as conn:
-            return sync_concept_memberships_from_akshare(conn, trade_date=trade_date, max_concepts=max_concepts)
+            kwargs: dict[str, object] = {
+                "trade_date": trade_date,
+                "max_concepts": max_concepts,
+            }
+            if offset:
+                kwargs["offset"] = offset
+            if concept_system != "em":
+                kwargs["concept_system"] = concept_system
+            return sync_concept_memberships_from_akshare(conn, **kwargs)
 
 
 def run_stock_metadata_db_hydration(
