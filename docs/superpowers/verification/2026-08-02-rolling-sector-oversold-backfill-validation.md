@@ -82,7 +82,8 @@ vectorized PIT fallback and datetime fixes.  The nine-anchor historical replay
 took about 12.8 minutes because it intentionally reloads the full 5,200-asset
 PIT universe for every frozen date.  These are different operational paths:
 
-- daily production: one anchor, database reads only, target under one minute;
+- daily production: one anchor, database reads only, about 84 seconds in this
+  run and well below the one-hour operational target;
 - historical validation: repeated frozen loads, about 13 minutes for this
   nine-session window, within the 3,600-second replay budget.
 
