@@ -16,6 +16,22 @@ from stock_research.eastmoney_http import curl_eastmoney_json
 
 
 MINUTE_FIELDS = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+DAILY_FIELDS = [
+    "date",
+    "code",
+    "open",
+    "high",
+    "low",
+    "close",
+    "preclose",
+    "volume",
+    "amount",
+    "adjustflag",
+    "turn",
+    "tradestatus",
+    "pctChg",
+    "isST",
+]
 SOURCE_ENDPOINT = "query_history_k_data_plus"
 FREQ_TO_BAOSTOCK = {
     "1min": "1",
@@ -284,6 +300,95 @@ def query_baostock_minute_rows(
             while rs.next():
                 rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
             return rows
+
+    return run_with_baostock_retry(operation, timeout_seconds=timeout_seconds)
+
+
+def _daily_market_row(
+    raw: dict[str, Any],
+    *,
+    adjust_type: str,
+) -> dict[str, Any]:
+    code = str(raw.get("code") or "").strip()
+    if not code:
+        raise ValueError("Baostock daily row is missing code")
+    raw_date = str(raw.get("date") or "").strip()
+    if not raw_date:
+        raise ValueError(f"Baostock daily row is missing date for {code}")
+    return {
+        "asset_id": asset_id_from_baostock_code(code),
+        "ts_code": ts_code_from_baostock_code(code),
+        "trade_date": dt.date.fromisoformat(raw_date[:10]),
+        "adjust_type": adjust_type,
+        "open": parse_float(raw.get("open")),
+        "high": parse_float(raw.get("high")),
+        "low": parse_float(raw.get("low")),
+        "close": parse_float(raw.get("close")),
+        "preclose": parse_float(raw.get("preclose")),
+        "volume": parse_float(raw.get("volume")),
+        "amount": parse_float(raw.get("amount")),
+        "turnover_rate": parse_float(raw.get("turn") or raw.get("turnover")),
+        "pct_chg": parse_float(raw.get("pctChg") or raw.get("pct_chg")),
+        "trade_status": str(raw.get("tradestatus") or raw.get("trade_status") or "1"),
+        "is_st": str(raw.get("isST") or raw.get("is_st") or "0").strip().lower()
+        in {"1", "true", "yes", "y"},
+        "source": "baostock",
+    }
+
+
+def query_baostock_daily_range_rows(
+    start_date: dt.date,
+    end_date: dt.date,
+    *,
+    ts_codes: list[str],
+    timeout_seconds: float | None = None,
+    adjust_types: tuple[str, ...] | list[str] = ("raw", "qfq", "hfq"),
+) -> list[dict[str, Any]]:
+    """Fetch daily bars for explicit assets and a date range.
+
+    The adapter deliberately keeps the source request at the asset/date-range
+    level.  Each requested adjustment is sent with Baostock's documented
+    adjustflag mapping, and the normalized row retains the source values used
+    for the raw payload audit by the rolling backfill.
+    """
+    if end_date < start_date:
+        raise ValueError("end_date must not precede start_date")
+    selected_adjust_types = tuple(str(value).strip().lower() for value in adjust_types)
+    if not selected_adjust_types:
+        raise ValueError("adjust_types must not be empty")
+    for adjust_type in selected_adjust_types:
+        adjustflag_for_adjust_type(adjust_type)
+
+    codes = [baostock_code_from_ts_code(str(ts_code).strip().upper()) for ts_code in ts_codes]
+    if not codes:
+        return []
+
+    def operation() -> list[dict[str, Any]]:
+        login_or_raise(timeout_seconds=timeout_seconds)
+        try:
+            with temporary_baostock_proxy(), temporary_socket_timeout(timeout_seconds):
+                rows: list[dict[str, Any]] = []
+                for code in codes:
+                    for adjust_type in selected_adjust_types:
+                        result = bs.query_history_k_data_plus(
+                            code,
+                            ",".join(DAILY_FIELDS),
+                            start_date=start_date.isoformat(),
+                            end_date=end_date.isoformat(),
+                            frequency="d",
+                            adjustflag=adjustflag_for_adjust_type(adjust_type),
+                        )
+                        if result.error_code != "0":
+                            raise RuntimeError(
+                                f"baostock daily query failed for {code}: "
+                                f"{result.error_code} {result.error_msg}"
+                            )
+                        while result.next():
+                            raw = dict(zip(result.fields, result.get_row_data(), strict=True))
+                            rows.append(_daily_market_row(raw, adjust_type=adjust_type))
+                return rows
+        finally:
+            logout_safely()
 
     return run_with_baostock_retry(operation, timeout_seconds=timeout_seconds)
 

@@ -158,15 +158,15 @@ def test_market_backfill_writes_raw_and_bars_with_canonical_conflicts(
         lambda opened, sql, params: [_master_row("CN:SH:600000", exchange="SH")],
     )
 
-    def fake_fetch(**kwargs):
+    def fake_range(**kwargs):
         source_calls.append(kwargs)
-        trade_date = kwargs["trade_date"]
+        trade_date = kwargs["start_date"]
         return [
             _bar("CN:SH:600000", trade_date, "raw"),
             _bar("CN:SH:600000", trade_date, "qfq"),
         ]
 
-    monkeypatch.setattr(market_backfill, "fetch_akshare_daily_rows", fake_fetch)
+    monkeypatch.setattr(market_backfill, "fetch_akshare_daily_range_rows", fake_range)
     monkeypatch.setattr(
         market_backfill,
         "execute_many",
@@ -203,27 +203,42 @@ def test_market_backfill_writes_raw_and_bars_with_canonical_conflicts(
     assert {row["adjust_type"] for row in bar_rows} == {"raw", "qfq"}
 
 
-def test_market_backfill_reports_missing_and_retryable_failures(
+def test_market_backfill_batches_akshare_by_asset_date_range(
     monkeypatch, tmp_path: Path
 ):
     conn = _FakeConnection()
+    range_calls = []
+    execute_many_calls: list[tuple[str, list[dict[str, object]]]] = []
     monkeypatch.setattr(market_backfill, "connect", lambda service: _connection(conn))
     monkeypatch.setattr(
         market_backfill,
         "fetch_all",
         lambda opened, sql, params: [_master_row("CN:SH:600000", exchange="SH")],
     )
-    attempts: dict[str, int] = {}
 
-    def fake_fetch(**kwargs):
-        key = str(kwargs["trade_date"])
-        attempts[key] = attempts.get(key, 0) + 1
-        if key == "2026-07-29":
-            return []
-        raise RuntimeError("temporary source outage")
+    def fake_range(**kwargs):
+        range_calls.append(kwargs)
+        return [
+            _bar("CN:SH:600000", date(2026, 7, 29), "raw"),
+            _bar("CN:SH:600000", date(2026, 7, 30), "raw"),
+        ]
 
-    monkeypatch.setattr(market_backfill, "fetch_akshare_daily_rows", fake_fetch)
-    monkeypatch.setattr(market_backfill, "execute_many", lambda *args: pytest.fail("no rows expected"))
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_akshare_daily_range_rows",
+        fake_range,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_akshare_daily_rows",
+        lambda **kwargs: pytest.fail("range adapter should replace per-day calls"),
+    )
+    monkeypatch.setattr(
+        market_backfill,
+        "execute_many",
+        lambda conn, sql, rows: execute_many_calls.append((sql, list(rows))),
+    )
 
     result = market_backfill.run_market_backfill(
         asset_ids=["CN:SH:600000"],
@@ -235,11 +250,181 @@ def test_market_backfill_reports_missing_and_retryable_failures(
         output_dir=tmp_path,
     )
 
+    assert len(range_calls) == 1
+    assert range_calls[0]["ts_codes"] == ["600000.SH"]
+    assert range_calls[0]["start_date"] == date(2026, 7, 29)
+    assert range_calls[0]["end_date"] == date(2026, 7, 30)
+    assert result["raw_rows"] == result["bar_rows"] == 2
+    assert len(execute_many_calls) == 2
+    report = json.loads(Path(result["paths"]["json"]).read_text(encoding="utf-8"))
+    assert [(row["trade_date"], row["status"]) for row in report["rows"]] == [
+        ("2026-07-29", "fetched"),
+        ("2026-07-30", "fetched"),
+    ]
+
+
+def test_tushare_range_fallback_keeps_successful_days_around_one_failure(
+    monkeypatch, tmp_path: Path
+):
+    conn = _FakeConnection()
+    source_calls = []
+    execute_many_calls: list[tuple[str, list[dict[str, object]]]] = []
+    monkeypatch.setattr(market_backfill, "connect", lambda service: _connection(conn))
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_all",
+        lambda opened, sql, params: [_master_row("CN:SH:600000", exchange="SH")],
+    )
+
+    def fake_daily(**kwargs):
+        trade_date = kwargs["trade_date"]
+        source_calls.append(trade_date)
+        if trade_date == date(2026, 7, 30):
+            raise RuntimeError("temporary source outage")
+        return [_bar("CN:SH:600000", trade_date, "raw")]
+
+    monkeypatch.setattr(market_backfill, "fetch_tushare_daily_rows", fake_daily)
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_tushare_adjusted_daily_rows",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        market_backfill,
+        "execute_many",
+        lambda conn, sql, rows: execute_many_calls.append((sql, list(rows))),
+    )
+
+    result = market_backfill.run_market_backfill(
+        asset_ids=["CN:SH:600000"],
+        start_date="2026-07-29",
+        end_date="2026-07-31",
+        adjust_types=("raw",),
+        source="tushare",
+        dry_run=False,
+        output_dir=tmp_path,
+    )
+
+    report = json.loads(Path(result["paths"]["json"]).read_text(encoding="utf-8"))
+    assert [(row["trade_date"], row["status"]) for row in report["rows"]] == [
+        ("2026-07-29", "fetched"),
+        ("2026-07-30", "retryable_failure"),
+        ("2026-07-31", "fetched"),
+    ]
+    assert source_calls.count(date(2026, 7, 31)) == 1
+    assert result["raw_rows"] == result["bar_rows"] == 2
+    assert len(execute_many_calls) == 2
+
+
+def test_baostock_source_batches_range_with_all_adjustments(
+    monkeypatch, tmp_path: Path
+):
+    conn = _FakeConnection()
+    range_calls = []
+    monkeypatch.setattr(market_backfill, "connect", lambda service: _connection(conn))
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_all",
+        lambda opened, sql, params: [_master_row("CN:SH:600000", exchange="SH")],
+    )
+
+    def fake_range(**kwargs):
+        range_calls.append(kwargs)
+        return [
+            _bar("CN:SH:600000", date(2026, 7, 29), adjust_type)
+            for adjust_type in ("raw", "qfq", "hfq")
+        ]
+
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_baostock_daily_range_rows",
+        fake_range,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        market_backfill,
+        "execute_many",
+        lambda *args: None,
+    )
+
+    result = market_backfill.run_market_backfill(
+        asset_ids=["CN:SH:600000"],
+        start_date="2026-07-29",
+        end_date="2026-07-29",
+        adjust_types=("raw", "qfq", "hfq"),
+        source="baostock",
+        dry_run=False,
+        output_dir=tmp_path,
+    )
+
+    assert len(range_calls) == 1
+    assert range_calls[0]["ts_codes"] == ["600000.SH"]
+    assert range_calls[0]["adjust_types"] == ("raw", "qfq", "hfq")
+    assert result["source"] == "baostock"
+    assert result["raw_rows"] == result["bar_rows"] == 3
+
+
+def test_cli_accepts_baostock_as_an_approved_backfill_source():
+    args = cli.build_parser().parse_args(
+        [
+            "rolling-sector-oversold-backfill",
+            "--dataset",
+            "market_daily_bar",
+            "--gap-workplan",
+            "gap_workplan.json",
+            "--start-date",
+            "2026-07-29",
+            "--end-date",
+            "2026-07-29",
+            "--adjust-types",
+            "raw,qfq,hfq",
+            "--source",
+            "baostock",
+        ]
+    )
+    assert args.source == "baostock"
+
+
+def test_market_backfill_reports_missing_and_retryable_failures(
+    monkeypatch, tmp_path: Path
+):
+    conn = _FakeConnection()
+    monkeypatch.setattr(market_backfill, "connect", lambda service: _connection(conn))
+    monkeypatch.setattr(
+        market_backfill,
+        "fetch_all",
+        lambda opened, sql, params: [
+            _master_row("CN:SH:600000", exchange="SH"),
+            _master_row("CN:SH:600001", exchange="SH"),
+        ],
+    )
+    attempts: dict[str, int] = {}
+
+    def fake_range(**kwargs):
+        key = kwargs["ts_codes"][0]
+        attempts[key] = attempts.get(key, 0) + 1
+        if key == "600000.SH":
+            return []
+        raise RuntimeError("temporary source outage")
+
+    monkeypatch.setattr(market_backfill, "fetch_akshare_daily_range_rows", fake_range)
+    monkeypatch.setattr(market_backfill, "execute_many", lambda *args: pytest.fail("no rows expected"))
+
+    result = market_backfill.run_market_backfill(
+        asset_ids=["CN:SH:600000", "CN:SH:600001"],
+        start_date="2026-07-29",
+        end_date="2026-07-29",
+        adjust_types=("raw",),
+        source="akshare",
+        dry_run=False,
+        output_dir=tmp_path,
+    )
+
     with Path(result["paths"]["csv"]).open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert {row["status"] for row in rows} == {"missing", "retryable_failure"}
     assert result["raw_rows"] == result["bar_rows"] == 0
-    assert attempts["2026-07-30"] > 1
+    assert attempts["600001.SH"] > 1
 
 
 def test_cli_wires_gap_workplan_market_backfill_to_current_source(

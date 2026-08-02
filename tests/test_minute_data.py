@@ -261,6 +261,97 @@ def test_query_baostock_minute_rows_uses_frequency_and_adjustflag(monkeypatch):
     assert calls[0][2]["adjustflag"] == "2"
 
 
+def test_query_baostock_daily_range_rows_batches_adjustments_and_normalizes(monkeypatch):
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = [
+            "date",
+            "code",
+            "open",
+            "high",
+            "low",
+            "close",
+            "preclose",
+            "volume",
+            "amount",
+            "adjustflag",
+            "turn",
+            "tradestatus",
+            "pctChg",
+            "isST",
+        ]
+
+        def __init__(self, adjustflag):
+            self.rows = [[
+                "2026-07-29",
+                "sh.600000",
+                "10.0",
+                "10.5",
+                "9.9",
+                "10.3",
+                "9.8",
+                "1234",
+                "5678.9",
+                adjustflag,
+                "0.12",
+                "1",
+                "5.1",
+                "0",
+            ]]
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    calls = []
+    sessions = {"login": 0, "logout": 0}
+
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    monkeypatch.setattr(
+        minute_data.bs,
+        "login",
+        lambda: sessions.__setitem__("login", sessions["login"] + 1) or Login(),
+    )
+    monkeypatch.setattr(
+        minute_data.bs,
+        "logout",
+        lambda: sessions.__setitem__("logout", sessions["logout"] + 1),
+    )
+
+    def fake_query(code, fields, **kwargs):
+        calls.append((code, fields, kwargs))
+        return Result(kwargs["adjustflag"])
+
+    monkeypatch.setattr(minute_data.bs, "query_history_k_data_plus", fake_query)
+
+    rows = minute_data.query_baostock_daily_range_rows(
+        dt.date(2026, 7, 29),
+        dt.date(2026, 7, 30),
+        ts_codes=["600000.SH"],
+        adjust_types=("raw", "qfq", "hfq"),
+    )
+
+    assert len(calls) == 3
+    assert [call[2]["adjustflag"] for call in calls] == ["3", "2", "1"]
+    assert all(call[2]["frequency"] == "d" for call in calls)
+    assert all(call[0] == "sh.600000" for call in calls)
+    assert len(rows) == 3
+    assert rows[0]["asset_id"] == "CN:SH:600000"
+    assert rows[0]["trade_date"] == dt.date(2026, 7, 29)
+    assert rows[0]["close"] == 10.3
+    assert rows[0]["turnover_rate"] == 0.12
+    assert rows[0]["pct_chg"] == 5.1
+    assert sessions == {"login": 1, "logout": 1}
+
+
 def test_query_baostock_minute_rows_applies_socket_timeout(monkeypatch):
     class Result:
         error_code = "0"

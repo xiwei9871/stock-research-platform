@@ -14,14 +14,18 @@ from typing import Any
 from stock_research.config import SETTINGS
 from stock_research.daily_close_pipeline import (
     fetch_akshare_daily_rows,
+    fetch_akshare_daily_range_rows,
     fetch_tushare_adjusted_daily_rows,
     fetch_tushare_daily_rows,
 )
 from stock_research.db import connect, execute_many, fetch_all
+from stock_research.minute_data import (
+    query_baostock_daily_range_rows as fetch_baostock_daily_range_rows,
+)
 
 
 SUPPORTED_ADJUST_TYPES = ("raw", "qfq", "hfq")
-SUPPORTED_SOURCES = ("akshare", "tushare")
+SUPPORTED_SOURCES = ("akshare", "tushare", "baostock")
 DEFAULT_OUTPUT_DIR = Path("outputs/research/rolling_sector_oversold_backfill")
 DEFAULT_TIMEOUT_SECONDS = 60
 DEFAULT_MAX_RETRIES = 3
@@ -120,97 +124,34 @@ def run_market_backfill(
     raw_rows: list[dict[str, Any]] = []
     bar_rows: list[dict[str, Any]] = []
 
-    current_date = parsed_start
-    while current_date <= parsed_end:
-        for asset_id in normalized_assets:
-            validation = _validate_asset_for_date(
-                asset_id,
-                master_by_asset.get(asset_id),
-                current_date,
-                include_invalid_assets=include_invalid_assets,
-            )
-            for adjust_type in normalized_adjust_types:
-                detail = _report_row(
-                    asset_id=asset_id,
-                    trade_date=current_date,
-                    adjust_type=adjust_type,
-                    source=normalized_source,
-                    endpoint=endpoint,
-                    request_start=request_start,
-                    request_end=request_end,
-                )
-                if validation is not None:
-                    detail["status"] = validation
-                    report_rows.append(detail)
-                    continue
-                if dry_run:
-                    detail["status"] = "planned"
-                    report_rows.append(detail)
-            if validation is not None or dry_run:
-                continue
-
-            ts_code = _asset_id_to_ts_code(asset_id)
-            fetched_rows, attempts, error = _fetch_source_with_retries(
-                normalized_source,
-                current_date,
-                ts_code,
-                normalized_adjust_types,
-                timeout_seconds=timeout_seconds,
-                max_retries=max_retries,
-            )
-            rows_by_adjust = {
-                str(row.get("adjust_type") or "raw"): row
-                for row in fetched_rows
-                if _same_asset_and_date(row, asset_id, current_date)
-            }
-            for adjust_type in normalized_adjust_types:
-                detail = _report_row(
-                    asset_id=asset_id,
-                    trade_date=current_date,
-                    adjust_type=adjust_type,
-                    source=normalized_source,
-                    endpoint=endpoint,
-                    request_start=request_start,
-                    request_end=request_end,
-                )
-                detail["attempts"] = attempts
-                row = rows_by_adjust.get(adjust_type)
-                if error is not None:
-                    detail["status"] = "retryable_failure"
-                    detail["error"] = error
-                elif row is None:
-                    detail["status"] = "missing"
-                else:
-                    normalized_row = _normalize_bar_row(
-                        row,
-                        asset_id=asset_id,
-                        trade_date=current_date,
-                        adjust_type=adjust_type,
-                        source=normalized_source,
-                    )
-                    payload = _raw_payload(
-                        row,
-                        source=normalized_source,
-                        endpoint=endpoint,
-                        asset_id=asset_id,
-                        trade_date=current_date,
-                        request_start=request_start,
-                        request_end=request_end,
-                    )
-                    raw_record = _raw_payload_row(
-                        payload,
-                        asset_id=asset_id,
-                        trade_date=current_date,
-                        adjust_type=adjust_type,
-                        source=normalized_source,
-                        endpoint=endpoint,
-                    )
-                    detail["status"] = "fetched"
-                    detail["payload_hash"] = raw_record["payload_hash"]
-                    raw_rows.append(raw_record)
-                    bar_rows.append(normalized_row)
-                report_rows.append(detail)
-        current_date += timedelta(days=1)
+    if dry_run:
+        report_rows = _build_planned_report_rows(
+            assets=normalized_assets,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            adjust_types=normalized_adjust_types,
+            source=normalized_source,
+            endpoint=endpoint,
+            request_start=request_start,
+            request_end=request_end,
+            master_by_asset=master_by_asset,
+            include_invalid_assets=include_invalid_assets,
+        )
+    else:
+        report_rows, raw_rows, bar_rows = _run_execute_backfill(
+            assets=normalized_assets,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            adjust_types=normalized_adjust_types,
+            source=normalized_source,
+            endpoint=endpoint,
+            request_start=request_start,
+            request_end=request_end,
+            master_by_asset=master_by_asset,
+            include_invalid_assets=include_invalid_assets,
+            max_retries=max_retries,
+            timeout_seconds=timeout_seconds,
+        )
 
     if not dry_run and (raw_rows or bar_rows):
         _write_rows(service, raw_rows, bar_rows)
@@ -230,6 +171,165 @@ def run_market_backfill(
     report["paths"] = paths
     report["report_path"] = paths["json"]
     return report
+
+
+def _build_planned_report_rows(
+    *,
+    assets: list[str],
+    start_date: date,
+    end_date: date,
+    adjust_types: tuple[str, ...],
+    source: str,
+    endpoint: str,
+    request_start: str,
+    request_end: str,
+    master_by_asset: dict[str, dict[str, Any]],
+    include_invalid_assets: bool,
+) -> list[dict[str, Any]]:
+    report_rows: list[dict[str, Any]] = []
+    for trade_date in _iter_dates(start_date, end_date):
+        for asset_id in assets:
+            validation = _validate_asset_for_date(
+                asset_id,
+                master_by_asset.get(asset_id),
+                trade_date,
+                include_invalid_assets=include_invalid_assets,
+            )
+            status = validation or "planned"
+            for adjust_type in adjust_types:
+                detail = _report_row(
+                    asset_id=asset_id,
+                    trade_date=trade_date,
+                    adjust_type=adjust_type,
+                    source=source,
+                    endpoint=endpoint,
+                    request_start=request_start,
+                    request_end=request_end,
+                )
+                detail["status"] = status
+                report_rows.append(detail)
+    return report_rows
+
+
+def _run_execute_backfill(
+    *,
+    assets: list[str],
+    start_date: date,
+    end_date: date,
+    adjust_types: tuple[str, ...],
+    source: str,
+    endpoint: str,
+    request_start: str,
+    request_end: str,
+    master_by_asset: dict[str, dict[str, Any]],
+    include_invalid_assets: bool,
+    max_retries: int,
+    timeout_seconds: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    report_rows: list[dict[str, Any]] = []
+    raw_rows: list[dict[str, Any]] = []
+    bar_rows: list[dict[str, Any]] = []
+    dates = list(_iter_dates(start_date, end_date))
+    valid_dates_by_asset: dict[str, list[date]] = {}
+
+    for trade_date in dates:
+        for asset_id in assets:
+            validation = _validate_asset_for_date(
+                asset_id,
+                master_by_asset.get(asset_id),
+                trade_date,
+                include_invalid_assets=include_invalid_assets,
+            )
+            if validation is None:
+                valid_dates_by_asset.setdefault(asset_id, []).append(trade_date)
+                continue
+            for adjust_type in adjust_types:
+                detail = _report_row(
+                    asset_id=asset_id,
+                    trade_date=trade_date,
+                    adjust_type=adjust_type,
+                    source=source,
+                    endpoint=endpoint,
+                    request_start=request_start,
+                    request_end=request_end,
+                )
+                detail["status"] = validation
+                report_rows.append(detail)
+
+    for asset_id in assets:
+        for range_start, range_end in _contiguous_ranges(
+            valid_dates_by_asset.get(asset_id, [])
+        ):
+            fetched_rows, attempts_by_date, errors_by_date = _fetch_source_range_with_retries(
+                source,
+                range_start,
+                range_end,
+                _asset_id_to_ts_code(asset_id),
+                adjust_types,
+                timeout_seconds=timeout_seconds,
+                max_retries=max_retries,
+            )
+            rows_by_key = {
+                (row_date, str(row.get("adjust_type") or "raw")): row
+                for row in fetched_rows
+                if str(row.get("asset_id") or "").strip().upper() == asset_id
+                and (row_date := _row_date(row)) is not None
+                and range_start <= row_date <= range_end
+            }
+            for trade_date in _iter_dates(range_start, range_end):
+                for adjust_type in adjust_types:
+                    detail = _report_row(
+                        asset_id=asset_id,
+                        trade_date=trade_date,
+                        adjust_type=adjust_type,
+                        source=source,
+                        endpoint=endpoint,
+                        request_start=request_start,
+                        request_end=request_end,
+                    )
+                    detail["attempts"] = attempts_by_date.get(trade_date, 0)
+                    row = rows_by_key.get((trade_date, adjust_type))
+                    error = errors_by_date.get(trade_date)
+                    if error is not None:
+                        detail["status"] = "retryable_failure"
+                        detail["error"] = error
+                    elif row is None:
+                        detail["status"] = "missing"
+                    else:
+                        normalized_row = _normalize_bar_row(
+                            row,
+                            asset_id=asset_id,
+                            trade_date=trade_date,
+                            adjust_type=adjust_type,
+                            source=source,
+                        )
+                        payload = _raw_payload(
+                            row,
+                            source=source,
+                            endpoint=endpoint,
+                            asset_id=asset_id,
+                            trade_date=trade_date,
+                            request_start=range_start.isoformat(),
+                            request_end=range_end.isoformat(),
+                        )
+                        raw_record = _raw_payload_row(
+                            payload,
+                            asset_id=asset_id,
+                            trade_date=trade_date,
+                            adjust_type=adjust_type,
+                            source=source,
+                            endpoint=endpoint,
+                        )
+                        detail["status"] = "fetched"
+                        detail["payload_hash"] = raw_record["payload_hash"]
+                        raw_rows.append(raw_record)
+                        bar_rows.append(normalized_row)
+                    report_rows.append(detail)
+
+    report_rows.sort(
+        key=lambda row: (row["trade_date"], row["asset_id"], row["adjust_type"])
+    )
+    return report_rows, raw_rows, bar_rows
 
 
 def load_gap_workplan_asset_ids(
@@ -404,6 +504,7 @@ def _endpoint_for_source(source: str) -> str:
     return {
         "akshare": "akshare.stock_zh_a_hist",
         "tushare": "tushare.pro.daily",
+        "baostock": "baostock.query_history_k_data_plus",
     }[source]
 
 
@@ -431,7 +532,7 @@ def _fetch_source_with_retries(
                     timeout_seconds=timeout_seconds,
                     adjust_types=adjust_types,
                 )
-            else:
+            elif source == "tushare":
                 rows = fetch_tushare_daily_rows(
                     trade_date=trade_date,
                     token=os.environ.get("TUSHARE_TOKEN"),
@@ -447,22 +548,122 @@ def _fetch_source_with_retries(
                         adjust_types=adjust_types,
                     )
                 )
+            else:
+                rows = fetch_baostock_daily_range_rows(
+                    start_date=trade_date,
+                    end_date=trade_date,
+                    ts_codes=[ts_code],
+                    timeout_seconds=timeout_seconds,
+                    adjust_types=adjust_types,
+                )
             return list(rows or []), attempt, None
         except Exception as exc:  # noqa: BLE001 - report retryable source failures.
             last_error = f"{type(exc).__name__}: {exc}"
     return [], max_retries, last_error
 
 
+def _fetch_source_range_with_retries(
+    source: str,
+    start_date: date,
+    end_date: date,
+    ts_code: str,
+    adjust_types: tuple[str, ...],
+    *,
+    timeout_seconds: int,
+    max_retries: int,
+) -> tuple[list[dict[str, Any]], dict[date, int], dict[date, str]]:
+    if source == "tushare":
+        rows: list[dict[str, Any]] = []
+        attempts_by_date: dict[date, int] = {}
+        errors_by_date: dict[date, str] = {}
+        for trade_date in _iter_dates(start_date, end_date):
+            fetched, day_attempts, error = _fetch_source_with_retries(
+                source,
+                trade_date,
+                ts_code,
+                adjust_types,
+                timeout_seconds=timeout_seconds,
+                max_retries=max_retries,
+            )
+            attempts_by_date[trade_date] = day_attempts
+            if error is not None:
+                errors_by_date[trade_date] = error
+                continue
+            rows.extend(fetched)
+        return rows, attempts_by_date, errors_by_date
+
+    last_error: str | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            if source == "akshare":
+                rows = fetch_akshare_daily_range_rows(
+                    start_date=start_date,
+                    end_date=end_date,
+                    ts_codes=[ts_code],
+                    timeout_seconds=timeout_seconds,
+                    adjust_types=adjust_types,
+                )
+            else:
+                rows = fetch_baostock_daily_range_rows(
+                    start_date=start_date,
+                    end_date=end_date,
+                    ts_codes=[ts_code],
+                    timeout_seconds=timeout_seconds,
+                    adjust_types=adjust_types,
+                )
+            attempts_by_date = {
+                trade_date: attempt
+                for trade_date in _iter_dates(start_date, end_date)
+            }
+            return list(rows or []), attempts_by_date, {}
+        except Exception as exc:  # noqa: BLE001 - report retryable source failures.
+            last_error = f"{type(exc).__name__}: {exc}"
+    attempts_by_date = {
+        trade_date: max_retries
+        for trade_date in _iter_dates(start_date, end_date)
+    }
+    errors_by_date = {
+        trade_date: last_error or "source range request failed"
+        for trade_date in _iter_dates(start_date, end_date)
+    }
+    return [], attempts_by_date, errors_by_date
+
+
+def _iter_dates(start_date: date, end_date: date):
+    current = start_date
+    while current <= end_date:
+        yield current
+        current += timedelta(days=1)
+
+
+def _contiguous_ranges(values: list[date]):
+    if not values:
+        return
+    ordered = sorted(set(values))
+    range_start = previous = ordered[0]
+    for current in ordered[1:]:
+        if current != previous + timedelta(days=1):
+            yield range_start, previous
+            range_start = current
+        previous = current
+    yield range_start, previous
+
+
+def _row_date(row: dict[str, Any]) -> date | None:
+    value = row.get("trade_date")
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
 def _same_asset_and_date(row: dict[str, Any], asset_id: str, trade_date: date) -> bool:
     row_asset = str(row.get("asset_id") or "").strip().upper()
-    row_date = row.get("trade_date")
-    if isinstance(row_date, date):
-        parsed = row_date
-    else:
-        try:
-            parsed = date.fromisoformat(str(row_date)[:10])
-        except ValueError:
-            return False
+    parsed = _row_date(row)
+    if parsed is None:
+        return False
     return row_asset == asset_id and parsed == trade_date
 
 

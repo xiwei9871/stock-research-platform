@@ -74,6 +74,27 @@ PYTHONPATH=src .venv/bin/python -m stock_research.cli \
   --output-dir outputs/research/rolling_sector_oversold_backfill
 ```
 
+When the AkShare endpoint is unavailable, use the approved Baostock range
+adapter instead:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_research.cli \
+  rolling-sector-oversold-backfill \
+  --dataset market_daily_bar \
+  --gap-workplan artifacts/rolling_sector_oversold/gap_workplan_2026-07-21/gap_workplan.json \
+  --start-date 2026-07-21 \
+  --end-date 2026-07-31 \
+  --adjust-types raw,qfq,hfq \
+  --source baostock \
+  --service stock_research \
+  --dry-run
+```
+
+Both range adapters batch requests by eligible asset and contiguous date range;
+they do not issue one external request for every asset/date pair. Baostock uses
+`adjustflag=3/2/1` for `raw/qfq/hfq` and records the endpoint and requested
+range in the raw payload audit.
+
 Only after reviewing the JSON/CSV report should an operator repeat the command
 with `--execute`. The executor queries `core.asset_master` before making any
 source request, applies list/delist PIT checks, and never requests BSE (`CN:BJ`)

@@ -4584,7 +4584,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--adjust-types", type=parse_adjust_types
     )
     rolling_oversold_backfill.add_argument(
-        "--source", choices=("akshare", "tushare")
+        "--source", choices=("akshare", "tushare", "baostock")
     )
     rolling_oversold_backfill.add_argument(
         "--service", default=SETTINGS.research_service

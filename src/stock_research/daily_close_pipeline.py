@@ -982,6 +982,80 @@ def fetch_akshare_daily_rows(
     return rows
 
 
+def fetch_akshare_daily_range_rows(
+    start_date: date,
+    end_date: date,
+    *,
+    ts_codes: list[str],
+    timeout_seconds: int,
+    adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES,
+) -> list[dict[str, Any]]:
+    """Fetch one explicit date range per symbol/adjustment from AkShare."""
+    if end_date < start_date:
+        raise ValueError("end_date must not precede start_date")
+
+    def _parse_trade_date(value: Any) -> date | None:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if value in (None, ""):
+            return None
+        try:
+            return date.fromisoformat(str(value).replace("/", "-")[:10])
+        except ValueError:
+            return None
+
+    def _fetch_one(ts_code: str) -> list[dict[str, Any]]:
+        import akshare as ak
+
+        rows: list[dict[str, Any]] = []
+        for adjust_type in adjust_types:
+            frame = ak.stock_zh_a_hist(
+                symbol=ts_code_symbol(ts_code),
+                period="daily",
+                start_date=format_trade_date(start_date),
+                end_date=format_trade_date(end_date),
+                adjust="" if adjust_type == "raw" else adjust_type,
+            )
+            if frame is None or frame.empty:
+                continue
+            for source_row in frame.to_dict("records"):
+                trade_date = _parse_trade_date(
+                    source_row.get("日期")
+                    or source_row.get("date")
+                    or source_row.get("datetime")
+                )
+                if trade_date is None or not start_date <= trade_date <= end_date:
+                    continue
+                rows.append(
+                    {
+                        "ts_code": ts_code,
+                        "asset_id": ts_code_to_asset_id(ts_code),
+                        "trade_date": trade_date,
+                        "open": source_row.get("开盘"),
+                        "high": source_row.get("最高"),
+                        "low": source_row.get("最低"),
+                        "close": source_row.get("收盘"),
+                        "preclose": None,
+                        "volume": source_row.get("成交量"),
+                        "amount": source_row.get("成交额"),
+                        "turnover_rate": source_row.get("换手率"),
+                        "pct_chg": source_row.get("涨跌幅"),
+                        "trade_status": "1",
+                        "is_st": False,
+                        "adjust_type": adjust_type,
+                        "source": "akshare",
+                    }
+                )
+        return rows
+
+    rows: list[dict[str, Any]] = []
+    for ts_code in ts_codes:
+        rows.extend(call_with_timeout(_fetch_one, timeout_seconds, ts_code))
+    return rows
+
+
 def fetch_akshare_minute5_rows(
     ts_code: str, *, start_date: date, end_date: date, timeout_seconds: int
 ) -> list[dict[str, Any]]:
