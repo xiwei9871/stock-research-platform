@@ -239,18 +239,50 @@ def load_gap_workplan_asset_ids(
     """Extract explicit asset keys from a Task1 gap-workplan artifact."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     rows = payload.get("gap_rows", [])
-    asset_ids = {
-        str(row.get("asset_or_key") or "").strip()
-        for row in rows
-        if row.get("dataset") == dataset and str(row.get("asset_or_key") or "").strip()
-    }
-    if asset_ids:
+    if isinstance(rows, list) and rows:
+        asset_ids = {
+            str(row.get("asset_or_key") or "").strip()
+            for row in rows
+            if row.get("bucket") == "market_bar_backfill"
+            and row.get("dataset") == dataset
+            and str(row.get("asset_or_key") or "").strip()
+        }
         return sorted(asset_ids)
     buckets = payload.get("buckets", {})
-    selected = set()
-    for bucket in ("market_bar_backfill", "out_of_scope_bse"):
-        selected.update(str(value).strip() for value in buckets.get(bucket, ()) if str(value).strip())
-    return sorted(selected)
+    values = buckets.get("market_bar_backfill", ())
+    if isinstance(values, (str, bytes)):
+        values = (values,)
+    return sorted({str(value).strip() for value in values if str(value).strip()})
+
+
+def load_gap_workplan_exclusions(
+    path: str | Path,
+    dataset: str = "market_daily_bar",
+) -> dict[str, Any]:
+    """Summarize excluded BSE keys without expanding them by date or adjustment."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    rows = payload.get("gap_rows", [])
+    if isinstance(rows, list) and rows:
+        excluded = {
+            str(row.get("asset_or_key") or "").strip()
+            for row in rows
+            if row.get("bucket") == "out_of_scope_bse"
+            and row.get("dataset") == dataset
+            and str(row.get("asset_or_key") or "").strip()
+        }
+    else:
+        buckets = payload.get("buckets", {})
+        values = buckets.get("out_of_scope_bse", ())
+        if isinstance(values, (str, bytes)):
+            values = (values,)
+        excluded = {
+            str(value).strip() for value in values if str(value).strip()
+        }
+    ordered = sorted(excluded)
+    return {
+        "out_of_scope_bse": ordered,
+        "out_of_scope_bse_count": len(ordered),
+    }
 
 
 def _normalize_asset_ids(asset_ids: list[str] | tuple[str, ...]) -> list[str]:

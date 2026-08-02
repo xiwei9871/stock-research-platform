@@ -325,3 +325,151 @@ def test_cli_wires_gap_workplan_market_backfill_to_current_source(
     assert captured["adjust_types"] == ("raw", "qfq", "hfq")
     assert captured["source"] == "akshare"
     assert captured["dry_run"] is True
+
+
+def test_workplan_loader_only_returns_eligible_market_bucket_and_summarizes_bse(
+    tmp_path: Path,
+):
+    workplan = tmp_path / "gap_workplan.json"
+    workplan.write_text(
+        json.dumps(
+            {
+                "buckets": {
+                    "invalid_membership": ["CN:SZ:000002"],
+                    "market_bar_backfill": ["CN:SH:600000"],
+                    "out_of_scope_bse": ["CN:BJ:920001"],
+                },
+                "gap_rows": [
+                    {
+                        "bucket": "invalid_membership",
+                        "dataset": "market_daily_bar",
+                        "asset_or_key": "CN:SZ:000002",
+                    },
+                    {
+                        "bucket": "out_of_scope_bse",
+                        "dataset": "market_daily_bar",
+                        "asset_or_key": "CN:BJ:920001",
+                    },
+                    {
+                        "bucket": "market_bar_backfill",
+                        "dataset": "finance_history",
+                        "asset_or_key": "CN:SZ:000003",
+                    },
+                    {
+                        "bucket": "market_bar_backfill",
+                        "dataset": "market_daily_bar",
+                        "asset_or_key": "CN:SH:600000",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert market_backfill.load_gap_workplan_asset_ids(workplan) == [
+        "CN:SH:600000"
+    ]
+    assert market_backfill.load_gap_workplan_exclusions(workplan) == {
+        "out_of_scope_bse": ["CN:BJ:920001"],
+        "out_of_scope_bse_count": 1,
+    }
+
+
+def test_workplan_loader_legacy_buckets_never_falls_back_to_bse_or_invalid(
+    tmp_path: Path,
+):
+    workplan = tmp_path / "legacy_gap_workplan.json"
+    workplan.write_text(
+        json.dumps(
+            {
+                "buckets": {
+                    "invalid_membership": ["CN:SZ:000002"],
+                    "market_bar_backfill": ["CN:SH:600000"],
+                    "out_of_scope_bse": ["CN:BJ:920001"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert market_backfill.load_gap_workplan_asset_ids(workplan) == [
+        "CN:SH:600000"
+    ]
+    assert market_backfill.load_gap_workplan_exclusions(workplan) == {
+        "out_of_scope_bse": ["CN:BJ:920001"],
+        "out_of_scope_bse_count": 1,
+    }
+
+
+def test_cli_reports_workplan_bse_count_without_expanding_exclusions(
+    monkeypatch, tmp_path: Path, capsys
+):
+    workplan = tmp_path / "gap_workplan.json"
+    workplan.write_text(
+        json.dumps(
+            {
+                "buckets": {
+                    "invalid_membership": ["CN:SZ:000002"],
+                    "market_bar_backfill": ["CN:SH:600000"],
+                    "out_of_scope_bse": ["CN:BJ:920001"],
+                },
+                "gap_rows": [
+                    {
+                        "bucket": "invalid_membership",
+                        "dataset": "market_daily_bar",
+                        "asset_or_key": "CN:SZ:000002",
+                    },
+                    {
+                        "bucket": "out_of_scope_bse",
+                        "dataset": "market_daily_bar",
+                        "asset_or_key": "CN:BJ:920001",
+                    },
+                    {
+                        "bucket": "market_bar_backfill",
+                        "dataset": "market_daily_bar",
+                        "asset_or_key": "CN:SH:600000",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        cli,
+        "run_market_backfill",
+        lambda **kwargs: captured.update(kwargs)
+        or {
+            "paths": {
+                "json": str(tmp_path / "report.json"),
+                "csv": str(tmp_path / "report.csv"),
+            },
+            "status_counts": {},
+        },
+    )
+
+    cli.main_for_args(
+        [
+            "rolling-sector-oversold-backfill",
+            "--dataset",
+            "market_daily_bar",
+            "--gap-workplan",
+            str(workplan),
+            "--start-date",
+            "2026-07-29",
+            "--end-date",
+            "2026-07-30",
+            "--adjust-types",
+            "raw,qfq,hfq",
+            "--source",
+            "akshare",
+            "--service",
+            "stock_research",
+            "--dry-run",
+            "--output-dir",
+            str(tmp_path / "reports"),
+        ]
+    )
+
+    assert captured["asset_ids"] == ["CN:SH:600000"]
+    assert "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|1" in capsys.readouterr().out

@@ -42,6 +42,7 @@ from stock_research.config import SETTINGS
 from stock_research.rolling_oversold.contracts import RollingOversoldConfig
 from stock_research.rolling_oversold.market_backfill import (
     load_gap_workplan_asset_ids,
+    load_gap_workplan_exclusions,
     run_market_backfill,
 )
 
@@ -8497,6 +8498,9 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         _print_rolling_oversold_machine_lines(result)
     elif args.command == "rolling-sector-oversold-backfill":
         asset_ids = load_market_backfill_asset_ids(args.gap_workplan, args.dataset)
+        workplan_exclusions = load_gap_workplan_exclusions(
+            args.gap_workplan, args.dataset
+        )
         result = run_market_backfill(
             asset_ids=asset_ids,
             start_date=args.start_date,
@@ -8523,6 +8527,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(
             "rolling_sector_oversold_backfill|out_of_scope_bse|"
             f"{result.get('status_counts', {}).get('out_of_scope_bse', 0)}"
+        )
+        print(
+            "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|"
+            f"{workplan_exclusions['out_of_scope_bse_count']}"
         )
     elif args.command == "rolling-sector-oversold-report":
         snapshot_dir = Path(args.snapshot_dir).expanduser().resolve()
