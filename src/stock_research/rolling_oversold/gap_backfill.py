@@ -229,6 +229,10 @@ def write_gap_workplan(
     root.mkdir(parents=True, exist_ok=True)
     json_path = root / "gap_workplan.json"
     csv_path = root / "gap_workplan.csv"
+    previous_targets = {
+        json_path: _read_existing_text(json_path),
+        csv_path: _read_existing_text(csv_path),
+    }
     json_temp: Path | None = None
     csv_temp: Path | None = None
     try:
@@ -238,6 +242,10 @@ def write_gap_workplan(
         json_temp = None
         os.replace(csv_temp, csv_path)
         csv_temp = None
+    except BaseException:
+        _restore_target(json_path, previous_targets[json_path])
+        _restore_target(csv_path, previous_targets[csv_path])
+        raise
     finally:
         for temporary in (json_temp, csv_temp):
             if temporary is not None:
@@ -366,19 +374,47 @@ def _non_negative_integer(value: object, field: str) -> int:
 
 
 def _write_temporary(root: Path, suffix: str, content: str) -> Path:
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="",
-        dir=root,
-        prefix=".gap_workplan.",
-        suffix=suffix,
-        delete=False,
-    ) as handle:
-        handle.write(content)
-        handle.flush()
-        os.fsync(handle.fileno())
-        return Path(handle.name)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=root,
+            prefix=".gap_workplan.",
+            suffix=suffix,
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        return temporary
+    except BaseException:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+
+
+def _read_existing_text(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def _restore_target(path: Path, previous: str | None) -> None:
+    current = _read_existing_text(path)
+    if current == previous:
+        return
+    if previous is None:
+        path.unlink(missing_ok=True)
+        return
+
+    temporary = _write_temporary(path.parent, ".restore.tmp", previous)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _proposed_next_task(bucket: str, dataset: str) -> str:

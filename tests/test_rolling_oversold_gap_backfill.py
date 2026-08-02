@@ -417,3 +417,63 @@ def test_write_gap_workplan_publishes_both_files_with_os_replace(
         "gap_workplan.csv",
     ]
     assert all(source.startswith(".gap_workplan.") for source, _ in replacements)
+
+
+def test_write_gap_workplan_cleans_temporary_file_when_fsync_fails(
+    tmp_path: Path, monkeypatch
+):
+    workplan = build_gap_workplan(
+        gaps=[_gap("market_daily_bar", "CN:SZ:000001")],
+        asset_master={"CN:SZ:000001"},
+    )
+
+    def fail_fsync(_file_descriptor):
+        raise OSError("injected fsync failure")
+
+    monkeypatch.setattr(gap_backfill_module.os, "fsync", fail_fsync)
+
+    with pytest.raises(OSError, match="injected fsync failure"):
+        write_gap_workplan(workplan, tmp_path)
+
+    assert list(tmp_path.glob(".gap_workplan.*.tmp")) == []
+    assert not (tmp_path / "gap_workplan.json").exists()
+    assert not (tmp_path / "gap_workplan.csv").exists()
+
+
+def test_write_gap_workplan_rolls_back_json_when_second_replace_fails(
+    tmp_path: Path, monkeypatch
+):
+    original = build_gap_workplan(
+        gaps=[_gap("market_daily_bar", "CN:SZ:000001")],
+        asset_master={"CN:SZ:000001"},
+    )
+    write_gap_workplan(original, tmp_path)
+    json_path = tmp_path / "gap_workplan.json"
+    csv_path = tmp_path / "gap_workplan.csv"
+    original_json = json_path.read_bytes()
+    original_csv = csv_path.read_bytes()
+
+    replacement = build_gap_workplan(
+        gaps=[_gap("market_daily_bar", "CN:SZ:000002")],
+        asset_master={"CN:SZ:000002"},
+    )
+    real_replace = gap_backfill_module.os.replace
+    failure_injected = False
+
+    def fail_second_publication(source, destination):
+        nonlocal failure_injected
+        if Path(destination) == csv_path and not failure_injected:
+            failure_injected = True
+            raise OSError("injected second replace failure")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(
+        gap_backfill_module.os, "replace", fail_second_publication
+    )
+
+    with pytest.raises(OSError, match="injected second replace failure"):
+        write_gap_workplan(replacement, tmp_path)
+
+    assert json_path.read_bytes() == original_json
+    assert csv_path.read_bytes() == original_csv
+    assert list(tmp_path.glob(".gap_workplan.*.tmp")) == []
