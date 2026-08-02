@@ -442,6 +442,8 @@ def sync_finance_for_assets(
     gap workplan never expands into a full-market finance download.
     """
 
+    if cutoff is None:
+        raise ValueError("scoped finance sync requires an explicit PIT cutoff")
     normalized = sorted(
         {
             str(asset_id).strip().upper()

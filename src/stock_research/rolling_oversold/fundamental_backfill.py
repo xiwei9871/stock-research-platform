@@ -317,6 +317,7 @@ def run_fundamental_backfill(
             "assets": valuation_assets,
             "requested_rows": len(valuation_rows),
             "written_rows": 0,
+            "incomplete_assets": [],
         },
         "exclusions": {
             "out_of_scope_bse": scope["out_of_scope_bse"],
@@ -375,6 +376,10 @@ def run_fundamental_backfill(
             report["valuation"]["written_rows"] = _upsert_valuation_rows(
                 writable, service=service
             )
+        writable_assets = {row["asset_id"] for row in writable}
+        report["valuation"]["incomplete_assets"] = [
+            asset_id for asset_id in valuation_assets if asset_id not in writable_assets
+        ]
         report["finance"]["written_rows"] = _count_adapter_rows(
             report["finance"]["adapter_results"]
         )
@@ -494,10 +499,7 @@ def _write_report(report: Mapping[str, Any], output_dir: str | Path) -> dict[str
     rows: list[dict[str, Any]] = []
     for dataset, section in (("finance_history", report["finance"]), ("valuation_history", report["valuation"])):
         for asset_id in section["assets"]:
-            incomplete = (
-                dataset == "finance_history"
-                and asset_id in set(section.get("incomplete_assets", []))
-            )
+            incomplete = asset_id in set(section.get("incomplete_assets", []))
             rows.append(
                 {
                     "dataset": dataset,
