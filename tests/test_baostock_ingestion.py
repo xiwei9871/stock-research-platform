@@ -241,6 +241,55 @@ def test_sync_industry_memberships_closes_removed_industry_key(monkeypatch):
     ]
 
 
+def test_sync_industry_memberships_scopes_closure_to_snapshot_system(monkeypatch):
+    conn = FakeConnection()
+    close_calls = []
+
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "connect",
+        lambda service: _ConnectionContext(conn),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "load_cached_industry_snapshot_payload",
+        lambda opened, trade_date: [
+            {
+                "updateDate": "2026-05-04",
+                "code": "sh.600000",
+                "industry": "C39电子设备",
+                "industryClassification": "证监会行业分类",
+            }
+        ],
+        raising=False,
+    )
+
+    def fake_fetch_all(opened, sql, params=None):
+        assert "industry_system = ANY(%s)" in sql
+        assert params == ["2024-05-31", ["csrc"]]
+        return [
+            {"industry_system": "csrc", "industry_code": "C36"},
+            {"industry_system": "sw", "industry_code": "S1"},
+        ]
+
+    monkeypatch.setattr(baostock_ingestion, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_industry_memberships",
+        lambda opened, rows: len(rows),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "execute",
+        lambda opened, sql, params=None: close_calls.append((sql, params)),
+    )
+
+    assert baostock_ingestion.sync_industry_memberships("2024-05-31", use_cache=True) == 1
+
+    closed_codes = {params[2] for _, params in close_calls}
+    assert closed_codes == {"C36", "C39"}
+
+
 def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
     conn = FakeConnection()
     query_calls = []

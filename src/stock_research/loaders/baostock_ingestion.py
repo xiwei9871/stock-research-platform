@@ -629,6 +629,7 @@ def _upsert_and_close_industry_memberships(
         key = (row["industry_system"], row["industry_code"])
         current_assets_by_industry.setdefault(key, set()).add(row["asset_id"])
 
+    current_systems = sorted({row["industry_system"] for row in rows})
     existing_key_rows = fetch_all(
         conn,
         """
@@ -636,12 +637,14 @@ def _upsert_and_close_industry_memberships(
         FROM core.industry_membership
         WHERE end_date IS NULL
           AND start_date < %s
+          AND industry_system = ANY(%s)
         """,
-        [trade_date],
+        [trade_date, current_systems],
     )
     existing_keys = {
         (row["industry_system"], row["industry_code"])
         for row in existing_key_rows
+        if row["industry_system"] in current_systems
     }
 
     close_sql = """
