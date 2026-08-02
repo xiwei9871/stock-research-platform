@@ -4,7 +4,13 @@
 
 **Goal:** 将 2026-07-21 至 2026-07-31 冻结回放中的 preflight gap 变成可审计、可重跑的数据库回填流程，并保证以后每日滚动运行不再因为同类缺口回退到长时间阻塞。
 
-**Architecture:** 先做数据宇宙和资产代码的分类修复，不把所有 gap 直接当成外部下载任务；然后按行情、状态、板块衍生、财务、估值、指数六类执行独立回填。策略运行始终只读数据库，任何外部数据源只允许出现在独立 backfill/ingest 任务中，回填后由同一套 PIT preflight 和冻结回放验收。
+**Scope decision (confirmed):** 本轮及后续滚动超跌策略暂不纳入北交所。所有
+`CN:BJ:*` 股票从 PIT 股票宇宙、候选快照、财务/估值回填和验收统计中排除；
+`BSE_50` 不再是默认滚动策略的必需指数，也不作为本轮回填失败项。北交所只
+在审计中单独记为 `out_of_scope_bse`，不发起外部下载、不写入策略所需的缺口
+回填任务。`STAR_50` 仍属于范围内指数，必须补齐。
+
+**Architecture:** 先做数据宇宙和资产代码的分类修复，不把所有 gap 直接当成外部下载任务；然后按行情、状态、板块衍生、财务、估值、指数六类执行独立回填，同时保留 `invalid_membership`、`out_of_scope_bse` 和 `out_of_scope_index` 排除桶。策略运行始终只读数据库，任何外部数据源只允许出现在独立 backfill/ingest 任务中，回填后由同一套 PIT preflight 和冻结回放验收。
 
 **Tech Stack:** Python 3.14, pandas, psycopg/PostgreSQL, existing `stock_research` CLI, Baostock/Tushare/Eastmoney/AkShare adapters only inside ingestion jobs, pytest.
 
@@ -22,15 +28,18 @@ The committed 2026-07-21 preflight artifact reports 3,750 gaps:
 | `market_daily_bar` | 686 | classify stale/unmapped assets, then backfill true active assets |
 | `finance_history` | 673 | backfill PIT finance rows for active assets |
 | `market.industry_daily_bar` | 21 | rebuild after membership and market bars |
-| `market.index_daily_bar` | 2 | fill 252-session `STAR_50` and `BSE_50` history |
+| `market.index_daily_bar` | 2 | fill 252-session `STAR_50`; classify `BSE_50` as out of scope |
 
 The 686 market/status asset IDs split into 367 assets absent from
 `core.asset_master` and 319 assets present in the master. The 367 must not be
-blindly downloaded. The 319 are the true first-pass data candidates; most are
-`CN:BJ:920xxx`, for which the current `stock_qfq`/`stock_hfq` source services
-have no `bj*` source tables. The existing concept normalizer also maps
-`900xxx` B-share codes to `CN:BJ:900xxx`; that creates invalid asset IDs and
-must be rejected before membership synchronization.
+blindly downloaded. Before generating any source request, join the IDs to the
+PIT asset master and apply the exchange filter. All `CN:BJ:*` rows, including
+the master-present `920xxx` rows, are classified as `out_of_scope_bse`; they are
+not true backfill candidates in this plan. Only active, non-BJ SH/SZ/STAR/
+ChiNext assets proceed to market, finance, valuation, or derived-data tasks.
+The existing concept normalizer also maps `900xxx` B-share codes to
+`CN:BJ:900xxx`; that creates invalid asset IDs and must be rejected before
+membership synchronization.
 
 The 252-session replay window starts on 2025-05-28 for the 2026-07-21 anchor
 and on 2025-06-10 for the 2026-07-31 anchor. The backfill scope for a complete
@@ -47,8 +56,9 @@ and on 2025-06-10 for the 2026-07-31 anchor. The backfill scope for a complete
 
 Use a fixture containing the committed `preflight.json` shape and a mocked
 asset-master lookup. The classifier must produce `invalid_membership` for an
-asset missing from `core.asset_master`, `market_bar_backfill` for an eligible
-asset with no cutoff bar, and preserve sector/index gap rows unchanged.
+asset missing from `core.asset_master`, `out_of_scope_bse` for any `CN:BJ:*`
+asset, `market_bar_backfill` for an eligible non-BJ asset with no cutoff bar,
+and preserve sector/index gap rows unchanged.
 
 ```python
 def test_build_gap_workplan_separates_invalid_memberships_from_real_backfills():
@@ -56,13 +66,15 @@ def test_build_gap_workplan_separates_invalid_memberships_from_real_backfills():
         gaps=[
             DataGap("market_daily_bar", "CN:BJ:900901", "2026-07-21", "2026-07-21", 1, 0, "missing_cutoff_bar"),
             DataGap("market_daily_bar", "CN:BJ:920001", "2026-07-21", "2026-07-21", 1, 0, "missing_cutoff_bar"),
+            DataGap("market_daily_bar", "CN:SZ:000001", "2026-07-21", "2026-07-21", 1, 0, "missing_cutoff_bar"),
             DataGap("market.index_daily_bar", "BSE_50", None, "2026-07-21", 252, 21, "insufficient_252_session_history"),
         ],
-        asset_master={"CN:BJ:920001"},
+        asset_master={"CN:BJ:920001", "CN:SZ:000001"},
     )
     assert result["invalid_membership"] == ["CN:BJ:900901"]
-    assert result["market_bar_backfill"] == ["CN:BJ:920001"]
-    assert result["index_backfill"] == ["BSE_50"]
+    assert result["out_of_scope_bse"] == ["CN:BJ:920001"]
+    assert result["market_bar_backfill"] == ["CN:SZ:000001"]
+    assert result["out_of_scope_index"] == ["BSE_50"]
 ```
 
 - [ ] **Step 2: Run the focused test and verify it fails.**
@@ -91,6 +103,8 @@ def classify_asset_gap(
 ) -> str:
     if not asset_master_present:
         return "invalid_membership"
+    if asset_id.startswith("CN:BJ:"):
+        return "out_of_scope_bse"
     if dataset in {"market_daily_bar", "core.asset_status_daily"}:
         return "market_bar_backfill"
     if dataset == "finance_history":
@@ -110,11 +124,12 @@ def build_gap_workplan(
         "invalid_membership": [], "market_bar_backfill": [],
         "finance_backfill": [], "valuation_backfill": [],
         "index_backfill": [], "derived_backfill": [],
+        "out_of_scope_bse": [], "out_of_scope_index": [],
     }
     for gap in gaps:
         key = gap.asset_id
         if gap.dataset == "market.index_daily_bar":
-            bucket = "index_backfill"
+            bucket = "out_of_scope_index" if gap.asset_id == "BSE_50" else "index_backfill"
         elif key is None:
             bucket = "derived_backfill"
         else:
@@ -166,8 +181,16 @@ artifacts/rolling_sector_oversold/replay_2026-07-21_2026-07-31_stock_research_v2
 
 Query `core.asset_master` for all asset gap IDs and write the audit under
 `artifacts/rolling_sector_oversold/gap_workplan_2026-07-21/`. The audit must
-report the 367 no-master assets separately from the 319 master-present assets
-before any source request is made.
+report, before any source request is made:
+
+1. no-master/invalid membership IDs;
+2. master-present but `CN:BJ:*` IDs as `out_of_scope_bse`;
+3. active, master-present non-BJ IDs as the only source-request candidates;
+4. `BSE_50` as `out_of_scope_index`, while retaining only in-scope index gaps.
+
+The audit must include counts and the exact ID lists for each bucket; the
+original 367/319 split is diagnostic only and must not be interpreted as a
+download list.
 
 - [ ] **Step 6: Commit the audit tool.**
 
@@ -183,6 +206,7 @@ rtk git commit -m "feat: classify rolling oversold data gaps"
 **Files:**
 - Modify: `src/stock_research/core_data.py:_asset_id_from_cn_stock_code`
 - Modify: `src/stock_research/rolling_oversold/loaders.py:_membership_sql`
+- Modify: `src/stock_research/rolling_oversold/contracts.py:DEFAULT_INDEX_IDS`
 - Modify: `src/stock_research/loaders/baostock_ingestion.py:sync_industry_memberships`
 - Create: `tests/test_core_data_concept_asset_ids.py`
 - Modify: `tests/test_rolling_oversold_loaders_preflight.py`
@@ -197,7 +221,16 @@ def test_membership_loader_excludes_asset_without_active_asset_master(monkeypatc
     sql, params = capture_membership_query("2026-07-21")
     assert "JOIN core.asset_master" in sql
     assert "list_date" in sql and "delist_date" in sql
+    assert "COALESCE(a.exchange, '') <> 'BJ'" in sql
     assert params.count("2026-07-21") >= 4
+
+def test_membership_loader_excludes_bse_rows(monkeypatch):
+    rows = load_memberships_for_cutoff("2026-07-21")
+    assert all(not row.asset_id.startswith("CN:BJ:") for row in rows)
+
+def test_default_rolling_indices_do_not_require_bse50():
+    assert "BSE_50" not in DEFAULT_INDEX_IDS
+    assert "STAR_50" in DEFAULT_INDEX_IDS
 ```
 
 - [ ] **Step 2: Run the tests and verify the new tests fail.**
@@ -215,8 +248,9 @@ join `core.asset_master`.
 - [ ] **Step 3: Implement the minimum normalization and universe fix.**
 
 Change `_asset_id_from_cn_stock_code` so `900xxx` returns `None`; retain
-`920xxx` as `CN:BJ:920xxx`. Change `_membership_sql` to join the master and
-apply the PIT listing window:
+`920xxx` as `CN:BJ:920xxx` for other data-maintenance workflows, but exclude
+all `CN:BJ:*` rows from this rolling universe. Change `_membership_sql` to join
+the master, apply the PIT listing window, and apply the exchange filter:
 
 ```sql
 JOIN core.asset_master a ON a.asset_id = m.asset_id
@@ -224,6 +258,7 @@ WHERE m.start_date <= %s
   AND (m.end_date IS NULL OR m.end_date > %s)
   AND (a.list_date IS NULL OR a.list_date <= %s)
   AND (a.delist_date IS NULL OR a.delist_date > %s)
+  AND COALESCE(a.exchange, '') <> 'BJ'
 ```
 
 Update `_membership_params` to provide the four cutoff parameters before any
@@ -234,12 +269,18 @@ from the current snapshot, using the same end-date semantics already used by
 concept membership. This prevents old SH/SZ rows without a master record from
 remaining active forever.
 
+Update `DEFAULT_INDEX_IDS` to remove `BSE_50`. A caller may still request
+`BSE_50` for a separate historical data-maintenance job, but it must never be
+required by the rolling stock strategy or counted as an unresolved gap in this
+plan.
+
 - [ ] **Step 4: Re-run focused tests.**
 
 ```bash
 rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m pytest \
   tests/test_core_data_concept_asset_ids.py \
   tests/test_rolling_oversold_loaders_preflight.py \
+  tests/test_rolling_oversold_contracts.py \
   tests/test_consumer_oversold_loaders.py -q
 ```
 
@@ -289,7 +330,7 @@ write zero new logical rows and must not duplicate data.
 ```python
 def test_targeted_market_backfill_is_idempotent_and_keeps_source_metadata():
     result = run_market_backfill(
-        asset_ids=["CN:BJ:920001"],
+        asset_ids=["CN:SZ:000001"],
         start_date=date(2025, 5, 28),
         end_date=date(2026, 7, 31),
         adjust_types=("raw", "qfq", "hfq"),
@@ -342,9 +383,9 @@ The executor must:
 1. Validate all IDs against `core.asset_master` and refuse IDs not in the
    approved active universe unless `--include-invalid-assets` is explicitly
    used for a historical repair task.
-2. Fetch through an existing ingestion adapter that supports BSE `920xxx`;
-   the current `stock_qfq`/`stock_hfq` table loader is not sufficient because
-   those services expose zero `bj*` source tables.
+2. Fetch through an approved existing ingestion adapter for the eligible
+   non-BJ exchanges (SH, SZ, STAR, and ChiNext). The source adapter must not
+   silently add `CN:BJ:*`; the target validator rejects them before a request.
 3. Store raw payloads with source, endpoint, request range, and payload hash.
 4. Upsert raw/qfq/hfq rows into `market_daily_bar`.
 5. Emit per-asset and per-day counts, missing source responses, and retryable
@@ -352,7 +393,7 @@ The executor must:
 
 The strategy loader must not import or call this module.
 
-- [ ] **Step 4: Run focused tests and then a dry-run for the 319 master-present assets.**
+- [ ] **Step 4: Run focused tests and then a dry-run for the active non-BJ candidates.**
 
 ```bash
 rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -364,14 +405,16 @@ rtk /Users/xiwei/stock_research/.venv/bin/stock-research rolling-sector-oversold
   --adjust-types raw,qfq,hfq --service stock_research --dry-run
 ```
 
-Expected: the dry-run includes only eligible master-present assets and shows
-the requested 2025-05-28 through 2026-07-31 range.
+Expected: the dry-run includes only active, master-present, non-BJ assets and
+shows the requested 2025-05-28 through 2026-07-31 range. It must report the
+excluded BSE IDs separately and must not issue a source request for them.
 
 - [ ] **Step 5: Execute the market backfill in resumable batches.**
 
-Run with a batch size of 25–50 assets and persist each batch result. Retry only
-failed batches. Do not run the full nine-anchor strategy until the workplan
-reports zero unresolved market-bar gaps for all anchor cutoff dates.
+Run with a batch size of 25–50 active non-BJ assets and persist each batch
+result. Retry only failed batches. Do not run the full nine-anchor strategy
+until the workplan reports zero unresolved market-bar gaps for all anchor
+cutoff dates; `out_of_scope_bse` is an expected terminal bucket, not a retry.
 
 - [ ] **Step 6: Commit the backfill executor and runbook.**
 
@@ -433,10 +476,12 @@ The command must discover systems from the active membership workplan rather
 than silently assuming only `csrc`/`em`. Add the missing `build-concept-bars`
 CLI parser if direct maintenance execution is needed.
 
-Fill the two index gaps with 252 sessions through the existing index adapter;
-add a targeted `--index-ids STAR_50,BSE_50` option and verify that each index
-has at least 252 non-null close rows. The current database has only 21 rows for
-each, so merely rerunning the current default sync is not acceptance.
+Fill `STAR_50` with 252 sessions through the existing index adapter and verify
+that it has at least 252 non-null close rows. `BSE_50` is explicitly skipped
+for this strategy scope: its existing two-row gap is recorded as
+`out_of_scope_index`, and a missing BSE_50 history must not block preflight or
+replay. A caller may pass an explicit index list for a separate BSE data task,
+but that task is not part of this plan.
 
 - [ ] **Step 3: Run the derived tests and execute the rebuild.**
 
@@ -486,14 +531,14 @@ quarter`, including the intervening quarters). For valuation, request
 ```python
 def test_finance_backfill_never_publishes_future_announcements():
     rows = build_finance_backfill_rows(
-        asset_ids=["CN:BJ:920001"], cutoff=date(2026, 7, 21)
+        asset_ids=["CN:SZ:000001"], cutoff=date(2026, 7, 21)
     )
     assert all(row["announcement_date"] <= date(2026, 7, 21) for row in rows)
     assert len({row["report_period"] for row in rows}) >= 5
 
 def test_valuation_backfill_keeps_factor_names_and_version():
     rows = build_valuation_backfill_rows(
-        asset_ids=["CN:BJ:920001"], start_date=date(2025, 5, 28), end_date=date(2026, 7, 31)
+        asset_ids=["CN:SZ:000001"], start_date=date(2025, 5, 28), end_date=date(2026, 7, 31)
     )
     assert {row["factor_name"] for row in rows} <= {"pe_ttm", "ps_ttm", "ev_ebitda"}
     assert all(row["calc_version"] for row in rows)
@@ -501,12 +546,13 @@ def test_valuation_backfill_keeps_factor_names_and_version():
 
 - [ ] **Step 3: Implement source-specific fundamental backfill.**
 
-Use the existing `sync-baostock-finance` path for assets and periods it
-supports. For BSE assets not present in Baostock, use an approved existing
-fundamental adapter and write to the canonical `finance.*` and
-`factor.factor_daily` tables with source/version metadata. Never fill missing
-values with zero or with post-cutoff data. A failed source request remains a
-gap and is reported for retry.
+Use the existing `sync-baostock-finance` path for eligible non-BJ assets and
+periods it supports. The request generator must be fed only the active
+non-BJ universe; BSE assets are classified as `out_of_scope_bse` and are not
+sent to any fundamental adapter in this plan. Write to the canonical
+`finance.*` and `factor.factor_daily` tables with source/version metadata.
+Never fill missing values with zero or with post-cutoff data. A failed source
+request remains a gap and is reported for retry.
 
 - [ ] **Step 4: Run targeted fundamental backfill and validate coverage.**
 
@@ -550,7 +596,9 @@ rtk /Users/xiwei/stock_research/.venv/bin/stock-research rolling-sector-oversold
 ```
 
 Acceptance: no unresolved `market_daily_bar`, `core.asset_status_daily`,
-finance, valuation, sector-bar, or index gaps for the active PIT universe.
+finance, valuation, sector-bar, or in-scope index gaps for the active PIT
+universe; `CN:BJ:*` rows appear only under `out_of_scope_bse`, and `BSE_50`
+appears only under `out_of_scope_index`.
 
 - [ ] **Step 2: Run the complete frozen replay.**
 
@@ -565,7 +613,9 @@ rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_res
 
 Acceptance: `blocked=0`, nine anchors processed, nine immutable snapshot
 manifests, no unresolved backfill artifact, and all 1/3/5-day outcomes are
-pending or complete according to available future sessions.
+pending or complete according to available future sessions. Every snapshot
+must contain zero `CN:BJ:*` stock candidates and must use the non-BJ default
+index universe.
 
 - [ ] **Step 3: Generate the 2026-07-30 focus report.**
 
@@ -593,7 +643,8 @@ Record stage timings. The current database-only path already fails fast in
 daily target is under 180 seconds and the nine-anchor replay target remains
 under the configured 3,600-second budget. If the successful one-anchor run
 exceeds 180 seconds, profile the recorded stage timings before changing the
-algorithm.
+algorithm. The timing comparison must use the same non-BJ universe in both
+runs.
 
 - [ ] **Step 5: Run final tests and commit the validation record.**
 
@@ -627,5 +678,7 @@ rtk git commit -m "test: validate rolling oversold gap backfill"
 行业/股票评分和快照写入，因此计划把正常单日目标定为 **180 秒以内**，而不是
 把 23 秒误当成成功运行耗时。一次性的 9-anchor 回放仍按 **1 小时以内**验收。
 
-补数本身可能需要更久，尤其是 303 个 BSE 资产的历史日线和财务数据；它是一次
-性、可分批、可恢复的 backfill 成本，不会叠加到以后的每日策略运行时间。
+补数本身可能需要更久，但本轮不对北交所发起日线或财务回填。非北交所缺口是
+一次性、可分批、可恢复的 backfill 成本，不会叠加到以后的每日策略运行时间；
+北交所数量和缺口只在审计报告中保留为 `out_of_scope_bse`，避免与真正的
+数据缺失混淆。
