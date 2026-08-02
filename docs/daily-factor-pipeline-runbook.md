@@ -77,6 +77,42 @@ Resume an interrupted daily incremental run from a named step, or rerun one step
 
 The daily incremental DAG loads market bars first, then checks target-date `market_daily_bar` freshness before downstream derived steps.
 
+## Rolling Sector Oversold Fundamental Backfill
+
+Use the committed gap workplan to plan PIT finance and valuation repairs for
+eligible non-BJ assets.  Start with the default dry-run; it writes only an
+auditable JSON/CSV report and does not call an external source or mutate the
+database:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research rolling-sector-oversold-backfill \
+  --dataset fundamentals \
+  --gap-workplan artifacts/rolling_sector_oversold/gap_workplan_2026-07-21/gap_workplan.json \
+  --start-date 2025-05-28 --end-date 2026-07-31 --service stock_research
+```
+
+The fundamentals task keeps only `finance_backfill`/`valuation_backfill`
+rows, excludes `invalid_membership` and `CN:BJ:*`, and never fills missing
+financial or valuation values with zero.  Finance requests cover at least five
+disclosed report periods so cumulative TTM calculations can use the prior
+fiscal year and prior same quarter.  All PIT rows must satisfy
+`announcement_date <= anchor_date`; valuation output is restricted to
+`pe_ttm`, `ps_ttm`, and `ev_ebitda` with a non-empty calculation version.
+
+Only after reviewing the report and confirming source coverage should an
+operator explicitly execute the adapter-backed job:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research rolling-sector-oversold-backfill \
+  --dataset fundamentals --execute \
+  --gap-workplan artifacts/rolling_sector_oversold/gap_workplan_2026-07-21/gap_workplan.json \
+  --start-date 2025-05-28 --end-date 2026-07-31 --service stock_research
+```
+
+Re-run the rolling PIT preflight after execution.  Failed or still-missing
+source rows remain gaps and must be retried or reported; they are not silently
+treated as valid strategy inputs.
+
 Check Phase 10 operational health without mutating data:
 
 ```bash

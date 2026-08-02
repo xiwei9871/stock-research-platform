@@ -1,3 +1,4 @@
+from datetime import date
 from functools import lru_cache
 import time
 from typing import Any
@@ -357,6 +358,7 @@ def _baostock_codes(
     *,
     year: int | None = None,
     quarter: int | None = None,
+    asset_ids: list[str] | None = None,
 ) -> list[str]:
     filters = [
         "baostock_code IS NOT NULL",
@@ -368,6 +370,9 @@ def _baostock_codes(
         params.append(quarter_end_date(year, quarter))
         filters.append("(delist_date IS NULL OR delist_date >= %s)")
         params.append(quarter_end_date(year, quarter))
+    if asset_ids is not None:
+        filters.append("asset_id = ANY(%s)")
+        params.append(sorted({str(asset_id).strip() for asset_id in asset_ids if str(asset_id).strip()}))
     sql = f"""
     SELECT baostock_code
     FROM core.asset_master
@@ -399,6 +404,57 @@ def sync_finance_for_period(
             "queried_assets": 0,
         }
 
+    return _sync_finance_codes(codes, year, quarter, service=service)
+
+
+def sync_finance_for_assets(
+    asset_ids: list[str] | tuple[str, ...],
+    year: int,
+    quarter: int,
+    *,
+    service: str = SETTINGS.research_service,
+    cutoff: date | str | None = None,
+) -> dict[str, int]:
+    """Sync one reporting period for an explicit PIT asset subset.
+
+    This scoped variant is used by rolling-sector-oversold maintenance so a
+    gap workplan never expands into a full-market finance download.
+    """
+
+    normalized = sorted({str(asset_id).strip().upper() for asset_id in asset_ids if str(asset_id).strip()})
+    if not normalized:
+        return {
+            "indicator_quarter": 0,
+            "income_statement": 0,
+            "share_capital_event": 0,
+            "queried_assets": 0,
+        }
+    with connect(service) as conn:
+        codes = _baostock_codes(
+            conn,
+            year=year,
+            quarter=quarter,
+            asset_ids=normalized,
+        )
+    if not codes:
+        return {
+            "indicator_quarter": 0,
+            "income_statement": 0,
+            "share_capital_event": 0,
+            "queried_assets": 0,
+        }
+    return _sync_finance_codes(codes, year, quarter, service=service, cutoff=cutoff)
+
+
+def _sync_finance_codes(
+    codes: list[str],
+    year: int,
+    quarter: int,
+    *,
+    service: str,
+    cutoff: date | str | None = None,
+) -> dict[str, int]:
+    cutoff_date = None if cutoff is None else date.fromisoformat(str(cutoff)[:10])
     _login_or_raise()
     try:
         indicators = []
@@ -416,10 +472,14 @@ def sync_finance_for_period(
                 _query_rows_with_retry(bs.query_dupont_data, code, year, quarter),
             )
             for row in merged_rows:
-                indicators.append(normalize_indicator_row(row))
+                normalized = normalize_indicator_row(row)
+                if cutoff_date is None or date.fromisoformat(normalized["announcement_date"][:10]) <= cutoff_date:
+                    indicators.append(normalized)
             for row in profit_rows:
-                incomes.append(normalize_income_row(row))
-                share_capital_events.append(normalize_share_capital_row(row))
+                income = normalize_income_row(row)
+                if cutoff_date is None or date.fromisoformat(income["announcement_date"][:10]) <= cutoff_date:
+                    incomes.append(income)
+                    share_capital_events.append(normalize_share_capital_row(row))
 
         with connect(service) as conn:
             counts = upsert_finance_rows(

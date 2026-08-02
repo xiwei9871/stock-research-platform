@@ -46,6 +46,9 @@ from stock_research.rolling_oversold.market_backfill import (
     run_market_backfill,
 )
 from stock_research.rolling_oversold.derived_backfill import run_derived_backfill
+from stock_research.rolling_oversold.fundamental_backfill import (
+    run_fundamental_backfill,
+)
 
 # Keep the CLI-facing helper name explicit about the source of the asset list.
 # The compatibility alias also makes it straightforward for callers/tests to
@@ -4575,7 +4578,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     rolling_oversold_backfill = subparsers.add_parser("rolling-sector-oversold-backfill")
     rolling_oversold_backfill.add_argument(
-        "--dataset", choices=("market_daily_bar", "derived"), required=True
+        "--dataset", choices=("market_daily_bar", "derived", "fundamentals"), required=True
     )
     rolling_oversold_backfill.add_argument("--gap-workplan")
     rolling_oversold_backfill.add_argument("--start-date", required=True)
@@ -8534,6 +8537,39 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             print(
                 "rolling_sector_oversold_derived_backfill|out_of_scope_index|"
                 f"{','.join(result.get('out_of_scope_index', []))}"
+            )
+        elif args.dataset == "fundamentals":
+            result = run_fundamental_backfill(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                gap_workplan=args.gap_workplan,
+                service=args.service,
+                dry_run=args.dry_run,
+                output_dir=args.output_dir,
+            )
+            print(
+                "rolling_sector_oversold_fundamentals_backfill|report|"
+                f"{result['paths']['json']}"
+            )
+            print(
+                "rolling_sector_oversold_fundamentals_backfill|csv|"
+                f"{result['paths']['csv']}"
+            )
+            print(
+                "rolling_sector_oversold_fundamentals_backfill|finance_requested|"
+                f"{result.get('finance', {}).get('requested_rows', 0)}"
+            )
+            print(
+                "rolling_sector_oversold_fundamentals_backfill|valuation_requested|"
+                f"{result.get('valuation', {}).get('requested_rows', 0)}"
+            )
+            print(
+                "rolling_sector_oversold_fundamentals_backfill|out_of_scope_bse|"
+                f"{','.join(result.get('exclusions', {}).get('out_of_scope_bse', []))}"
+            )
+            print(
+                "rolling_sector_oversold_fundamentals_backfill|invalid_membership|"
+                f"{','.join(result.get('exclusions', {}).get('invalid_membership', []))}"
             )
         else:
             if not args.gap_workplan or not args.adjust_types or not args.source:
