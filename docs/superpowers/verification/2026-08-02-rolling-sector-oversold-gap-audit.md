@@ -65,3 +65,25 @@ BSE_50
 ```
 
 The only in-scope index gap is `STAR_50`, classified as `index_backfill`.
+
+## Post-backfill closure
+
+The 3,750-row table above is the initial audit, not the final live state.  The
+follow-up repair tasks completed the scoped data work without downloading BSE
+assets:
+
+- Industry membership refresh returned 5,200 rows for 2026-07-21 and 5,202
+  rows for 2026-07-31; the raw Baostock snapshots contained 5,534 and 5,536
+  rows respectively.
+- Asset-master lifecycle/code corrections were applied only to identified
+  assets, including 13 delisted records and the missing 301583 listing.  BSE
+  assets remained excluded.
+- The original market backfill wrote 2,592 canonical rows with zero source
+  failures.  Subsequent single-day repairs wrote 3, 6, 9, and 195 rows for
+  newly exposed non-BJ gaps; each run reported zero failed and zero missing
+  rows.
+- A direct database audit across all nine open sessions from 2026-07-21
+  through 2026-07-31 found zero missing qfq bars and zero missing status rows
+  for the active non-BJ strategy universe.
+- The final replay preflight is passed for every anchor.  See the companion
+  backfill validation record for the complete evidence and replay paths.

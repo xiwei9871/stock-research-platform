@@ -96,9 +96,13 @@ rows, excludes `invalid_membership` and `CN:BJ:*`, and never fills missing
 financial or valuation values with zero.  Finance requests cover six quarter
 ends so a not-yet-disclosed current quarter still leaves at least five visible
 report periods for cumulative TTM calculations, including the prior fiscal
-year and prior same quarter.  All PIT rows must satisfy
+year and prior same quarter.  The rolling loader keeps ten disclosed periods
+in memory so a missing current ROE can use the latest older PIT value without
+calling an external source.  All PIT rows must satisfy
 `announcement_date <= anchor_date`; valuation output is restricted to
-`pe_ttm`, `ps_ttm`, and `ev_ebitda` with a non-empty calculation version.
+source-backed `pe_ttm` and `ps_ttm` (and `ev_ebitda` only when the database
+actually provides EBITDA).  No EV/EBITDA value is fabricated from EBIT or
+another proxy.
 
 Only after reviewing the report and confirming source coverage should an
 operator explicitly execute the adapter-backed job:
