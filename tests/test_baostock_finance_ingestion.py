@@ -78,6 +78,21 @@ def test_normalize_income_row_uses_profit_fields():
     assert normalized["eps_basic"] == 1.501749
 
 
+def test_normalize_income_row_falls_back_to_net_profit_for_parent_profit():
+    row = {
+        "code": "sh.688797",
+        "pubDate": "2026-07-31",
+        "statDate": "2026-06-30",
+        "MBRevenue": "100.0",
+        "netProfit": "12.5",
+    }
+
+    normalized = baostock_finance_ingestion.normalize_income_row(row)
+
+    assert normalized["np_parent"] == 12.5
+    assert normalized["source"] == "baostock"
+
+
 def test_normalize_share_capital_row_uses_profit_share_fields():
     row = {
         "code": "sh.600000",

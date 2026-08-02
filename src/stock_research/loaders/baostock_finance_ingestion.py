@@ -25,6 +25,14 @@ def parse_float(value: Any) -> float | None:
     return float(text)
 
 
+def _first_float(row: dict[str, Any], *fields: str) -> float | None:
+    for field in fields:
+        value = parse_float(row.get(field))
+        if value is not None:
+            return value
+    return None
+
+
 def report_type_from_period(report_period: str) -> str:
     if str(report_period).endswith("-12-31"):
         return "FY"
@@ -73,8 +81,14 @@ def normalize_income_row(row: dict[str, Any]) -> dict[str, Any]:
         "operating_profit": parse_float(row.get("operateProfit")),
         "total_profit": parse_float(row.get("totalProfit")),
         "net_profit": parse_float(row.get("netProfit")),
-        "np_parent": parse_float(row.get("parentNetProfit")),
-        "np_parent_deducted": parse_float(row.get("deductParentNetProfit")),
+        # Baostock's query_profit_data payloads in the current adapter do not
+        # consistently expose parentNetProfit.  netProfit is the available
+        # attributable-profit field for those rows; retain it as a
+        # source-backed fallback rather than dropping the TTM input.
+        "np_parent": _first_float(row, "parentNetProfit", "netProfit"),
+        "np_parent_deducted": _first_float(
+            row, "deductParentNetProfit", "deductNetProfit"
+        ),
         "eps_basic": parse_float(row.get("epsTTM")),
         "source": "baostock",
     }
