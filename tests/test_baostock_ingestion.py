@@ -148,6 +148,13 @@ def test_sync_industry_memberships_uses_cached_snapshot(monkeypatch):
         "upsert_industry_memberships",
         lambda opened, rows: calls.append((opened, rows)) or len(rows),
     )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "fetch_all",
+        lambda opened, sql, params=None: [
+            {"industry_system": "csrc", "industry_code": "J66"}
+        ],
+    )
     monkeypatch.setattr(baostock_ingestion, "execute", fake_execute)
     monkeypatch.setattr(
         baostock_ingestion.bs,
@@ -169,6 +176,66 @@ def test_sync_industry_memberships_uses_cached_snapshot(monkeypatch):
         "2024-05-31",
         "csrc",
         "J66",
+        "2024-05-31",
+        ["CN:SH:600000"],
+    ]
+
+
+def test_sync_industry_memberships_closes_removed_industry_key(monkeypatch):
+    conn = FakeConnection()
+    close_calls = []
+
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "connect",
+        lambda service: _ConnectionContext(conn),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "load_cached_industry_snapshot_payload",
+        lambda opened, trade_date: [
+            {
+                "updateDate": "2026-05-04",
+                "code": "sh.600000",
+                "industry": "C39电子设备",
+                "industryClassification": "证监会行业分类",
+            }
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "fetch_all",
+        lambda opened, sql, params=None: [
+            {"industry_system": "csrc", "industry_code": "C36"},
+            {"industry_system": "csrc", "industry_code": "C39"},
+        ],
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_industry_memberships",
+        lambda opened, rows: len(rows),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "execute",
+        lambda opened, sql, params=None: close_calls.append((sql, params)),
+    )
+
+    assert baostock_ingestion.sync_industry_memberships("2024-05-31", use_cache=True) == 1
+
+    params_by_code = {params[2]: params for _, params in close_calls}
+    assert params_by_code["C36"] == [
+        "2024-05-31",
+        "csrc",
+        "C36",
+        "2024-05-31",
+        [],
+    ]
+    assert params_by_code["C39"] == [
+        "2024-05-31",
+        "csrc",
+        "C39",
         "2024-05-31",
         ["CN:SH:600000"],
     ]
@@ -248,6 +315,13 @@ def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
         baostock_ingestion,
         "upsert_industry_memberships",
         lambda opened, rows: upserted.append(rows) or len(rows),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "fetch_all",
+        lambda opened, sql, params=None: [
+            {"industry_system": "csrc", "industry_code": "J66"}
+        ],
     )
     monkeypatch.setattr(
         baostock_ingestion,
