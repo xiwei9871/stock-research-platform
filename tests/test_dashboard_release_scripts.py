@@ -1282,9 +1282,9 @@ def test_launchd_template_uses_selected_release_root_not_worktree():
     assert "<key>STRATEGY_SOURCE_ROOT</key>" in plist
     assert "<string>/Users/xiwei/stock_research</string>" in plist
     assert "EXPECTED_TRADE_DATE" not in plist
-    assert "<integer>23</integer>" in plist
+    assert "<integer>22</integer>" in plist
     assert "<integer>0</integer>" in plist
-    assert "<integer>22</integer>" not in plist
+    assert "<integer>23</integer>" not in plist
 
 
 def test_sync_script_separates_release_source_from_runtime_strategy_outputs():
