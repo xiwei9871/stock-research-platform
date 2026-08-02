@@ -8532,6 +8532,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|"
             f"{workplan_exclusions['out_of_scope_bse_count']}"
         )
+        print(
+            "rolling_sector_oversold_backfill|workplan_invalid_membership|"
+            f"{workplan_exclusions['invalid_membership_count']}"
+        )
     elif args.command == "rolling-sector-oversold-report":
         snapshot_dir = Path(args.snapshot_dir).expanduser().resolve()
         snapshot = load_rolling_oversold_snapshot(snapshot_dir)

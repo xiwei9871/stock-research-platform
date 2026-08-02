@@ -372,6 +372,8 @@ def test_workplan_loader_only_returns_eligible_market_bucket_and_summarizes_bse(
     assert market_backfill.load_gap_workplan_exclusions(workplan) == {
         "out_of_scope_bse": ["CN:BJ:920001"],
         "out_of_scope_bse_count": 1,
+        "invalid_membership": ["CN:SZ:000002"],
+        "invalid_membership_count": 1,
     }
 
 
@@ -398,6 +400,43 @@ def test_workplan_loader_legacy_buckets_never_falls_back_to_bse_or_invalid(
     assert market_backfill.load_gap_workplan_exclusions(workplan) == {
         "out_of_scope_bse": ["CN:BJ:920001"],
         "out_of_scope_bse_count": 1,
+        "invalid_membership": ["CN:SZ:000002"],
+        "invalid_membership_count": 1,
+    }
+
+
+def test_workplan_loader_falls_back_to_buckets_when_gap_rows_have_no_target_dataset(
+    tmp_path: Path,
+):
+    workplan = tmp_path / "mixed_gap_workplan.json"
+    workplan.write_text(
+        json.dumps(
+            {
+                "buckets": {
+                    "invalid_membership": ["CN:SZ:000002"],
+                    "market_bar_backfill": ["CN:SH:600000"],
+                    "out_of_scope_bse": ["CN:BJ:920001"],
+                },
+                "gap_rows": [
+                    {
+                        "bucket": "finance_backfill",
+                        "dataset": "finance_history",
+                        "asset_or_key": "CN:SZ:000003",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert market_backfill.load_gap_workplan_asset_ids(workplan) == [
+        "CN:SH:600000"
+    ]
+    assert market_backfill.load_gap_workplan_exclusions(workplan) == {
+        "out_of_scope_bse": ["CN:BJ:920001"],
+        "out_of_scope_bse_count": 1,
+        "invalid_membership": ["CN:SZ:000002"],
+        "invalid_membership_count": 1,
     }
 
 
@@ -472,4 +511,6 @@ def test_cli_reports_workplan_bse_count_without_expanding_exclusions(
     )
 
     assert captured["asset_ids"] == ["CN:SH:600000"]
-    assert "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|1" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|1" in output
+    assert "rolling_sector_oversold_backfill|workplan_invalid_membership|1" in output

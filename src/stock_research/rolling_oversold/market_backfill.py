@@ -247,12 +247,9 @@ def load_gap_workplan_asset_ids(
             and row.get("dataset") == dataset
             and str(row.get("asset_or_key") or "").strip()
         }
-        return sorted(asset_ids)
-    buckets = payload.get("buckets", {})
-    values = buckets.get("market_bar_backfill", ())
-    if isinstance(values, (str, bytes)):
-        values = (values,)
-    return sorted({str(value).strip() for value in values if str(value).strip()})
+        if asset_ids:
+            return sorted(asset_ids)
+    return _workplan_bucket_values(payload, "market_bar_backfill")
 
 
 def load_gap_workplan_exclusions(
@@ -262,27 +259,49 @@ def load_gap_workplan_exclusions(
     """Summarize excluded BSE keys without expanding them by date or adjustment."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     rows = payload.get("gap_rows", [])
-    if isinstance(rows, list) and rows:
-        excluded = {
-            str(row.get("asset_or_key") or "").strip()
-            for row in rows
-            if row.get("bucket") == "out_of_scope_bse"
-            and row.get("dataset") == dataset
-            and str(row.get("asset_or_key") or "").strip()
-        }
-    else:
-        buckets = payload.get("buckets", {})
-        values = buckets.get("out_of_scope_bse", ())
-        if isinstance(values, (str, bytes)):
-            values = (values,)
-        excluded = {
-            str(value).strip() for value in values if str(value).strip()
-        }
+    excluded = _workplan_row_values(
+        rows, bucket="out_of_scope_bse", dataset=dataset
+    )
+    if not excluded:
+        excluded = set(_workplan_bucket_values(payload, "out_of_scope_bse"))
+    invalid = _workplan_row_values(
+        rows, bucket="invalid_membership", dataset=dataset
+    )
+    if not invalid:
+        invalid = set(_workplan_bucket_values(payload, "invalid_membership"))
     ordered = sorted(excluded)
+    invalid_ordered = sorted(invalid)
     return {
         "out_of_scope_bse": ordered,
         "out_of_scope_bse_count": len(ordered),
+        "invalid_membership": invalid_ordered,
+        "invalid_membership_count": len(invalid_ordered),
     }
+
+
+def _workplan_row_values(
+    rows: object,
+    *,
+    bucket: str,
+    dataset: str,
+) -> set[str]:
+    if not isinstance(rows, list) or not rows:
+        return set()
+    return {
+        str(row.get("asset_or_key") or "").strip()
+        for row in rows
+        if row.get("bucket") == bucket
+        and row.get("dataset") == dataset
+        and str(row.get("asset_or_key") or "").strip()
+    }
+
+
+def _workplan_bucket_values(payload: dict[str, Any], bucket: str) -> list[str]:
+    buckets = payload.get("buckets", {})
+    values = buckets.get(bucket, ()) if isinstance(buckets, dict) else ()
+    if isinstance(values, (str, bytes)):
+        values = (values,)
+    return sorted({str(value).strip() for value in values if str(value).strip()})
 
 
 def _normalize_asset_ids(asset_ids: list[str] | tuple[str, ...]) -> list[str]:
