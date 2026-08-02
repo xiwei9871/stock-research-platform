@@ -286,6 +286,76 @@ def test_build_gap_workplan_is_deterministic_with_shuffle_and_duplicates():
     assert len(forward["gap_rows"]) == 3
 
 
+def test_build_gap_workplan_is_deterministic_when_counts_differ():
+    smaller = DataGap(
+        "market_daily_bar",
+        "CN:SZ:000001",
+        "2026-07-21",
+        "2026-07-21",
+        1,
+        0,
+        "missing_cutoff_bar",
+    )
+    larger = DataGap(
+        "market_daily_bar",
+        "CN:SZ:000001",
+        "2026-07-21",
+        "2026-07-21",
+        2,
+        0,
+        "missing_cutoff_bar",
+    )
+
+    forward = build_gap_workplan(
+        gaps=[larger, smaller], asset_master={"CN:SZ:000001"}
+    )
+    reverse = build_gap_workplan(
+        gaps=[smaller, larger], asset_master={"CN:SZ:000001"}
+    )
+
+    assert forward == reverse
+    assert [row["expected_rows"] for row in forward["gap_rows"]] == [1, 2]
+
+
+def test_write_gap_workplan_is_deterministic_when_counts_differ(tmp_path: Path):
+    buckets = {
+        "invalid_membership": [],
+        "market_bar_backfill": ["CN:SZ:000001"],
+        "finance_backfill": [],
+        "valuation_backfill": [],
+        "index_backfill": [],
+        "derived_backfill": [],
+        "out_of_scope_bse": [],
+        "out_of_scope_index": [],
+    }
+    row = {
+        "bucket": "market_bar_backfill",
+        "dataset": "market_daily_bar",
+        "asset_or_key": "CN:SZ:000001",
+        "start_date": "2026-07-21",
+        "end_date": "2026-07-21",
+        "actual_rows": 0,
+        "reason": "missing_cutoff_bar",
+        "proposed_next_task": "backfill_market_daily_bar",
+    }
+    larger = {**row, "expected_rows": 2}
+    smaller = {**row, "expected_rows": 1}
+    forward = {**buckets, "gap_rows": [larger, smaller]}
+    reverse = {**buckets, "gap_rows": [smaller, larger]}
+
+    forward_paths = write_gap_workplan(forward, tmp_path / "forward")
+    reverse_paths = write_gap_workplan(reverse, tmp_path / "reverse")
+
+    assert Path(forward_paths["json"]).read_bytes() == Path(
+        reverse_paths["json"]
+    ).read_bytes()
+    assert Path(forward_paths["csv"]).read_bytes() == Path(
+        reverse_paths["csv"]
+    ).read_bytes()
+    payload = json.loads(Path(forward_paths["json"]).read_text(encoding="utf-8"))
+    assert [row["expected_rows"] for row in payload["gap_rows"]] == [1, 2]
+
+
 @pytest.mark.parametrize(
     ("gap", "message"),
     [

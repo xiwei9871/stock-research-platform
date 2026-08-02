@@ -157,16 +157,7 @@ def build_gap_workplan(
     buckets = {
         bucket: sorted(bucket_values[bucket]) for bucket in WORKPLAN_BUCKETS
     }
-    audit_rows.sort(
-        key=lambda row: (
-            row["bucket"],
-            row["dataset"],
-            row["asset_or_key"],
-            row["start_date"] or "",
-            row["end_date"] or "",
-            row["reason"],
-        )
-    )
+    audit_rows.sort(key=_audit_row_sort_key)
     return {**buckets, "gap_rows": audit_rows}
 
 
@@ -189,16 +180,7 @@ def write_gap_workplan(
     ):
         raise ValueError("workplan gap_rows must be a sequence")
     audit_rows = [_normalize_audit_row(row) for row in raw_gap_rows]
-    audit_rows.sort(
-        key=lambda row: (
-            row["bucket"],
-            row["dataset"],
-            row["asset_or_key"],
-            row["start_date"] or "",
-            row["end_date"] or "",
-            row["reason"],
-        )
-    )
+    audit_rows.sort(key=_audit_row_sort_key)
     _validate_bucket_audit_alignment(buckets, audit_rows)
     bucket_gap_counts = {
         bucket: sum(row["bucket"] == bucket for row in audit_rows)
@@ -339,6 +321,20 @@ def _validate_bucket_audit_alignment(
             raise ValueError(
                 f"workplan bucket {bucket} keys must match explicit gap_rows"
             )
+
+
+def _audit_row_sort_key(row: Mapping[str, Any]) -> tuple[object, ...]:
+    return (
+        row["bucket"],
+        row["dataset"],
+        row["asset_or_key"],
+        row["start_date"] or "",
+        row["end_date"] or "",
+        row["expected_rows"],
+        row["actual_rows"],
+        row["reason"],
+        row["proposed_next_task"],
+    )
 
 
 def _non_empty_text(value: object, field: str) -> str:
