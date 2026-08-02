@@ -45,6 +45,7 @@ from stock_research.rolling_oversold.market_backfill import (
     load_gap_workplan_exclusions,
     run_market_backfill,
 )
+from stock_research.rolling_oversold.derived_backfill import run_derived_backfill
 
 # Keep the CLI-facing helper name explicit about the source of the asset list.
 # The compatibility alias also makes it straightforward for callers/tests to
@@ -4574,16 +4575,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     rolling_oversold_backfill = subparsers.add_parser("rolling-sector-oversold-backfill")
     rolling_oversold_backfill.add_argument(
-        "--dataset", choices=("market_daily_bar",), required=True
+        "--dataset", choices=("market_daily_bar", "derived"), required=True
     )
-    rolling_oversold_backfill.add_argument("--gap-workplan", required=True)
+    rolling_oversold_backfill.add_argument("--gap-workplan")
     rolling_oversold_backfill.add_argument("--start-date", required=True)
     rolling_oversold_backfill.add_argument("--end-date", required=True)
     rolling_oversold_backfill.add_argument(
-        "--adjust-types", type=parse_adjust_types, required=True
+        "--adjust-types", type=parse_adjust_types
     )
     rolling_oversold_backfill.add_argument(
-        "--source", choices=("akshare", "tushare"), required=True
+        "--source", choices=("akshare", "tushare")
     )
     rolling_oversold_backfill.add_argument(
         "--service", default=SETTINGS.research_service
@@ -8497,45 +8498,88 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         _print_rolling_oversold_machine_lines(result)
     elif args.command == "rolling-sector-oversold-backfill":
-        asset_ids = load_market_backfill_asset_ids(args.gap_workplan, args.dataset)
-        workplan_exclusions = load_gap_workplan_exclusions(
-            args.gap_workplan, args.dataset
-        )
-        result = run_market_backfill(
-            asset_ids=asset_ids,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            adjust_types=tuple(args.adjust_types),
-            source=args.source,
-            service=args.service,
-            dry_run=args.dry_run,
-            output_dir=args.output_dir,
-            include_invalid_assets=args.include_invalid_assets,
-        )
-        print(
-            "rolling_sector_oversold_backfill|report|"
-            f"{result['paths']['json']}"
-        )
-        print(
-            "rolling_sector_oversold_backfill|csv|"
-            f"{result['paths']['csv']}"
-        )
-        print(f"rolling_sector_oversold_backfill|raw_rows|{result.get('raw_rows', 0)}")
-        print(f"rolling_sector_oversold_backfill|bar_rows|{result.get('bar_rows', 0)}")
-        print(f"rolling_sector_oversold_backfill|failed|{result.get('failed', 0)}")
-        print(f"rolling_sector_oversold_backfill|missing|{result.get('missing', 0)}")
-        print(
-            "rolling_sector_oversold_backfill|out_of_scope_bse|"
-            f"{result.get('status_counts', {}).get('out_of_scope_bse', 0)}"
-        )
-        print(
-            "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|"
-            f"{workplan_exclusions['out_of_scope_bse_count']}"
-        )
-        print(
-            "rolling_sector_oversold_backfill|workplan_invalid_membership|"
-            f"{workplan_exclusions['invalid_membership_count']}"
-        )
+        if args.dataset == "derived":
+            result = run_derived_backfill(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                gap_workplan=args.gap_workplan,
+                service=args.service,
+                dry_run=args.dry_run,
+                output_dir=args.output_dir,
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|report|"
+                f"{result['paths']['json']}"
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|csv|"
+                f"{result['paths']['csv']}"
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|asset_status_daily|"
+                f"{result['asset_status_daily']['status']}"
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|industry_daily_bar|"
+                f"{','.join(result['industry_daily_bar']['systems'])}"
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|concept_daily_bar|"
+                f"{','.join(result['concept_daily_bar']['systems'])}"
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|index_daily_bar|"
+                f"{','.join(result['index_daily_bar']['indices'])}"
+            )
+            print(
+                "rolling_sector_oversold_derived_backfill|out_of_scope_index|"
+                f"{','.join(result.get('out_of_scope_index', []))}"
+            )
+        else:
+            if not args.gap_workplan or not args.adjust_types or not args.source:
+                raise ValueError(
+                    "market_daily_bar backfill requires --gap-workplan, "
+                    "--adjust-types, and --source"
+                )
+            asset_ids = load_market_backfill_asset_ids(args.gap_workplan, args.dataset)
+            workplan_exclusions = load_gap_workplan_exclusions(
+                args.gap_workplan, args.dataset
+            )
+            result = run_market_backfill(
+                asset_ids=asset_ids,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                adjust_types=tuple(args.adjust_types),
+                source=args.source,
+                service=args.service,
+                dry_run=args.dry_run,
+                output_dir=args.output_dir,
+                include_invalid_assets=args.include_invalid_assets,
+            )
+            print(
+                "rolling_sector_oversold_backfill|report|"
+                f"{result['paths']['json']}"
+            )
+            print(
+                "rolling_sector_oversold_backfill|csv|"
+                f"{result['paths']['csv']}"
+            )
+            print(f"rolling_sector_oversold_backfill|raw_rows|{result.get('raw_rows', 0)}")
+            print(f"rolling_sector_oversold_backfill|bar_rows|{result.get('bar_rows', 0)}")
+            print(f"rolling_sector_oversold_backfill|failed|{result.get('failed', 0)}")
+            print(f"rolling_sector_oversold_backfill|missing|{result.get('missing', 0)}")
+            print(
+                "rolling_sector_oversold_backfill|out_of_scope_bse|"
+                f"{result.get('status_counts', {}).get('out_of_scope_bse', 0)}"
+            )
+            print(
+                "rolling_sector_oversold_backfill|workplan_out_of_scope_bse|"
+                f"{workplan_exclusions['out_of_scope_bse_count']}"
+            )
+            print(
+                "rolling_sector_oversold_backfill|workplan_invalid_membership|"
+                f"{workplan_exclusions['invalid_membership_count']}"
+            )
     elif args.command == "rolling-sector-oversold-report":
         snapshot_dir = Path(args.snapshot_dir).expanduser().resolve()
         snapshot = load_rolling_oversold_snapshot(snapshot_dir)

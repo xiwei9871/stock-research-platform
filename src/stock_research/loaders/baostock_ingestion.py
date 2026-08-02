@@ -707,31 +707,72 @@ def sync_index_daily_bars(
     start_date: str,
     end_date: str,
     service: str = SETTINGS.research_service,
+    index_ids: list[str] | tuple[str, ...] | None = None,
 ) -> int:
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
-    try:
-        rows = []
-        for index_id, code in INDEX_TARGETS.items():
-            rs = bs.query_history_k_data_plus(
-                code,
-                "date,code,open,high,low,close,preclose,volume,amount,pctChg",
-                start_date=start_date,
-                end_date=end_date,
-                frequency="d",
-            )
-            if rs.error_code != "0":
-                raise RuntimeError(
-                    f"baostock index query failed for {code}: "
-                    f"{rs.error_code} {rs.error_msg}"
+    selected = (
+        tuple(dict.fromkeys(index_ids))
+        if index_ids is not None
+        else tuple(INDEX_TARGETS) + tuple(AKSHARE_INDEX_TARGETS)
+    )
+    unsupported = sorted(
+        set(selected) - set(INDEX_TARGETS) - set(AKSHARE_INDEX_TARGETS)
+    )
+    if unsupported:
+        raise ValueError(f"Unsupported index targets: {unsupported}")
+
+    baostock_targets = {
+        index_id: INDEX_TARGETS[index_id]
+        for index_id in selected
+        if index_id in INDEX_TARGETS
+    }
+    supplemental_targets = {
+        index_id: AKSHARE_INDEX_TARGETS[index_id]
+        for index_id in selected
+        if index_id in AKSHARE_INDEX_TARGETS
+    }
+    rows = []
+    if baostock_targets:
+        login = bs.login()
+        if login.error_code != "0":
+            raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+        try:
+            for index_id, code in baostock_targets.items():
+                rs = bs.query_history_k_data_plus(
+                    code,
+                    "date,code,open,high,low,close,preclose,volume,amount,pctChg",
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency="d",
                 )
-            rows.extend(normalize_index_row(index_id, row) for row in _rows_from_result(rs))
-        rows.extend(query_akshare_index_daily_rows(start_date=start_date, end_date=end_date))
-        with connect(service) as conn:
-            return upsert_index_daily_bars(conn, rows)
-    finally:
-        bs.logout()
+                if rs.error_code != "0":
+                    raise RuntimeError(
+                        f"baostock index query failed for {code}: "
+                        f"{rs.error_code} {rs.error_msg}"
+                    )
+                rows.extend(
+                    normalize_index_row(index_id, row) for row in _rows_from_result(rs)
+                )
+        finally:
+            bs.logout()
+
+    if supplemental_targets:
+        if index_ids is None:
+            rows.extend(
+                query_akshare_index_daily_rows(
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            )
+        else:
+            rows.extend(
+                query_akshare_index_daily_rows(
+                    start_date=start_date,
+                    end_date=end_date,
+                    targets=supplemental_targets,
+                )
+            )
+    with connect(service) as conn:
+        return upsert_index_daily_bars(conn, rows)
 
 
 def sync_index_constituents(
