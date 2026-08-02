@@ -231,23 +231,29 @@ def load_rolling_inputs(
 
 
 def _membership_sql(table: str, prefix: str, systems: tuple[str, ...] | None) -> str:
-    system_clause = f"\n      AND {prefix}_system = ANY(%s)" if systems is not None else ""
+    system_clause = f"\n      AND m.{prefix}_system = ANY(%s)" if systems is not None else ""
     columns = (
-        f"asset_id, {prefix}_system, {prefix}_code, {prefix}_name, start_date, end_date"
+        f"m.asset_id, m.{prefix}_system, m.{prefix}_code, m.{prefix}_name, "
+        "m.start_date, m.end_date"
         if prefix == "concept"
-        else "asset_id, industry_system, industry_code, industry_name, level, start_date, end_date"
+        else "m.asset_id, m.industry_system, m.industry_code, m.industry_name, "
+        "m.level, m.start_date, m.end_date"
     )
     return f"""
     SELECT {columns}
-    FROM {table}
-    WHERE start_date <= %s
-      AND (end_date IS NULL OR end_date > %s){system_clause}
-    ORDER BY asset_id, {prefix}_system, {prefix}_code, start_date
+    FROM {table} m
+    JOIN core.asset_master a ON a.asset_id = m.asset_id
+    WHERE m.start_date <= %s
+      AND (m.end_date IS NULL OR m.end_date > %s)
+      AND (a.list_date IS NULL OR a.list_date <= %s)
+      AND (a.delist_date IS NULL OR a.delist_date > %s)
+      AND COALESCE(a.exchange, '') <> 'BJ'{system_clause}
+    ORDER BY m.asset_id, m.{prefix}_system, m.{prefix}_code, m.start_date
     """
 
 
 def _membership_params(cutoff: str, systems: tuple[str, ...] | None) -> list[Any]:
-    return [cutoff, cutoff, *([list(systems)] if systems is not None else [])]
+    return [cutoff, cutoff, cutoff, cutoff, *([list(systems)] if systems is not None else [])]
 
 
 def _sector_bar_sql(

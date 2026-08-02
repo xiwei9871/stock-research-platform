@@ -37,7 +37,6 @@ DEFAULT_INDEX_IDS = (
     "SZSE_COMPONENT",
     "CSI_300",
     "STAR_50",
-    "BSE_50",
 )
 VALID_ADJUST_TYPES = ("raw", "qfq", "hfq")
 

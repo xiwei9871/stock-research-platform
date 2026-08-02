@@ -615,6 +615,45 @@ def _query_industry_snapshot_rows(trade_date: str) -> list[dict[str, str]]:
     raise RuntimeError("baostock industry query failed after retries")
 
 
+def _upsert_and_close_industry_memberships(
+    conn,
+    trade_date: str,
+    rows: list[dict[str, Any]],
+) -> int:
+    count = upsert_industry_memberships(conn, rows)
+    if not rows:
+        return count
+
+    current_assets_by_industry: dict[tuple[str, str], set[str]] = {}
+    for row in rows:
+        key = (row["industry_system"], row["industry_code"])
+        current_assets_by_industry.setdefault(key, set()).add(row["asset_id"])
+
+    close_sql = """
+    UPDATE core.industry_membership
+    SET end_date = %s,
+        updated_at = now()
+    WHERE industry_system = %s
+      AND industry_code = %s
+      AND end_date IS NULL
+      AND start_date < %s
+      AND NOT (asset_id = ANY(%s))
+    """
+    for (industry_system, industry_code), current_assets in current_assets_by_industry.items():
+        execute(
+            conn,
+            close_sql,
+            [
+                trade_date,
+                industry_system,
+                industry_code,
+                trade_date,
+                sorted(current_assets),
+            ],
+        )
+    return count
+
+
 def sync_industry_memberships(
     trade_date: str,
     service: str = SETTINGS.research_service,
@@ -629,7 +668,7 @@ def sync_industry_memberships(
                     for row in cached_rows
                     if str(row.get("industry", "")).strip()
                 ]
-                return upsert_industry_memberships(conn, rows)
+                return _upsert_and_close_industry_memberships(conn, trade_date, rows)
 
     raw_rows = _query_industry_snapshot_rows(trade_date)
     rows = [
@@ -639,7 +678,7 @@ def sync_industry_memberships(
     ]
     with connect(service) as conn:
         store_industry_snapshot_payload(conn, trade_date, raw_rows)
-        return upsert_industry_memberships(conn, rows)
+        return _upsert_and_close_industry_memberships(conn, trade_date, rows)
 
 
 def sync_index_daily_bars(

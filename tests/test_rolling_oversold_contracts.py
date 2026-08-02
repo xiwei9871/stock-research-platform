@@ -23,7 +23,6 @@ def test_config_preserves_anchor_and_exposes_contract_defaults():
         "SZSE_COMPONENT",
         "CSI_300",
         "STAR_50",
-        "BSE_50",
     )
     assert config.adjust_type == "qfq"
 

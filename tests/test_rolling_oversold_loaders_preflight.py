@@ -104,11 +104,35 @@ def test_loader_uses_anchor_cutoff_and_point_in_time_membership_predicates(monke
         (sql, params) for sql, params in calls if "core.concept_membership" in sql
     )
     assert "start_date <= %s" in industry_sql
-    assert "end_date IS NULL OR end_date > %s" in industry_sql
-    assert industry_params[:2] == ["2026-07-29", "2026-07-29"]
+    assert "m.end_date IS NULL OR m.end_date > %s" in industry_sql
+    assert "JOIN core.asset_master a ON a.asset_id = m.asset_id" in industry_sql
+    assert "m.start_date <= %s" in industry_sql
+    assert "m.end_date IS NULL OR m.end_date > %s" in industry_sql
+    assert "a.list_date IS NULL OR a.list_date <= %s" in industry_sql
+    assert "a.delist_date IS NULL OR a.delist_date > %s" in industry_sql
+    assert "COALESCE(a.exchange, '') <> 'BJ'" in industry_sql
+    assert industry_params[:4] == [
+        "2026-07-29",
+        "2026-07-29",
+        "2026-07-29",
+        "2026-07-29",
+    ]
+    assert industry_params[4:] == [["sw"]]
     assert "start_date <= %s" in concept_sql
-    assert "end_date IS NULL OR end_date > %s" in concept_sql
-    assert concept_params[:2] == ["2026-07-29", "2026-07-29"]
+    assert "m.end_date IS NULL OR m.end_date > %s" in concept_sql
+    assert "JOIN core.asset_master a ON a.asset_id = m.asset_id" in concept_sql
+    assert "m.start_date <= %s" in concept_sql
+    assert "m.end_date IS NULL OR m.end_date > %s" in concept_sql
+    assert "a.list_date IS NULL OR a.list_date <= %s" in concept_sql
+    assert "a.delist_date IS NULL OR a.delist_date > %s" in concept_sql
+    assert "COALESCE(a.exchange, '') <> 'BJ'" in concept_sql
+    assert concept_params[:4] == [
+        "2026-07-29",
+        "2026-07-29",
+        "2026-07-29",
+        "2026-07-29",
+    ]
+    assert concept_params[4:] == [["theme"]]
     stock_sql, stock_params = next(
         (sql, params) for sql, params in calls if "FROM market_daily_bar" in sql
     )

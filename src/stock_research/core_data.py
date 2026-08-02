@@ -420,20 +420,35 @@ def _asset_id_from_cn_stock_code(raw_code: str) -> str | None:
     code = raw_code.strip().upper()
     if not code:
         return None
+
+    def asset_id(symbol: str, exchange: str | None = None) -> str | None:
+        symbol = symbol.zfill(6)
+        if symbol.startswith("900"):
+            return None
+        if symbol.startswith("920"):
+            return f"CN:BJ:{symbol}"
+        if exchange is not None:
+            return f"CN:{exchange}:{symbol}"
+        return None
+
     if "." in code:
         left, right = code.split(".", 1)
         if right in {"SH", "SZ", "BJ"} and left.isdigit():
-            return f"CN:{right}:{left.zfill(6)}"
+            return asset_id(left, right)
         if left in {"SH", "SZ", "BJ"} and right.isdigit():
-            return f"CN:{left}:{right.zfill(6)}"
+            return asset_id(right, left)
     digits = "".join(ch for ch in code if ch.isdigit())
     if len(digits) != 6:
         return None
+    if digits.startswith("900"):
+        return None
+    if digits.startswith("920"):
+        return f"CN:BJ:{digits}"
     if digits.startswith(("600", "601", "603", "605", "688", "689")):
         exchange = "SH"
     elif digits.startswith(("000", "001", "002", "003", "300", "301", "302")):
         exchange = "SZ"
-    elif digits.startswith(("4", "8", "9")):
+    elif digits.startswith(("4", "8")):
         exchange = "BJ"
     else:
         return None

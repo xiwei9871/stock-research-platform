@@ -148,6 +148,7 @@ def test_sync_industry_memberships_uses_cached_snapshot(monkeypatch):
         "upsert_industry_memberships",
         lambda opened, rows: calls.append((opened, rows)) or len(rows),
     )
+    monkeypatch.setattr(baostock_ingestion, "execute", fake_execute)
     monkeypatch.setattr(
         baostock_ingestion.bs,
         "login",
@@ -158,6 +159,19 @@ def test_sync_industry_memberships_uses_cached_snapshot(monkeypatch):
 
     assert count == 1
     assert calls[0][1][0]["start_date"] == "2024-05-31"
+    assert len(conn.execute_calls) == 1
+    close_sql, close_params = conn.execute_calls[0]
+    assert "UPDATE core.industry_membership" in close_sql
+    assert "end_date IS NULL" in close_sql
+    assert "start_date < %s" in close_sql
+    assert "NOT (asset_id = ANY(%s))" in close_sql
+    assert close_params == [
+        "2024-05-31",
+        "csrc",
+        "J66",
+        "2024-05-31",
+        ["CN:SH:600000"],
+    ]
 
 
 def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
@@ -166,6 +180,7 @@ def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
     login_calls = []
     logout_calls = []
     upserted = []
+    close_calls = []
 
     class Result:
         fields = ["updateDate", "code", "industry", "industryClassification"]
@@ -234,6 +249,11 @@ def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
         "upsert_industry_memberships",
         lambda opened, rows: upserted.append(rows) or len(rows),
     )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "execute",
+        lambda opened, sql, params=None: close_calls.append((sql, params)),
+    )
 
     count = baostock_ingestion.sync_industry_memberships("2024-05-31", use_cache=True)
 
@@ -242,6 +262,38 @@ def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
     assert len(login_calls) == 2
     assert len(logout_calls) == 2
     assert upserted[0][0]["asset_id"] == "CN:SH:600000"
+    assert len(close_calls) == 1
+    assert close_calls[0][1] == [
+        "2024-05-31",
+        "csrc",
+        "J66",
+        "2024-05-31",
+        ["CN:SH:600000"],
+    ]
+
+
+def test_sync_industry_memberships_does_not_close_for_empty_cached_snapshot(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "connect",
+        lambda service: _ConnectionContext(conn),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "load_cached_industry_snapshot_payload",
+        lambda opened, trade_date: [],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_industry_memberships",
+        lambda opened, rows: 0,
+    )
+    monkeypatch.setattr(baostock_ingestion, "execute", fake_execute)
+
+    assert baostock_ingestion.sync_industry_memberships("2024-05-31", use_cache=True) == 0
+    assert conn.execute_calls == []
 
 
 def test_normalize_index_row_maps_market_bar():
