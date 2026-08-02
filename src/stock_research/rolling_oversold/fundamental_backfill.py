@@ -119,7 +119,9 @@ def build_finance_backfill_rows(
     ``announcement_date <= cutoff``.  Without source rows the function emits
     five quarter-period request records (with no financial values), which is
     useful for a dry-run and makes the required TTM history explicit.  A
-    request record is not written to ``finance.*``.
+    request record is not written to ``finance.*``.  When the source returns
+    fewer than five periods the shortfall is intentionally preserved; callers
+    must report that asset as incomplete rather than fabricating a period.
     """
 
     cutoff_date = _as_date(cutoff, "cutoff")
@@ -300,6 +302,7 @@ def run_fundamental_backfill(
             "requested_rows": len(finance_rows),
             "visible_rows": 0,
             "visible_report_periods": {},
+            "incomplete_assets": [],
             "written_rows": 0,
             "adapter_results": [],
         },
@@ -347,6 +350,11 @@ def run_fundamental_backfill(
             )
             for asset_id in finance_assets
         }
+        report["finance"]["incomplete_assets"] = [
+            asset_id
+            for asset_id, period_count in report["finance"]["visible_report_periods"].items()
+            if period_count < 5
+        ]
         visible_valuation = build_valuation_backfill_rows(
             valuation_assets, start, end, source_rows=source_valuation_rows
         )
@@ -448,6 +456,10 @@ def _write_report(report: Mapping[str, Any], output_dir: str | Path) -> dict[str
     rows: list[dict[str, Any]] = []
     for dataset, section in (("finance_history", report["finance"]), ("valuation_history", report["valuation"])):
         for asset_id in section["assets"]:
+            incomplete = (
+                dataset == "finance_history"
+                and asset_id in set(section.get("incomplete_assets", []))
+            )
             rows.append(
                 {
                     "dataset": dataset,
@@ -456,7 +468,13 @@ def _write_report(report: Mapping[str, Any], output_dir: str | Path) -> dict[str
                     "end_date": report["end_date"],
                     "requested_rows": section["requested_rows"],
                     "written_rows": section["written_rows"],
-                    "status": "dry_run" if report["dry_run"] else "executed",
+                    "status": (
+                        "incomplete"
+                        if incomplete
+                        else "dry_run"
+                        if report["dry_run"]
+                        else "executed"
+                    ),
                 }
             )
     fieldnames = (

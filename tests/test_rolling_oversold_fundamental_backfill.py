@@ -201,6 +201,33 @@ def test_execute_uses_only_scoped_assets_and_visible_rows(monkeypatch, tmp_path:
     assert result["finance"]["visible_report_periods"]["CN:SZ:000001"] >= 5
 
 
+def test_execute_reports_short_finance_history_without_fabricating_rows(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        fundamental_backfill,
+        "_load_finance_rows",
+        lambda *args, **kwargs: _finance_rows("CN:SZ:000001")[:4],
+    )
+    monkeypatch.setattr(fundamental_backfill, "_load_valuation_rows", lambda *args, **kwargs: [])
+    monkeypatch.setattr(fundamental_backfill, "upsert_factor_daily", lambda *args, **kwargs: 0)
+
+    workplan = tmp_path / "gap_workplan.json"
+    workplan.write_text(
+        json.dumps({"buckets": {"finance_backfill": ["CN:SZ:000001"]}}),
+        encoding="utf-8",
+    )
+    result = fundamental_backfill.run_fundamental_backfill(
+        start_date=date(2025, 5, 28),
+        end_date=date(2026, 7, 31),
+        gap_workplan=workplan,
+        dry_run=False,
+        output_dir=tmp_path / "out",
+        finance_adapter=lambda year, quarter, service: {},
+    )
+
+    assert result["finance"]["visible_report_periods"]["CN:SZ:000001"] == 4
+    assert result["finance"]["incomplete_assets"] == ["CN:SZ:000001"]
+
+
 def test_cli_accepts_fundamentals_dataset(monkeypatch, tmp_path: Path, capsys):
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
