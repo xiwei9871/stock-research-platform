@@ -65,6 +65,10 @@ if [[ ! -d "$STRATEGY_SOURCE_ROOT" ]]; then
 fi
 ROOT="$(cd "$ROOT" && pwd -P)"
 STRATEGY_SOURCE_ROOT="$(cd "$STRATEGY_SOURCE_ROOT" && pwd -P)"
+strategy_artifact_fallback_enabled=0
+if [[ "$STRATEGY_SOURCE_ROOT" != "$ROOT" || "$STRATEGY_OUTPUT_ROOT" != "$ROOT/outputs/research" ]]; then
+  strategy_artifact_fallback_enabled=1
+fi
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
     echo "Refusing disposable worktree release root: $ROOT" >&2
@@ -173,11 +177,11 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
       2>/dev/null || true
   )"
 fi
-if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
+if [[ -z "$EXPECTED_TRADE_DATE" && "$strategy_artifact_fallback_enabled" == "1" ]]; then
   EXPECTED_TRADE_DATE="$(
     STRATEGY_OUTPUT_ROOT="$STRATEGY_OUTPUT_ROOT" \
       "$STOCK_RESEARCH_PYTHON" -c \
-      'from pathlib import Path; import os, re; root = Path(os.environ["STRATEGY_OUTPUT_ROOT"]) / "strategy_daily_eod"; dates = sorted(path.name for path in root.iterdir() if path.is_dir() and re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", path.name) and (path / "strategy_eod_publish_summary.json").is_file()) if root.is_dir() else []; print(dates[-1] if dates else "")' \
+      'from pathlib import Path; import os, re; root = Path(os.environ["STRATEGY_OUTPUT_ROOT"]) / "strategy_daily_eod"; dates = sorted(path.name for path in root.iterdir() if path.is_dir() and re.fullmatch(r"\d{4}-\d{2}-\d{2}", path.name) and (path / "strategy_eod_publish_summary.json").is_file()) if root.is_dir() else []; print(dates[-1] if dates else "")' \
       2>/dev/null || true
   )"
 fi

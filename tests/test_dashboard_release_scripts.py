@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import stat
 import subprocess
 import textwrap
@@ -540,6 +541,53 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     assert "jqz@192.168.3.185" in commands
     assert "/home/jqz/code/stock-research-platform-main" in commands
     assert "BatchMode=yes" in commands
+
+
+def test_release_sync_falls_back_to_latest_strategy_artifact_date(tmp_path):
+    root, env, log_file = _release_fixture(tmp_path)
+    runtime_root = tmp_path / "runtime"
+    runtime_output = runtime_root / "outputs" / "research"
+    runtime_output.parent.mkdir(parents=True)
+    shutil.copytree(
+        root / "outputs" / "research" / "strategy_daily_eod",
+        runtime_output / "strategy_daily_eod",
+    )
+    env["STRATEGY_SOURCE_ROOT"] = str(runtime_root)
+    env["STRATEGY_OUTPUT_ROOT"] = str(runtime_output)
+    env["FAKE_PLATFORM_LOADER_FAIL"] = "1"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
+    commands = log_file.read_text(encoding="utf-8")
+    assert "2026-07-24" in commands
+
+
+def test_release_sync_does_not_scan_release_root_artifacts_when_date_sources_fail(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["FAKE_PLATFORM_LOADER_FAIL"] = "1"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Unable to resolve a valid EXPECTED_TRADE_DATE" in result.stderr
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert "rsync:" not in commands
 
 
 def test_release_sync_rejects_stale_date_from_matching_local_readiness(tmp_path):
