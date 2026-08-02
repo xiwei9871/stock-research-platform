@@ -8539,6 +8539,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 f"{','.join(result.get('out_of_scope_index', []))}"
             )
         elif args.dataset == "fundamentals":
+            if not args.gap_workplan:
+                raise ValueError(
+                    "fundamentals backfill requires --gap-workplan"
+                )
             result = run_fundamental_backfill(
                 start_date=args.start_date,
                 end_date=args.end_date,

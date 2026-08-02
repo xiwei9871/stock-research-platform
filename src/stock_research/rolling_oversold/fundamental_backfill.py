@@ -20,12 +20,9 @@ from typing import Any, Callable
 import pandas as pd
 
 from stock_research.config import SETTINGS
-from stock_research.db import connect, fetch_all
-from stock_research.factor_store import upsert_factor_daily
-from stock_research.loaders.baostock_finance_ingestion import (
-    sync_finance_for_assets,
-    sync_finance_for_period,
-)
+from stock_research.db import connect, execute_many, fetch_all
+from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_assets
+from stock_research.consumer_oversold.loaders import load_consumer_finance_history
 
 
 VALUATION_FACTOR_NAMES = ("pe_ttm", "ps_ttm", "ev_ebitda")
@@ -245,14 +242,24 @@ def build_valuation_backfill_rows(
         trade_date = _optional_date(raw.get("trade_date"), "trade_date")
         if trade_date is None or not start <= trade_date <= end:
             continue
+        computed_at = raw.get("computed_at")
+        if computed_at is not None:
+            computed_date = _optional_date(computed_at, "computed_at")
+            if computed_date is None or computed_date > end:
+                continue
         row = dict(raw)
         row["asset_id"] = asset_id
         row["trade_date"] = trade_date
         row["factor_name"] = factor_name
         row.setdefault("factor_group", "fundamental")
-        row.setdefault("calc_version", VALUATION_CALC_VERSION)
+        calc_version = str(row.get("calc_version") or "").strip()
+        row["calc_version"] = calc_version or VALUATION_CALC_VERSION
         row.setdefault("source", "factor_daily")
-        row.setdefault("source_data_version", "rolling_oversold_fundamentals_v1")
+        row["source_data_version"] = str(
+            row.get("source_data_version") or "rolling_oversold_fundamentals_v1"
+        ).strip()
+        if computed_at is not None:
+            row["computed_at"] = computed_at
         row.setdefault("status", "visible")
         result.append(row)
     result.sort(key=lambda row: (row["asset_id"], row["trade_date"], row["factor_name"]))
@@ -361,11 +368,13 @@ def run_fundamental_backfill(
         writable = [
             row
             for row in visible_valuation
-            if row.get("factor_value") is not None
+            if _usable_factor_value(row.get("factor_value"))
+            and row.get("computed_at") is not None
         ]
         if writable:
-            frame = pd.DataFrame(writable)
-            report["valuation"]["written_rows"] = int(upsert_factor_daily(frame, service=service))
+            report["valuation"]["written_rows"] = _upsert_valuation_rows(
+                writable, service=service
+            )
         report["finance"]["written_rows"] = _count_adapter_rows(
             report["finance"]["adapter_results"]
         )
@@ -410,15 +419,53 @@ def _load_valuation_rows(
         return []
     sql = """
     SELECT trade_date, asset_id, factor_name, factor_group, factor_value,
-           calc_version, source, source_data_version
+           calc_version, source, source_data_version, computed_at
     FROM factor.factor_daily
     WHERE asset_id = ANY(%s)
       AND trade_date BETWEEN %s AND %s
       AND factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')
+      AND computed_at < ((%s::date + interval '1 day') AT TIME ZONE 'Asia/Shanghai')
     ORDER BY asset_id, trade_date, factor_name, calc_version
     """
     with connect(service) as conn:
-        return fetch_all(conn, sql, [asset_ids, start, end])
+        return fetch_all(conn, sql, [asset_ids, start, end, end])
+
+
+def _upsert_valuation_rows(rows: list[dict[str, Any]], *, service: str) -> int:
+    """Upsert only source-backed factors while preserving their PIT timestamp."""
+
+    if not rows:
+        return 0
+    sql = """
+    INSERT INTO factor.factor_daily (
+        trade_date, asset_id, factor_name, factor_group, factor_value,
+        calc_version, source, source_data_version, computed_at
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (trade_date, asset_id, factor_name, calc_version)
+    DO UPDATE SET
+        factor_group = EXCLUDED.factor_group,
+        factor_value = EXCLUDED.factor_value,
+        source = EXCLUDED.source,
+        source_data_version = EXCLUDED.source_data_version,
+        computed_at = EXCLUDED.computed_at
+    """
+    values = [
+        (
+            row["trade_date"],
+            row["asset_id"],
+            row["factor_name"],
+            row.get("factor_group") or "fundamental",
+            row["factor_value"],
+            row["calc_version"],
+            row.get("source") or "factor_daily",
+            row.get("source_data_version") or "rolling_oversold_fundamentals_v1",
+            row["computed_at"],
+        )
+        for row in rows
+    ]
+    with connect(service) as conn:
+        execute_many(conn, sql, values)
+    return len(values)
 
 
 def _load_finance_rows(
@@ -426,22 +473,13 @@ def _load_finance_rows(
 ) -> list[dict[str, Any]]:
     if not asset_ids:
         return []
-    sql = """
-    SELECT asset_id, report_period, announcement_date, source,
-           revenue, np_parent
-    FROM finance.income_statement
-    WHERE asset_id = ANY(%s)
-      AND announcement_date <= %s
-    UNION ALL
-    SELECT asset_id, report_period, announcement_date, source,
-           NULL AS revenue, NULL AS np_parent
-    FROM finance.indicator_quarter
-    WHERE asset_id = ANY(%s)
-      AND announcement_date <= %s
-    ORDER BY asset_id, report_period, announcement_date, source
-    """
-    with connect(service) as conn:
-        return fetch_all(conn, sql, [asset_ids, cutoff, asset_ids, cutoff])
+    frame = load_consumer_finance_history(
+        asset_ids,
+        cutoff.isoformat(),
+        service=service,
+        max_report_periods=5,
+    )
+    return frame.to_dict("records")
 
 
 def _write_report(report: Mapping[str, Any], output_dir: str | Path) -> dict[str, str]:
@@ -559,6 +597,15 @@ def _optional_date(value: Any, field: str) -> date | None:
         return _as_date(value, field)
     except ValueError:
         return None
+
+
+def _usable_factor_value(value: Any) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        return not bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
 
 
 def _quarter_periods(cutoff: date, count: int) -> list[date]:

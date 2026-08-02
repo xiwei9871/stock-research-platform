@@ -193,6 +193,32 @@ def test_baostock_codes_can_filter_by_historical_universe(monkeypatch):
     assert 'delist_date IS NULL OR delist_date >= %s' in captured['sql']
 
 
+def test_scoped_baostock_codes_filter_assets_at_cutoff_not_report_period(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(conn, sql, params=None):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [{"baostock_code": "sh.688797"}]
+
+    monkeypatch.setattr(baostock_finance_ingestion, "fetch_all", fake_fetch_all)
+
+    codes = baostock_finance_ingestion._baostock_codes(
+        object(),
+        asset_ids=["CN:SH:688797"],
+        active_cutoff="2026-07-31",
+    )
+
+    assert codes == ["sh.688797"]
+    assert "asset_id = ANY(%s)" in captured["sql"]
+    assert "list_date IS NULL OR list_date <= %s" in captured["sql"]
+    assert [str(value) for value in captured["params"][:2]] == [
+        "2026-07-31",
+        "2026-07-31",
+    ]
+    assert "report_period" not in captured["sql"]
+
+
 def test_sync_finance_for_period_short_circuits_when_no_codes(monkeypatch):
     monkeypatch.setattr(baostock_finance_ingestion, "connect", lambda service: (_ for _ in ()).throw(AssertionError("connect should not be called again")))
     monkeypatch.setattr(

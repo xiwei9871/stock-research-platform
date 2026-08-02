@@ -359,6 +359,7 @@ def _baostock_codes(
     year: int | None = None,
     quarter: int | None = None,
     asset_ids: list[str] | None = None,
+    active_cutoff: date | str | None = None,
 ) -> list[str]:
     filters = [
         "baostock_code IS NOT NULL",
@@ -370,6 +371,12 @@ def _baostock_codes(
         params.append(quarter_end_date(year, quarter))
         filters.append("(delist_date IS NULL OR delist_date >= %s)")
         params.append(quarter_end_date(year, quarter))
+    elif active_cutoff is not None:
+        cutoff = date.fromisoformat(str(active_cutoff)[:10])
+        filters.append("(list_date IS NULL OR list_date <= %s)")
+        params.append(cutoff)
+        filters.append("(delist_date IS NULL OR delist_date >= %s)")
+        params.append(cutoff)
     if asset_ids is not None:
         filters.append("asset_id = ANY(%s)")
         params.append(sorted({str(asset_id).strip() for asset_id in asset_ids if str(asset_id).strip()}))
@@ -438,9 +445,8 @@ def sync_finance_for_assets(
     with connect(service) as conn:
         codes = _baostock_codes(
             conn,
-            year=year,
-            quarter=quarter,
             asset_ids=normalized,
+            active_cutoff=cutoff,
         )
     if not codes:
         return {

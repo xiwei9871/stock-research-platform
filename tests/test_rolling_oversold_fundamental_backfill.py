@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import date
 from pathlib import Path
 
@@ -68,6 +69,26 @@ def test_valuation_backfill_keeps_factor_names_and_version():
     assert all(row["calc_version"] for row in rows)
 
 
+def test_valuation_backfill_replaces_empty_version_and_keeps_nan_unwritable():
+    rows = fundamental_backfill.build_valuation_backfill_rows(
+        asset_ids=["CN:SZ:000001"],
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 31),
+        source_rows=[
+            {
+                "asset_id": "CN:SZ:000001",
+                "trade_date": "2026-07-31",
+                "factor_name": "pe_ttm",
+                "factor_value": math.nan,
+                "calc_version": None,
+                "computed_at": "2026-07-31T09:00:00+08:00",
+            }
+        ],
+    )
+    assert rows[0]["calc_version"]
+    assert not fundamental_backfill._usable_factor_value(rows[0]["factor_value"])
+
+
 def test_workplan_scope_only_returns_eligible_finance_and_valuation_assets(tmp_path: Path):
     path = tmp_path / "gap_workplan.json"
     path.write_text(
@@ -118,7 +139,7 @@ def test_run_fundamental_backfill_dry_run_never_calls_adapter_or_writer(monkeypa
     )
     monkeypatch.setattr(
         fundamental_backfill,
-        "upsert_factor_daily",
+        "_upsert_valuation_rows",
         lambda *args, **kwargs: calls.append("writer"),
     )
     workplan = tmp_path / "gap_workplan.json"
@@ -158,7 +179,7 @@ def test_execute_uses_only_scoped_assets_and_visible_rows(monkeypatch, tmp_path:
     monkeypatch.setattr(fundamental_backfill, "_load_valuation_rows", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         fundamental_backfill,
-        "upsert_factor_daily",
+        "_upsert_valuation_rows",
         lambda *args, **kwargs: 0,
     )
 
@@ -208,7 +229,7 @@ def test_execute_reports_short_finance_history_without_fabricating_rows(monkeypa
         lambda *args, **kwargs: _finance_rows("CN:SZ:000001")[:4],
     )
     monkeypatch.setattr(fundamental_backfill, "_load_valuation_rows", lambda *args, **kwargs: [])
-    monkeypatch.setattr(fundamental_backfill, "upsert_factor_daily", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(fundamental_backfill, "_upsert_valuation_rows", lambda *args, **kwargs: 0)
 
     workplan = tmp_path / "gap_workplan.json"
     workplan.write_text(
