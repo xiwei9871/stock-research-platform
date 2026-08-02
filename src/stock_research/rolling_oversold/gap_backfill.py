@@ -5,10 +5,12 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
+import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from stock_research.strategy_data_policy import DataGap
 
@@ -40,19 +42,28 @@ CSV_COLUMNS = (
 )
 
 
-class GapWorkplan(dict[str, list[str]]):
-    """Bucket mapping with the original gap-level audit rows attached."""
+class GapAuditRow(TypedDict):
+    bucket: str
+    dataset: str
+    asset_or_key: str
+    start_date: str | None
+    end_date: str | None
+    expected_rows: int
+    actual_rows: int
+    reason: str
+    proposed_next_task: str
 
-    def __init__(
-        self,
-        buckets: Mapping[str, Sequence[str]],
-        *,
-        audit_rows: Iterable[Mapping[str, Any]],
-    ) -> None:
-        super().__init__(
-            (bucket, list(buckets.get(bucket, ()))) for bucket in WORKPLAN_BUCKETS
-        )
-        self.audit_rows = tuple(dict(row) for row in audit_rows)
+
+class GapWorkplan(TypedDict):
+    invalid_membership: list[str]
+    market_bar_backfill: list[str]
+    finance_backfill: list[str]
+    valuation_backfill: list[str]
+    index_backfill: list[str]
+    derived_backfill: list[str]
+    out_of_scope_bse: list[str]
+    out_of_scope_index: list[str]
+    gap_rows: list[GapAuditRow]
 
 
 def load_preflight_gaps(path: str | Path) -> tuple[DataGap, ...]:
@@ -108,16 +119,15 @@ def build_gap_workplan(
     audit_rows: list[dict[str, Any]] = []
 
     for gap in gaps:
-        dataset = str(_gap_value(gap, "dataset") or "").strip()
-        if not dataset:
-            raise ValueError("gap dataset must be non-empty")
-        key = _gap_key(gap, dataset)
+        normalized = _normalize_gap(gap)
+        dataset = normalized["dataset"]
+        key = normalized["asset_or_key"]
 
         if dataset == "market.index_daily_bar":
             bucket = (
                 "out_of_scope_index" if key == "BSE_50" else "index_backfill"
             )
-        elif dataset in DERIVED_DATASETS or _gap_value(gap, "asset_id") is None:
+        elif dataset in DERIVED_DATASETS or normalized["asset_id"] is None:
             bucket = "derived_backfill"
         else:
             bucket = classify_asset_gap(
@@ -135,11 +145,11 @@ def build_gap_workplan(
                 "bucket": bucket,
                 "dataset": dataset,
                 "asset_or_key": key,
-                "start_date": _gap_value(gap, "start_date"),
-                "end_date": _gap_value(gap, "end_date"),
-                "expected_rows": int(_gap_value(gap, "expected_rows") or 0),
-                "actual_rows": int(_gap_value(gap, "actual_rows") or 0),
-                "reason": str(_gap_value(gap, "reason") or ""),
+                "start_date": normalized["start_date"],
+                "end_date": normalized["end_date"],
+                "expected_rows": normalized["expected_rows"],
+                "actual_rows": normalized["actual_rows"],
+                "reason": normalized["reason"],
                 "proposed_next_task": _proposed_next_task(bucket, dataset),
             }
         )
@@ -157,24 +167,39 @@ def build_gap_workplan(
             row["reason"],
         )
     )
-    return GapWorkplan(buckets, audit_rows=audit_rows)
+    return {**buckets, "gap_rows": audit_rows}
 
 
 def write_gap_workplan(
-    workplan: dict[str, list[str]], output_dir: str | Path
+    workplan: Mapping[str, object], output_dir: str | Path
 ) -> dict[str, str]:
     """Write deterministic JSON and CSV artifacts without database access."""
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
-    json_path = root / "gap_workplan.json"
-    csv_path = root / "gap_workplan.csv"
-
-    buckets = {
-        bucket: sorted(set(workplan.get(bucket, ()))) for bucket in WORKPLAN_BUCKETS
-    }
-    audit_rows = [dict(row) for row in getattr(workplan, "audit_rows", ())]
-    if not audit_rows:
-        raise ValueError("workplan must retain gap-level audit rows")
+    buckets = _normalize_workplan_buckets(workplan)
+    raw_gap_rows = workplan.get("gap_rows")
+    if raw_gap_rows is None:
+        legacy_rows = getattr(workplan, "audit_rows", None)
+        if legacy_rows is not None:
+            raw_gap_rows = legacy_rows
+        elif any(buckets.values()):
+            raise ValueError("non-empty workplan must include explicit gap_rows")
+        else:
+            raw_gap_rows = ()
+    if isinstance(raw_gap_rows, (str, bytes)) or not isinstance(
+        raw_gap_rows, Sequence
+    ):
+        raise ValueError("workplan gap_rows must be a sequence")
+    audit_rows = [_normalize_audit_row(row) for row in raw_gap_rows]
+    audit_rows.sort(
+        key=lambda row: (
+            row["bucket"],
+            row["dataset"],
+            row["asset_or_key"],
+            row["start_date"] or "",
+            row["end_date"] or "",
+            row["reason"],
+        )
+    )
+    _validate_bucket_audit_alignment(buckets, audit_rows)
     bucket_gap_counts = {
         bucket: sum(row["bucket"] == bucket for row in audit_rows)
         for bucket in WORKPLAN_BUCKETS
@@ -191,16 +216,32 @@ def write_gap_workplan(
         "buckets": buckets,
         "gap_rows": audit_rows,
     }
-    json_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
+    json_content = json.dumps(
+        payload, ensure_ascii=False, indent=2, sort_keys=True
+    ) + "\n"
     buffer = io.StringIO(newline="")
     writer = csv.DictWriter(buffer, fieldnames=CSV_COLUMNS, lineterminator="\n")
     writer.writeheader()
     writer.writerows(audit_rows)
-    csv_path.write_text(buffer.getvalue(), encoding="utf-8")
+    csv_content = buffer.getvalue()
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    json_path = root / "gap_workplan.json"
+    csv_path = root / "gap_workplan.csv"
+    json_temp: Path | None = None
+    csv_temp: Path | None = None
+    try:
+        json_temp = _write_temporary(root, ".json.tmp", json_content)
+        csv_temp = _write_temporary(root, ".csv.tmp", csv_content)
+        os.replace(json_temp, json_path)
+        json_temp = None
+        os.replace(csv_temp, csv_path)
+        csv_temp = None
+    finally:
+        for temporary in (json_temp, csv_temp):
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
     return {"json": str(json_path), "csv": str(csv_path)}
 
 
@@ -210,17 +251,134 @@ def _gap_value(gap: object, field: str) -> Any:
     return getattr(gap, field, None)
 
 
-def _gap_key(gap: object, dataset: str) -> str:
+def _normalize_gap(gap: object) -> dict[str, Any]:
+    dataset = _non_empty_text(_gap_value(gap, "dataset"), "dataset")
     asset_id = _gap_value(gap, "asset_id")
-    if asset_id is not None and str(asset_id).strip():
-        return str(asset_id).strip()
-    sector_system = str(_gap_value(gap, "sector_system") or "").strip()
-    sector_code = str(_gap_value(gap, "sector_code") or "").strip()
+    if asset_id is not None:
+        asset_id = _non_empty_text(asset_id, "asset_id")
+    sector_system = _optional_text(_gap_value(gap, "sector_system"), "sector_system")
+    sector_code = _optional_text(_gap_value(gap, "sector_code"), "sector_code")
+    key = asset_id
     if sector_system and sector_code:
-        return f"{sector_system}:{sector_code}"
-    if sector_code:
-        return sector_code
-    return dataset
+        key = key or f"{sector_system}:{sector_code}"
+    elif sector_code:
+        key = key or sector_code
+    if key is None:
+        raise ValueError("gap asset/sector key must be non-empty")
+    return {
+        "dataset": dataset,
+        "asset_id": asset_id,
+        "asset_or_key": key,
+        "start_date": _optional_iso_date(_gap_value(gap, "start_date"), "start_date"),
+        "end_date": _optional_iso_date(_gap_value(gap, "end_date"), "end_date"),
+        "expected_rows": _non_negative_integer(
+            _gap_value(gap, "expected_rows"), "expected_rows"
+        ),
+        "actual_rows": _non_negative_integer(
+            _gap_value(gap, "actual_rows"), "actual_rows"
+        ),
+        "reason": _non_empty_text(_gap_value(gap, "reason"), "reason"),
+    }
+
+
+def _normalize_audit_row(row: object) -> dict[str, Any]:
+    if not isinstance(row, Mapping):
+        raise ValueError("workplan gap_rows entries must be mappings")
+    bucket = _non_empty_text(row.get("bucket"), "bucket")
+    if bucket not in WORKPLAN_BUCKETS:
+        raise ValueError(f"workplan gap_rows bucket must be one of {WORKPLAN_BUCKETS}")
+    return {
+        "bucket": bucket,
+        "dataset": _non_empty_text(row.get("dataset"), "dataset"),
+        "asset_or_key": _non_empty_text(
+            row.get("asset_or_key"), "asset/sector key"
+        ),
+        "start_date": _optional_iso_date(row.get("start_date"), "start_date"),
+        "end_date": _optional_iso_date(row.get("end_date"), "end_date"),
+        "expected_rows": _non_negative_integer(
+            row.get("expected_rows"), "expected_rows"
+        ),
+        "actual_rows": _non_negative_integer(row.get("actual_rows"), "actual_rows"),
+        "reason": _non_empty_text(row.get("reason"), "reason"),
+        "proposed_next_task": _non_empty_text(
+            row.get("proposed_next_task"), "proposed_next_task"
+        ),
+    }
+
+
+def _normalize_workplan_buckets(
+    workplan: Mapping[str, object],
+) -> dict[str, list[str]]:
+    buckets: dict[str, list[str]] = {}
+    for bucket in WORKPLAN_BUCKETS:
+        values = workplan.get(bucket, ())
+        if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
+            raise ValueError(f"workplan bucket {bucket} must be a sequence")
+        buckets[bucket] = sorted(
+            {_non_empty_text(value, f"workplan bucket {bucket} key") for value in values}
+        )
+    return buckets
+
+
+def _validate_bucket_audit_alignment(
+    buckets: Mapping[str, Sequence[str]], audit_rows: Sequence[Mapping[str, Any]]
+) -> None:
+    audited = {bucket: set() for bucket in WORKPLAN_BUCKETS}
+    for row in audit_rows:
+        audited[str(row["bucket"])].add(str(row["asset_or_key"]))
+    for bucket in WORKPLAN_BUCKETS:
+        if set(buckets[bucket]) != audited[bucket]:
+            raise ValueError(
+                f"workplan bucket {bucket} keys must match explicit gap_rows"
+            )
+
+
+def _non_empty_text(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"gap {field} must be non-empty text")
+    return value.strip()
+
+
+def _optional_text(value: object, field: str) -> str | None:
+    if value is None:
+        return None
+    return _non_empty_text(value, field)
+
+
+def _optional_iso_date(value: object, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"gap {field} must use YYYY-MM-DD or be null")
+    try:
+        normalized = date.fromisoformat(value).isoformat()
+    except ValueError as exc:
+        raise ValueError(f"gap {field} must use YYYY-MM-DD or be null") from exc
+    if normalized != value:
+        raise ValueError(f"gap {field} must use YYYY-MM-DD or be null")
+    return value
+
+
+def _non_negative_integer(value: object, field: str) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"gap {field} must be a non-negative integer")
+    return value
+
+
+def _write_temporary(root: Path, suffix: str, content: str) -> Path:
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        newline="",
+        dir=root,
+        prefix=".gap_workplan.",
+        suffix=suffix,
+        delete=False,
+    ) as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+        return Path(handle.name)
 
 
 def _proposed_next_task(bucket: str, dataset: str) -> str:

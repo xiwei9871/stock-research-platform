@@ -7,6 +7,9 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+import stock_research.rolling_oversold.gap_backfill as gap_backfill_module
 from stock_research.rolling_oversold.gap_backfill import (
     build_gap_workplan,
     classify_asset_gap,
@@ -216,3 +219,201 @@ def test_write_gap_workplan_persists_auditable_json_and_csv(tmp_path: Path):
             "proposed_next_task": "backfill_market_daily_bar",
         }
     ]
+
+
+def test_write_gap_workplan_supports_plain_dict_copy_with_explicit_gap_rows(
+    tmp_path: Path,
+):
+    workplan = build_gap_workplan(
+        gaps=[_gap("market_daily_bar", "CN:SZ:000001")],
+        asset_master={"CN:SZ:000001"},
+    )
+    plain_copy = dict(workplan)
+
+    paths = write_gap_workplan(plain_copy, tmp_path)
+
+    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
+    assert payload["buckets"]["market_bar_backfill"] == ["CN:SZ:000001"]
+    assert payload["gap_rows"][0]["reason"] == "missing_market_daily_bar"
+
+
+def test_write_gap_workplan_rejects_nonempty_plain_dict_without_gap_rows(
+    tmp_path: Path,
+):
+    workplan = {
+        "invalid_membership": [],
+        "market_bar_backfill": ["CN:SZ:000001"],
+        "finance_backfill": [],
+        "valuation_backfill": [],
+        "index_backfill": [],
+        "derived_backfill": [],
+        "out_of_scope_bse": [],
+        "out_of_scope_index": [],
+    }
+
+    with pytest.raises(ValueError, match="gap_rows"):
+        write_gap_workplan(workplan, tmp_path)
+
+
+def test_write_gap_workplan_serializes_empty_workplan(tmp_path: Path):
+    empty = dict(build_gap_workplan(gaps=[], asset_master=set()))
+
+    paths = write_gap_workplan(empty, tmp_path)
+
+    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
+    assert payload["summary"]["total_gap_rows"] == 0
+    assert payload["gap_rows"] == []
+    assert all(not values for values in payload["buckets"].values())
+    with Path(paths["csv"]).open(encoding="utf-8", newline="") as handle:
+        assert list(csv.DictReader(handle)) == []
+
+
+def test_build_gap_workplan_is_deterministic_with_shuffle_and_duplicates():
+    first = _gap("market_daily_bar", "CN:SZ:000002")
+    second = _gap("market_daily_bar", "CN:SZ:000001")
+
+    forward = build_gap_workplan(
+        gaps=[first, second, first],
+        asset_master={"CN:SZ:000001", "CN:SZ:000002"},
+    )
+    reverse = build_gap_workplan(
+        gaps=[first, second, first][::-1],
+        asset_master={"CN:SZ:000001", "CN:SZ:000002"},
+    )
+
+    assert forward == reverse
+    assert forward["market_bar_backfill"] == ["CN:SZ:000001", "CN:SZ:000002"]
+    assert len(forward["gap_rows"]) == 3
+
+
+@pytest.mark.parametrize(
+    ("gap", "message"),
+    [
+        (
+            {
+                "asset_id": "CN:SZ:000001",
+                "reason": "missing",
+                "expected_rows": 1,
+                "actual_rows": 0,
+            },
+            "dataset",
+        ),
+        (
+            {
+                "dataset": "market.concept_daily_bar",
+                "asset_id": None,
+                "reason": "missing",
+                "expected_rows": 1,
+                "actual_rows": 0,
+            },
+            "asset/sector key",
+        ),
+        (
+            {
+                "dataset": "market_daily_bar",
+                "asset_id": "CN:SZ:000001",
+                "reason": " ",
+                "expected_rows": 1,
+                "actual_rows": 0,
+            },
+            "reason",
+        ),
+        (
+            {
+                "dataset": "market_daily_bar",
+                "asset_id": "CN:SZ:000001",
+                "reason": "missing",
+                "start_date": 20260721,
+                "expected_rows": 1,
+                "actual_rows": 0,
+            },
+            "start_date",
+        ),
+        (
+            {
+                "dataset": "market_daily_bar",
+                "asset_id": "CN:SZ:000001",
+                "reason": "missing",
+                "end_date": "2026-02-30",
+                "expected_rows": 1,
+                "actual_rows": 0,
+            },
+            "end_date",
+        ),
+        (
+            {
+                "dataset": "market_daily_bar",
+                "asset_id": "CN:SZ:000001",
+                "reason": "missing",
+                "expected_rows": True,
+                "actual_rows": 0,
+            },
+            "expected_rows",
+        ),
+        (
+            {
+                "dataset": "market_daily_bar",
+                "asset_id": "CN:SZ:000001",
+                "reason": "missing",
+                "expected_rows": 1,
+                "actual_rows": -1,
+            },
+            "actual_rows",
+        ),
+    ],
+)
+def test_build_gap_workplan_rejects_malformed_gap_like_rows(gap, message):
+    with pytest.raises(ValueError, match=message):
+        build_gap_workplan(gaps=[gap], asset_master={"CN:SZ:000001"})
+
+
+def test_write_gap_workplan_leaves_no_temporary_files(tmp_path: Path):
+    workplan = build_gap_workplan(
+        gaps=[_gap("market_daily_bar", "CN:SZ:000001")],
+        asset_master={"CN:SZ:000001"},
+    )
+
+    write_gap_workplan(workplan, tmp_path)
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "gap_workplan.csv",
+        "gap_workplan.json",
+    ]
+
+
+def test_write_gap_workplan_rejects_malformed_explicit_gap_rows(tmp_path: Path):
+    workplan = dict(
+        build_gap_workplan(
+            gaps=[_gap("market_daily_bar", "CN:SZ:000001")],
+            asset_master={"CN:SZ:000001"},
+        )
+    )
+    workplan["gap_rows"][0]["reason"] = ""
+
+    with pytest.raises(ValueError, match="reason"):
+        write_gap_workplan(workplan, tmp_path)
+
+
+def test_write_gap_workplan_publishes_both_files_with_os_replace(
+    tmp_path: Path, monkeypatch
+):
+    workplan = build_gap_workplan(
+        gaps=[_gap("market_daily_bar", "CN:SZ:000001")],
+        asset_master={"CN:SZ:000001"},
+    )
+    replacements: list[tuple[str, str]] = []
+    real_replace = gap_backfill_module.os.replace
+
+    def recording_replace(source, destination):
+        replacements.append((Path(source).name, Path(destination).name))
+        real_replace(source, destination)
+
+    monkeypatch.setattr(gap_backfill_module.os, "replace", recording_replace)
+
+    write_gap_workplan(workplan, tmp_path)
+
+    assert [destination for _, destination in replacements] == [
+        "gap_workplan.json",
+        "gap_workplan.csv",
+    ]
+    assert all(source.startswith(".gap_workplan.") for source, _ in replacements)
