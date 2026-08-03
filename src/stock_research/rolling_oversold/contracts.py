@@ -32,6 +32,14 @@ class StockLifecycle(str, Enum):
     INVALIDATED = "invalidated"
 
 
+class SectorResearchEligibility(str, Enum):
+    """Whether a sector has enough point-in-time evidence for research."""
+
+    ELIGIBLE = "eligible"
+    WATCH = "watch"
+    BLOCKED_DATA = "blocked_data"
+
+
 DEFAULT_INDEX_IDS = (
     "SSE_COMPOSITE",
     "SZSE_COMPONENT",
@@ -39,6 +47,31 @@ DEFAULT_INDEX_IDS = (
     "STAR_50",
 )
 VALID_ADJUST_TYPES = ("raw", "qfq", "hfq")
+
+SECTOR_FEATURE_COLUMNS = (
+    "sector_low_date_20d",
+    "sector_low_close_20d",
+    "sector_recovery_from_low_20d",
+    "sector_days_since_low_20d",
+    "sector_volume_ratio_5_20",
+    "sector_ma5_slope_5d",
+    "sector_ma10_slope_10d",
+    "sector_research_eligibility",
+)
+
+REQUIRED_SECTOR_COLUMNS = frozenset(
+    (
+        "sector_system",
+        "sector_code",
+        "sector_name",
+        "sector_oversold_score",
+        "sector_repairability_score",
+        "sector_direction_score",
+        "sector_recovery_state",
+        "sector_gate_status",
+        *SECTOR_FEATURE_COLUMNS,
+    )
+)
 
 REQUIRED_SNAPSHOT_COLUMNS = frozenset(
     (
@@ -129,6 +162,13 @@ def validate_snapshot_columns(columns: Iterable[str]) -> list[str]:
 
     present = set(columns)
     return sorted(REQUIRED_SNAPSHOT_COLUMNS - present)
+
+
+def validate_sector_columns(columns: Iterable[str]) -> list[str]:
+    """Return required sector column names absent from *columns*, sorted."""
+
+    present = set(columns)
+    return sorted(REQUIRED_SECTOR_COLUMNS - present)
 
 
 def _validate_date(field_name: str, value: object) -> None:

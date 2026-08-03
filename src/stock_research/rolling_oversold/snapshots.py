@@ -15,7 +15,12 @@ from typing import Any, Callable, Mapping
 
 import pandas as pd
 
-from .contracts import validate_snapshot_columns
+from .contracts import (
+    SECTOR_FEATURE_COLUMNS,
+    SectorResearchEligibility,
+    validate_sector_columns,
+    validate_snapshot_columns,
+)
 
 
 _STOCK_CONTEXT_COLUMNS = (
@@ -27,6 +32,7 @@ _STOCK_CONTEXT_COLUMNS = (
     "sector_direction_score",
     "sector_recovery_state",
     "sector_gate_status",
+    *SECTOR_FEATURE_COLUMNS,
 )
 _STOCK_INPUT_COLUMNS = (
     *_STOCK_CONTEXT_COLUMNS,
@@ -67,6 +73,14 @@ _STOCK_COLUMNS = (
 _OUTCOME_PRICE_SOURCES = frozenset(("raw", "qfq", "hfq"))
 _SECTOR_INPUT_COLUMNS = _STOCK_CONTEXT_COLUMNS
 _SECTOR_CONTEXT_VALUE_COLUMNS = _STOCK_CONTEXT_COLUMNS[2:]
+_SECTOR_NUMERIC_FEATURE_COLUMNS = (
+    "sector_low_close_20d",
+    "sector_recovery_from_low_20d",
+    "sector_days_since_low_20d",
+    "sector_volume_ratio_5_20",
+    "sector_ma5_slope_5d",
+    "sector_ma10_slope_10d",
+)
 _SECTOR_COLUMNS = (
     *_SECTOR_INPUT_COLUMNS,
     "sector_rank",
@@ -131,6 +145,8 @@ def build_rolling_snapshot(
 
     sectors = _normalize_sector_rows(sector_states)
     stocks = _normalize_stock_rows(stock_candidates)
+    legacy_sector_schema = bool(sectors.attrs.get("_legacy_sector_schema"))
+    legacy_stock_schema = bool(stocks.attrs.get("_legacy_sector_schema"))
     stocks = _apply_stock_metadata(
         stocks,
         snapshot_id=snapshot_id,
@@ -151,6 +167,10 @@ def build_rolling_snapshot(
         score_version=score_version,
         market_state=regime["market_regime"],
     )
+    if legacy_sector_schema:
+        sectors.attrs["_legacy_sector_schema"] = True
+    if legacy_stock_schema:
+        stocks.attrs["_legacy_sector_schema"] = True
     _validate_stock_sector_context(stocks, sectors, previous_snapshot_id=previous_id)
 
     preflight = _normalize_preflight(regime.pop("preflight", None))
@@ -293,21 +313,102 @@ def _previous_rows(
     return previous_id, _normalize_stock_rows(stocks), _normalize_sector_rows(sectors)
 
 
+def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
+    """Add deterministic v2 columns for legacy v1 inputs.
+
+    A frame that contains none of the v2 columns is treated as a legacy input;
+    partially supplied v2 frames remain strict and fail on missing columns.
+    The private frame attribute lets write-time validation distinguish those
+    compatibility rows from an explicitly incomplete v2 row.
+    """
+
+    base_columns = tuple(
+        column
+        for column in _SECTOR_INPUT_COLUMNS
+        if column not in SECTOR_FEATURE_COLUMNS
+    )
+    _require_columns(frame, base_columns, label)
+    supplied_features = set(frame.columns).intersection(SECTOR_FEATURE_COLUMNS)
+    legacy = not supplied_features
+    if not legacy:
+        _require_columns(frame, _SECTOR_INPUT_COLUMNS, label)
+        return False
+    for column in SECTOR_FEATURE_COLUMNS:
+        if column not in frame:
+            frame[column] = pd.NA
+    gate = frame["sector_gate_status"].astype("string").str.strip().str.casefold()
+    eligibility = gate.map(
+        {
+            "confirmed": SectorResearchEligibility.ELIGIBLE.value,
+            "watch": SectorResearchEligibility.WATCH.value,
+            "blocked": SectorResearchEligibility.BLOCKED_DATA.value,
+        }
+    )
+    frame["sector_research_eligibility"] = eligibility
+    frame.attrs["_legacy_sector_schema"] = True
+    return True
+
+
+def _validate_sector_eligibility_values(frame: pd.DataFrame, label: str) -> None:
+    allowed = {item.value for item in SectorResearchEligibility}
+    values = frame["sector_research_eligibility"].astype("string")
+    invalid = values.notna() & ~values.isin(allowed)
+    if invalid.any():
+        raise ValueError(
+            f"{label} sector_research_eligibility must be one of "
+            + ", ".join(sorted(allowed))
+        )
+    frame["sector_research_eligibility"] = values
+
+
+def _normalize_sector_feature_values(frame: pd.DataFrame, label: str) -> None:
+    date_values = frame["sector_low_date_20d"]
+    parsed_dates = pd.to_datetime(date_values, errors="coerce")
+    invalid_date = date_values.notna() & parsed_dates.isna()
+    if invalid_date.any():
+        raise ValueError(f"{label} sector_low_date_20d must be an ISO date")
+    frame["sector_low_date_20d"] = parsed_dates.dt.strftime("%Y-%m-%d").astype("string")
+    for column in _SECTOR_NUMERIC_FEATURE_COLUMNS:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
+
 def _normalize_stock_rows(
     frame: pd.DataFrame, *, allow_revision_rows: bool = False
 ) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=_STOCK_COLUMNS)
-    _require_columns(frame, _STOCK_INPUT_COLUMNS, "stock_candidates")
     result = frame.copy(deep=True)
+    legacy_sector_schema = _ensure_sector_contract_columns(result, "stock_candidates")
     _normalize_string_columns(result, ("asset_id", "sector_system", "sector_code", "sector_name"))
-    _normalize_string_columns(result, ("stock_lifecycle", "sector_recovery_state", "sector_gate_status"))
-    for column in ("stock_lifecycle", "sector_recovery_state", "sector_gate_status"):
+    _normalize_string_columns(
+        result,
+        (
+            "stock_lifecycle",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "sector_research_eligibility",
+        ),
+    )
+    for column in (
+        "stock_lifecycle",
+        "sector_recovery_state",
+        "sector_gate_status",
+        "sector_research_eligibility",
+    ):
         result[column] = result[column].str.casefold()
     _require_nonempty_strings(result, ("asset_id", "sector_system", "sector_code", "sector_name"), "stock_candidates")
     _require_nonempty_strings(
-        result, ("stock_lifecycle", "sector_recovery_state", "sector_gate_status"), "stock_candidates"
+        result,
+        (
+            "stock_lifecycle",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "sector_research_eligibility",
+        ),
+        "stock_candidates",
     )
+    _validate_sector_eligibility_values(result, "stock_candidates")
+    _normalize_sector_feature_values(result, "stock_candidates")
     _require_finite_numbers(
         result,
         ("stock_score",),
@@ -347,7 +448,10 @@ def _normalize_stock_rows(
         if column not in result:
             result[column] = ""
         result[column] = result[column].fillna("").astype("string")
-    return _ordered_frame(result, _STOCK_COLUMNS, sort_columns=("stock_rank", "asset_id"))
+    normalized = _ordered_frame(result, _STOCK_COLUMNS, sort_columns=("stock_rank", "asset_id"))
+    if legacy_sector_schema:
+        normalized.attrs["_legacy_sector_schema"] = True
+    return normalized
 
 
 def _normalize_outcome_price_columns(frame: pd.DataFrame) -> None:
@@ -367,7 +471,13 @@ def _normalize_outcome_price_columns(frame: pd.DataFrame) -> None:
     invalid_source = source.notna() & ~source.isin(_OUTCOME_PRICE_SOURCES)
     if invalid_source.any():
         raise ValueError("stock_candidates adjusted_close_source must be one of raw, qfq, hfq")
-    excluded = frame["sector_gate_status"].eq("blocked") | frame["stock_lifecycle"].eq("invalidated")
+    excluded = (
+        frame["sector_gate_status"].eq("blocked")
+        | frame["sector_research_eligibility"].eq(
+            SectorResearchEligibility.BLOCKED_DATA.value
+        )
+        | frame["stock_lifecycle"].eq("invalidated")
+    )
     mismatched = anchor_supplied != source.notna()
     if mismatched.any():
         raise ValueError(
@@ -385,19 +495,39 @@ def _normalize_outcome_price_columns(frame: pd.DataFrame) -> None:
 def _normalize_sector_rows(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=_SECTOR_COLUMNS)
-    _require_columns(frame, _SECTOR_INPUT_COLUMNS, "sector_states")
     result = frame.copy(deep=True)
+    legacy_sector_schema = _ensure_sector_contract_columns(result, "sector_states")
     _normalize_string_columns(
         result,
-        ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
+        (
+            "sector_system",
+            "sector_code",
+            "sector_name",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "sector_research_eligibility",
+        ),
     )
-    for column in ("sector_recovery_state", "sector_gate_status"):
+    for column in (
+        "sector_recovery_state",
+        "sector_gate_status",
+        "sector_research_eligibility",
+    ):
         result[column] = result[column].str.casefold()
     _require_nonempty_strings(
         result,
-        ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
+        (
+            "sector_system",
+            "sector_code",
+            "sector_name",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "sector_research_eligibility",
+        ),
         "sector_states",
     )
+    _validate_sector_eligibility_values(result, "sector_states")
+    _normalize_sector_feature_values(result, "sector_states")
     _require_finite_numbers(
         result,
         ("sector_oversold_score", "sector_repairability_score", "sector_direction_score"),
@@ -419,6 +549,8 @@ def _normalize_sector_rows(frame: pd.DataFrame) -> pd.DataFrame:
         kind="mergesort",
     ).reset_index(drop=True)
     result["sector_rank"] = pd.Series(range(1, len(result) + 1), dtype="int64")
+    if legacy_sector_schema:
+        result.attrs["_legacy_sector_schema"] = True
     return result
 
 
@@ -588,9 +720,12 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     missing_stock_schema = sorted(set(_STOCK_COLUMNS) - set(snapshot["stock_candidates"].columns))
     if missing_stock_schema:
         raise ValueError("stock snapshot rows missing canonical columns: " + ", ".join(missing_stock_schema))
-    missing_sector = sorted(set(_SECTOR_INPUT_COLUMNS) - set(snapshot["sector_states"].columns))
+    missing_sector = validate_sector_columns(snapshot["sector_states"].columns)
     if missing_sector:
-        raise ValueError("sector snapshot rows missing canonical columns: " + ", ".join(missing_sector))
+        raise ValueError(
+            "sector snapshot rows do not satisfy the required sector column contract: "
+            + ", ".join(missing_sector)
+        )
     missing_sector_schema = sorted(set(_SECTOR_COLUMNS) - set(snapshot["sector_states"].columns))
     if missing_sector_schema:
         raise ValueError("sector snapshot rows missing canonical columns: " + ", ".join(missing_sector_schema))
@@ -604,6 +739,8 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     if not isinstance(market_state, str) or not market_state.strip():
         raise ValueError("snapshot market_regime must include a non-empty market_regime value")
     market_regime["market_regime"] = market_state.strip()
+    preflight = _normalize_preflight(snapshot["preflight"])
+    backfill_requests = _normalize_backfill(snapshot["backfill_requests"])
     stock_rows = _validate_stock_snapshot_rows(
         snapshot["stock_candidates"],
         snapshot_id=expected_id,
@@ -614,7 +751,9 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         previous_snapshot_id=previous_id,
     )
     sector_rows = _validate_sector_snapshot_rows(
-        snapshot["sector_states"], previous_snapshot_id=previous_id
+        snapshot["sector_states"],
+        previous_snapshot_id=previous_id,
+        structured_gaps=_structured_gap_rows(preflight, backfill_requests),
     )
     _validate_stock_sector_context(
         stock_rows, sector_rows, previous_snapshot_id=previous_id
@@ -632,8 +771,8 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         "score_version": version,
         "market_regime": market_regime,
         "previous_snapshot_id": previous_id,
-        "preflight": _normalize_preflight(snapshot["preflight"]),
-        "backfill_requests": _normalize_backfill(snapshot["backfill_requests"]),
+        "preflight": preflight,
+        "backfill_requests": backfill_requests,
         "runtime_metadata": _normalize_runtime_metadata(snapshot.get("runtime_metadata")),
     }
     normalized["sector_states"] = _ordered_frame(
@@ -704,26 +843,53 @@ def _validate_stock_cross_artifact_metadata(
 
 
 def _validate_sector_snapshot_rows(
-    frame: pd.DataFrame, *, previous_snapshot_id: str | None
+    frame: pd.DataFrame,
+    *,
+    previous_snapshot_id: str | None,
+    structured_gaps: tuple[Mapping[str, object], ...] = (),
 ) -> pd.DataFrame:
     result = frame.copy(deep=True)
     if result.empty:
         return result
     _normalize_string_columns(
         result,
-        ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
+        (
+            "sector_system",
+            "sector_code",
+            "sector_name",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "sector_research_eligibility",
+        ),
     )
+    for column in (
+        "sector_recovery_state",
+        "sector_gate_status",
+        "sector_research_eligibility",
+    ):
+        result[column] = result[column].str.casefold()
     _require_nonempty_strings(
         result,
-        ("sector_system", "sector_code", "sector_name", "sector_recovery_state", "sector_gate_status"),
+        (
+            "sector_system",
+            "sector_code",
+            "sector_name",
+            "sector_recovery_state",
+            "sector_gate_status",
+            "sector_research_eligibility",
+        ),
         "sector_states",
     )
+    _validate_sector_eligibility_values(result, "sector_states")
+    _normalize_sector_feature_values(result, "sector_states")
     _require_finite_numbers(
         result,
         ("sector_oversold_score", "sector_repairability_score", "sector_direction_score"),
         "sector_states",
         allow_missing=_allow_missing_sector_scores(result),
     )
+    if not bool(frame.attrs.get("_legacy_sector_schema")):
+        _validate_sector_repair_features(result, structured_gaps)
     if result.duplicated(["sector_system", "sector_code"]).any():
         raise ValueError("sector_states has duplicate sector identity")
     result["sector_rank"] = pd.to_numeric(result["sector_rank"], errors="coerce")
@@ -742,6 +908,81 @@ def _validate_sector_snapshot_rows(
         result, previous_snapshot_id=previous_snapshot_id
     )
     return result
+
+
+def _validate_sector_repair_features(
+    frame: pd.DataFrame, structured_gaps: tuple[Mapping[str, object], ...]
+) -> None:
+    feature_columns = tuple(
+        column for column in SECTOR_FEATURE_COLUMNS if column != "sector_research_eligibility"
+    )
+    _require_finite_numbers(
+        frame,
+        _SECTOR_NUMERIC_FEATURE_COLUMNS,
+        "sector_states",
+        allow_missing=frame["sector_research_eligibility"].eq(
+            SectorResearchEligibility.BLOCKED_DATA.value
+        ),
+    )
+    for _, row in frame.iterrows():
+        eligibility = str(row["sector_research_eligibility"])
+        missing = [column for column in feature_columns if _is_missing(row[column])]
+        if eligibility == SectorResearchEligibility.BLOCKED_DATA.value:
+            if missing and not _has_sector_gap(
+                structured_gaps,
+                sector_system=str(row["sector_system"]),
+                sector_code=str(row["sector_code"]),
+            ):
+                raise ValueError(
+                    "blocked_data sector rows with empty features require a structured data gap"
+                )
+            continue
+        if missing:
+            raise ValueError(
+                "non-blocked sector rows require complete sector repair features: "
+                + ", ".join(missing)
+            )
+        days = row["sector_days_since_low_20d"]
+        if float(days) < 0 or float(days) % 1:
+            raise ValueError("sector_days_since_low_20d must be a non-negative integer")
+
+
+def _structured_gap_rows(
+    preflight: Mapping[str, object], backfill_requests: pd.DataFrame
+) -> tuple[Mapping[str, object], ...]:
+    rows: list[Mapping[str, object]] = []
+    gaps = preflight.get("gaps", [])
+    if isinstance(gaps, list):
+        rows.extend(item for item in gaps if isinstance(item, Mapping))
+    if not backfill_requests.empty:
+        rows.extend(
+            item
+            for item in backfill_requests.to_dict(orient="records")
+            if isinstance(item, Mapping)
+        )
+    return tuple(rows)
+
+
+def _has_sector_gap(
+    gaps: tuple[Mapping[str, object], ...], *, sector_system: str, sector_code: str
+) -> bool:
+    identity = f"{sector_system}:{sector_code}".casefold()
+    normalized_code = sector_code.casefold()
+    for gap in gaps:
+        dataset = str(gap.get("dataset") or "").strip()
+        reason = str(gap.get("reason") or "").strip()
+        if not dataset or not reason:
+            continue
+        asset_id = str(gap.get("asset_id") or "").strip().casefold()
+        gap_system = str(gap.get("sector_system") or "").strip().casefold()
+        gap_code = str(gap.get("sector_code") or "").strip().casefold()
+        if asset_id in {identity, normalized_code, f"{sector_system}/{sector_code}".casefold()}:
+            return True
+        if gap_code == normalized_code and (not gap_system or gap_system == sector_system.casefold()):
+            return True
+        if not asset_id and any(token in dataset.casefold() for token in ("sector", "concept", sector_system.casefold())):
+            return True
+    return False
 
 
 def _validate_sector_cross_artifact_metadata(
@@ -1039,7 +1280,13 @@ def _require_finite_numbers(
 
 
 def _allow_missing_sector_scores(frame: pd.DataFrame) -> pd.Series:
-    return frame["sector_gate_status"].eq("blocked") | frame["sector_recovery_state"].eq("unknown")
+    return (
+        frame["sector_gate_status"].eq("blocked")
+        | frame["sector_recovery_state"].eq("unknown")
+        | frame["sector_research_eligibility"].eq(
+            SectorResearchEligibility.BLOCKED_DATA.value
+        )
+    )
 
 
 def _validate_date(label: str, value: object) -> None:
