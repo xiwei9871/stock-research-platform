@@ -172,6 +172,52 @@ def test_target_membership_backfill_uses_verified_snapshot_file(monkeypatch, tmp
     assert len(execute_calls) == 2
 
 
+def test_live_ths_source_cannot_be_blessed_by_manual_source_asof(
+    monkeypatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    # Keep the production wrapper identity intact while making its underlying
+    # live adapter return an unannotated frame.
+    monkeypatch.setattr(
+        backfill,
+        "fetch_ths_detail_constituents",
+        lambda symbol: pd.DataFrame([{"代码": "000001", "名称": "样本"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [_master("CN:SZ:000001")],
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: pytest.fail("unannotated live source must not write"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda *args, **kwargs: pytest.fail("unannotated live source must not close history"),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes=["300238"],
+        source_asof=date(2026, 7, 31),
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["source_pit_status"] == "current_unknown_asof"
+    assert result["write_blocked"] is True
+    assert result["write_blocked_reason"] == "source_asof_unknown"
+    assert result["database_writes"] == 0
+
+
 @pytest.mark.parametrize(
     ("source_asof", "expected_effective_date", "expected_status", "expected_reason"),
     [

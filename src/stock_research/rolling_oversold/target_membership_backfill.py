@@ -374,6 +374,12 @@ def fetch_target_concept_constituents_em(symbol: str) -> Any:
     return ak.stock_board_concept_cons_em(symbol)
 
 
+# Keep an identity sentinel so tests/operator-injected fetchers cannot be
+# mistaken for the production live THS endpoint.  A manually supplied
+# ``--source-asof`` must never be enough to bless an unannotated live response.
+_DEFAULT_THS_CONSTITUENT_FETCHER = fetch_target_concept_constituents
+
+
 @lru_cache(maxsize=1)
 def _get_ths_v_code() -> str:
     """Generate the THS ``v`` cookie using AkShare's bundled JavaScript."""
@@ -752,6 +758,12 @@ def run_target_membership_backfill(
         fetch_boards = board_fetcher or fetch_target_concept_boards
         fetch_constituents = constituent_fetcher or fetch_target_concept_constituents
         custom_constituent_fetcher = constituent_fetcher is not None
+    using_live_ths_source = (
+        snapshot_frame is None
+        and membership_snapshot_file is None
+        and constituent_fetcher is None
+        and fetch_target_concept_constituents is _DEFAULT_THS_CONSTITUENT_FETCHER
+    )
     load_master = asset_master_loader or load_target_asset_master
 
     source_missing_codes: list[str] = []
@@ -773,6 +785,8 @@ def run_target_membership_backfill(
     out_of_scope_bse: list[str] = []
     out_of_scope_900xxx: list[str] = []
     member_cap_applied_concepts: list[str] = []
+    live_source_asof_values: set[date] = set()
+    live_source_asof_unknown = False
 
     for code in codes:
         board = boards_by_code.get(code)
@@ -788,6 +802,17 @@ def run_target_membership_backfill(
             fetch_symbol = board["concept_name"] if custom_constituent_fetcher else code
             raw_constituents = fetch_constituents(fetch_symbol)
             source_attrs = getattr(raw_constituents, "attrs", {})
+            if using_live_ths_source:
+                live_asof = _parse_source_asof(
+                    source_attrs.get("source_asof")
+                    or source_attrs.get("source_effective_date")
+                    if isinstance(source_attrs, Mapping)
+                    else None
+                )
+                if live_asof is None:
+                    live_source_asof_unknown = True
+                else:
+                    live_source_asof_values.add(live_asof)
             if isinstance(source_attrs, Mapping) and source_attrs.get("member_cap_applied"):
                 member_cap_applied_concepts.append(code)
             if _is_empty_source_response(raw_constituents):
@@ -936,6 +961,29 @@ def run_target_membership_backfill(
     ]
 
     source_incomplete = bool(source_error or source_missing_codes or failed_concepts)
+    if using_live_ths_source:
+        if live_source_asof_unknown:
+            source_pit_verified = False
+            source_asof_reason = "source_asof_unknown"
+            source_pit_status = "current_unknown_asof"
+        elif len(live_source_asof_values) != 1:
+            source_pit_verified = False
+            source_asof_reason = "source_asof_unknown"
+            source_pit_status = "current_unknown_asof"
+        else:
+            live_source_asof = next(iter(live_source_asof_values))
+            if source_effective is None:
+                source_effective = live_source_asof
+                source_effective_text = source_effective.isoformat()
+                source_pit_verified, source_asof_reason = validate_membership_source_asof(
+                    source_asof=source_effective,
+                    requested_date=cutoff,
+                )
+                source_pit_status = "verified" if source_pit_verified else "after_requested_date"
+            elif source_effective != live_source_asof:
+                source_pit_verified = False
+                source_asof_reason = "source_asof_mismatch"
+                source_pit_status = "current_unknown_asof"
     write_blocked = not source_pit_verified or source_incomplete
     if not source_pit_verified:
         write_blocked_reason = source_asof_reason
