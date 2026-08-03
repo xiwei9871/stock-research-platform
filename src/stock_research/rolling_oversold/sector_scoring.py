@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .contracts import GateStatus, RecoveryState
+from .contracts import GateStatus, RecoveryState, SectorResearchEligibility
 
 
 _NUMERIC_COLUMNS = (
@@ -348,10 +348,11 @@ def _gate_status(row: pd.Series, regime: str) -> str:
 
 
 def _research_eligibility(row: pd.Series) -> str:
-    """Map the legacy gate to the explicit research visibility status.
+    """Classify research visibility independently from the legacy gate.
 
-    Task 3 may refine this policy.  For now, preserve the legacy gate semantics
-    while distinguishing data blockage from an ordinary watch row.
+    ``blocked_data`` is reserved for rows whose point-in-time evidence is not
+    complete.  A complete row remains visible for research even when the
+    backwards-compatible stock gate is blocked.
     """
 
     if (
@@ -361,10 +362,17 @@ def _research_eligibility(row: pd.Series) -> str:
         or row.get("sector_feature_data_status") != "ok"
         or any(pd.isna(row.get(column)) for column in _REQUIRED_REPAIR_FEATURE_COLUMNS)
     ):
-        return "blocked_data"
-    if row.get("sector_gate_status") == GateStatus.CONFIRMED.value:
-        return "eligible"
-    return "watch"
+        return SectorResearchEligibility.BLOCKED_DATA.value
+    recovery_state = str(row.get("sector_recovery_state") or "").strip().casefold()
+    gate_status = str(row.get("sector_gate_status") or "").strip().casefold()
+    if recovery_state in {
+        RecoveryState.FRESH_OVERSOLD.value,
+        RecoveryState.REPAIRING.value,
+        "confirmed",
+        "confirmed_repair",
+    } or gate_status == GateStatus.CONFIRMED.value:
+        return SectorResearchEligibility.ELIGIBLE.value
+    return SectorResearchEligibility.WATCH.value
 
 
 def _feature_data_status(

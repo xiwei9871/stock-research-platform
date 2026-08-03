@@ -28,7 +28,7 @@ from stock_research.strategy_data_policy import (
     write_backfill_request,
 )
 
-from .contracts import GateStatus, RollingOversoldConfig, StockLifecycle
+from .contracts import GateStatus, RollingOversoldConfig, SectorResearchEligibility, StockLifecycle
 from .loaders import RollingInputs, load_rolling_inputs
 from .market_regime import compute_market_regime_features
 from .outcomes import evaluate_snapshot, summarize_rolling_evaluation
@@ -574,6 +574,11 @@ def _canonicalize_sector_states(states: pd.DataFrame) -> pd.DataFrame:
     for column in ("sector_recovery_state", "sector_gate_status"):
         values = result.get(column, pd.Series(pd.NA, index=result.index, dtype="string"))
         result[column] = values.astype("string").str.strip().str.casefold().replace("", pd.NA)
+    if "sector_research_eligibility" in result:
+        values = result["sector_research_eligibility"]
+        result["sector_research_eligibility"] = (
+            values.astype("string").str.strip().str.casefold().replace("", pd.NA)
+        )
     result["sector_recovery_state"] = result["sector_recovery_state"].fillna("unknown")
     result["sector_gate_status"] = result["sector_gate_status"].fillna(GateStatus.BLOCKED.value)
     for column in (
@@ -586,6 +591,20 @@ def _canonicalize_sector_states(states: pd.DataFrame) -> pd.DataFrame:
         ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"]
     ].isna().any(axis=1)
     result.loc[invalid_mapping | invalid_scores, "sector_gate_status"] = GateStatus.BLOCKED.value
+    if (
+        "sector_research_eligibility" in result
+        and result["sector_research_eligibility"].notna().any()
+    ):
+        fallback = result["sector_gate_status"].map(
+            {
+                GateStatus.CONFIRMED.value: SectorResearchEligibility.ELIGIBLE.value,
+                GateStatus.WATCH.value: SectorResearchEligibility.WATCH.value,
+                GateStatus.BLOCKED.value: SectorResearchEligibility.BLOCKED_DATA.value,
+            }
+        )
+        result["sector_research_eligibility"] = result[
+            "sector_research_eligibility"
+        ].fillna(fallback)
 
     duplicates = result.duplicated(["sector_system", "sector_code"], keep=False)
     if duplicates.any():
@@ -610,9 +629,43 @@ def _canonicalize_sector_states(states: pd.DataFrame) -> pd.DataFrame:
 def _gated_sector_rows(sector_states: pd.DataFrame, *, top_n: int) -> pd.DataFrame:
     if sector_states.empty:
         return sector_states.copy(deep=True)
-    gated = sector_states.loc[
-        ~sector_states["sector_gate_status"].eq(GateStatus.BLOCKED.value)
-    ].copy()
+    eligibility = sector_states.get(
+        "sector_research_eligibility", pd.Series(pd.NA, index=sector_states.index)
+    )
+    explicit_eligibility = eligibility.notna().any()
+    if explicit_eligibility:
+        normalized_eligibility = (
+            eligibility.astype("string").str.strip().str.casefold().replace("", pd.NA)
+        )
+        gate = (
+            sector_states["sector_gate_status"]
+            .astype("string")
+            .str.strip()
+            .str.casefold()
+        )
+        normalized_eligibility = normalized_eligibility.fillna(
+            gate.map(
+                {
+                    GateStatus.CONFIRMED.value: SectorResearchEligibility.ELIGIBLE.value,
+                    GateStatus.WATCH.value: SectorResearchEligibility.WATCH.value,
+                    GateStatus.BLOCKED.value: SectorResearchEligibility.BLOCKED_DATA.value,
+                }
+            )
+        )
+        gated = sector_states.loc[
+            normalized_eligibility.isin(
+                {
+                    SectorResearchEligibility.ELIGIBLE.value,
+                    SectorResearchEligibility.WATCH.value,
+                }
+            )
+        ].copy()
+    else:
+        # Legacy sector frames have no explicit visibility field.  Preserve
+        # the old gate behavior for those inputs.
+        gated = sector_states.loc[
+            ~sector_states["sector_gate_status"].eq(GateStatus.BLOCKED.value)
+        ].copy()
     if gated.empty:
         return gated
     gated = gated.sort_values(
@@ -642,9 +695,10 @@ def _score_gated_stock_candidates(
     joined = features.merge(context, on=["sector_system", "sector_code"], how="inner", sort=False)
     if joined.empty:
         return pd.DataFrame()
-    # A stock may belong to an industry and a concept.  Keep every sector row
-    # in the snapshot, but score an asset once against its strongest permitted
-    # sector so the immutable stock artifact retains its unique-asset contract.
+    # A stock may belong to an industry and a concept.  Keep the immutable
+    # stock artifact's unique-asset contract by scoring it once against its
+    # strongest permitted sector; sector_stock_rank remains local to that
+    # selected sector rather than being merged into the compatibility rank.
     joined = joined.sort_values(
         ["asset_id", "sector_oversold_score", "sector_system", "sector_code"],
         ascending=[True, False, True, True],
@@ -655,6 +709,7 @@ def _score_gated_stock_candidates(
         sector_states,
         top_n=config.stock_top_n,
         config=config,
+        sector_selection=gated_sectors,
     )
 
 

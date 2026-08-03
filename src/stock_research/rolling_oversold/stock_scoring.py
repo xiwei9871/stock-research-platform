@@ -15,7 +15,14 @@ import pandas as pd
 
 from stock_research.strategy_data_policy import DataGap
 
-from .contracts import GateStatus, RecoveryState, RollingOversoldConfig, StockLifecycle
+from .contracts import (
+    SECTOR_FEATURE_COLUMNS,
+    GateStatus,
+    RecoveryState,
+    RollingOversoldConfig,
+    SectorResearchEligibility,
+    StockLifecycle,
+)
 
 
 _KEY_COLUMNS = ("sector_system", "sector_code")
@@ -28,6 +35,8 @@ _SECTOR_CONTEXT_COLUMNS = (
     "sector_direction_score",
     "sector_recovery_state",
     "sector_gate_status",
+    *SECTOR_FEATURE_COLUMNS,
+    "sector_feature_data_status",
 )
 _COMPONENT_COLUMNS = (
     "stock_oversold_depth_score",
@@ -59,6 +68,7 @@ _OUTPUT_COLUMNS = (
     "stock_excess_return",
     *_COMPONENT_COLUMNS,
     "stock_score",
+    "sector_stock_rank",
     "stock_rank",
     "stock_lifecycle",
     "anchor_close",
@@ -115,11 +125,15 @@ def score_rolling_stock_candidates(
     *,
     top_n: int,
     config: RollingOversoldConfig,
+    sector_selection: pd.DataFrame | Sequence[object] | None = None,
 ) -> pd.DataFrame:
-    """Return fresh, explainable stock candidates from non-blocked sector states.
+    """Return explainable stock candidates scoped to selected research sectors.
 
     Missing sector context and incomplete score inputs fail closed.  In
     particular, this function never fills a required score component with zero.
+    ``sector_selection`` is optional for compatibility with callers that pass
+    the complete sector state frame.  When supplied, only those canonical
+    sector keys are scored.
     """
 
     if not isinstance(stock_features, pd.DataFrame) or not isinstance(sector_states, pd.DataFrame):
@@ -142,7 +156,14 @@ def score_rolling_stock_candidates(
         ],
         errors="ignore",
     )
+    explicit_eligibility = (
+        "sector_research_eligibility" in sector_states
+        and sector_states["sector_research_eligibility"].notna().any()
+    )
     sectors = _canonicalize_sector(sector_states)
+    sectors = _select_sector_context(sectors, sector_selection)
+    if sector_selection is not None:
+        stocks = _filter_stocks_to_sectors(stocks, sectors)
     _require_stock_sector_keys(stocks)
     _require_sector_context(stocks, sectors, config)
     sector_context = sectors.loc[:, list(_SECTOR_CONTEXT_COLUMNS)].copy()
@@ -163,8 +184,24 @@ def score_rolling_stock_candidates(
         joined["market_regime"].astype("string").str.strip().replace("", pd.NA).fillna("unknown")
     )
 
-    blocked = joined["sector_gate_status"].eq(GateStatus.BLOCKED.value)
-    active = joined.loc[~blocked].copy()
+    joined["sector_research_eligibility"] = _normalized_sector_eligibility(
+        joined["sector_research_eligibility"], joined["sector_gate_status"]
+    )
+    if explicit_eligibility:
+        active = joined.loc[
+            joined["sector_research_eligibility"].isin(
+                {
+                    SectorResearchEligibility.ELIGIBLE.value,
+                    SectorResearchEligibility.WATCH.value,
+                }
+            )
+        ].copy()
+    else:
+        # Legacy fixtures with no explicit eligibility retain their historical
+        # gate behavior.  A present-but-empty column follows the same fallback.
+        active = joined.loc[
+            ~joined["sector_gate_status"].eq(GateStatus.BLOCKED.value)
+        ].copy()
     if active.empty:
         return _empty_result()
 
@@ -172,6 +209,14 @@ def score_rolling_stock_candidates(
     _validate_sector_numeric_context(active)
     _score_components(active)
     _assign_outcome_inputs(active, config)
+    effective_gate = active["sector_gate_status"].astype("string")
+    visible_blocked = active["sector_research_eligibility"].isin(
+        {
+            SectorResearchEligibility.ELIGIBLE.value,
+            SectorResearchEligibility.WATCH.value,
+        }
+    ) & effective_gate.eq(GateStatus.BLOCKED.value)
+    effective_gate = effective_gate.mask(visible_blocked, GateStatus.WATCH.value)
     active["stock_lifecycle"] = [
         classify_stock_lifecycle(
             anchor_return=anchor_return,
@@ -185,12 +230,15 @@ def score_rolling_stock_candidates(
             active["anchor_return"],
             active["distance_to_252d_high"],
             active["sector_recovery_state"],
-            active["sector_gate_status"],
+            effective_gate,
             strict=True,
         )
     ]
-    active["score_status"] = "scored"
-    active["score_reason"] = ""
+    watch_rows = active["sector_research_eligibility"].eq(
+        SectorResearchEligibility.WATCH.value
+    )
+    active["score_status"] = np.where(watch_rows, "sector_watch", "scored")
+    active["score_reason"] = np.where(watch_rows, "sector_watch", "")
     active["stock_feature_source"] = active.get(
         "stock_feature_source", pd.Series("precomputed", index=active.index)
     ).fillna("precomputed")
@@ -206,8 +254,26 @@ def score_rolling_stock_candidates(
         ["stock_score", "asset_id", "sector_system", "sector_code"],
         ascending=[False, True, True, True],
         kind="mergesort",
-    ).head(top_n)
+    )
+    selected = (
+        selected.groupby(list(_KEY_COLUMNS), group_keys=False, sort=False)
+        .head(top_n)
+        .copy()
+    )
+    selected["sector_stock_rank"] = (
+        selected.groupby(list(_KEY_COLUMNS), sort=False).cumcount() + 1
+    ).astype(int)
+    selected = selected.sort_values(
+        ["stock_score", "asset_id", "sector_system", "sector_code"],
+        ascending=[False, True, True, True],
+        kind="mergesort",
+    )
     selected["stock_rank"] = np.arange(1, len(selected) + 1, dtype=int)
+    # ``stock_rank`` remains the compatibility/global ordering.  The new
+    # ``sector_stock_rank`` above is independently restarted per sector.
+    selected.attrs["_legacy_sector_schema"] = (
+        not explicit_eligibility or not _has_complete_sector_repair_context(selected)
+    )
     return _output_frame(selected)
 
 
@@ -324,16 +390,89 @@ def _canonicalize_sector(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=_SECTOR_CONTEXT_COLUMNS)
     result = _canonicalize_sector_keys(frame)
-    missing = [column for column in _SECTOR_CONTEXT_COLUMNS if column not in result]
+    # Task1/Task2 sector repair fields are optional for legacy callers.  They
+    # are carried through when present and filled with nulls otherwise; the
+    # explicit eligibility column controls visibility only when supplied.
+    missing = [
+        column
+        for column in _SECTOR_CONTEXT_COLUMNS
+        if column not in result and column not in SECTOR_FEATURE_COLUMNS
+        and column != "sector_feature_data_status"
+    ]
     if missing:
         raise ValueError(f"sector_states missing required columns: {', '.join(missing)}")
+    for column in (*SECTOR_FEATURE_COLUMNS, "sector_feature_data_status"):
+        if column not in result:
+            result[column] = pd.NA
     result = _deterministically_deduplicate(result, list(_KEY_COLUMNS))
-    for column in ("sector_recovery_state", "sector_gate_status"):
+    for column in (
+        "sector_recovery_state",
+        "sector_gate_status",
+        "sector_research_eligibility",
+        "sector_feature_data_status",
+    ):
         result[column] = result[column].astype("string").str.strip().replace("", pd.NA)
     output_columns = [* _SECTOR_CONTEXT_COLUMNS]
     if "market_regime" in result:
         output_columns.append("market_regime")
     return result.loc[:, output_columns]
+
+
+def _select_sector_context(
+    sectors: pd.DataFrame,
+    sector_selection: pd.DataFrame | Sequence[object] | None,
+) -> pd.DataFrame:
+    """Restrict canonical sector context to an explicit key selection."""
+
+    if sector_selection is None:
+        return sectors
+    if isinstance(sector_selection, pd.DataFrame):
+        selected = _canonicalize_sector_keys(sector_selection)
+        if not set(_KEY_COLUMNS).issubset(selected.columns):
+            raise ValueError("sector_selection must include sector_system and sector_code")
+        keys = selected.loc[:, list(_KEY_COLUMNS)].dropna().drop_duplicates()
+    else:
+        values = list(sector_selection)
+        if not values:
+            return sectors.iloc[0:0].copy()
+        keys = pd.DataFrame(values, columns=list(_KEY_COLUMNS))
+        keys = _canonicalize_sector_keys(keys).loc[:, list(_KEY_COLUMNS)].dropna().drop_duplicates()
+    if keys.empty:
+        return sectors.iloc[0:0].copy()
+    selected_index = pd.MultiIndex.from_frame(keys)
+    sector_index = pd.MultiIndex.from_frame(sectors.loc[:, list(_KEY_COLUMNS)])
+    return sectors.loc[sector_index.isin(selected_index)].copy()
+
+
+def _filter_stocks_to_sectors(stocks: pd.DataFrame, sectors: pd.DataFrame) -> pd.DataFrame:
+    if stocks.empty or sectors.empty:
+        return stocks.iloc[0:0].copy()
+    selected_index = pd.MultiIndex.from_frame(sectors.loc[:, list(_KEY_COLUMNS)])
+    stock_index = pd.MultiIndex.from_frame(stocks.loc[:, list(_KEY_COLUMNS)])
+    return stocks.loc[stock_index.isin(selected_index)].copy()
+
+
+def _normalized_sector_eligibility(
+    eligibility: pd.Series, gate: pd.Series
+) -> pd.Series:
+    values = eligibility.astype("string").str.strip().str.casefold().replace("", pd.NA)
+    fallback = gate.astype("string").str.strip().str.casefold().map(
+        {
+            GateStatus.CONFIRMED.value: SectorResearchEligibility.ELIGIBLE.value,
+            GateStatus.WATCH.value: SectorResearchEligibility.WATCH.value,
+            GateStatus.BLOCKED.value: SectorResearchEligibility.BLOCKED_DATA.value,
+        }
+    )
+    return values.fillna(fallback)
+
+
+def _has_complete_sector_repair_context(frame: pd.DataFrame) -> bool:
+    feature_columns = tuple(
+        column for column in SECTOR_FEATURE_COLUMNS if column != "sector_research_eligibility"
+    )
+    if not feature_columns or frame.empty:
+        return False
+    return bool(frame.loc[:, list(feature_columns)].notna().all(axis=1).all())
 
 
 def _canonicalize_sector_keys(frame: pd.DataFrame) -> pd.DataFrame:
@@ -618,5 +757,6 @@ def _output_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _empty_result() -> pd.DataFrame:
     empty = pd.DataFrame(columns=_OUTPUT_COLUMNS)
+    empty["sector_stock_rank"] = empty["sector_stock_rank"].astype("int64")
     empty["stock_rank"] = empty["stock_rank"].astype("int64")
     return empty
