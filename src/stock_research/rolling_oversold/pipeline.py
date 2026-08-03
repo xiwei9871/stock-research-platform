@@ -66,6 +66,25 @@ _BACKFILL_COLUMNS = (
     "actual_rows",
     "reason",
 )
+_SECTOR_BATCH_REQUIRED_ARTIFACTS = frozenset(
+    {
+        "market_regime.csv",
+        "sector_states.csv",
+        "stock_candidates.csv",
+        "preflight.json",
+        "backfill_requests.csv",
+        "sector_daily_board.csv",
+        "sector_stock_candidates.csv",
+    }
+)
+_SECTOR_BATCH_ROW_COUNT_KEYS = frozenset(
+    {
+        "sector_states",
+        "stock_candidates",
+        "sector_daily_board",
+        "sector_stock_candidates",
+    }
+)
 
 
 def run_one_anchor(
@@ -622,8 +641,7 @@ def _load_existing_sector_batch_result(
     ):
         return None
     hashes = manifest.get("artifact_hashes")
-    aliases = ("sector_daily_board.csv", "sector_stock_candidates.csv")
-    if not isinstance(hashes, dict) or not set(aliases).issubset(hashes):
+    if not isinstance(hashes, dict) or not _SECTOR_BATCH_REQUIRED_ARTIFACTS.issubset(hashes):
         return None
     for name, expected_hash in hashes.items():
         if not isinstance(name, str) or not name or Path(name).name != name:
@@ -637,10 +655,46 @@ def _load_existing_sector_batch_result(
             return None
         if actual_hash != expected_hash:
             return None
-    loaded = load_rolling_oversold_snapshot(destination)
+    try:
+        if (destination / "sector_daily_board.csv").read_bytes() != (
+            destination / "sector_states.csv"
+        ).read_bytes():
+            return None
+        if (destination / "sector_stock_candidates.csv").read_bytes() != (
+            destination / "stock_candidates.csv"
+        ).read_bytes():
+            return None
+    except OSError:
+        return None
+    row_counts = manifest.get("row_counts")
+    if not isinstance(row_counts, dict) or not _SECTOR_BATCH_ROW_COUNT_KEYS.issubset(row_counts):
+        return None
+    normalized_counts: dict[str, int] = {}
+    for key in _SECTOR_BATCH_ROW_COUNT_KEYS:
+        value = row_counts.get(key)
+        if type(value) is not int or value < 0:
+            return None
+        normalized_counts[key] = value
+    if (
+        normalized_counts["sector_states"] != normalized_counts["sector_daily_board"]
+        or normalized_counts["stock_candidates"]
+        != normalized_counts["sector_stock_candidates"]
+    ):
+        return None
+    try:
+        loaded = load_rolling_oversold_snapshot(destination)
+    except (OSError, ValueError, pd.errors.ParserError):
+        return None
     _assert_existing_snapshot_lineage(loaded, previous_snapshot)
     sectors = loaded.get("sector_states", pd.DataFrame())
     stocks = loaded.get("stock_candidates", pd.DataFrame())
+    if not isinstance(sectors, pd.DataFrame) or not isinstance(stocks, pd.DataFrame):
+        return None
+    if (
+        len(sectors) != normalized_counts["sector_states"]
+        or len(stocks) != normalized_counts["stock_candidates"]
+    ):
+        return None
     metadata = manifest.get("runtime_metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
@@ -654,7 +708,7 @@ def _load_existing_sector_batch_result(
         "sector_stock_candidates": str(destination / "sector_stock_candidates.csv"),
     }
     snapshot = dict(loaded)
-    snapshot["row_counts"] = manifest.get("row_counts", {})
+    snapshot["row_counts"] = dict(row_counts)
     snapshot["runtime_metadata"] = metadata
     return {
         "blocked": False,

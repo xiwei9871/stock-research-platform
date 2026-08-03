@@ -358,6 +358,65 @@ def test_sector_batch_fast_path_requires_manifest_identity_match(monkeypatch, tm
     ) is None
 
 
+def test_sector_batch_fast_path_requires_complete_artifact_hash_set(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+    manifest_path = Path(result["paths"]["manifest"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["artifact_hashes"]["sector_states.csv"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    (manifest_path.parent / "sector_states.csv").unlink()
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=tmp_path,
+        anchor_date=ANCHOR,
+        score_version=config.score_version,
+    ) is None
+
+
+def test_sector_batch_fast_path_requires_consistent_manifest_row_counts(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+    manifest_path = Path(result["paths"]["manifest"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["row_counts"]["sector_states"] += 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=tmp_path,
+        anchor_date=ANCHOR,
+        score_version=config.score_version,
+    ) is None
+
+
 def test_batch_snapshot_requires_positive_contiguous_sector_stock_ranks(monkeypatch):
     inputs = _fixture_inputs()
     config = RollingOversoldConfig(anchor_start_date=ANCHOR)
