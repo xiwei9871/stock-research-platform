@@ -5981,6 +5981,9 @@ def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
     for key in (
         "trade_date",
         "target_code_count",
+        "source_member_cap",
+        "source_contract",
+        "member_cap_applied_concept_count",
         "valid_non_bj_memberships",
         "database_writes",
         "dry_run",
@@ -5996,6 +5999,7 @@ def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
         "failed_concepts",
         "out_of_scope_bse",
         "out_of_scope_900xxx",
+        "member_cap_applied_concepts",
     ):
         value = result.get(key, [])
         if isinstance(value, (list, tuple, set)):

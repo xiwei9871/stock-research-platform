@@ -41,6 +41,8 @@ TARGET_CODE_PATTERN = re.compile(r"^[0-9]{6}$")
 TARGET_CONCEPT_SYSTEM = "ths"
 BOARD_SOURCE = "akshare:stock_board_concept_name_ths"
 MEMBERSHIP_SOURCE = "ths:q.10jqka.com.cn_gn_detail"
+THS_MEMBER_CAP = 50
+THS_SOURCE_CONTRACT = "ths:q.10jqka.com.cn_gn_detail_top50"
 
 BOARD_UPSERT_SQL = """
 INSERT INTO core.concept_board (
@@ -266,7 +268,11 @@ def fetch_ths_detail_constituents(
         total_pages = _parse_ths_total_pages(first_soup)
         rows: list[dict[str, str]] = []
         rows.extend(_parse_ths_detail_table(first_soup))
+        if len(rows) >= THS_MEMBER_CAP:
+            rows = rows[:THS_MEMBER_CAP]
         for page in range(2, total_pages + 1):
+            if len(rows) >= THS_MEMBER_CAP:
+                break
             response = session.get(
                 _ths_detail_url(code, page),
                 headers=headers,
@@ -275,6 +281,9 @@ def fetch_ths_detail_constituents(
             soup = _validate_ths_response(response)
             page_rows = _parse_ths_detail_table(soup)
             rows.extend(page_rows)
+            if len(rows) >= THS_MEMBER_CAP:
+                rows = rows[:THS_MEMBER_CAP]
+                break
         if not rows:
             raise RuntimeError("empty_response")
         deduped: list[dict[str, str]] = []
@@ -284,7 +293,12 @@ def fetch_ths_detail_constituents(
                 continue
             seen.add(row["代码"])
             deduped.append(row)
-        return pd.DataFrame(deduped, columns=["代码", "名称"])
+        frame = pd.DataFrame(deduped[:THS_MEMBER_CAP], columns=["代码", "名称"])
+        frame.attrs["member_cap_applied"] = len(rows) >= THS_MEMBER_CAP
+        frame.attrs["source_contract_complete"] = True
+        frame.attrs["source_total_pages"] = total_pages
+        frame.attrs["source_member_cap"] = THS_MEMBER_CAP
+        return frame
     finally:
         close = getattr(session, "close", None)
         if callable(close):
@@ -300,7 +314,7 @@ def _ths_detail_url(
     value = page if cache_buster is None else cache_buster
     return (
         "https://q.10jqka.com.cn/gn/detail/board/0/field/199112/order/desc/"
-        f"page/{page}/ajax/1/code/{concept_code}/?cb={value}"
+        f"page/{page}/code/{concept_code}/?cb={value}"
     )
 
 
@@ -349,6 +363,12 @@ def _table_has_code_row(table: Any) -> bool:
 
 
 def _looks_like_ths_auth_challenge(text: str) -> bool:
+    # Normal THS detail pages are large full HTML documents and may include
+    # client-side challenge/login script names in otherwise valid markup.  A
+    # short response is the reliable signal for the compact login/challenge
+    # body returned by the endpoint when the cookie is rejected.
+    if len(text) > 5000:
+        return False
     lower = text.lower()
     return any(
         marker in lower
@@ -468,6 +488,7 @@ def run_target_membership_backfill(
     candidate_assets: set[str] = set()
     out_of_scope_bse: list[str] = []
     out_of_scope_900xxx: list[str] = []
+    member_cap_applied_concepts: list[str] = []
 
     for code in codes:
         board = boards_by_code.get(code)
@@ -482,6 +503,9 @@ def run_target_membership_backfill(
             # boundary, without re-fetching the full board list per concept.
             fetch_symbol = board["concept_name"] if custom_constituent_fetcher else code
             raw_constituents = fetch_constituents(fetch_symbol)
+            source_attrs = getattr(raw_constituents, "attrs", {})
+            if isinstance(source_attrs, Mapping) and source_attrs.get("member_cap_applied"):
+                member_cap_applied_concepts.append(code)
             if _is_empty_source_response(raw_constituents):
                 failed_concepts.append(code)
                 detail_rows.append(
@@ -624,6 +648,10 @@ def run_target_membership_backfill(
         "source_missing_codes": source_missing_codes,
         "failed_concepts": failed_concepts,
         "source_error": source_error,
+        "source_member_cap": THS_MEMBER_CAP,
+        "source_contract": THS_SOURCE_CONTRACT,
+        "member_cap_applied_concepts": sorted(set(member_cap_applied_concepts)),
+        "member_cap_applied_concept_count": len(set(member_cap_applied_concepts)),
         "valid_non_bj_memberships": len(valid_rows),
         "valid_non_bj_membership_rows": valid_rows,
         "out_of_scope_bse": out_of_scope_bse,

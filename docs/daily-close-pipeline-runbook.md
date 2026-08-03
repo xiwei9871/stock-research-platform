@@ -116,8 +116,16 @@ sent to an external source.
 The frozen 302-concept `ths` target has a separate membership repair command.
 It fetches the THS board list once and requests constituents only for target
 codes present in the supplied CSV/list. Constituents use the paginated THS
-detail page (`ths:q.10jqka.com.cn_gn_detail`) with the AkShare-bundled `v` cookie; the
-EastMoney/AkShare adapter is available only as an explicit fallback function.
+full-page detail endpoint (`ths:q.10jqka.com.cn_gn_detail`, URL
+`q.10jqka.com.cn/gn/detail/board/0/field/199112/page/{page}/code/{code}/`)
+with the AkShare-bundled `v` cookie. The historical membership contract is the
+first 50 source members per concept (`source_member_cap=50`), matching the
+existing core membership/market-bar universe; the adapter stops after page 5
+when that cap is reached and records the concept in
+`member_cap_applied_concepts`. This is an explicit contract, not an unreported
+truncation. Boards with fewer than 50 members are read to their reported final
+page. The EastMoney/AkShare adapter is available only as an explicit fallback
+function.
 The strategy itself remains database-only and never calls this source boundary.
 
 Preview first (the CLI defaults to `--dry-run`):

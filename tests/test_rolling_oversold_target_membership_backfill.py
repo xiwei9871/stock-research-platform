@@ -92,6 +92,10 @@ def test_target_membership_dry_run_does_not_write(monkeypatch, tmp_path: Path):
     assert result["dry_run"] is True
     assert result["database_writes"] == 0
     assert result["source_missing_codes"] == ["309268"]
+    assert result["source_member_cap"] == backfill.THS_MEMBER_CAP
+    assert result["source_contract"] == backfill.THS_SOURCE_CONTRACT
+    assert result["member_cap_applied_concepts"] == []
+    assert result["member_cap_applied_concept_count"] == 0
     assert result["valid_non_bj_memberships"] == 1
     assert result["paths"]["json"]
     assert result["paths"]["csv"]
@@ -419,8 +423,77 @@ def test_ths_detail_constituent_adapter_paginates_and_extracts_second_column(mon
     assert frame["名称"].tolist() == ["样本一", "样本二"]
     assert "/code/300238/" in seen_urls[0]
     assert "/field/199112/" in seen_urls[0]
+    assert "/ajax/1/" not in seen_urls[0]
     assert "?cb=1" in seen_urls[0]
     assert len(seen_urls) == 2
+
+
+def test_ths_detail_constituent_adapter_stops_at_existing_top50_cap(monkeypatch):
+    def page_html(page: int) -> str:
+        rows = "".join(
+            f"<tr><td>{index}</td><td>{page:03d}{index:03d}</td><td>样本</td></tr>"
+            for index in range(1, 11)
+        )
+        return (
+            "<html><body><span class='page_info'>"
+            f"{page}/6</span><table class='m-table m-pager-table'><tbody>{rows}"
+            "</tbody></table></body></html>"
+        )
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+
+        def __init__(self, page: int):
+            self.text = page_html(page)
+
+    seen_pages: list[int] = []
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            page = int(url.split("/page/")[1].split("/")[0])
+            seen_pages.append(page)
+            return FakeResponse(page)
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+
+    frame = backfill.fetch_ths_detail_constituents("300238")
+
+    assert len(frame) == backfill.THS_MEMBER_CAP == 50
+    assert seen_pages == [1, 2, 3, 4, 5]
+    assert frame.attrs["member_cap_applied"] is True
+    assert frame.attrs["source_contract_complete"] is True
+
+
+def test_target_summary_audits_concepts_reaching_source_member_cap(monkeypatch, tmp_path: Path):
+    source_frame = pd.DataFrame([{"代码": "000001", "名称": "样本"}])
+    source_frame.attrs["member_cap_applied"] = True
+
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(backfill, "fetch_target_concept_constituents", lambda symbol: source_frame)
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [_master("CN:SZ:000001")],
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=True,
+    )
+
+    assert result["source_member_cap"] == 50
+    assert result["source_contract"] == "ths:q.10jqka.com.cn_gn_detail_top50"
+    assert result["member_cap_applied_concepts"] == ["300238"]
+    assert result["member_cap_applied_concept_count"] == 1
 
 
 @pytest.mark.parametrize(
@@ -498,6 +571,34 @@ def test_ths_detail_empty_body_or_auth_challenge_is_explicit(monkeypatch, body):
     monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
     with pytest.raises(RuntimeError, match="ths_auth_challenge"):
         backfill.fetch_ths_detail_constituents("300238")
+
+
+def test_ths_detail_large_valid_page_with_challenge_script_marker_is_accepted(monkeypatch):
+    rows = "<tr><td>1</td><td>000001</td><td>样本</td></tr>"
+    body = (
+        "<html><body><span class='page_info'>1/1</span>"
+        "<script>location.href='//upass.10jqka.com.cn/login';</script>"
+        + ("<!-- chameleon -->" * 400)
+        + f"<table class='m-table m-pager-table'><tbody>{rows}</tbody></table>"
+        "</body></html>"
+    )
+    assert len(body) > 5000
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+        text = body
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+
+    frame = backfill.fetch_ths_detail_constituents("300238")
+
+    assert frame["代码"].tolist() == ["000001"]
 
 
 def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: Path):
