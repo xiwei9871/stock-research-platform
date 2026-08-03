@@ -344,7 +344,7 @@ def test_failed_source_concept_blocks_all_writes_and_preserves_history(monkeypat
     )
 
     def constituents(symbol):
-        if symbol == "失败板块":
+        if symbol == "309268":
             raise RuntimeError("source unavailable")
         return pd.DataFrame([{"代码": "000001", "名称": "样本"}])
 
@@ -379,6 +379,76 @@ def test_failed_source_concept_blocks_all_writes_and_preserves_history(monkeypat
     assert result["write_blocked_reason"] == "source_incomplete"
     assert execute_many_calls == []
     assert execute_calls == []
+
+
+def test_ths_detail_constituent_adapter_paginates_and_extracts_second_column(monkeypatch):
+    class FakeResponse:
+        def __init__(self, text: str, *, status_code: int = 200, content_type: str = "text/html"):
+            self.text = text
+            self.status_code = status_code
+            self.headers = {"Content-Type": content_type}
+
+    pages = {
+        1: """
+        <html><body><div class='m-page'><span class='page_info'>1/2</span></div>
+        <table class='m-table m-pager-table'><tbody>
+          <tr><td>1</td><td><a>000001</a></td><td>样本一</td></tr>
+        </tbody></table></body></html>
+        """,
+        2: """
+        <html><body><div class='m-page'><span class='page_info'>2/2</span></div>
+        <table class='m-table m-pager-table'><tbody>
+          <tr><td>2</td><td><a>600000</a></td><td>样本二</td></tr>
+        </tbody></table></body></html>
+        """,
+    }
+    seen_urls: list[str] = []
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            seen_urls.append(url)
+            page = int(url.split("/page/")[1].split("/")[0])
+            return FakeResponse(pages[page])
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+
+    frame = backfill.fetch_ths_detail_constituents("300238")
+
+    assert frame["代码"].tolist() == ["000001", "600000"]
+    assert frame["名称"].tolist() == ["样本一", "样本二"]
+    assert "/code/300238/" in seen_urls[0]
+    assert len(seen_urls) == 2
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"status_code": 401, "content_type": "text/html", "text": "<html/>"},
+        {"status_code": 200, "content_type": "text/plain", "text": "not html"},
+        {
+            "status_code": 200,
+            "content_type": "text/html",
+            "text": "<html><body><span class='page_info'>1/1</span><table class='m-table m-pager-table'><tbody></tbody></table></body></html>",
+        },
+    ],
+)
+def test_ths_detail_constituent_adapter_fails_closed_for_bad_or_empty_response(
+    monkeypatch, response
+):
+    class FakeResponse:
+        status_code = response["status_code"]
+        headers = {"Content-Type": response["content_type"]}
+        text = response["text"]
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+    with pytest.raises(RuntimeError, match="401|non_html|empty_response"):
+        backfill.fetch_ths_detail_constituents("300238")
 
 
 def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: Path):

@@ -115,8 +115,10 @@ sent to an external source.
 
 The frozen 302-concept `ths` target has a separate membership repair command.
 It fetches the THS board list once and requests constituents only for target
-codes present in the supplied CSV/list. The strategy itself remains database
-only and never calls this source boundary.
+codes present in the supplied CSV/list. Constituents use the paginated THS
+detail page (`ths:web_detail`) with the AkShare-bundled `v` cookie; the
+EastMoney/AkShare adapter is available only as an explicit fallback function.
+The strategy itself remains database-only and never calls this source boundary.
 
 Preview first (the CLI defaults to `--dry-run`):
 

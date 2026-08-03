@@ -14,10 +14,17 @@ import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import requests
+
+try:  # pragma: no cover - dependency is provided by AkShare in production
+    from bs4 import BeautifulSoup
+except Exception:  # pragma: no cover - unit tests can inject a compatible parser
+    BeautifulSoup = None
 
 from stock_research.config import SETTINGS
 from stock_research.core_data import _asset_id_from_cn_stock_code
@@ -33,7 +40,7 @@ DEFAULT_OUTPUT_DIR = Path("outputs/research/rolling_sector_target_membership_bac
 TARGET_CODE_PATTERN = re.compile(r"^[0-9]{6}$")
 TARGET_CONCEPT_SYSTEM = "ths"
 BOARD_SOURCE = "akshare:stock_board_concept_name_ths"
-MEMBERSHIP_SOURCE = "akshare:stock_board_concept_cons_em"
+MEMBERSHIP_SOURCE = "ths:web_detail"
 
 BOARD_UPSERT_SQL = """
 INSERT INTO core.concept_board (
@@ -194,15 +201,148 @@ def fetch_target_concept_boards() -> Any:
 
 
 def fetch_target_concept_constituents(symbol: str) -> Any:
-    """Fetch one board's constituents through the existing AkShare adapter."""
+    """Fetch one board's constituents through the explicit THS adapter.
+
+    ``symbol`` is the six-digit THS concept code when called by the executor.
+    The previous EastMoney adapter remains available as
+    :func:`fetch_target_concept_constituents_em` and is never selected
+    implicitly.
+    """
+
+    return fetch_ths_detail_constituents(symbol)
+
+
+def fetch_target_concept_constituents_em(symbol: str) -> Any:
+    """Explicit EastMoney/AkShare fallback for operator-selected use only."""
 
     if ak is None:
         raise RuntimeError("akshare package is required for target membership backfill")
-    # AkShare exposes the THS board names but the existing constituent adapter
-    # is EastMoney-backed and accepts the board name.  Keeping this call here
-    # makes the source boundary explicit and prevents strategy code from
-    # discovering or downloading a universe.
     return ak.stock_board_concept_cons_em(symbol)
+
+
+@lru_cache(maxsize=1)
+def _get_ths_v_code() -> str:
+    """Generate the THS ``v`` cookie using AkShare's bundled JavaScript."""
+
+    try:
+        import py_mini_racer
+        from akshare.stock_feature.stock_board_concept_ths import _get_file_content_ths
+    except Exception as exc:  # pragma: no cover - exercised with missing deps
+        raise RuntimeError("THS adapter requires akshare and py_mini_racer") from exc
+    try:
+        js = py_mini_racer.MiniRacer()
+        js.eval(_get_file_content_ths("ths.js"))
+        value = str(js.call("v") or "").strip()
+    except Exception as exc:  # noqa: BLE001 - source setup must fail closed
+        raise RuntimeError(f"unable to generate THS v cookie: {exc}") from exc
+    if not value:
+        raise RuntimeError("THS v cookie is empty")
+    return value
+
+
+def fetch_ths_detail_constituents(
+    concept_code: str,
+    *,
+    timeout_seconds: int = 20,
+) -> pd.DataFrame:
+    """Fetch all constituents from the paginated THS concept detail table."""
+
+    code = normalize_target_codes((concept_code,))[0]
+    if BeautifulSoup is None:
+        raise RuntimeError("THS adapter requires beautifulsoup4")
+    v_code = _get_ths_v_code()
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+        ),
+        "Cookie": f"v={v_code}",
+    }
+    session = requests.Session()
+    try:
+        first_url = _ths_detail_url(code, 1)
+        first_response = session.get(first_url, headers=headers, timeout=timeout_seconds)
+        first_soup = _validate_ths_response(first_response)
+        total_pages = _parse_ths_total_pages(first_soup)
+        rows: list[dict[str, str]] = []
+        rows.extend(_parse_ths_detail_table(first_soup))
+        for page in range(2, total_pages + 1):
+            response = session.get(
+                _ths_detail_url(code, page),
+                headers=headers,
+                timeout=timeout_seconds,
+            )
+            soup = _validate_ths_response(response)
+            page_rows = _parse_ths_detail_table(soup)
+            rows.extend(page_rows)
+        if not rows:
+            raise RuntimeError("empty_response")
+        deduped: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for row in rows:
+            if row["代码"] in seen:
+                continue
+            seen.add(row["代码"])
+            deduped.append(row)
+        return pd.DataFrame(deduped, columns=["代码", "名称"])
+    finally:
+        close = getattr(session, "close", None)
+        if callable(close):
+            close()
+
+
+def _ths_detail_url(concept_code: str, page: int) -> str:
+    return (
+        "https://q.10jqka.com.cn/gn/detail/board/0/field/10/order/desc/"
+        f"page/{page}/ajax/1/code/{concept_code}/"
+    )
+
+
+def _validate_ths_response(response: Any):
+    status_code = int(getattr(response, "status_code", 0) or 0)
+    if status_code != 200:
+        raise RuntimeError(f"HTTP {status_code}")
+    text = str(getattr(response, "text", "") or "")
+    headers = getattr(response, "headers", {}) or {}
+    content_type = str(headers.get("Content-Type", headers.get("content-type", ""))).lower()
+    if "html" not in content_type and "<html" not in text.lower():
+        raise RuntimeError("non_html_response")
+    soup = BeautifulSoup(text, features="lxml")
+    if soup is None:
+        raise RuntimeError("non_html_response")
+    return soup
+
+
+def _parse_ths_total_pages(soup: Any) -> int:
+    page_info = soup.select_one(".m-page .page_info") or soup.select_one(".page_info")
+    text = page_info.get_text(" ", strip=True) if page_info is not None else ""
+    match = re.search(r"/\s*(\d+)", text)
+    if match is None:
+        raise RuntimeError("page_count_unavailable")
+    total = int(match.group(1))
+    if total < 1 or total > 10000:
+        raise RuntimeError("invalid_page_count")
+    return total
+
+
+def _parse_ths_detail_table(soup: Any) -> list[dict[str, str]]:
+    table = soup.select_one(".m-table.m-pager-table")
+    if table is None:
+        raise RuntimeError("table_not_found")
+    rows: list[dict[str, str]] = []
+    for tr in table.select("tbody tr"):
+        cells = tr.find_all("td")
+        if len(cells) < 2:
+            continue
+        code_text = cells[1].get_text(" ", strip=True)
+        code_match = re.search(r"\d{6}", code_text)
+        if code_match is None:
+            continue
+        name = cells[2].get_text(" ", strip=True) if len(cells) >= 3 else ""
+        rows.append({"代码": code_match.group(0), "名称": name})
+    if not rows:
+        raise RuntimeError("empty_response")
+    return rows
 
 
 def load_target_asset_master(
@@ -266,6 +406,7 @@ def run_target_membership_backfill(
     codes = load_target_codes(target_codes)
     fetch_boards = board_fetcher or fetch_target_concept_boards
     fetch_constituents = constituent_fetcher or fetch_target_concept_constituents
+    custom_constituent_fetcher = constituent_fetcher is not None
     load_master = asset_master_loader or load_target_asset_master
 
     source_missing_codes: list[str] = []
@@ -295,7 +436,11 @@ def run_target_membership_backfill(
             )
             continue
         try:
-            raw_constituents = fetch_constituents(board["concept_name"])
+            # The default THS detail adapter requires the board code.  An
+            # injected adapter keeps the historical name-based test/operator
+            # boundary, without re-fetching the full board list per concept.
+            fetch_symbol = board["concept_name"] if custom_constituent_fetcher else code
+            raw_constituents = fetch_constituents(fetch_symbol)
             if _is_empty_source_response(raw_constituents):
                 failed_concepts.append(code)
                 detail_rows.append(
