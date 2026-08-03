@@ -37,7 +37,28 @@ API 服务对报告根只能使用只读挂载。仅一次性生成容器可以�
 
 ## 生成命令
 
-一次性容器内执行：
+在远端代码根执行以下完整命令。`PILOT_RELEASE_ID` 必须是已通过外网 release gate 的完整 Git SHA；容器使用部署用户 uid/gid，主题资料和 outputs 只读，只有专用报告根可写：
+
+```bash
+PILOT_RELEASE_ID=<完整发布SHA>
+REMOTE_ROOT=/home/jqz/code/stock-research-platform-main
+
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --mount type=bind,src="$REMOTE_ROOT/artifacts/theme_decomposition",dst=/app/artifacts/theme_decomposition,readonly \
+  --mount type=bind,src="$REMOTE_ROOT/outputs",dst=/app/outputs,readonly \
+  --mount type=bind,src="$REMOTE_ROOT/reports/theme-research",dst=/app/reports/theme-research \
+  "stock-research-dashboard-api:$PILOT_RELEASE_ID" \
+  python -m stock_research.theme_research_report_generator \
+    --repository-root /app \
+    --report-root /app/reports/theme-research \
+    --theme-id ai_power_value_capture_v1 \
+    --version 2026-08-03.1 \
+    --generated-at 2026-08-03T10:00:00+08:00 \
+    --pipeline-run-id production-ai-power-pilot-20260803
+```
+
+容器内的等价生成命令为：
 
 ```bash
 python -m stock_research.theme_research_report_generator \
@@ -53,7 +74,25 @@ python -m stock_research.theme_research_report_generator \
 
 ## 索引命令
 
-通过带有数据库 service 配置和只读报告挂载的 API one-shot 容器执行：
+通过带有正式 env、PostgreSQL service 文件和只读报告挂载的 API one-shot 容器执行：
+
+```bash
+cd /home/jqz/code/stock-research-platform-main
+PILOT_RELEASE_ID=<完整发布SHA>
+STOCK_RESEARCH_RELEASE_ID="$PILOT_RELEASE_ID" \
+STOCK_RESEARCH_FRONTEND_BUILD_ID="$PILOT_RELEASE_ID" \
+DASHBOARD_REMOTE_ENV_FILE=/home/jqz/code/stock-research-platform-main/.dashboard_runtime_env \
+DASHBOARD_PGSERVICE_FILE=/home/jqz/code/stock-research-platform-main/.pg_service.conf \
+THEME_RESEARCH_REPORT_HOST_ROOT=/home/jqz/code/stock-research-platform-main/reports/theme-research \
+docker compose --project-name stock_research_dashboard \
+  -f deploy/dashboard-release.compose.yml \
+  run --rm --no-deps api \
+  python -m stock_research.theme_research_report_index \
+    --root /app/reports/theme-research \
+    --service theme_research_report_indexer
+```
+
+该 compose service 将报告根挂载为只读，并将 `.pg_service.conf` 只读挂载到 `/app/.pg_service.conf`。容器内的等价索引命令为：
 
 ```bash
 python -m stock_research.theme_research_report_index \

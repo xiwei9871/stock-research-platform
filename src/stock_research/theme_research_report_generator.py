@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,12 +24,13 @@ GENERATOR_VERSION = "1.0.0"
 
 _VERSION_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}\.[1-9][0-9]*$")
 _SAFE_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_PROHIBITED_TRADING_PHRASES = (
-    "买入",
-    "卖出",
-    "目标价",
-    "buy recommendation",
-    "sell recommendation",
+_PROHIBITED_TRADING_PATTERNS = (
+    re.compile(r"(?:建议\s*)?(?:买入|卖出|增持|减持|做多|做空|看多|看空)"),
+    re.compile(r"(?i)\b(?:buy|sell|buying|selling)\b"),
+    re.compile(
+        r"(?i)\b(?:recommend(?:ed|ation)?\s+(?:buying|selling|to\s+(?:buy|sell))|target\s+price|price\s+target|overweight|underweight)\b"
+    ),
+    re.compile(r"(?:目标价|价格目标)"),
 )
 
 
@@ -47,6 +49,8 @@ class PilotReportInputs:
     company_priorities: tuple[dict[str, Any], ...]
     evidence_gaps: tuple[dict[str, Any], ...]
     artifact_versions: tuple[str, ...]
+    mapping_sources: tuple[dict[str, Any], ...] = ()
+    mapping_evidence_items: tuple[dict[str, Any], ...] = ()
 
 
 def load_ai_power_report_inputs(
@@ -71,6 +75,34 @@ def load_ai_power_report_inputs(
         crosswalk_dir=crosswalk_root,
         repository_root=root,
     )
+    company_mappings = tuple(
+        sorted(
+            (
+                row
+                for row in mapping_package["company_mappings"]
+                if row["theme_id"] == theme_id
+            ),
+            key=lambda row: row["mapping_id"],
+        )
+    )
+    mapping_evidence_ids = {
+        evidence_id
+        for mapping in company_mappings
+        for evidence_id in mapping.get("evidence_ids", [])
+    }
+    mapping_evidence_items = tuple(
+        sorted(
+            (
+                row
+                for row in mapping_package["evidence_items"]
+                if row["evidence_id"] in mapping_evidence_ids
+            ),
+            key=lambda row: row["evidence_id"],
+        )
+    )
+    mapping_source_ids = {
+        row["source_id"] for row in mapping_evidence_items
+    }
     return PilotReportInputs(
         theme=theme_detail["theme"],
         nodes=tuple(sorted(theme_detail["nodes"], key=lambda row: row["node_id"])),
@@ -80,16 +112,7 @@ def load_ai_power_report_inputs(
         claims=tuple(
             sorted(theme_detail["claims"], key=lambda row: row["claim_id"])
         ),
-        company_mappings=tuple(
-            sorted(
-                (
-                    row
-                    for row in mapping_package["company_mappings"]
-                    if row["theme_id"] == theme_id
-                ),
-                key=lambda row: row["mapping_id"],
-            )
-        ),
+        company_mappings=company_mappings,
         node_priorities=tuple(
             row
             for row in priority_package["node_priorities"]
@@ -108,6 +131,17 @@ def load_ai_power_report_inputs(
         artifact_versions=tuple(
             priority_package["theme_package"]["artifact_versions"]
         ),
+        mapping_sources=tuple(
+            sorted(
+                (
+                    row
+                    for row in mapping_package["sources"]
+                    if row["source_id"] in mapping_source_ids
+                ),
+                key=lambda row: row["source_id"],
+            )
+        ),
+        mapping_evidence_items=mapping_evidence_items,
     )
 
 
@@ -131,7 +165,10 @@ def render_ai_power_report_markdown(
         "",
         "## 核心结论与研究边界",
         "",
-        str(inputs.theme.get("summary") or "暂无主题摘要。"),
+        _chinese_or_fallback(
+            inputs.theme.get("summary"),
+            "本主题围绕 AI 算力基础设施中的供电转换、配电、散热和电网接入环节，梳理价值量、瓶颈与证据边界。",
+        ),
         "",
         "本报告仅汇总系统中已经存在并通过结构校验的主题、节点、公司映射、证据和优先级结果；未执行新的外部资料抓取。",
         "",
@@ -146,7 +183,7 @@ def render_ai_power_report_markdown(
     ):
         lines.append(
             f"| {_cell(node.get('node_name'))} (`{node['node_id']}`) | "
-            f"{_cell(node.get('node_type'))} | {_cell(node.get('description'))} | "
+            f"{_cell(node.get('node_type'))} | {_chinese_or_fallback(node.get('description'), f'该节点类型为 `{node.get("node_type", "unknown")}`，需结合证据核对其产业链职责。')} | "
             f"{_cell(node.get('node_review_status'))} |"
         )
 
@@ -199,7 +236,7 @@ def render_ai_power_report_markdown(
         for node in sorted(linked_nodes, key=lambda row: row["node_id"]):
             lines.append(
                 f"- **{_cell(node.get('node_name'))}** (`{node['node_id']}`)："
-                f"{_cell(node.get('description'))}"
+                f"{_chinese_or_fallback(node.get('description'), '该节点属于 AI 供电与数据中心配套范围，具体职责需结合来源核对。')}"
             )
     else:
         lines.append("- 当前结构化节点中没有单独标记的供电或散热配套节点，需由 admin 核对主题边界。")
@@ -209,20 +246,21 @@ def render_ai_power_report_markdown(
             "",
             "## 重点公司映射",
             "",
-            "| 公司 | 节点 | 业务重要性 | 映射审核 | 研究优先级 | 交叉评审状态 | 关系摘要 |",
-            "|---|---|---|---|---:|---|---|",
+            "| 映射 ID | 公司 | 节点 | 业务重要性 | 映射审核 | 研究优先级 | 交叉评审状态 | 证据 ID | 关系摘要 |",
+            "|---|---|---|---|---|---:|---|---|---|",
         ]
     )
     for mapping in sorted(inputs.company_mappings, key=lambda row: row["mapping_id"]):
         priority = company_priority.get(mapping["mapping_id"], {})
         lines.append(
-            f"| {_cell(mapping.get('company_name'))} (`{mapping.get('company_code', '')}`) | "
+            f"| `{mapping['mapping_id']}` | {_cell(mapping.get('company_name'))} (`{mapping.get('company_code', '')}`) | "
             f"`{mapping.get('mapped_node_id', '')}` | "
             f"{_cell(mapping.get('business_materiality'))} | "
             f"{_cell(mapping.get('review_status'))} | "
             f"{_number(priority.get('company_research_priority_score')):g} | "
             f"{_cell(priority.get('integration_status', 'not_crosswalk_scoped'))} | "
-            f"{_cell(mapping.get('relationship_summary'))} |"
+            f"{', '.join(f'`{value}`' for value in mapping.get('evidence_ids', [])) or '无'} | "
+            f"{_chinese_or_fallback(mapping.get('relationship_summary'), '该公司与所列节点存在正式研究映射，关系强度与业务重要性仍需依据证据逐项复核。')} |"
         )
 
     lines.extend(["", "## 证据强弱与待补缺口", ""])
@@ -251,7 +289,7 @@ def render_ai_power_report_markdown(
         for claim in sorted(risk_claims, key=lambda row: row["claim_id"]):
             lines.append(
                 f"- `{claim['claim_id']}` [{claim.get('evidence_status', 'unknown')}] "
-                f"{_cell(claim.get('claim_text'))}"
+                f"{_chinese_or_fallback(claim.get('claim_text'), '该观点被标记为风险或证据不足，需结合来源与反证继续核对。')}"
             )
     else:
         lines.append("- 当前结构化资料未提供独立风险观点；这不代表风险不存在，admin 应重点检查反证与边界条件。")
@@ -275,6 +313,32 @@ def render_ai_power_report_markdown(
             f"{_cell(source.get('review_status'))} |"
         )
 
+    lines.extend(
+        [
+            "",
+            "### 公司映射证据索引",
+            "",
+            "| 证据 ID | 来源 ID | 类型 | 摘要 |",
+            "|---|---|---|---|",
+        ]
+    )
+    for evidence in sorted(
+        inputs.mapping_evidence_items,
+        key=lambda row: row["evidence_id"],
+    ):
+        lines.append(
+            f"| `{evidence['evidence_id']}` | `{evidence.get('source_id', '')}` | "
+            f"{_cell(evidence.get('evidence_type'))} | "
+            f"{_chinese_or_fallback(evidence.get('evidence_summary'), '该证据用于支持公司与产业链节点之间的研究映射。')} |"
+        )
+    lines.extend(["", "### 公司映射来源索引", ""])
+    for source in sorted(inputs.mapping_sources, key=lambda row: row["source_id"]):
+        lines.append(
+            f"- `{source['source_id']}`：{_cell(source.get('title'))}；"
+            f"发布者：{_cell(source.get('publisher'))}；"
+            f"日期：{_cell(source.get('publish_date'))}。"
+        )
+
     lines.extend(["", "### 观点索引", ""])
     for claim in sorted(inputs.claims, key=lambda row: row["claim_id"]):
         refs = ", ".join(
@@ -282,7 +346,7 @@ def render_ai_power_report_markdown(
         )
         lines.append(
             f"- `{claim['claim_id']}` [{claim.get('evidence_status', 'unknown')}] "
-            f"{_cell(claim.get('claim_text'))}；来源：{refs or '无'}。"
+            f"{_chinese_or_fallback(claim.get('claim_text'), '该结构化观点需按当前证据状态进行人工复核。')}；来源：{refs or '无'}。"
         )
 
     lines.extend(
@@ -385,9 +449,14 @@ def generate_ai_power_pending_report(
         os.chmod(manifest_path, 0o440)
         _fsync_regular_file(markdown_path)
         _fsync_regular_file(manifest_path)
+        # macOS refuses to rename a non-writable directory in this layout;
+        # production Linux keeps the final directory mode before visibility.
+        staging_mode = 0o750 if sys.platform == "darwin" else 0o550
+        os.chmod(staging, staging_mode)
         _fsync_directory(staging)
         os.replace(staging, final_dir)
-        os.chmod(final_dir, 0o550)
+        if staging_mode != 0o550:
+            os.chmod(final_dir, 0o550)
         _fsync_directory(theme_dir)
         return {
             "status": "generated",
@@ -422,11 +491,30 @@ def _validate_inputs(inputs: PilotReportInputs, generated_at: datetime) -> None:
     for label, values in required.items():
         if not values:
             raise PilotReportGenerationError(f"pilot inputs require {label}")
+    expected_evidence_ids = {
+        evidence_id
+        for mapping in inputs.company_mappings
+        for evidence_id in mapping.get("evidence_ids", [])
+    }
+    loaded_evidence_ids = {
+        row.get("evidence_id") for row in inputs.mapping_evidence_items
+    }
+    loaded_source_ids = {row.get("source_id") for row in inputs.mapping_sources}
+    evidence_source_ids = {
+        row.get("source_id") for row in inputs.mapping_evidence_items
+    }
+    if not expected_evidence_ids.issubset(loaded_evidence_ids) or not evidence_source_ids.issubset(
+        loaded_source_ids
+    ):
+        raise PilotReportGenerationError("pilot inputs require a complete mapping evidence chain")
 
 
 def _reject_prohibited_trading_language(text: str) -> None:
-    lowered = text.lower()
-    hits = [phrase for phrase in _PROHIBITED_TRADING_PHRASES if phrase.lower() in lowered]
+    hits = []
+    for pattern in _PROHIBITED_TRADING_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            hits.append(match.group(0))
     if hits:
         raise PilotReportGenerationError(
             f"prohibited trading language found: {', '.join(hits)}"
@@ -435,6 +523,13 @@ def _reject_prohibited_trading_language(text: str) -> None:
 
 def _cell(value: Any) -> str:
     return str(value or "").replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
+
+
+def _chinese_or_fallback(value: Any, fallback: str) -> str:
+    text = _cell(value)
+    if re.search(r"[\u3400-\u9fff]", text):
+        return text
+    return f"中文审核提示：{fallback} 原始资料：{text}"
 
 
 def _number(value: Any) -> float:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from dataclasses import replace
@@ -109,6 +110,25 @@ def pilot_inputs() -> PilotReportInputs:
             },
         ),
         artifact_versions=("theme_decomposition_v1_6",),
+        mapping_sources=(
+            {
+                "source_id": "mapping-source-1",
+                "title": "公司公告",
+                "publisher": "示例公司",
+                "publish_date": "2026-03-31",
+                "reliability_level": "S0",
+                "review_status": "accepted",
+                "url_or_ref": "local:mapping-source-1",
+            },
+        ),
+        mapping_evidence_items=(
+            {
+                "evidence_id": "evidence-1",
+                "source_id": "mapping-source-1",
+                "evidence_type": "product_relationship",
+                "evidence_summary": "公告确认服务器电源产品关系。",
+            },
+        ),
     )
 
 
@@ -131,6 +151,9 @@ def test_render_ai_power_report_is_deterministic_and_review_only():
         assert heading in first
     assert "source-1" in first
     assert "claim-1" in first
+    assert "mapping-1" in first
+    assert "evidence-1" in first
+    assert "mapping-source-1" in first
     assert "不构成投资建议" in first
     assert all(phrase not in first for phrase in ("目标价", "买入", "卖出"))
 
@@ -213,6 +236,35 @@ def test_failed_rename_leaves_no_final_or_staging_directory(
     assert list(tmp_path.glob(".staging-*")) == []
 
 
+def test_post_rename_parent_fsync_failure_keeps_committed_final_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from stock_research import theme_research_report_generator as generator
+
+    original_fsync = generator._fsync_directory
+    theme_dir = tmp_path / PILOT_THEME_ID
+
+    def fail_parent_fsync(path: Path) -> None:
+        if path == theme_dir:
+            raise OSError("parent fsync failed")
+        original_fsync(path)
+
+    monkeypatch.setattr(generator, "_fsync_directory", fail_parent_fsync)
+    with pytest.raises(OSError, match="parent fsync failed"):
+        generate_ai_power_pending_report(
+            inputs=pilot_inputs(),
+            report_root=tmp_path,
+            version="2026-08-03.1",
+            generated_at=GENERATED_AT,
+            pipeline_run_id="post-rename-failure",
+        )
+    final_dir = theme_dir / "2026-08-03.1"
+    assert final_dir.exists()
+    assert stat.S_IMODE(final_dir.stat().st_mode) == 0o550
+    assert (final_dir / "manifest.json").is_file()
+    assert list(theme_dir.glob(".staging-*")) == []
+
+
 def test_trading_language_fails_before_finalization(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -232,6 +284,79 @@ def test_trading_language_fails_before_finalization(
             pipeline_run_id="guardrail",
         )
     assert not (tmp_path / PILOT_THEME_ID / "2026-08-03.1").exists()
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    (
+        "target price",
+        "price target",
+        "建议增持",
+        "建议减持",
+        "做多",
+        "做空",
+        "看多",
+        "看空",
+        "BUY",
+        "SELL",
+        "recommend buying",
+        "recommend selling",
+        "overweight",
+        "underweight",
+    ),
+)
+def test_extended_trading_language_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phrase: str
+):
+    from stock_research import theme_research_report_generator as generator
+
+    monkeypatch.setattr(
+        generator,
+        "render_ai_power_report_markdown",
+        lambda *_args, **_kwargs: phrase,
+    )
+    with pytest.raises(PilotReportGenerationError, match="prohibited trading language"):
+        generate_ai_power_pending_report(
+            inputs=pilot_inputs(),
+            report_root=tmp_path,
+            version="2026-08-03.1",
+            generated_at=GENERATED_AT,
+            pipeline_run_id=f"guardrail-{phrase.encode().hex()[:16]}",
+        )
+
+
+def test_renderer_preserves_english_canonical_analysis_with_chinese_review_prompt():
+    inputs = pilot_inputs()
+    rendered = render_ai_power_report_markdown(
+        replace(
+            inputs,
+            theme={**inputs.theme, "summary": "English theme summary must not be copied."},
+            nodes=({**inputs.nodes[0], "description": "English node description must not be copied."},),
+            claims=({**inputs.claims[0], "claim_text": "English claim analysis must not be copied."},),
+            company_mappings=(
+                {**inputs.company_mappings[0], "relationship_summary": "English company analysis must not be copied."},
+            ),
+        ),
+        generated_at=GENERATED_AT,
+    )
+
+    for sentence in (
+        "English theme summary must not be copied.",
+        "English node description must not be copied.",
+        "English claim analysis must not be copied.",
+        "English company analysis must not be copied.",
+    ):
+        assert sentence in rendered
+    assert rendered.count("中文审核提示") >= 4
+
+
+def test_renderer_requires_complete_company_mapping_evidence_chain():
+    inputs = pilot_inputs()
+    with pytest.raises(PilotReportGenerationError, match="mapping evidence chain"):
+        render_ai_power_report_markdown(
+            replace(inputs, mapping_evidence_items=()),
+            generated_at=GENERATED_AT,
+        )
 
 
 def test_generator_cli_help_is_available():
