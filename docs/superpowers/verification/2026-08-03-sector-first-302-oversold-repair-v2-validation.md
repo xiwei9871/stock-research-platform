@@ -126,3 +126,59 @@ nuclear-sector visibility, and immutable historical publication.  The live
 with `blocked=false` and the full sector/candidate artifacts published to its
 run directory.  Runtime artifacts are deliberately not committed to the code
 repository; their paths and manifest evidence remain external to this record.
+
+## Database-only five-anchor replay evidence
+
+The first database replay exposed that the v2 replay command was still calling
+the legacy single-anchor scorer.  The replay now routes
+`rolling_oversold_sector_*` versions through `run_sector_batch`; legacy v1
+replay remains unchanged.  The regression is covered by
+`test_sector_v2_replay_uses_full_sector_batch_path`.
+
+The corrected replay was run against `stock_research` with no provider
+fallback:
+
+```text
+rtk env PYTHONPATH=src \
+  /Users/xiwei/stock_research/.venv/bin/python -m stock_research.cli \
+  rolling-sector-oversold-replay \
+  --anchor-start-date 2026-07-27 \
+  --anchor-end-date 2026-07-31 \
+  --output-dir /tmp/rolling_sector_oversold_full_replay_20260727_20260731 \
+  --sector-top-n 302 \
+  --stock-top-n 10 \
+  --score-version rolling_oversold_sector_v2 \
+  --service stock_research
+```
+
+Result: `blocked=0`, five anchors processed, total runtime `349.26 s`.
+Every anchor published a manifest, preflight, canonical sector/stock files,
+and both batch aliases:
+
+| Anchor | Sector rows | Sector-stock rows | Preflight gaps |
+| --- | ---: | ---: | ---: |
+| 2026-07-27 | 1,379 | 3,066 | 1,054 |
+| 2026-07-28 | 1,379 | 3,379 | 1,054 |
+| 2026-07-29 | 1,379 | 3,362 | 1,053 |
+| 2026-07-30 | 1,379 | 3,411 | 1,053 |
+| 2026-07-31 | 1,379 | 3,439 | 1,053 |
+
+The 302 frozen concept codes from
+`concept_drawdown_over24_2026-08-01.csv` all occur in the replay's `ths`
+board.  `ths:300238` / `核电` is present at 2026-07-31; the live database
+currently marks it `blocked_data` and emits an explicit `sector_features` gap,
+so it is visible for backfill rather than silently removed.
+
+Using the published replay snapshots and database-only qfq bars through the
+2026-08-03 evaluation cutoff, sector outcomes were checked for horizons 1/3/5:
+
+| Anchor | Detail rows | Complete | Pending | Invalid target dates |
+| --- | ---: | ---: | ---: | ---: |
+| 2026-07-27 | 9,198 | 9,195 | 3 | 0 |
+| 2026-07-28 | 10,137 | 6,152 | 3,076 | 0 |
+| 2026-07-29 | 10,086 | 6,150 | 3,084 | 0 |
+| 2026-07-30 | 10,233 | 3,080 | 6,160 | 0 |
+| 2026-07-31 | 10,317 | 3,059 | 6,127 | 0 |
+
+All non-null target dates were strictly later than their anchor; pending rows
+remain pending when the required future sessions are not yet available.
