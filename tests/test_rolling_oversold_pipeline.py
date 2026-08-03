@@ -93,6 +93,58 @@ def test_replay_processes_complete_sessions_ascending_and_links_previous_snapsho
     assert result["all_sector_rows_have_status"] is True
 
 
+def test_sector_v2_replay_uses_full_sector_batch_path(monkeypatch, tmp_path):
+    """The v2 replay must not fall back to the legacy single-anchor scorer."""
+
+    sessions = [date(2026, 7, 27), date(2026, 7, 28)]
+    config = RollingOversoldConfig(
+        anchor_start_date=sessions[0],
+        anchor_end_date=sessions[-1],
+        score_version="rolling_oversold_sector_v2",
+    )
+    monkeypatch.setattr(pipeline, "_load_complete_anchor_sessions", lambda **kwargs: sessions)
+
+    calls: list[tuple[date, object]] = []
+
+    def fake_run_sector_batch(*, anchor_date, previous_snapshot, **kwargs):
+        calls.append((anchor_date, previous_snapshot))
+        snapshot = {
+            "snapshot_id": f"rolling_oversold_sector_v2|{anchor_date.isoformat()}",
+            "sector_states": pd.DataFrame(
+                [{"sector_research_eligibility": "eligible"}]
+            ),
+        }
+        return {
+            "blocked": False,
+            "snapshot": snapshot,
+            "snapshot_id": snapshot["snapshot_id"],
+            "runtime_seconds": 0.01,
+        }
+
+    monkeypatch.setattr(pipeline, "run_sector_batch", fake_run_sector_batch)
+    monkeypatch.setattr(
+        pipeline,
+        "run_one_anchor",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("v2 replay must use run_sector_batch")
+        ),
+    )
+
+    result = pipeline.run_rolling_replay(
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+
+    assert [call[0] for call in calls] == sessions
+    assert calls[0][1] is None
+    assert calls[1][1]["snapshot_id"] == "rolling_oversold_sector_v2|2026-07-27"
+    assert result["snapshot_ids"] == [
+        "rolling_oversold_sector_v2|2026-07-27",
+        "rolling_oversold_sector_v2|2026-07-28",
+    ]
+
+
 def test_replay_stops_at_first_block_to_preserve_snapshot_lineage(monkeypatch, tmp_path):
     sessions = [date(2026, 7, 21), date(2026, 7, 22), date(2026, 7, 23)]
     config = RollingOversoldConfig(

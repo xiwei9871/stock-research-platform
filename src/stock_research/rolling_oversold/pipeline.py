@@ -849,13 +849,22 @@ def run_rolling_replay(
             anchor_start_date=anchor,
             anchor_end_date=replay_evaluation_cutoff,
         )
-        result = run_one_anchor(
-            anchor_date=anchor,
-            previous_snapshot=previous_snapshot,
-            config=anchor_config,
-            output_dir=output_dir,
-            service=service,
-        )
+        if config.score_version.startswith("rolling_oversold_sector_"):
+            result = run_sector_batch(
+                anchor_date=anchor,
+                previous_snapshot=previous_snapshot,
+                config=anchor_config,
+                output_dir=output_dir,
+                service=service,
+            )
+        else:
+            result = run_one_anchor(
+                anchor_date=anchor,
+                previous_snapshot=previous_snapshot,
+                config=anchor_config,
+                output_dir=output_dir,
+                service=service,
+            )
         anchors.append(result)
         blocked_count += int(bool(result.get("blocked")))
         runtime.checkpoint("replay")
