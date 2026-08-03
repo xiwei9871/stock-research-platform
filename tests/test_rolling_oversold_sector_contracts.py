@@ -347,6 +347,48 @@ def test_v2_removed_sector_with_empty_features_is_not_legacy_exempt(tmp_path):
         write_rolling_snapshot(current, output_dir=tmp_path)
 
 
+def test_mixed_v1_current_does_not_exempt_removed_v2_sector_rows(tmp_path):
+    previous_v2 = _snapshot()
+    legacy_current = pd.DataFrame(
+        [
+            {
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Legacy current",
+                "sector_oversold_score": 78.0,
+                "sector_repairability_score": 66.0,
+                "sector_direction_score": 49.0,
+                "sector_recovery_state": "fresh_oversold",
+                "sector_gate_status": "watch",
+            }
+        ]
+    )
+    current = build_rolling_snapshot(
+        anchor_date=ANCHOR,
+        data_cutoff_date=CUTOFF,
+        market_regime={"market_regime": "risk_off"},
+        sector_states=legacy_current,
+        stock_candidates=pd.DataFrame(),
+        previous_snapshot=previous_v2,
+        score_version="rolling_oversold_v1",
+    )
+    removed = current["sector_states"]["sector_revision_status"].eq("removed")
+    assert removed.any()
+    for column in (
+        "sector_low_date_20d",
+        "sector_low_close_20d",
+        "sector_recovery_from_low_20d",
+        "sector_days_since_low_20d",
+        "sector_volume_ratio_5_20",
+        "sector_ma5_slope_5d",
+        "sector_ma10_slope_10d",
+    ):
+        current["sector_states"].loc[removed, column] = pd.NA
+
+    with pytest.raises(ValueError, match="non-blocked sector rows require complete"):
+        write_rolling_snapshot(current, output_dir=tmp_path)
+
+
 def test_unknown_legacy_gate_maps_to_watch_research_eligibility():
     legacy = pd.DataFrame(
         [

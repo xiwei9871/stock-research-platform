@@ -969,17 +969,20 @@ def _validate_sector_snapshot_rows(
     revision_status = (
         result["sector_revision_status"].fillna("current").astype("string").str.casefold()
     )
-    if not bool(frame.attrs.get("_legacy_sector_schema")):
-        legacy_removed_keys = set(
-            _legacy_removed_sector_keys(frame.attrs.get(_LEGACY_REMOVED_SECTOR_KEYS_ATTR))
-        )
-        row_keys = (
-            result["sector_system"].astype("string").str.casefold()
-            + ":"
-            + result["sector_code"].astype("string").str.casefold()
-        )
-        legacy_removed = revision_status.eq("removed") & row_keys.isin(legacy_removed_keys)
-        active_rows = result.loc[~legacy_removed].copy(deep=True)
+    legacy_schema = bool(frame.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
+    legacy_removed_keys = set(
+        _legacy_removed_sector_keys(frame.attrs.get(_LEGACY_REMOVED_SECTOR_KEYS_ATTR))
+    )
+    row_keys = (
+        result["sector_system"].astype("string").str.casefold()
+        + ":"
+        + result["sector_code"].astype("string").str.casefold()
+    )
+    legacy_removed = revision_status.eq("removed") & row_keys.isin(legacy_removed_keys)
+    legacy_current = legacy_schema & ~revision_status.eq("removed")
+    legacy_exempt = legacy_current | legacy_removed
+    active_rows = result.loc[~legacy_exempt].copy(deep=True)
+    if not active_rows.empty:
         _validate_sector_repair_features(active_rows, structured_gaps)
     if result.duplicated(["sector_system", "sector_code"]).any():
         raise ValueError("sector_states has duplicate sector identity")
