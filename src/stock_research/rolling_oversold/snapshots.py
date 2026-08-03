@@ -19,6 +19,7 @@ import pandas as pd
 from .contracts import (
     SECTOR_FEATURE_COLUMNS,
     SectorResearchEligibility,
+    StockLifecycle,
     validate_sector_columns,
     validate_snapshot_columns,
 )
@@ -376,14 +377,13 @@ def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
     _require_columns(frame, base_columns, label)
     supplied_features = set(frame.columns).intersection(SECTOR_FEATURE_COLUMNS)
     # Stock rows are a denormalized view of the sector context.  Older callers
-    # may provide only a subset of repair columns; those cells are hydrated
-    # from the canonical sector row before cross-artifact validation.  Sector
-    # board rows remain strict when they explicitly provide only part of v2.
-    legacy = (
-        bool(frame.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
-        or not supplied_features
-        or label == "stock_candidates"
+    # may provide no repair columns at all; those legacy cells are hydrated
+    # from the canonical sector row before cross-artifact validation.  A frame
+    # that supplies any v2 feature columns must provide the complete v2 schema.
+    legacy_marked = bool(frame.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR)) and (
+        supplied_features == set(SECTOR_FEATURE_COLUMNS)
     )
+    legacy = legacy_marked or not supplied_features
     if not legacy:
         _require_columns(frame, _SECTOR_INPUT_COLUMNS, label)
         return False
@@ -532,10 +532,28 @@ def _normalize_stock_rows(
         raise ValueError("stock_candidates stock_rank must contain positive integers")
     result["stock_rank"] = result["stock_rank"].astype("Int64")
     if batch_mode and "sector_stock_rank" not in result:
-        result["sector_stock_rank"] = pd.NA
+        raise ValueError("stock_candidates sector_stock_rank is required in batch mode")
     if not allow_duplicate_assets and result["asset_id"].duplicated().any():
         duplicate = result.loc[result["asset_id"].duplicated(keep=False), "asset_id"].iloc[0]
         raise ValueError(f"stock_candidates has duplicate asset_id {duplicate}")
+    if batch_mode and result.duplicated(
+        ["asset_id", "sector_system", "sector_code"]
+    ).any():
+        duplicate = result.loc[
+            result.duplicated(
+                ["asset_id", "sector_system", "sector_code"], keep=False
+            ),
+            ["asset_id", "sector_system", "sector_code"],
+        ].iloc[0]
+        raise ValueError(
+            "stock_candidates has duplicate composite key "
+            f"{duplicate['asset_id']}/{duplicate['sector_system']}/{duplicate['sector_code']}"
+        )
+    if batch_mode:
+        result["sector_stock_rank"] = pd.to_numeric(
+            result["sector_stock_rank"], errors="coerce"
+        )
+        _validate_sector_stock_ranks(result, allow_revision_rows=allow_revision_rows)
     _normalize_outcome_price_columns(result)
     for column in _STOCK_METADATA_COLUMNS:
         if column not in result:
@@ -549,6 +567,42 @@ def _normalize_stock_rows(
     if legacy_sector_schema:
         normalized.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     return normalized
+
+
+def _validate_sector_stock_ranks(
+    frame: pd.DataFrame, *, allow_revision_rows: bool
+) -> None:
+    """Require active batch candidates to carry contiguous per-sector ranks."""
+
+    revision_rows = (
+        frame["stock_lifecycle"].eq(StockLifecycle.INVALIDATED.value)
+        if allow_revision_rows
+        else pd.Series(False, index=frame.index)
+    )
+    active = frame.loc[~revision_rows].copy()
+    invalid_rank = (
+        active["sector_stock_rank"].isna()
+        | ~active["sector_stock_rank"].map(
+            lambda value: math.isfinite(value) if pd.notna(value) else False
+        )
+        | (active["sector_stock_rank"] <= 0)
+        | (active["sector_stock_rank"] % 1 != 0)
+    )
+    if invalid_rank.any():
+        raise ValueError(
+            "stock_candidates sector_stock_rank must contain positive integers"
+        )
+    active["sector_stock_rank"] = active["sector_stock_rank"].astype("Int64")
+    for (sector_system, sector_code), group in active.groupby(
+        ["sector_system", "sector_code"], sort=False, dropna=False
+    ):
+        actual = sorted(int(value) for value in group["sector_stock_rank"].tolist())
+        expected = list(range(1, len(actual) + 1))
+        if actual != expected:
+            raise ValueError(
+                "stock_candidates sector_stock_rank must be contiguous from 1 "
+                f"for sector {sector_system}/{sector_code}"
+            )
 
 
 def _normalize_outcome_price_columns(frame: pd.DataFrame) -> None:

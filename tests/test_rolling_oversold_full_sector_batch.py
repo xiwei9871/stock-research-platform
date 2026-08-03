@@ -213,7 +213,175 @@ def test_sector_batch_alias_artifacts_round_trip_sector_stock_rank(monkeypatch, 
     assert second["batch_manifest"] == manifest
 
 
-def test_batch_snapshot_hydrates_partially_missing_stock_repair_column(monkeypatch, tmp_path):
+def test_sector_batch_fast_path_rejects_requested_previous_snapshot_lineage(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+
+    with pytest.raises(ValueError, match="predecessor does not match"):
+        pipeline.run_sector_batch(
+            anchor_date=ANCHOR,
+            config=config,
+            output_dir=tmp_path,
+            inputs=inputs,
+            previous_snapshot={"snapshot_id": "different|2026-07-30"},
+            service="research-test",
+        )
+
+
+def test_sector_batch_fast_path_requires_intact_alias_artifacts(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+    manifest_path = Path(result["paths"]["manifest"])
+    alias_path = manifest_path.parent / "sector_stock_candidates.csv"
+    alias_path.write_bytes(alias_path.read_bytes() + b"corruption")
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=tmp_path,
+        anchor_date=ANCHOR,
+        score_version=config.score_version,
+        previous_snapshot=None,
+    ) is None
+
+
+def test_batch_snapshot_requires_positive_contiguous_sector_stock_ranks(monkeypatch):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        service="research-test",
+    )
+    invalid = dict(result["snapshot"])
+    invalid["stock_candidates"] = invalid["stock_candidates"].copy()
+    invalid["stock_candidates"].loc[invalid["stock_candidates"].index[0], "sector_stock_rank"] = 0
+    with pytest.raises(ValueError, match="sector_stock_rank"):
+        build_rolling_snapshot(
+            anchor_date=ANCHOR,
+            data_cutoff_date=ANCHOR,
+            market_regime={"market_regime": "risk_off"},
+            sector_states=invalid["sector_states"],
+            stock_candidates=invalid["stock_candidates"],
+            previous_snapshot=None,
+            score_version=config.score_version,
+            batch_mode=True,
+        )
+
+    non_contiguous = dict(result["snapshot"])
+    non_contiguous["stock_candidates"] = non_contiguous["stock_candidates"].copy()
+    first_sector = non_contiguous["stock_candidates"]["sector_code"].iloc[0]
+    sector_rows = non_contiguous["stock_candidates"]["sector_code"].eq(first_sector)
+    non_contiguous["stock_candidates"].loc[sector_rows, "sector_stock_rank"] = [1, 3]
+    with pytest.raises(ValueError, match="contiguous"):
+        build_rolling_snapshot(
+            anchor_date=ANCHOR,
+            data_cutoff_date=ANCHOR,
+            market_regime={"market_regime": "risk_off"},
+            sector_states=non_contiguous["sector_states"],
+            stock_candidates=non_contiguous["stock_candidates"],
+            previous_snapshot=None,
+            score_version=config.score_version,
+            batch_mode=True,
+        )
+
+
+def test_batch_snapshot_missing_sector_stock_rank_is_rejected(monkeypatch):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        service="research-test",
+    )
+    stock_candidates = result["snapshot"]["stock_candidates"].drop(columns=["sector_stock_rank"])
+    with pytest.raises(ValueError, match="sector_stock_rank"):
+        build_rolling_snapshot(
+            anchor_date=ANCHOR,
+            data_cutoff_date=ANCHOR,
+            market_regime={"market_regime": "risk_off"},
+            sector_states=result["snapshot"]["sector_states"],
+            stock_candidates=stock_candidates,
+            previous_snapshot=None,
+            score_version=config.score_version,
+            batch_mode=True,
+        )
+
+
+def test_batch_snapshot_rejects_exact_duplicate_composite_candidate(monkeypatch):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        service="research-test",
+    )
+    stocks = result["snapshot"]["stock_candidates"]
+    duplicate = pd.concat([stocks.iloc[[0]], stocks.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match="duplicate composite"):
+        build_rolling_snapshot(
+            anchor_date=ANCHOR,
+            data_cutoff_date=ANCHOR,
+            market_regime={"market_regime": "risk_off"},
+            sector_states=result["snapshot"]["sector_states"],
+            stock_candidates=duplicate,
+            previous_snapshot=None,
+            score_version=config.score_version,
+            batch_mode=True,
+        )
+
+
+def test_batch_snapshot_rejects_partial_explicit_v2_stock_repair_schema(monkeypatch, tmp_path):
     inputs = _fixture_inputs()
     config = RollingOversoldConfig(anchor_start_date=ANCHOR)
     monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
@@ -233,12 +401,12 @@ def test_batch_snapshot_hydrates_partially_missing_stock_repair_column(monkeypat
     partial["stock_candidates"] = partial["stock_candidates"].drop(
         columns=["sector_volume_ratio_5_20"]
     )
-    write_result = write_rolling_snapshot(
-        partial,
-        output_dir=tmp_path,
-        batch_mode=True,
-    )
-    assert write_result["status"] == "created"
+    with pytest.raises(ValueError, match="sector_volume_ratio_5_20"):
+        write_rolling_snapshot(
+            partial,
+            output_dir=tmp_path,
+            batch_mode=True,
+        )
 
 
 def test_batch_snapshot_previous_duplicate_assets_use_sector_scoped_revisions(

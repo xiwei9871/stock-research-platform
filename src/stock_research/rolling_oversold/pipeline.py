@@ -350,6 +350,7 @@ def run_sector_batch(
         output_dir=output_dir,
         anchor_date=anchor_date,
         score_version=config.score_version,
+        previous_snapshot=previous_snapshot,
     )
     if existing is not None:
         return existing
@@ -561,6 +562,7 @@ def _load_existing_sector_batch_result(
     output_dir: str | Path | None,
     anchor_date: date,
     score_version: str,
+    previous_snapshot: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
     """Return a previously published batch without recomputing or replacing it."""
 
@@ -580,12 +582,22 @@ def _load_existing_sector_batch_result(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     hashes = manifest.get("artifact_hashes")
-    if not isinstance(hashes, dict) or not {
-        "sector_daily_board.csv",
-        "sector_stock_candidates.csv",
-    }.issubset(hashes):
+    aliases = ("sector_daily_board.csv", "sector_stock_candidates.csv")
+    if not isinstance(hashes, dict) or not set(aliases).issubset(hashes):
         return None
+    for name in aliases:
+        expected_hash = hashes.get(name)
+        path = destination / name
+        if not isinstance(expected_hash, str) or not expected_hash or not path.is_file():
+            return None
+        try:
+            actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            return None
+        if actual_hash != expected_hash:
+            return None
     loaded = load_rolling_oversold_snapshot(destination)
+    _assert_existing_snapshot_lineage(loaded, previous_snapshot)
     sectors = loaded.get("sector_states", pd.DataFrame())
     stocks = loaded.get("stock_candidates", pd.DataFrame())
     metadata = manifest.get("runtime_metadata", {})
