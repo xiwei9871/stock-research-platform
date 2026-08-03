@@ -593,12 +593,15 @@ def run_sector_batch(
                 "manifest": str(manifest_path),
                 "batch_manifest": str(manifest_path),
                 "snapshot_manifest": str(manifest_path),
+                "market_regime": str(manifest_path.parent / "market_regime.csv"),
                 "sector_states": str(manifest_path.parent / "sector_states.csv"),
                 "stock_candidates": str(manifest_path.parent / "stock_candidates.csv"),
                 "sector_daily_board": str(manifest_path.parent / "sector_daily_board.csv"),
                 "sector_stock_candidates": str(
                     manifest_path.parent / "sector_stock_candidates.csv"
                 ),
+                "preflight": str(manifest_path.parent / "preflight.json"),
+                "backfill_requests": str(manifest_path.parent / "backfill_requests.csv"),
             }
             try:
                 batch_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -763,10 +766,13 @@ def _load_existing_sector_batch_result(
         "manifest": str(manifest_path),
         "batch_manifest": str(manifest_path),
         "snapshot_manifest": str(manifest_path),
+        "market_regime": str(destination / "market_regime.csv"),
         "sector_states": str(destination / "sector_states.csv"),
         "stock_candidates": str(destination / "stock_candidates.csv"),
         "sector_daily_board": str(destination / "sector_daily_board.csv"),
         "sector_stock_candidates": str(destination / "sector_stock_candidates.csv"),
+        "preflight": str(destination / "preflight.json"),
+        "backfill_requests": str(destination / "backfill_requests.csv"),
     }
     snapshot = dict(loaded)
     snapshot["row_counts"] = dict(row_counts)

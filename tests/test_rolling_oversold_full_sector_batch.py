@@ -161,6 +161,13 @@ def test_full_sector_batch_has_independent_ranks_one_load_and_runtime_manifest(
     assert result["sector_count"] == 302
     board = result["sector_states"]
     candidates = result["stock_candidates"]
+    assert {
+        "market_regime",
+        "preflight",
+        "backfill_requests",
+        "sector_daily_board",
+        "sector_stock_candidates",
+    }.issubset(result["paths"])
     assert len(board) == 302
     assert candidates.groupby(["sector_system", "sector_code"])["sector_stock_rank"].min().eq(1).all()
     assert candidates["asset_id"].eq("SHARED").sum() == 2
@@ -212,6 +219,9 @@ def test_sector_batch_alias_artifacts_round_trip_sector_stock_rank(monkeypatch, 
         service="research-test",
     )
     assert second["batch_manifest"] == manifest
+    assert {"market_regime", "preflight", "backfill_requests"}.issubset(
+        second["paths"]
+    )
 
 
 def test_sector_batch_fast_path_rejects_requested_previous_snapshot_lineage(monkeypatch, tmp_path):
