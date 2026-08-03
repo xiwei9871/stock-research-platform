@@ -343,7 +343,7 @@ def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
             "watch": SectorResearchEligibility.WATCH.value,
             "blocked": SectorResearchEligibility.BLOCKED_DATA.value,
         }
-    )
+    ).fillna(SectorResearchEligibility.WATCH.value)
     frame["sector_research_eligibility"] = eligibility
     frame.attrs["_legacy_sector_schema"] = True
     return True
@@ -888,12 +888,15 @@ def _validate_sector_snapshot_rows(
         "sector_states",
         allow_missing=_allow_missing_sector_scores(result),
     )
+    revision_status = (
+        result["sector_revision_status"].fillna("current").astype("string").str.casefold()
+    )
     if not bool(frame.attrs.get("_legacy_sector_schema")):
-        _validate_sector_repair_features(result, structured_gaps)
+        active_rows = result.loc[~revision_status.eq("removed")].copy(deep=True)
+        _validate_sector_repair_features(active_rows, structured_gaps)
     if result.duplicated(["sector_system", "sector_code"]).any():
         raise ValueError("sector_states has duplicate sector identity")
     result["sector_rank"] = pd.to_numeric(result["sector_rank"], errors="coerce")
-    revision_status = result["sector_revision_status"].fillna("current").astype("string")
     invalid_rank = (
         result["sector_rank"].isna()
         | ~result["sector_rank"].map(lambda value: math.isfinite(value) if pd.notna(value) else False)

@@ -204,3 +204,58 @@ def test_legacy_v1_inputs_are_compatibly_augmented():
     snapshot = _snapshot(sectors=legacy)
     assert set(REQUIRED_SECTOR_COLUMNS).issubset(snapshot["sector_states"].columns)
     assert snapshot["sector_states"].loc[0, "sector_research_eligibility"] == "watch"
+
+
+def test_legacy_removed_sector_revision_keeps_v1_feature_blanks(tmp_path):
+    legacy = pd.DataFrame(
+        [
+            {
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Industry one",
+                "sector_oversold_score": 78.0,
+                "sector_repairability_score": 66.0,
+                "sector_direction_score": 49.0,
+                "sector_recovery_state": "fresh_oversold",
+                "sector_gate_status": "watch",
+            }
+        ]
+    )
+    previous = _snapshot(sectors=legacy)
+    current = build_rolling_snapshot(
+        anchor_date=ANCHOR,
+        data_cutoff_date=CUTOFF,
+        market_regime={"market_regime": "risk_off"},
+        sector_states=pd.DataFrame([_sector_row(sector_code="300239")]),
+        stock_candidates=pd.DataFrame(),
+        previous_snapshot=previous,
+        score_version="rolling_oversold_v2",
+    )
+
+    removed = current["sector_states"].loc[
+        current["sector_states"]["sector_revision_status"].eq("removed")
+    ]
+    assert len(removed) == 1
+    assert pd.isna(removed.iloc[0]["sector_low_close_20d"])
+    assert write_rolling_snapshot(current, output_dir=tmp_path)["status"] == "created"
+
+
+def test_unknown_legacy_gate_maps_to_watch_research_eligibility():
+    legacy = pd.DataFrame(
+        [
+            {
+                "sector_system": "sw",
+                "sector_code": "I9",
+                "sector_name": "Legacy sector",
+                "sector_oversold_score": 45.0,
+                "sector_repairability_score": 51.0,
+                "sector_direction_score": 48.0,
+                "sector_recovery_state": "unknown",
+                "sector_gate_status": "legacy_gate",
+            }
+        ]
+    )
+
+    snapshot = _snapshot(sectors=legacy)
+
+    assert snapshot["sector_states"].loc[0, "sector_research_eligibility"] == "watch"
