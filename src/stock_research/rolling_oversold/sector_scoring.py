@@ -210,7 +210,7 @@ def _score_one_sector(
         else np.array([], dtype=float)
     )
     volumes = (
-        sector["volume"].dropna().to_numpy(dtype=float)
+        _numeric_series(sector["volume"]).to_numpy(dtype=float)
         if not sector.empty and "volume" in sector
         else np.array([], dtype=float)
     )
@@ -483,7 +483,7 @@ def _volume_features(volume: object, amount: object) -> dict[str, float]:
     """Return independent 5/20 volume and amount ratios."""
 
     return {
-        "sector_volume_ratio_5_20": _ratio_5_20(_numeric_array(volume)),
+        "sector_volume_ratio_5_20": _volume_ratio_5_20(volume),
         "sector_amount_ratio_5_20": _ratio_5_20(_numeric_array(amount)),
     }
 
@@ -624,6 +624,21 @@ def _ratio_5_20(values: np.ndarray) -> float:
     recent = float(np.mean(values[-5:]))
     baseline = float(np.mean(values[-20:]))
     return float(recent / baseline) if baseline else float("nan")
+
+
+def _volume_ratio_5_20(values: object) -> float:
+    """Return a volume ratio only when both windows are fully observed."""
+
+    series = _numeric_series(values)
+    if len(series) < _MIN_FEATURE_HISTORY:
+        return float("nan")
+    recent = series.tail(5)
+    baseline = series.tail(20)
+    if recent.isna().any() or baseline.isna().any():
+        return float("nan")
+    recent_mean = float(recent.mean())
+    baseline_mean = float(baseline.mean())
+    return float(recent_mean / baseline_mean) if baseline_mean else float("nan")
 
 
 def _count_ratio(frame: pd.DataFrame, numerator_column: str) -> pd.Series | None:

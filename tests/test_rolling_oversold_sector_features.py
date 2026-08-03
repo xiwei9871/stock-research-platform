@@ -159,6 +159,25 @@ def test_complete_history_has_ok_feature_status() -> None:
     assert row["sector_research_eligibility"] in {"eligible", "watch"}
 
 
+@pytest.mark.parametrize("missing_index", [10, 24])
+def test_partial_volume_history_is_blocked_instead_of_dropna_substitution(
+    missing_index: int,
+) -> None:
+    volumes = [100.0] * 25
+    volumes[missing_index] = float("nan")
+    row = make_scored_sector_row(
+        make_sector_bars(
+            [120 - index for index in range(19)] + [100, 95, 90, 88, 92, 94],
+            volumes=volumes,
+            amounts=[1000] * 25,
+        )
+    )
+
+    assert pd.isna(row["sector_volume_ratio_5_20"])
+    assert row["sector_feature_data_status"] == "missing_volume"
+    assert row["sector_research_eligibility"] == "blocked_data"
+
+
 def test_future_bar_after_anchor_does_not_change_frozen_features() -> None:
     history = make_sector_bars(
         [100, 95, 90, 88, 92, 94],
