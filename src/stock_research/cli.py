@@ -49,6 +49,9 @@ from stock_research.rolling_oversold.derived_backfill import run_derived_backfil
 from stock_research.rolling_oversold.fundamental_backfill import (
     run_fundamental_backfill,
 )
+from stock_research.rolling_oversold.target_membership_backfill import (
+    run_target_membership_backfill,
+)
 
 # Keep the CLI-facing helper name explicit about the source of the asset list.
 # The compatibility alias also makes it straightforward for callers/tests to
@@ -4586,6 +4589,28 @@ def build_parser() -> argparse.ArgumentParser:
     rolling_oversold_batch.add_argument("--sector-stock-top-n", type=int, default=10)
     rolling_oversold_batch.add_argument("--runtime-budget-seconds", type=int, default=3600)
 
+    rolling_target_membership = subparsers.add_parser(
+        "rolling-sector-target-membership-backfill"
+    )
+    rolling_target_membership.add_argument("--trade-date", required=True)
+    rolling_target_membership.add_argument("--concept-codes-file", required=True)
+    rolling_target_membership.add_argument(
+        "--service", default=SETTINGS.research_service
+    )
+    rolling_target_membership.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/rolling_sector_target_membership_backfill"),
+    )
+    rolling_target_membership_mode = rolling_target_membership.add_mutually_exclusive_group()
+    rolling_target_membership_mode.add_argument(
+        "--dry-run", dest="dry_run", action="store_true"
+    )
+    rolling_target_membership_mode.add_argument(
+        "--execute", dest="dry_run", action="store_false"
+    )
+    rolling_target_membership.set_defaults(dry_run=True)
+
     rolling_oversold_backfill = subparsers.add_parser("rolling-sector-oversold-backfill")
     rolling_oversold_backfill.add_argument(
         "--dataset", choices=("market_daily_bar", "derived", "fundamentals"), required=True
@@ -5942,6 +5967,36 @@ def _print_rolling_oversold_machine_lines(result: dict[str, object]) -> None:
         "rolling_sector_oversold|blocked|"
         f"{_rolling_oversold_machine_value(result.get('blocked', ''))}"
     )
+
+
+def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
+    paths = result.get("paths", {})
+    if not isinstance(paths, dict):
+        paths = {}
+    for key in ("json", "csv"):
+        print(
+            f"rolling_sector_target_membership_backfill|{key}|"
+            f"{_rolling_oversold_machine_value(paths.get(key, ''))}"
+        )
+    for key in (
+        "trade_date",
+        "target_code_count",
+        "valid_non_bj_memberships",
+        "database_writes",
+        "dry_run",
+    ):
+        print(
+            f"rolling_sector_target_membership_backfill|{key}|"
+            f"{_rolling_oversold_machine_value(result.get(key, ''))}"
+        )
+    for key in ("source_missing_codes", "failed_concepts", "out_of_scope_bse"):
+        value = result.get(key, [])
+        if isinstance(value, (list, tuple, set)):
+            value = ",".join(str(item) for item in value)
+        print(
+            f"rolling_sector_target_membership_backfill|{key}|"
+            f"{_rolling_oversold_machine_value(value)}"
+        )
 
 
 def _rolling_oversold_machine_value(value: object) -> str:
@@ -8633,6 +8688,16 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             result_paths["evaluation_summary"] = str(artifact_dir / "evaluation_summary.csv")
         result["paths"] = result_paths
         _print_rolling_oversold_machine_lines(result)
+    elif args.command == "rolling-sector-target-membership-backfill":
+        result = run_target_membership_backfill(
+            trade_date=dt.date.fromisoformat(args.trade_date),
+            target_codes=args.concept_codes_file,
+            service=args.service,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+        )
+        _print_target_membership_machine_lines(result)
+        return 0
     elif args.command == "rolling-sector-oversold-backfill":
         if args.dataset == "derived":
             result = run_derived_backfill(

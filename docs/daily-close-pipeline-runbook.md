@@ -111,6 +111,34 @@ endpoint, requested date range, payload hash, attempts, and per-row status. A
 filled with zero values. `out_of_scope_bse` rows are reported but are never
 sent to an external source.
 
+## Rolling Oversold 302-Concept Membership Backfill (P0)
+
+The frozen 302-concept `ths` target has a separate membership repair command.
+It fetches the THS board list once and requests constituents only for target
+codes present in the supplied CSV/list. The strategy itself remains database
+only and never calls this source boundary.
+
+Preview first (the CLI defaults to `--dry-run`):
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_research.cli \
+  rolling-sector-target-membership-backfill \
+  --trade-date 2026-07-31 \
+  --concept-codes-file outputs/research/concept_drawdown_over24_2026-08-01.csv \
+  --service stock_research \
+  --output-dir outputs/research/rolling_sector_target_membership_backfill \
+  --dry-run
+```
+
+Review `target_membership_backfill_summary.json` before executing. The report
+must retain `source_missing_codes` and `failed_concepts`; a failed source
+concept is never allowed to close its prior active membership history. Only
+active, non-delisted, non-BSE assets present in `core.asset_master` are valid.
+Execute explicitly with `--execute`. Board and membership writes share one
+database transaction, with the membership conflict key
+`(asset_id, concept_system, concept_code, start_date)`, so an identical rerun
+is idempotent. `database_writes` is always zero in a dry-run.
+
 ## Cron
 
 Install a crontab similar to:
