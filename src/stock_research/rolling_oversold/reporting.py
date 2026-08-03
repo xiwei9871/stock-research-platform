@@ -44,6 +44,17 @@ def load_rolling_oversold_snapshot(snapshot_dir: str | Path) -> dict[str, object
         }
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     market = _read_csv(directory / "market_regime.csv")
+    sectors = _read_csv(directory / "sector_states.csv")
+    stocks = _read_csv(directory / "stock_candidates.csv")
+    legacy_schema = bool(manifest.get("legacy_sector_schema")) or _is_legacy_version(
+        manifest.get("score_version")
+    )
+    if legacy_schema:
+        sectors.attrs["_legacy_sector_schema"] = True
+        stocks.attrs["_legacy_sector_schema"] = True
+    legacy_removed_keys = manifest.get("legacy_removed_sector_keys", ())
+    if isinstance(legacy_removed_keys, list) and legacy_removed_keys:
+        sectors.attrs["_legacy_removed_sector_keys"] = tuple(legacy_removed_keys)
     return {
         "snapshot_id": manifest.get("snapshot_id", ""),
         "anchor_date": manifest.get("anchor_date", ""),
@@ -52,11 +63,17 @@ def load_rolling_oversold_snapshot(snapshot_dir: str | Path) -> dict[str, object
         "previous_snapshot_id": manifest.get("previous_snapshot_id"),
         "manifest": manifest,
         "market_regime": market.iloc[0].dropna().to_dict() if not market.empty else {},
-        "sector_states": _read_csv(directory / "sector_states.csv"),
-        "stock_candidates": _read_csv(directory / "stock_candidates.csv"),
+        "sector_states": sectors,
+        "stock_candidates": stocks,
         "preflight": preflight,
         "backfill_requests": _read_csv(directory / "backfill_requests.csv"),
     }
+
+
+def _is_legacy_version(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    return re.search(r"(?:^|_)v1$", value.strip()) is not None
 
 
 def write_rolling_sector_oversold_report(

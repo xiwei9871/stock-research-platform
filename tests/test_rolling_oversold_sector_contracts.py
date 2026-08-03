@@ -162,6 +162,48 @@ def test_blocked_data_sector_without_structured_gap_is_rejected(tmp_path):
         write_rolling_snapshot(snapshot, output_dir=tmp_path)
 
 
+def test_blocked_data_gap_must_identify_the_same_sector(tmp_path):
+    blocked = pd.DataFrame(
+        [
+            _sector_row(
+                sector_oversold_score=pd.NA,
+                sector_repairability_score=pd.NA,
+                sector_direction_score=pd.NA,
+                sector_recovery_state="unknown",
+                sector_gate_status="blocked",
+                sector_research_eligibility="blocked_data",
+                **{
+                    key: pd.NA
+                    for key in _NEW_FEATURES
+                    if key != "sector_research_eligibility"
+                },
+            )
+        ]
+    )
+    snapshot = _snapshot(
+        sectors=blocked,
+        market_regime={
+            "market_regime": "risk_off",
+            "preflight": {
+                "gaps": [
+                    {
+                        "dataset": "market.ths_daily_bar",
+                        "asset_id": "other:300238",
+                        "start_date": "2026-07-30",
+                        "end_date": "2026-07-30",
+                        "expected_rows": 1,
+                        "actual_rows": 0,
+                        "reason": "missing_cutoff_sector_bar",
+                    }
+                ]
+            },
+        },
+    )
+
+    with pytest.raises(ValueError, match="structured data gap|gap"):
+        write_rolling_snapshot(snapshot, output_dir=tmp_path)
+
+
 def test_sector_features_round_trip_through_csv_manifest_and_report(tmp_path):
     snapshot = _snapshot()
     result = write_rolling_snapshot(snapshot, output_dir=tmp_path)
@@ -184,6 +226,12 @@ def test_sector_features_round_trip_through_csv_manifest_and_report(tmp_path):
     report = report_path.read_text(encoding="utf-8")
     assert "sector_research_eligibility" in report
     assert "sector_low_close_20d" in report
+
+
+@pytest.mark.parametrize("invalid_date", ["07/28/2026", pd.Timestamp("2026-07-28")])
+def test_sector_low_date_requires_iso_calendar_date(invalid_date):
+    with pytest.raises(ValueError, match="sector_low_date_20d"):
+        _snapshot(sectors=pd.DataFrame([_sector_row(sector_low_date_20d=invalid_date)]))
 
 
 def test_legacy_v1_inputs_are_compatibly_augmented():
@@ -238,6 +286,65 @@ def test_legacy_removed_sector_revision_keeps_v1_feature_blanks(tmp_path):
     assert len(removed) == 1
     assert pd.isna(removed.iloc[0]["sector_low_close_20d"])
     assert write_rolling_snapshot(current, output_dir=tmp_path)["status"] == "created"
+
+
+def test_legacy_schema_marker_survives_csv_load_and_rebuild(tmp_path):
+    legacy = pd.DataFrame(
+        [
+            {
+                "sector_system": "sw",
+                "sector_code": "I1",
+                "sector_name": "Industry one",
+                "sector_oversold_score": 78.0,
+                "sector_repairability_score": 66.0,
+                "sector_direction_score": 49.0,
+                "sector_recovery_state": "fresh_oversold",
+                "sector_gate_status": "watch",
+            }
+        ]
+    )
+    snapshot = _snapshot(sectors=legacy)
+    first = write_rolling_snapshot(snapshot, output_dir=tmp_path / "first")
+    loaded = load_rolling_oversold_snapshot(Path(first["manifest_path"]).parent)
+
+    rebuilt = build_rolling_snapshot(
+        anchor_date=ANCHOR,
+        data_cutoff_date=CUTOFF,
+        market_regime={"market_regime": "risk_off"},
+        sector_states=loaded["sector_states"],
+        stock_candidates=loaded["stock_candidates"],
+        previous_snapshot=None,
+        score_version=loaded["score_version"],
+    )
+
+    assert write_rolling_snapshot(rebuilt, output_dir=tmp_path / "rebuilt")["status"] == "created"
+
+
+def test_v2_removed_sector_with_empty_features_is_not_legacy_exempt(tmp_path):
+    previous = _snapshot()
+    current = build_rolling_snapshot(
+        anchor_date=ANCHOR,
+        data_cutoff_date=CUTOFF,
+        market_regime={"market_regime": "risk_off"},
+        sector_states=pd.DataFrame([_sector_row(sector_code="300239")]),
+        stock_candidates=pd.DataFrame(),
+        previous_snapshot=previous,
+        score_version="rolling_oversold_v2",
+    )
+    removed = current["sector_states"]["sector_revision_status"].eq("removed")
+    for column in (
+        "sector_low_date_20d",
+        "sector_low_close_20d",
+        "sector_recovery_from_low_20d",
+        "sector_days_since_low_20d",
+        "sector_volume_ratio_5_20",
+        "sector_ma5_slope_5d",
+        "sector_ma10_slope_10d",
+    ):
+        current["sector_states"].loc[removed, column] = pd.NA
+
+    with pytest.raises(ValueError, match="non-blocked sector rows require complete"):
+        write_rolling_snapshot(current, output_dir=tmp_path)
 
 
 def test_unknown_legacy_gate_maps_to_watch_research_eligibility():

@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 from typing import Any, Callable, Mapping
@@ -105,6 +106,10 @@ _ARTIFACT_NAMES = (
     "preflight.json",
     "backfill_requests.csv",
 )
+_LEGACY_SECTOR_SCHEMA_ATTR = "_legacy_sector_schema"
+_LEGACY_REMOVED_SECTOR_KEYS_ATTR = "_legacy_removed_sector_keys"
+_LEGACY_SECTOR_SCHEMA_MANIFEST_KEY = "legacy_sector_schema"
+_LEGACY_REMOVED_SECTOR_KEYS_MANIFEST_KEY = "legacy_removed_sector_keys"
 def build_rolling_snapshot(
     *,
     anchor_date: date,
@@ -145,8 +150,8 @@ def build_rolling_snapshot(
 
     sectors = _normalize_sector_rows(sector_states)
     stocks = _normalize_stock_rows(stock_candidates)
-    legacy_sector_schema = bool(sectors.attrs.get("_legacy_sector_schema"))
-    legacy_stock_schema = bool(stocks.attrs.get("_legacy_sector_schema"))
+    legacy_sector_schema = bool(sectors.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
+    legacy_stock_schema = bool(stocks.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
     stocks = _apply_stock_metadata(
         stocks,
         snapshot_id=snapshot_id,
@@ -168,9 +173,9 @@ def build_rolling_snapshot(
         market_state=regime["market_regime"],
     )
     if legacy_sector_schema:
-        sectors.attrs["_legacy_sector_schema"] = True
+        sectors.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     if legacy_stock_schema:
-        stocks.attrs["_legacy_sector_schema"] = True
+        stocks.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     _validate_stock_sector_context(stocks, sectors, previous_snapshot_id=previous_id)
 
     preflight = _normalize_preflight(regime.pop("preflight", None))
@@ -224,6 +229,13 @@ def write_rolling_snapshot(
             name: hashlib.sha256(contents).hexdigest() for name, contents in artifact_bytes.items()
         },
     }
+    if bool(normalized["sector_states"].attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR)):
+        manifest[_LEGACY_SECTOR_SCHEMA_MANIFEST_KEY] = True
+    legacy_removed_keys = _legacy_removed_sector_keys(
+        normalized["sector_states"].attrs.get(_LEGACY_REMOVED_SECTOR_KEYS_ATTR)
+    )
+    if legacy_removed_keys:
+        manifest[_LEGACY_REMOVED_SECTOR_KEYS_MANIFEST_KEY] = list(legacy_removed_keys)
     manifest_path = destination / "manifest.json"
 
     if destination.exists():
@@ -329,7 +341,7 @@ def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
     )
     _require_columns(frame, base_columns, label)
     supplied_features = set(frame.columns).intersection(SECTOR_FEATURE_COLUMNS)
-    legacy = not supplied_features
+    legacy = bool(frame.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR)) or not supplied_features
     if not legacy:
         _require_columns(frame, _SECTOR_INPUT_COLUMNS, label)
         return False
@@ -344,9 +356,28 @@ def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
             "blocked": SectorResearchEligibility.BLOCKED_DATA.value,
         }
     ).fillna(SectorResearchEligibility.WATCH.value)
-    frame["sector_research_eligibility"] = eligibility
-    frame.attrs["_legacy_sector_schema"] = True
+    if (
+        "sector_research_eligibility" not in frame
+        or frame["sector_research_eligibility"].isna().all()
+    ):
+        frame["sector_research_eligibility"] = eligibility
+    frame.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     return True
+
+
+def _legacy_removed_sector_keys(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        values = (value,)
+    elif isinstance(value, (tuple, list, set, frozenset)):
+        values = tuple(value)
+    else:
+        return ()
+    normalized = {
+        str(item).strip().casefold()
+        for item in values
+        if str(item).strip()
+    }
+    return tuple(sorted(normalized))
 
 
 def _validate_sector_eligibility_values(frame: pd.DataFrame, label: str) -> None:
@@ -362,12 +393,28 @@ def _validate_sector_eligibility_values(frame: pd.DataFrame, label: str) -> None
 
 
 def _normalize_sector_feature_values(frame: pd.DataFrame, label: str) -> None:
-    date_values = frame["sector_low_date_20d"]
-    parsed_dates = pd.to_datetime(date_values, errors="coerce")
-    invalid_date = date_values.notna() & parsed_dates.isna()
-    if invalid_date.any():
-        raise ValueError(f"{label} sector_low_date_20d must be an ISO date")
-    frame["sector_low_date_20d"] = parsed_dates.dt.strftime("%Y-%m-%d").astype("string")
+    normalized_dates: list[object] = []
+    for value in frame["sector_low_date_20d"]:
+        if _is_missing(value):
+            normalized_dates.append(pd.NA)
+            continue
+        if isinstance(value, datetime):
+            raise ValueError(f"{label} sector_low_date_20d must be an ISO date")
+        if isinstance(value, date):
+            text_value = value.isoformat()
+        elif isinstance(value, str):
+            text_value = value.strip()
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text_value) is None:
+                raise ValueError(f"{label} sector_low_date_20d must be an ISO date")
+        else:
+            raise ValueError(f"{label} sector_low_date_20d must be an ISO date")
+        try:
+            normalized_dates.append(date.fromisoformat(text_value).isoformat())
+        except ValueError as error:
+            raise ValueError(f"{label} sector_low_date_20d must be an ISO date") from error
+    frame["sector_low_date_20d"] = pd.Series(
+        normalized_dates, index=frame.index, dtype="string"
+    )
     for column in _SECTOR_NUMERIC_FEATURE_COLUMNS:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
@@ -450,7 +497,7 @@ def _normalize_stock_rows(
         result[column] = result[column].fillna("").astype("string")
     normalized = _ordered_frame(result, _STOCK_COLUMNS, sort_columns=("stock_rank", "asset_id"))
     if legacy_sector_schema:
-        normalized.attrs["_legacy_sector_schema"] = True
+        normalized.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     return normalized
 
 
@@ -550,7 +597,7 @@ def _normalize_sector_rows(frame: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
     result["sector_rank"] = pd.Series(range(1, len(result) + 1), dtype="int64")
     if legacy_sector_schema:
-        result.attrs["_legacy_sector_schema"] = True
+        result.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     return result
 
 
@@ -616,12 +663,23 @@ def _apply_sector_revisions(
     current: pd.DataFrame, previous: pd.DataFrame | None, previous_snapshot_id: str | None
 ) -> pd.DataFrame:
     result = current.copy(deep=True)
+    legacy_schema = bool(result.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
+    legacy_removed_keys = set(
+        _legacy_removed_sector_keys(result.attrs.get(_LEGACY_REMOVED_SECTOR_KEYS_ATTR))
+    )
     result["previous_snapshot_id"] = previous_snapshot_id if previous_snapshot_id else pd.NA
     result["sector_rank_delta"] = pd.NA
     result["sector_recovery_state_delta"] = pd.NA
     result["sector_revision_status"] = "current"
     if previous is None:
-        return _ordered_frame(result, _SECTOR_COLUMNS, sort_columns=("sector_rank", "sector_system", "sector_code"))
+        normalized = _ordered_frame(
+            result, _SECTOR_COLUMNS, sort_columns=("sector_rank", "sector_system", "sector_code")
+        )
+        if legacy_schema:
+            normalized.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
+        if legacy_removed_keys:
+            normalized.attrs[_LEGACY_REMOVED_SECTOR_KEYS_ATTR] = tuple(sorted(legacy_removed_keys))
+        return normalized
     prior = previous.set_index(["sector_system", "sector_code"], drop=False)
     current_keys = set(zip(result["sector_system"], result["sector_code"], strict=True))
     for index, row in result.iterrows():
@@ -638,13 +696,26 @@ def _apply_sector_revisions(
         ~previous.apply(lambda row: (row["sector_system"], row["sector_code"]) in current_keys, axis=1)
     ].copy(deep=True)
     if not removed.empty:
+        previous_legacy_schema = bool(previous.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
         removed["sector_rank"] = pd.NA
         removed["previous_snapshot_id"] = previous_snapshot_id
         removed["sector_rank_delta"] = pd.NA
         removed["sector_recovery_state_delta"] = removed["sector_recovery_state"].astype(str) + "->absent"
         removed["sector_revision_status"] = "removed"
+        if previous_legacy_schema:
+            legacy_removed_keys.update(
+                f"{row['sector_system']}:{row['sector_code']}".casefold()
+                for _, row in removed.iterrows()
+            )
         result = pd.concat([result, removed], ignore_index=True, sort=False)
-    return _ordered_frame(result, _SECTOR_COLUMNS, sort_columns=("sector_rank", "sector_system", "sector_code"))
+    normalized = _ordered_frame(
+        result, _SECTOR_COLUMNS, sort_columns=("sector_rank", "sector_system", "sector_code")
+    )
+    if legacy_schema:
+        normalized.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
+    if legacy_removed_keys:
+        normalized.attrs[_LEGACY_REMOVED_SECTOR_KEYS_ATTR] = tuple(sorted(legacy_removed_keys))
+    return normalized
 
 
 def _normalize_mapping(value: Mapping[str, object]) -> dict[str, object]:
@@ -779,6 +850,13 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         sector_rows, _SECTOR_COLUMNS,
         sort_columns=("sector_rank", "sector_system", "sector_code"),
     )
+    if bool(sector_rows.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR)):
+        normalized["sector_states"].attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
+    legacy_removed_keys = _legacy_removed_sector_keys(
+        sector_rows.attrs.get(_LEGACY_REMOVED_SECTOR_KEYS_ATTR)
+    )
+    if legacy_removed_keys:
+        normalized["sector_states"].attrs[_LEGACY_REMOVED_SECTOR_KEYS_ATTR] = legacy_removed_keys
     normalized["stock_candidates"] = _ordered_frame(
         stock_rows, _STOCK_COLUMNS,
         sort_columns=("stock_rank", "asset_id"),
@@ -892,7 +970,16 @@ def _validate_sector_snapshot_rows(
         result["sector_revision_status"].fillna("current").astype("string").str.casefold()
     )
     if not bool(frame.attrs.get("_legacy_sector_schema")):
-        active_rows = result.loc[~revision_status.eq("removed")].copy(deep=True)
+        legacy_removed_keys = set(
+            _legacy_removed_sector_keys(frame.attrs.get(_LEGACY_REMOVED_SECTOR_KEYS_ATTR))
+        )
+        row_keys = (
+            result["sector_system"].astype("string").str.casefold()
+            + ":"
+            + result["sector_code"].astype("string").str.casefold()
+        )
+        legacy_removed = revision_status.eq("removed") & row_keys.isin(legacy_removed_keys)
+        active_rows = result.loc[~legacy_removed].copy(deep=True)
         _validate_sector_repair_features(active_rows, structured_gaps)
     if result.duplicated(["sector_system", "sector_code"]).any():
         raise ValueError("sector_states has duplicate sector identity")
@@ -919,14 +1006,6 @@ def _validate_sector_repair_features(
     feature_columns = tuple(
         column for column in SECTOR_FEATURE_COLUMNS if column != "sector_research_eligibility"
     )
-    _require_finite_numbers(
-        frame,
-        _SECTOR_NUMERIC_FEATURE_COLUMNS,
-        "sector_states",
-        allow_missing=frame["sector_research_eligibility"].eq(
-            SectorResearchEligibility.BLOCKED_DATA.value
-        ),
-    )
     for _, row in frame.iterrows():
         eligibility = str(row["sector_research_eligibility"])
         missing = [column for column in feature_columns if _is_missing(row[column])]
@@ -948,6 +1027,14 @@ def _validate_sector_repair_features(
         days = row["sector_days_since_low_20d"]
         if float(days) < 0 or float(days) % 1:
             raise ValueError("sector_days_since_low_20d must be a non-negative integer")
+    _require_finite_numbers(
+        frame,
+        _SECTOR_NUMERIC_FEATURE_COLUMNS,
+        "sector_states",
+        allow_missing=frame["sector_research_eligibility"].eq(
+            SectorResearchEligibility.BLOCKED_DATA.value
+        ),
+    )
 
 
 def _structured_gap_rows(
@@ -970,6 +1057,7 @@ def _has_sector_gap(
     gaps: tuple[Mapping[str, object], ...], *, sector_system: str, sector_code: str
 ) -> bool:
     identity = f"{sector_system}:{sector_code}".casefold()
+    normalized_system = sector_system.casefold()
     normalized_code = sector_code.casefold()
     for gap in gaps:
         dataset = str(gap.get("dataset") or "").strip()
@@ -979,11 +1067,9 @@ def _has_sector_gap(
         asset_id = str(gap.get("asset_id") or "").strip().casefold()
         gap_system = str(gap.get("sector_system") or "").strip().casefold()
         gap_code = str(gap.get("sector_code") or "").strip().casefold()
-        if asset_id in {identity, normalized_code, f"{sector_system}/{sector_code}".casefold()}:
+        if asset_id == identity:
             return True
-        if gap_code == normalized_code and (not gap_system or gap_system == sector_system.casefold()):
-            return True
-        if not asset_id and any(token in dataset.casefold() for token in ("sector", "concept", sector_system.casefold())):
+        if gap_system == normalized_system and gap_code == normalized_code:
             return True
     return False
 
