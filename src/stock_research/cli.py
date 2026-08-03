@@ -55,13 +55,16 @@ from stock_research.rolling_oversold.fundamental_backfill import (
 # replace the workplan loader without touching the backfill implementation.
 load_market_backfill_asset_ids = load_gap_workplan_asset_ids
 from stock_research.rolling_oversold.pipeline import (
+    evaluate_sector_batch_outcomes,
     resolve_rolling_history_start,
     run_rolling_daily,
     run_rolling_replay,
+    run_sector_batch,
 )
 from stock_research.rolling_oversold.reporting import (
     latest_rolling_evaluation_directory,
     load_rolling_oversold_snapshot,
+    write_sector_repair_summary,
     write_rolling_sector_oversold_report,
 )
 from stock_research.backtest import run_top20_backtest
@@ -4576,6 +4579,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--adjust-type", choices=("qfq", "hfq", "raw"), default="qfq"
     )
 
+    rolling_oversold_batch = subparsers.add_parser("rolling-sector-oversold-batch")
+    rolling_oversold_batch.add_argument("--anchor-date", required=True)
+    rolling_oversold_batch.add_argument("--output-dir", required=True)
+    rolling_oversold_batch.add_argument("--service", default=SETTINGS.research_service)
+    rolling_oversold_batch.add_argument("--sector-stock-top-n", type=int, default=10)
+    rolling_oversold_batch.add_argument("--runtime-budget-seconds", type=int, default=3600)
+
     rolling_oversold_backfill = subparsers.add_parser("rolling-sector-oversold-backfill")
     rolling_oversold_backfill.add_argument(
         "--dataset", choices=("market_daily_bar", "derived", "fundamentals"), required=True
@@ -5913,9 +5923,14 @@ def _print_rolling_oversold_machine_lines(result: dict[str, object]) -> None:
         "market_regime",
         "sector_states",
         "stock_candidates",
+        "sector_daily_board",
+        "sector_stock_candidates",
         "evaluation",
+        "evaluation_detail",
+        "evaluation_summary",
         "preflight",
         "backfill_requests",
+        "sector_repair_summary",
     ):
         value = paths.get(key, "")
         print(f"rolling_sector_oversold|{key}|{_rolling_oversold_machine_value(value)}")
@@ -5937,6 +5952,66 @@ def _rolling_oversold_machine_value(value: object) -> str:
 
 def _rolling_oversold_existing_path(path: Path) -> str:
     return str(path) if path.is_file() else ""
+
+
+def _batch_result_frame(
+    result: dict[str, object], key: str, *, fallback: object = None
+) -> pd.DataFrame:
+    value = result.get(key)
+    if not isinstance(value, pd.DataFrame):
+        value = fallback
+    return value.copy(deep=True) if isinstance(value, pd.DataFrame) else pd.DataFrame()
+
+
+def _batch_result_backfill_frame(
+    result: dict[str, object], snapshot: dict[str, object]
+) -> pd.DataFrame:
+    paths = result.get("paths")
+    if isinstance(paths, dict):
+        value = paths.get("backfill_requests")
+        if value:
+            path = Path(str(value))
+            if path.is_file():
+                try:
+                    return pd.read_csv(path)
+                except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
+                    pass
+    value = result.get("backfill_requests")
+    if not isinstance(value, (pd.DataFrame, list, tuple)):
+        value = snapshot.get("backfill_requests")
+    if isinstance(value, pd.DataFrame):
+        return value.copy(deep=True)
+    if isinstance(value, (list, tuple)):
+        return pd.DataFrame(value)
+    preflight = snapshot.get("preflight")
+    if isinstance(preflight, dict) and isinstance(preflight.get("gaps"), list):
+        return pd.DataFrame(preflight["gaps"])
+    return pd.DataFrame()
+
+
+def _batch_artifact_directory(result: dict[str, object], output_dir: str | Path) -> Path:
+    paths = result.get("paths")
+    if isinstance(paths, dict):
+        for key in ("manifest", "batch_manifest", "sector_daily_board", "backfill_requests"):
+            value = paths.get(key)
+            if value:
+                path = Path(str(value)).expanduser().resolve()
+                if path.suffix:
+                    return path.parent
+                return path
+    return Path(output_dir).expanduser().resolve()
+
+
+def _write_batch_evaluation_sidecars(evaluation: dict[str, object], artifact_dir: Path) -> None:
+    detail = evaluation.get("detail")
+    summary = evaluation.get("summary")
+    if not isinstance(detail, pd.DataFrame) and not isinstance(summary, pd.DataFrame):
+        return
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    if isinstance(detail, pd.DataFrame):
+        detail.to_csv(artifact_dir / "evaluation_detail.csv", index=False, lineterminator="\n")
+    if isinstance(summary, pd.DataFrame):
+        summary.to_csv(artifact_dir / "evaluation_summary.csv", index=False, lineterminator="\n")
 
 
 def main_for_args(argv: list[str] | None = None) -> int | None:
@@ -8499,6 +8574,64 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             output_dir=args.output_dir,
             service=args.service,
         )
+        _print_rolling_oversold_machine_lines(result)
+    elif args.command == "rolling-sector-oversold-batch":
+        anchor_date = dt.date.fromisoformat(args.anchor_date)
+        config = RollingOversoldConfig(
+            anchor_start_date=anchor_date,
+            anchor_end_date=anchor_date,
+            sector_output_top_n=args.sector_stock_top_n,
+            runtime_budget_seconds=args.runtime_budget_seconds,
+        )
+        result = run_sector_batch(
+            anchor_date=anchor_date,
+            config=config,
+            output_dir=args.output_dir,
+            service=args.service,
+        )
+        snapshot = result.get("snapshot")
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        board = _batch_result_frame(
+            result,
+            "sector_daily_board",
+            fallback=snapshot.get("sector_states"),
+        )
+        stocks = _batch_result_frame(
+            result,
+            "sector_stock_candidates",
+            fallback=snapshot.get("stock_candidates"),
+        )
+        backfill = _batch_result_backfill_frame(result, snapshot)
+        evaluation = result.get("outcomes")
+        if not isinstance(evaluation, dict):
+            bars = result.get("evaluation_bars")
+            if not isinstance(bars, pd.DataFrame):
+                bars = result.get("bars")
+            if isinstance(bars, pd.DataFrame) and isinstance(snapshot, dict) and snapshot:
+                evaluation = evaluate_sector_batch_outcomes(
+                    snapshot,
+                    bars=bars,
+                    evaluation_cutoff=anchor_date,
+                    horizons=config.forecast_horizons,
+                )
+        artifact_dir = _batch_artifact_directory(result, args.output_dir)
+        summary_path = write_sector_repair_summary(
+            output_dir=artifact_dir,
+            sector_board=board,
+            stock_candidates=stocks,
+            backfill_requests=backfill,
+            anchor_date=anchor_date,
+        )
+        if isinstance(evaluation, dict):
+            _write_batch_evaluation_sidecars(evaluation, artifact_dir)
+        result = dict(result)
+        result_paths = dict(result.get("paths", {})) if isinstance(result.get("paths"), dict) else {}
+        result_paths["sector_repair_summary"] = str(summary_path)
+        if isinstance(evaluation, dict):
+            result_paths["evaluation_detail"] = str(artifact_dir / "evaluation_detail.csv")
+            result_paths["evaluation_summary"] = str(artifact_dir / "evaluation_summary.csv")
+        result["paths"] = result_paths
         _print_rolling_oversold_machine_lines(result)
     elif args.command == "rolling-sector-oversold-backfill":
         if args.dataset == "derived":

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
+
 from stock_research import cli
 
 
@@ -52,6 +54,122 @@ def test_parser_accepts_all_rolling_sector_oversold_commands_with_explicit_date(
     assert daily.trade_date == "2026-07-21"
     assert daily.adjust_type == "qfq"
     assert report.focus_patterns == "alpha,theme"
+
+    batch = parser.parse_args(
+        [
+            "rolling-sector-oversold-batch",
+            "--anchor-date",
+            "2026-07-31",
+            "--output-dir",
+            "/tmp/full",
+        ]
+    )
+    assert batch.anchor_date == "2026-07-31"
+    assert batch.sector_stock_top_n == 10
+    assert batch.runtime_budget_seconds == 3600
+
+
+def test_batch_cli_runs_one_batch_and_publishes_report_paths(monkeypatch, tmp_path, capsys):
+    captured: dict[str, object] = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        board = pd.DataFrame(
+            [
+                {
+                    "sector_system": "ths",
+                    "sector_code": "300238",
+                    "sector_name": "核电",
+                    "sector_recovery_state": "confirmed_repair",
+                    "sector_oversold_score": 88.0,
+                    "sector_repairability_score": 91.0,
+                    "sector_direction_score": 83.0,
+                    "sector_research_eligibility": "eligible",
+                },
+                {
+                    "sector_system": "ths",
+                    "sector_code": "300239",
+                    "sector_name": "半导体",
+                    "sector_recovery_state": "expected_repair",
+                    "sector_oversold_score": 94.0,
+                    "sector_repairability_score": 79.0,
+                    "sector_direction_score": 73.0,
+                    "sector_research_eligibility": "eligible",
+                },
+            ]
+        )
+        stocks = pd.DataFrame(
+            [
+                {
+                    "asset_id": "A",
+                    "sector_system": "ths",
+                    "sector_code": "300238",
+                    "sector_name": "核电",
+                    "sector_stock_rank": 1,
+                    "stock_lifecycle": "confirmed_repair",
+                    "stock_score": 90.0,
+                }
+            ]
+        )
+        return {
+            "blocked": False,
+            "snapshot": {
+                "snapshot_id": "rolling_oversold_v2|2026-07-31",
+                "anchor_date": "2026-07-31",
+                "sector_states": board,
+                "stock_candidates": stocks,
+                "preflight": {},
+                "backfill_requests": pd.DataFrame(),
+            },
+            "sector_states": board,
+            "sector_daily_board": board,
+            "stock_candidates": stocks,
+            "sector_stock_candidates": stocks,
+            "paths": {
+                "manifest": str(tmp_path / "manifest.json"),
+                "sector_daily_board": str(tmp_path / "sector_daily_board.csv"),
+                "sector_stock_candidates": str(tmp_path / "sector_stock_candidates.csv"),
+                "backfill_requests": str(tmp_path / "backfill_requests.csv"),
+            },
+            "runtime_seconds": 0.25,
+        }
+
+    monkeypatch.setattr(cli, "run_sector_batch", fake_run, raising=False)
+    monkeypatch.setattr(
+        cli,
+        "evaluate_sector_batch_outcomes",
+        lambda *args, **kwargs: {"detail": pd.DataFrame(), "summary": pd.DataFrame()},
+        raising=False,
+    )
+
+    cli.main_for_args(
+        [
+            "rolling-sector-oversold-batch",
+            "--anchor-date",
+            "2026-07-31",
+            "--output-dir",
+            str(tmp_path),
+            "--service",
+            "research-test",
+            "--sector-stock-top-n",
+            "7",
+            "--runtime-budget-seconds",
+            "42",
+        ]
+    )
+
+    assert captured["service"] == "research-test"
+    assert captured["anchor_date"] == date(2026, 7, 31)
+    assert captured["config"].sector_output_top_n == 7
+    assert captured["config"].runtime_budget_seconds == 42
+    lines = {
+        line.split("|", 2)[1]: line.split("|", 2)[2]
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("rolling_sector_oversold|")
+    }
+    assert lines["sector_daily_board"] == str(tmp_path / "sector_daily_board.csv")
+    assert lines["sector_stock_candidates"] == str(tmp_path / "sector_stock_candidates.csv")
+    assert lines["sector_repair_summary"].endswith("sector_repair_summary.md")
 
 
 def test_replay_cli_dispatches_without_database_and_prints_required_machine_keys(

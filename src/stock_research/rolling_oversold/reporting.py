@@ -11,6 +11,7 @@ import pandas as pd
 
 
 REPORT_NAME = "rolling_sector_oversold_report.md"
+SECTOR_REPAIR_SUMMARY_NAME = "sector_repair_summary.md"
 
 
 def load_rolling_oversold_snapshot(snapshot_dir: str | Path) -> dict[str, object]:
@@ -225,6 +226,181 @@ def write_rolling_sector_oversold_report(
     path = destination / REPORT_NAME
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return path
+
+
+def write_sector_repair_summary(
+    *,
+    output_dir: str | Path,
+    sector_board: pd.DataFrame,
+    stock_candidates: pd.DataFrame | None = None,
+    backfill_requests: pd.DataFrame | Sequence[object] | None = None,
+    anchor_date: str | object | None = None,
+) -> Path:
+    """Publish a compact, human-readable summary for a full sector batch.
+
+    The two CSV artifacts remain the source of truth.  This markdown file is
+    deliberately a projection: it only selects and orders columns already
+    present in the supplied frames and never computes a replacement score.
+    ``backfill_requests`` is rendered as a structured table so a blocked or
+    partially covered batch remains auditable from the same output directory.
+    """
+
+    sectors = _frame(sector_board)
+    stocks = _frame(stock_candidates)
+    if backfill_requests is None:
+        gaps = pd.DataFrame()
+    elif isinstance(backfill_requests, pd.DataFrame):
+        gaps = _frame(backfill_requests)
+    elif isinstance(backfill_requests, (list, tuple)):
+        gaps = pd.DataFrame(list(backfill_requests))
+    else:
+        raise TypeError("backfill_requests must be a pandas DataFrame or sequence")
+    ordered = _sort_sector_repair_rows(sectors)
+    lines = [
+        "# Sector Repair Summary",
+        "",
+        f"- Anchor date: `{_text(anchor_date)}`",
+        "- Source of truth: `sector_daily_board.csv`, `sector_stock_candidates.csv`",
+        "",
+        "## Sector repair board",
+        "",
+    ]
+    lines.extend(
+        _table_or_empty(
+            ordered,
+            (
+                "sector_recovery_state",
+                "sector_system",
+                "sector_code",
+                "sector_name",
+                "sector_research_eligibility",
+                "sector_drawdown_60d",
+                "sector_drawdown_252d",
+                "sector_oversold_score",
+                "sector_repairability_score",
+                "sector_direction_score",
+            ),
+            "No sector rows are present.",
+        )
+    )
+    lines.extend(["", "## Stock candidates", ""])
+    lines.extend(
+        _table_or_empty(
+            _sort_stock_repair_rows(stocks),
+            (
+                "sector_recovery_state",
+                "sector_system",
+                "sector_code",
+                "sector_name",
+                "sector_stock_rank",
+                "asset_id",
+                "stock_lifecycle",
+                "stock_score",
+            ),
+            "No stock candidates are present.",
+        )
+    )
+    lines.extend(["", "## Structured backfill requests", ""])
+    lines.extend(
+        _table_or_empty(
+            gaps,
+            (
+                "dataset",
+                "asset_id",
+                "sector_system",
+                "sector_code",
+                "start_date",
+                "end_date",
+                "expected_rows",
+                "actual_rows",
+                "reason",
+            ),
+            "No backfill requests were recorded.",
+        )
+    )
+    destination = Path(output_dir).expanduser().resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / SECTOR_REPAIR_SUMMARY_NAME
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return path
+
+
+# Descriptive alias for callers that use the full-batch naming.
+write_rolling_sector_oversold_batch_report = write_sector_repair_summary
+
+
+def _sort_sector_repair_rows(sectors: pd.DataFrame) -> pd.DataFrame:
+    if sectors.empty:
+        return sectors.copy(deep=True)
+    result = sectors.copy(deep=True)
+    state = result.get(
+        "sector_recovery_state", pd.Series("unknown", index=result.index)
+    ).astype("string").fillna("unknown").str.strip().str.casefold()
+    state_order = {
+        "confirmed_repair": 0,
+        "repairing": 1,
+        "expected_repair": 2,
+        "fresh_oversold": 3,
+        "repaired": 4,
+        "structurally_weak": 5,
+        "failed_repair": 6,
+        "unknown": 7,
+    }
+    result["__repair_state_order"] = state.map(state_order).fillna(99)
+    drawdown = _first_numeric_column(
+        result, ("sector_drawdown_60d", "sector_drawdown_252d", "sector_drawdown_120d")
+    )
+    strength = _first_numeric_column(
+        result,
+        ("sector_repairability_score", "sector_direction_score", "sector_oversold_score"),
+    )
+    result["__repair_drawdown"] = drawdown
+    result["__repair_strength"] = strength
+    sort_columns = ["__repair_state_order", "__repair_drawdown", "__repair_strength"]
+    ascending = [True, True, False]
+    for column in ("sector_system", "sector_code"):
+        if column in result:
+            sort_columns.append(column)
+            ascending.append(True)
+    return result.sort_values(sort_columns, ascending=ascending, kind="mergesort", na_position="last").drop(
+        columns=["__repair_state_order", "__repair_drawdown", "__repair_strength"],
+        errors="ignore",
+    ).reset_index(drop=True)
+
+
+def _sort_stock_repair_rows(stocks: pd.DataFrame) -> pd.DataFrame:
+    if stocks.empty:
+        return stocks.copy(deep=True)
+    result = stocks.copy(deep=True)
+    state = result.get(
+        "sector_recovery_state", result.get("stock_lifecycle", pd.Series("unknown", index=result.index))
+    ).astype("string").fillna("unknown").str.strip().str.casefold()
+    result["__repair_state_order"] = state.map(
+        {"confirmed_repair": 0, "repairing": 1, "expected_repair": 2, "fresh_oversold": 3}
+    ).fillna(99)
+    score = pd.to_numeric(result.get("stock_score", pd.Series(pd.NA, index=result.index)), errors="coerce")
+    result["__repair_strength"] = score
+    sort_columns = ["__repair_state_order", "__repair_strength"]
+    ascending = [True, False]
+    if "sector_system" in result:
+        sort_columns.append("sector_system")
+        ascending.append(True)
+    if "sector_code" in result:
+        sort_columns.append("sector_code")
+        ascending.append(True)
+    if "sector_stock_rank" in result:
+        sort_columns.append("sector_stock_rank")
+        ascending.append(True)
+    return result.sort_values(sort_columns, ascending=ascending, kind="mergesort", na_position="last").drop(
+        columns=["__repair_state_order", "__repair_strength"], errors="ignore"
+    ).reset_index(drop=True)
+
+
+def _first_numeric_column(frame: pd.DataFrame, candidates: Sequence[str]) -> pd.Series:
+    for column in candidates:
+        if column in frame:
+            return pd.to_numeric(frame[column], errors="coerce")
+    return pd.Series(float("nan"), index=frame.index, dtype="float64")
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
