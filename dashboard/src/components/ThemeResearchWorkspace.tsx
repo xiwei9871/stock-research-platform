@@ -1,6 +1,7 @@
 import { ArrowLeft, Download, ExternalLink, RefreshCw, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { themeResearchReportPdfUrl } from '../api/client';
+import { fetchAdminThemeResearchReports, themeResearchReportPdfUrl } from '../api/client';
+import type { AdminThemeResearchReport } from '../api/types';
 import {
   fetchThemeResearchClaims,
   fetchThemeResearchCompanies,
@@ -25,6 +26,7 @@ type Props = {
   pathname: string;
   onNavigate: (path: string) => void;
   onOpenStock: (path: string) => void;
+  isAdmin?: boolean;
 };
 
 type RouteState = {
@@ -209,15 +211,15 @@ function statusClass(value: string) {
   return 'is-neutral';
 }
 
-function StatusBadge({ value }: { value: string }) {
-  return <span className={`theme-research-status ${statusClass(value)}`}>{readableStatus(value)}</span>;
+function StatusBadge({ value, prefix = '' }: { value: string; prefix?: string }) {
+  return <span className={`theme-research-status ${statusClass(value)}`}>{prefix}{readableStatus(value)}</span>;
 }
 
 function Score({ value }: { value: number }) {
   return <span className="theme-research-score">{Number.isInteger(value) ? value : value.toFixed(1)}</span>;
 }
 
-export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Props) {
+export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock, isAdmin = false }: Props) {
   const route = parseRoute(pathname);
   const [themes, setThemes] = useState<ThemeResearchThemeCollection | null>(null);
   const [detail, setDetail] = useState<ThemeResearchThemeDetail | null>(null);
@@ -225,6 +227,7 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
   const [sources, setSources] = useState<ThemeResearchSource[]>([]);
   const [claims, setClaims] = useState<ThemeResearchClaim[]>([]);
   const [companies, setCompanies] = useState<ThemeResearchCompany[]>([]);
+  const [pendingReports, setPendingReports] = useState<AdminThemeResearchReport[]>([]);
   const [query, setQuery] = useState('');
   const [nodeState, setNodeState] = useState('');
   const [loading, setLoading] = useState(true);
@@ -241,6 +244,10 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
     setSources([]);
     setClaims([]);
     setCompanies([]);
+    setPendingReports([]);
+    const adminReportsRequest = isAdmin && route && !route.reportVersionId
+      ? fetchAdminThemeResearchReports('pending_review').catch(() => ({ total: 0, items: [] }))
+      : Promise.resolve(null);
     const request = route?.reportVersionId
       ? Promise.resolve()
       : !route
@@ -252,14 +259,16 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
           route.tab === 'nodes' ? fetchThemeResearchNodes(route.themeId) : Promise.resolve(null),
           route.tab === 'sources' ? fetchThemeResearchSources(route.themeId) : Promise.resolve(null),
           route.tab === 'sources' ? fetchThemeResearchClaims(route.themeId) : Promise.resolve(null),
-          route.tab === 'companies' ? fetchThemeResearchCompanies(route.themeId) : Promise.resolve(null)
-        ]).then(([nextDetail, nextNodes, nextSources, nextClaims, nextCompanies]) => {
+          route.tab === 'companies' ? fetchThemeResearchCompanies(route.themeId) : Promise.resolve(null),
+          adminReportsRequest
+        ]).then(([nextDetail, nextNodes, nextSources, nextClaims, nextCompanies, nextPendingReports]) => {
           if (cancelled) return;
           setDetail(nextDetail);
           setNodes(nextNodes?.items ?? []);
           setSources(nextSources?.items ?? []);
           setClaims(nextClaims?.items ?? []);
           setCompanies(nextCompanies?.items ?? []);
+          setPendingReports(nextPendingReports?.items ?? []);
         });
     request
       .catch((reason: unknown) => {
@@ -271,7 +280,7 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
     return () => {
       cancelled = true;
     };
-  }, [pathname, retryVersion]);
+  }, [isAdmin, pathname, retryVersion]);
 
   const filteredThemes = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -377,7 +386,7 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
           <ArrowLeft size={18} aria-hidden="true" />
         </button>
         <div>
-          <div className="theme-research-title-line"><h1>{detail.theme.theme_name}</h1><StatusBadge value={detail.theme.status} /></div>
+          <div className="theme-research-title-line"><h1>{detail.theme.theme_name}</h1><StatusBadge value={detail.theme.status} prefix="主题" /></div>
           <p>{themeSummary(detail.theme.theme_id, detail.theme.summary)}</p>
         </div>
         <time dateTime={detail.theme.last_updated}>更新 {detail.theme.last_updated}</time>
@@ -396,7 +405,13 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
           </button>
         ))}
       </nav>
-      {route.tab === 'overview' ? <Overview detail={detail} onNavigate={onNavigate} /> : null}
+      {route.tab === 'overview' ? (
+        <Overview
+          detail={detail}
+          onNavigate={onNavigate}
+          pendingReport={pendingReports.find((report) => report.theme_id === detail.theme.theme_id) ?? null}
+        />
+      ) : null}
       {route.tab === 'nodes' ? (
         <NodesView nodes={filteredNodes} query={query} setQuery={setQuery} nodeState={nodeState} setNodeState={setNodeState} />
       ) : null}
@@ -410,7 +425,15 @@ function Metric({ label, value, tone = '' }: { label: string; value: number; ton
   return <div className={`theme-research-metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function Overview({ detail, onNavigate }: { detail: ThemeResearchThemeDetail; onNavigate: (path: string) => void }) {
+function Overview({
+  detail,
+  onNavigate,
+  pendingReport
+}: {
+  detail: ThemeResearchThemeDetail;
+  onNavigate: (path: string) => void;
+  pendingReport: AdminThemeResearchReport | null;
+}) {
   const report = detail.theme.analysis_report;
   return (
     <div className="theme-research-view">
@@ -419,6 +442,8 @@ function Overview({ detail, onNavigate }: { detail: ThemeResearchThemeDetail; on
           <h2>分析报告</h2>
           {report.status === 'published' ? (
             <p>版本 {report.version} · 发布于 {report.published_at}</p>
+          ) : pendingReport ? (
+            <p>版本 {pendingReport.version} · 已进入人工审核队列</p>
           ) : (
             <p>研究与报告生成正在后台持续推进，审核发布后即可阅读。</p>
           )}
@@ -443,6 +468,13 @@ function Overview({ detail, onNavigate }: { detail: ThemeResearchThemeDetail; on
                 <Download size={16} aria-hidden="true" /> 下载 PDF
               </a>
             ) : null}
+          </div>
+        ) : pendingReport ? (
+          <div className="theme-report-actions">
+            <span className="theme-research-status is-warning">待审核</span>
+            <button className="icon-text-button" type="button" onClick={() => onNavigate('/admin/theme-research/report-review')}>
+              进入报告审核
+            </button>
           </div>
         ) : (
           <span className="theme-research-status is-warning">研究中</span>

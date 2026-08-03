@@ -660,6 +660,7 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
               pathname={themeResearchPathname}
               onNavigate={navigateThemeResearch}
               onOpenStock={openStockWorkspaceFromThemeResearch}
+              isAdmin={currentUser?.role === 'admin'}
             />
           ) : null}
           {workspaceMode === 'techBottleneckReviewUniverse' ? (
