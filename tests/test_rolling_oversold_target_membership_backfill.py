@@ -466,6 +466,69 @@ def test_ths_detail_constituent_adapter_stops_at_existing_top50_cap(monkeypatch)
     assert frame.attrs["source_contract_complete"] is True
 
 
+def test_ths_detail_repeated_page_fails_closed_before_member_cap(monkeypatch):
+    def page_html(page: int) -> str:
+        # Page 2 repeats page 1 while claiming a different page number.
+        return (
+            "<html><body><span class='page_info'>"
+            f"{page}/3</span><table class='m-table m-pager-table'><tbody>"
+            "<tr><td>1</td><td>000001</td><td>样本</td></tr>"
+            "</tbody></table></body></html>"
+        )
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+
+        def __init__(self, page: int):
+            self.text = page_html(page)
+
+    seen_pages: list[int] = []
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            page = int(url.split("/page/")[1].split("/")[0])
+            seen_pages.append(page)
+            return FakeResponse(page)
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+
+    with pytest.raises(RuntimeError, match="duplicate_or_stalled_page"):
+        backfill.fetch_ths_detail_constituents("300238")
+    assert seen_pages == [1, 2]
+
+
+def test_ths_detail_page_number_mismatch_fails_closed(monkeypatch):
+    pages = {
+        1: "1/2",
+        2: "3/2",
+    }
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+
+        def __init__(self, page: int):
+            self.text = (
+                "<html><body><span class='page_info'>"
+                f'{pages[page]}</span><table class="m-table m-pager-table"><tbody>'
+                f"<tr><td>{page}</td><td>{page:06d}</td><td>样本</td></tr>"
+                "</tbody></table></body></html>"
+            )
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            page = int(url.split("/page/")[1].split("/")[0])
+            return FakeResponse(page)
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+
+    with pytest.raises(RuntimeError, match="page_mismatch"):
+        backfill.fetch_ths_detail_constituents("300238")
+
+
 def test_target_summary_audits_concepts_reaching_source_member_cap(monkeypatch, tmp_path: Path):
     source_frame = pd.DataFrame([{"代码": "000001", "名称": "样本"}])
     source_frame.attrs["member_cap_applied"] = True
@@ -610,6 +673,7 @@ def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: P
         yield FakeConnection()
 
     execute_many_calls: list[tuple[str, list[tuple[object, ...]]]] = []
+    execute_calls: list[tuple[str, list[object]]] = []
     monkeypatch.setattr(backfill, "connect", fake_connect)
     monkeypatch.setattr(
         backfill,
@@ -631,7 +695,11 @@ def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: P
         "execute_many",
         lambda conn, sql, rows: execute_many_calls.append((sql, list(rows))),
     )
-    monkeypatch.setattr(backfill, "execute", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda conn, sql, params: execute_calls.append((sql, list(params))),
+    )
 
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
@@ -643,6 +711,11 @@ def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: P
 
     membership_sql = next(sql for sql, _rows in execute_many_calls if "concept_membership" in sql)
     assert "ON CONFLICT (asset_id, concept_system, concept_code, start_date)" in membership_sql
+    close_sql, close_params = execute_calls[0]
+    assert "UPDATE core.concept_membership" in close_sql
+    assert "NOT (asset_id = ANY" not in close_sql
+    assert close_params == [date(2026, 7, 31), "ths", "300238", date(2026, 7, 31)]
+    assert result["database_writes"] == 3
     assert result["upsert_conflict_key"] == [
         "asset_id",
         "concept_system",

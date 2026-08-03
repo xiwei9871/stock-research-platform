@@ -150,6 +150,10 @@ dropped. If any source code is missing or any concept response fails/has an
 invalid empty schema, execution is fail-closed: the summary reports
 `write_blocked=true`, `write_blocked_reason=source_incomplete`, and performs no
 board, membership, or history-close write.
+For each successful concept, the current cutoff snapshot is upserted first and
+then every older active membership row (`start_date < trade_date`) is closed at
+the cutoff; this deliberately removes stale duplicate active rows while
+leaving failed or missing concepts untouched.
 Execute explicitly with `--execute`. Board and membership writes share one
 database transaction, with the membership conflict key
 `(asset_id, concept_system, concept_code, start_date)`, so an identical rerun

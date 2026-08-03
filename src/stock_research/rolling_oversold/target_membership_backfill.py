@@ -85,7 +85,6 @@ WHERE concept_system = %s
   AND concept_code = %s
   AND end_date IS NULL
   AND start_date < %s
-  AND NOT (asset_id = ANY(%s))
 """
 
 ASSET_MASTER_SQL = """
@@ -265,9 +264,14 @@ def fetch_ths_detail_constituents(
         first_url = _ths_detail_url(code, 1)
         first_response = session.get(first_url, headers=headers, timeout=timeout_seconds)
         first_soup = _validate_ths_response(first_response)
-        total_pages = _parse_ths_total_pages(first_soup)
+        total_pages = _parse_ths_total_pages(first_soup, expected_page=1)
         rows: list[dict[str, str]] = []
-        rows.extend(_parse_ths_detail_table(first_soup))
+        seen_codes: set[str] = set()
+        _append_new_ths_page_rows(
+            rows,
+            _parse_ths_detail_table(first_soup),
+            seen_codes,
+        )
         if len(rows) >= THS_MEMBER_CAP:
             rows = rows[:THS_MEMBER_CAP]
         for page in range(2, total_pages + 1):
@@ -279,8 +283,11 @@ def fetch_ths_detail_constituents(
                 timeout=timeout_seconds,
             )
             soup = _validate_ths_response(response)
+            page_total = _parse_ths_total_pages(soup, expected_page=page)
+            if page_total != total_pages:
+                raise RuntimeError("page_count_mismatch")
             page_rows = _parse_ths_detail_table(soup)
-            rows.extend(page_rows)
+            _append_new_ths_page_rows(rows, page_rows, seen_codes)
             if len(rows) >= THS_MEMBER_CAP:
                 rows = rows[:THS_MEMBER_CAP]
                 break
@@ -337,16 +344,45 @@ def _validate_ths_response(response: Any):
     return soup
 
 
-def _parse_ths_total_pages(soup: Any) -> int:
+def _append_new_ths_page_rows(
+    rows: list[dict[str, str]],
+    page_rows: Iterable[Mapping[str, str]],
+    seen_codes: set[str],
+) -> None:
+    """Append one page while rejecting a repeated/stalled page.
+
+    THS occasionally returns the previous page (or a challenge response that
+    parses as the same table) without changing the page number.  Treating
+    that as a successful empty delta would silently produce an incomplete
+    snapshot, so every page before the member cap must contribute a new code.
+    """
+
+    page_codes = {str(row.get("代码") or "").strip() for row in page_rows}
+    page_codes.discard("")
+    new_codes = page_codes - seen_codes
+    if not new_codes:
+        raise RuntimeError("duplicate_or_stalled_page")
+    for row in page_rows:
+        code = str(row.get("代码") or "").strip()
+        if not code or code in seen_codes:
+            continue
+        seen_codes.add(code)
+        rows.append(dict(row))
+
+
+def _parse_ths_total_pages(soup: Any, *, expected_page: int | None = None) -> int:
     page_info = soup.select_one(".m-page .page_info") or soup.select_one(".page_info")
     text = page_info.get_text(" ", strip=True) if page_info is not None else ""
-    match = re.search(r"/\s*(\d+)", text)
+    match = re.search(r"(\d+)\s*/\s*(\d+)", text)
     if match is None:
         table = soup.select_one(".m-table.m-pager-table")
-        if table is not None and _table_has_code_row(table):
+        if expected_page in (None, 1) and table is not None and _table_has_code_row(table):
             return 1
         raise RuntimeError("page_count_unavailable")
-    total = int(match.group(1))
+    current = int(match.group(1))
+    total = int(match.group(2))
+    if expected_page is not None and current != expected_page:
+        raise RuntimeError("page_mismatch")
     if total < 1 or total > 10000:
         raise RuntimeError("invalid_page_count")
     return total
@@ -629,11 +665,11 @@ def run_target_membership_backfill(
             if membership_rows:
                 execute_many(conn, MEMBERSHIP_UPSERT_SQL, membership_rows)
                 database_writes += len(membership_rows)
-            for code, assets in valid_assets_by_concept.items():
+            for code in valid_assets_by_concept:
                 # ``source_members`` is populated only after a successful
                 # constituent response; failed/missing concepts never enter
                 # this loop and therefore cannot close historical membership.
-                execute(conn, CLOSE_MEMBERSHIP_SQL, [cutoff, TARGET_CONCEPT_SYSTEM, code, cutoff, assets])
+                execute(conn, CLOSE_MEMBERSHIP_SQL, [cutoff, TARGET_CONCEPT_SYSTEM, code, cutoff])
                 database_writes += 1
 
     out_of_scope_bse = sorted(set(out_of_scope_bse))
