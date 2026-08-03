@@ -222,6 +222,16 @@ def test_evaluate_snapshot_excludes_blocked_and_invalidated_rows_from_calibratio
     summary = summarize_rolling_evaluation(pd.concat([eligible, blocked, invalidated]))
     overall = summary.loc[summary["group_by"].eq("overall")].iloc[0]
     assert overall[["total_count", "complete_count", "pending_count", "excluded_count"]].tolist() == [3, 1, 0, 2]
+
+
+def test_evaluate_snapshot_preserves_blocked_precedence_when_both_statuses_apply():
+    detail = evaluate_snapshot(
+        _snapshot(gate_status="blocked", lifecycle="invalidated"),
+        bars=_bars([("2026-07-22", 10.2)]),
+        evaluation_cutoff=date(2026, 7, 22),
+        horizons=[1],
+    )
+    assert detail.loc[0, "evaluation_status"] == "excluded_blocked"
     with pytest.raises(ValueError, match="bars trade_date"):
         evaluate_snapshot(
             _snapshot(),

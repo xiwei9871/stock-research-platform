@@ -115,6 +115,20 @@ def test_sector_evaluator_uses_research_eligibility_over_legacy_gate():
     assert not detail["status"].str.startswith("excluded").any()
 
 
+def test_sector_evaluator_excludes_blocked_data_before_missing_source_validation():
+    snapshot = _snapshot()
+    snapshot["stock_candidates"] = snapshot["stock_candidates"].copy()
+    snapshot["stock_candidates"].loc[1, "sector_research_eligibility"] = "blocked_data"
+    snapshot["stock_candidates"].loc[1, "sector_gate_status"] = "confirmed"
+    snapshot["stock_candidates"].loc[1, "adjusted_close_source"] = pd.NA
+    detail = evaluate_sector_snapshot(
+        snapshot, bars=_bars(), evaluation_cutoff=date(2026, 8, 1), horizons=(1,)
+    )
+    assert detail.loc[detail["sector_code"].eq("B"), "status"].eq(
+        "excluded_blocked_data"
+    ).all()
+
+
 def test_sector_summary_has_sector_and_sector_stock_rank_buckets_and_metrics():
     detail = evaluate_sector_snapshot(
         _snapshot(), bars=_bars(), evaluation_cutoff=date(2026, 8, 3), horizons=(1, 3)

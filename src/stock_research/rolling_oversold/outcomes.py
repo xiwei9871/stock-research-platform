@@ -113,7 +113,9 @@ def evaluate_snapshot(
     if not isinstance(bars, pd.DataFrame):
         raise TypeError("bars must be a pandas DataFrame")
     candidate_rows = _normalize_candidates(
-        candidates, allow_duplicate_assets=allow_duplicate_assets
+        candidates,
+        allow_duplicate_assets=allow_duplicate_assets,
+        sector_mode=_sector_eligibility_mode,
     )
     sources = {
         row["adjusted_close_source"]
@@ -575,7 +577,10 @@ def _normalize_horizons(horizons: Sequence[int]) -> tuple[int, ...]:
 
 
 def _normalize_candidates(
-    candidates: pd.DataFrame, *, allow_duplicate_assets: bool = False
+    candidates: pd.DataFrame,
+    *,
+    allow_duplicate_assets: bool = False,
+    sector_mode: bool = False,
 ) -> pd.DataFrame:
     required = {"asset_id", "anchor_close"}
     missing = required - set(candidates.columns)
@@ -601,7 +606,8 @@ def _normalize_candidates(
         result["adjusted_close_source"] = pd.NA
     result["adjusted_close_source"] = result["adjusted_close_source"].astype("string").str.strip().replace("", pd.NA)
     excluded = result.apply(
-        lambda row: _evaluation_exclusion(row.to_dict()) is not None, axis=1
+        lambda row: _evaluation_exclusion(row.to_dict(), sector_mode=sector_mode) is not None,
+        axis=1,
     )
     invalid_source = (
         result["adjusted_close_source"].isna() | ~result["adjusted_close_source"].isin(_PRICE_SOURCES)
@@ -729,6 +735,12 @@ def _anchor_close(value: object) -> tuple[float, str, str]:
 def _evaluation_exclusion(
     candidate: dict[str, object], *, sector_mode: bool = False
 ) -> str | None:
+    # Preserve the legacy evaluator's precedence for rows carrying both
+    # statuses.  Sector mode intentionally bypasses this legacy gate below so
+    # a research-visible sector is not discarded merely because the old gate
+    # is blocked.
+    if not sector_mode and str(candidate["sector_gate_status"]).strip().lower() == "blocked":
+        return "excluded_blocked"
     if str(candidate["stock_lifecycle"]).strip().lower() == "invalidated":
         return "excluded_invalidated"
     if sector_mode:
