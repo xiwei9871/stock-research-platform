@@ -218,6 +218,7 @@ def _score_one_sector(
     trend_features = _trend_features(closes, dates)
     volume_features = _volume_features(volumes, amounts)
     breadth_features = _breadth_features(sector)
+    breadth_data_status = breadth_features.pop("_breadth_data_status", "ok")
     features = {
         "sector_system": mapping["sector_system"], "sector_code": mapping["sector_code"],
         "sector_name": mapping["sector_name"], "sector_mapping_valid": mapping["valid"],
@@ -247,7 +248,9 @@ def _score_one_sector(
     features.update(volume_features)
     features.update(breadth_features)
     features["sector_feature_data_status"] = _feature_data_status(
-        features, history_observations=history
+        features,
+        history_observations=history,
+        breadth_data_status=breadth_data_status,
     )
     return features
 
@@ -353,11 +356,18 @@ def _research_eligibility(row: pd.Series) -> str:
     return "watch"
 
 
-def _feature_data_status(features: dict[str, object], *, history_observations: int) -> str:
+def _feature_data_status(
+    features: dict[str, object],
+    *,
+    history_observations: int,
+    breadth_data_status: str = "ok",
+) -> str:
     """Classify whether required repair features are publishable at this cutoff."""
 
     if pd.isna(features.get("sector_volume_ratio_5_20")):
         return "missing_volume"
+    if breadth_data_status != "ok":
+        return breadth_data_status
     if any(
         pd.isna(features.get(column)) for column in _REQUIRED_REPAIR_FEATURE_COLUMNS
     ):
@@ -508,8 +518,10 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
         "sector_leader_return_5d": float("nan"),
         "sector_leader_breadth": float("nan"),
         "sector_dispersion_20d": float("nan"),
+        "_breadth_data_status": "ok",
     }
     if not isinstance(sector_frame, pd.DataFrame) or sector_frame.empty:
+        result["_breadth_data_status"] = "insufficient_history"
         return result
     frame = (
         sector_frame.sort_values("trade_date", kind="mergesort")
@@ -518,13 +530,23 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
     )
     closes = _numeric_series(frame.get("close", []))
     if len(closes) < _MIN_FEATURE_HISTORY:
+        result["_breadth_data_status"] = "insufficient_history"
         return result
     if closes.tail(min(20, len(closes))).isna().any() or pd.isna(closes.iloc[-1]):
+        result["_breadth_data_status"] = "missing_feature_data"
         return result
+
+    breadth_status = "ok"
+    count_windows: dict[str, tuple[bool, pd.Series, bool]] = {}
+    for column in ("up_count", "down_count", "new_low_count"):
+        count_windows[column] = _count_window_ratio(frame, column, window=20)
+        present, _, complete = count_windows[column]
+        if present and not complete:
+            breadth_status = "missing_feature_data"
+
     daily_up = np.diff(closes.to_numpy(dtype=float)) > 0
-    has_up_counts = {"up_count", "stock_count"}.issubset(frame.columns)
-    count_ratio = _count_ratio(frame, "up_count")
-    if count_ratio is not None:
+    has_up_counts, count_ratio, up_complete = count_windows["up_count"]
+    if has_up_counts and up_complete:
         result["sector_up_ratio_1d"] = float(count_ratio.iloc[-1])
         result["sector_up_ratio_5d"] = float(count_ratio.tail(5).mean())
         result["sector_up_ratio_20d"] = float(count_ratio.tail(20).mean())
@@ -540,26 +562,34 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
             if not valid.empty:
                 result[output] = float(valid.tail(20).mean())
     for window, output in ((20, "sector_new_low_ratio_20d"), (60, "sector_new_low_ratio_60d")):
-        count_ratio = _count_ratio(frame, "new_low_count")
-        if count_ratio is not None:
+        has_new_low_counts, count_ratio, new_low_complete = count_windows["new_low_count"]
+        if has_new_low_counts and new_low_complete:
             result[output] = float(count_ratio.tail(window).mean())
-        elif "new_low_count" not in frame or "stock_count" not in frame:
+        elif not has_new_low_counts:
             result[output] = float(
                 closes.iloc[-1] <= np.min(closes.to_numpy(dtype=float)[-window:])
             )
 
     for period in (1, 3, 5):
-        result[f"sector_leader_return_{period}d"] = _last_optional_feature(
-            frame,
-            (
-                f"leader_return_{period}d",
-                f"sector_leader_return_{period}d",
-                f"top_return_{period}d",
-            ),
+        leader_columns = (
+            f"leader_return_{period}d",
+            f"sector_leader_return_{period}d",
+            f"top_return_{period}d",
         )
+        result[f"sector_leader_return_{period}d"] = _last_optional_feature(
+            frame, leader_columns
+        )
+        if any(column in frame for column in leader_columns) and pd.isna(
+            result[f"sector_leader_return_{period}d"]
+        ):
+            breadth_status = "missing_feature_data"
     result["sector_leader_breadth"] = _last_optional_feature(
         frame, ("leader_breadth", "sector_leader_breadth")
     )
+    if any(column in frame for column in ("leader_breadth", "sector_leader_breadth")) and pd.isna(
+        result["sector_leader_breadth"]
+    ):
+        breadth_status = "missing_feature_data"
     if (
         pd.isna(result["sector_leader_breadth"])
         and "leader_count" in frame
@@ -570,17 +600,23 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
         ratio = leader_count / stock_count.replace(0, np.nan)
         if not ratio.empty and pd.notna(ratio.iloc[-1]):
             result["sector_leader_breadth"] = float(ratio.iloc[-1])
+        else:
+            breadth_status = "missing_feature_data"
 
-    supplied_dispersion = pd.to_numeric(
-        frame.get("dispersion_20d", pd.Series(pd.NA, index=frame.index)), errors="coerce"
-    ).dropna()
-    if not supplied_dispersion.empty:
-        result["sector_dispersion_20d"] = float(supplied_dispersion.tail(20).mean())
+    if "dispersion_20d" in frame:
+        supplied_dispersion = pd.to_numeric(frame["dispersion_20d"], errors="coerce")
+        dispersion_window = supplied_dispersion.tail(min(20, len(supplied_dispersion)))
+        if not dispersion_window.empty and not dispersion_window.isna().any():
+            result["sector_dispersion_20d"] = float(dispersion_window.mean())
+        else:
+            breadth_status = "missing_feature_data"
     elif len(closes) >= 3:
-        returns = np.diff(closes[-20:]) / closes[-20:-1]
+        close_values = closes.to_numpy(dtype=float)
+        returns = np.diff(close_values[-20:]) / close_values[-20:-1]
         result["sector_dispersion_20d"] = (
             float(np.std(returns)) if len(returns) else float("nan")
         )
+    result["_breadth_data_status"] = breadth_status
     return result
 
 
@@ -666,13 +702,27 @@ def _count_ratio(frame: pd.DataFrame, numerator_column: str) -> pd.Series | None
     return ratio if not ratio.empty and pd.notna(ratio.iloc[-1]) else None
 
 
+def _count_window_ratio(
+    frame: pd.DataFrame, numerator_column: str, *, window: int
+) -> tuple[bool, pd.Series, bool]:
+    if numerator_column not in frame or "stock_count" not in frame:
+        return False, pd.Series(dtype="float64"), False
+    numerator = pd.to_numeric(frame[numerator_column], errors="coerce")
+    denominator = pd.to_numeric(frame["stock_count"], errors="coerce").replace(0, np.nan)
+    ratio = numerator / denominator
+    recent = ratio.tail(min(window, len(ratio)))
+    return True, ratio, bool(not recent.empty and not recent.isna().any())
+
+
 def _last_optional_feature(frame: pd.DataFrame, columns: tuple[str, ...]) -> float:
     for column in columns:
         if column not in frame:
             continue
-        values = pd.to_numeric(frame[column], errors="coerce").dropna()
-        if not values.empty:
-            return float(values.iloc[-1])
+        values = pd.to_numeric(frame[column], errors="coerce")
+        recent = values.tail(min(20, len(values)))
+        if not recent.empty and not recent.isna().any():
+            return float(recent.iloc[-1])
+        return float("nan")
     return float("nan")
 
 
@@ -704,8 +754,8 @@ def _position(values: np.ndarray, window: int) -> float:
 def _breadth_or_price(sector: pd.DataFrame, closes: np.ndarray, window: int) -> float:
     has_counts = {"down_count", "stock_count"}.issubset(sector.columns)
     if has_counts:
-        ratios = sector["down_count"] / sector["stock_count"].replace(0, np.nan)
-        if not ratios.empty and pd.notna(ratios.iloc[-1]):
+        _, ratios, complete = _count_window_ratio(sector, "down_count", window=window)
+        if complete:
             return float(ratios.tail(window).mean())
         return float("nan")
     if len(closes) < _MIN_FEATURE_HISTORY or not np.isfinite(closes).all():
@@ -717,8 +767,8 @@ def _breadth_or_price(sector: pd.DataFrame, closes: np.ndarray, window: int) -> 
 def _new_low_ratio(sector: pd.DataFrame, closes: np.ndarray) -> float:
     has_counts = {"new_low_count", "stock_count"}.issubset(sector.columns)
     if has_counts:
-        ratios = sector["new_low_count"] / sector["stock_count"].replace(0, np.nan)
-        return float(ratios.iloc[-1]) if not ratios.empty and pd.notna(ratios.iloc[-1]) else float("nan")
+        _, ratios, complete = _count_window_ratio(sector, "new_low_count", window=60)
+        return float(ratios.iloc[-1]) if complete else float("nan")
     if len(closes) < _MIN_FEATURE_HISTORY or not np.isfinite(closes).all():
         return float("nan")
     return float(closes[-1] <= np.min(closes[-60:]))
@@ -727,8 +777,8 @@ def _new_low_ratio(sector: pd.DataFrame, closes: np.ndarray) -> float:
 def _up_ratio(sector: pd.DataFrame, closes: np.ndarray) -> float:
     has_counts = {"up_count", "stock_count"}.issubset(sector.columns)
     if has_counts:
-        ratios = sector["up_count"] / sector["stock_count"].replace(0, np.nan)
-        if not ratios.empty and pd.notna(ratios.iloc[-1]):
+        _, ratios, complete = _count_window_ratio(sector, "up_count", window=20)
+        if complete:
             return float(ratios.tail(20).mean())
         return float("nan")
     if len(closes) < _MIN_FEATURE_HISTORY or not np.isfinite(closes).all():
