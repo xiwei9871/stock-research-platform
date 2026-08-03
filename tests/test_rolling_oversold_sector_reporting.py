@@ -72,3 +72,36 @@ def test_sector_repair_summary_contains_nuclear_and_repair_labels_and_is_sorted(
     assert "expected_repair" in text
     assert "backfill" in text.lower()
     assert text.index("confirmed_repair") < text.index("expected_repair")
+
+
+def test_sector_repair_summary_uses_canonical_drawdown_columns_for_sorting(tmp_path):
+    sectors = pd.DataFrame(
+        [
+            {
+                "sector_system": "ths",
+                "sector_code": "deep",
+                "sector_name": "深跌板块",
+                "sector_recovery_state": "repairing",
+                "drawdown_60d": -0.55,
+                "sector_repairability_score": 70.0,
+            },
+            {
+                "sector_system": "ths",
+                "sector_code": "shallow",
+                "sector_name": "浅跌板块",
+                "sector_recovery_state": "repairing",
+                "drawdown_60d": -0.20,
+                "sector_repairability_score": 90.0,
+            },
+        ]
+    )
+    report = write_sector_repair_summary(
+        output_dir=tmp_path,
+        sector_board=sectors,
+        stock_candidates=pd.DataFrame(),
+        anchor_date="2026-07-31",
+    )
+
+    text = report.read_text(encoding="utf-8")
+    assert text.index("深跌板块") < text.index("浅跌板块")
+    assert "drawdown_60d" in text

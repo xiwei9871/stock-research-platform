@@ -274,7 +274,9 @@ def write_sector_repair_summary(
                 "sector_code",
                 "sector_name",
                 "sector_research_eligibility",
+                "drawdown_60d",
                 "sector_drawdown_60d",
+                "drawdown_252d",
                 "sector_drawdown_252d",
                 "sector_oversold_score",
                 "sector_repairability_score",
@@ -348,7 +350,15 @@ def _sort_sector_repair_rows(sectors: pd.DataFrame) -> pd.DataFrame:
     }
     result["__repair_state_order"] = state.map(state_order).fillna(99)
     drawdown = _first_numeric_column(
-        result, ("sector_drawdown_60d", "sector_drawdown_252d", "sector_drawdown_120d")
+        result,
+        (
+            "drawdown_60d",
+            "sector_drawdown_60d",
+            "drawdown_252d",
+            "sector_drawdown_252d",
+            "drawdown_120d",
+            "sector_drawdown_120d",
+        ),
     )
     strength = _first_numeric_column(
         result,
