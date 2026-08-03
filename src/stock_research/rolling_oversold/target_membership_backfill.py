@@ -601,6 +601,21 @@ def run_target_membership_backfill(
             )
             candidate_assets.add(raw_asset)
 
+        if not source_members[code]:
+            failed_concepts.append(code)
+            detail_rows.append(
+                _detail(
+                    code,
+                    board["concept_name"],
+                    "",
+                    "source_failed",
+                    "no_valid_non_bj_source_members",
+                )
+            )
+            # A source response containing only BSE members is not a valid
+            # snapshot for this strategy.  Do not let it close old history.
+            source_members.pop(code, None)
+
     master_rows = (
         list(load_master(sorted(candidate_assets), cutoff, service))
         if candidate_assets
@@ -631,6 +646,25 @@ def run_target_membership_backfill(
             valid_rows.append(item)
             valid_assets_by_concept[code].append(asset_id)
             detail_rows.append(_detail(code, item["concept_name"], asset_id, "valid", ""))
+
+    for code in list(valid_assets_by_concept):
+        if valid_assets_by_concept[code]:
+            continue
+        board = boards_by_code[code]
+        failed_concepts.append(code)
+        detail_rows.append(
+            _detail(
+                code,
+                board["concept_name"],
+                "",
+                "source_failed",
+                "no_valid_non_bj_pit_members",
+            )
+        )
+        # A source response whose every member fails PIT/master eligibility is
+        # incomplete for the frozen snapshot.  Preserve prior history by
+        # excluding the concept from the history-close loop.
+        del valid_assets_by_concept[code]
 
     # Deduplicate the source while retaining deterministic concept order.
     valid_rows = _dedupe_memberships(valid_rows)

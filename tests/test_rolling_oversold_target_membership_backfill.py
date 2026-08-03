@@ -237,6 +237,91 @@ def test_900xxx_is_audited_without_being_written(monkeypatch, tmp_path: Path):
     assert result["valid_non_bj_memberships"] == 1
 
 
+@pytest.mark.parametrize("source_row", [{"代码": "920001"}, {"代码": "900001"}])
+def test_concept_with_only_out_of_scope_members_is_failed_closed(
+    monkeypatch, tmp_path: Path, source_row: dict[str, str]
+):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_constituents",
+        lambda symbol: pd.DataFrame([source_row]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: pytest.fail("out-of-scope-only source must not write"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda *args, **kwargs: pytest.fail("out-of-scope-only source must not close history"),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["failed_concepts"] == ["300238"]
+    assert result["write_blocked"] is True
+    assert result["write_blocked_reason"] == "source_incomplete"
+    assert result["database_writes"] == 0
+    assert result["valid_non_bj_memberships"] == 0
+
+
+def test_concept_with_only_pit_ineligible_members_is_failed_closed(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_constituents",
+        lambda symbol: pd.DataFrame([{"代码": "000001", "名称": "已失效样本"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [
+            _master("CN:SZ:000001", is_active=False)
+        ],
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: pytest.fail("PIT-ineligible source must not write"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda *args, **kwargs: pytest.fail("PIT-ineligible source must not close history"),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["failed_concepts"] == ["300238"]
+    assert result["invalid_status_counts"] == {"inactive_pit": 1}
+    assert result["write_blocked"] is True
+    assert result["write_blocked_reason"] == "source_incomplete"
+    assert result["database_writes"] == 0
+    assert result["valid_non_bj_memberships"] == 0
+
+
 @pytest.mark.parametrize(
     "malformed_response",
     [
