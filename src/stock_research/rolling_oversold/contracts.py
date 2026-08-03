@@ -116,6 +116,11 @@ class RollingOversoldConfig:
     score_version: str = "rolling_oversold_v1"
     adjust_type: str = "qfq"
     runtime_budget_seconds: int = 3600
+    # Full-sector batch publication is deliberately separate from the
+    # compatibility ``stock_top_n`` setting used by the legacy mixed-universe
+    # path.  Appending the field keeps positional construction of the old
+    # config compatible.
+    sector_output_top_n: int = 10
 
     def __post_init__(self) -> None:
         _validate_date("anchor_start_date", self.anchor_start_date)
@@ -147,6 +152,7 @@ class RollingOversoldConfig:
 
         _validate_positive_integer("sector_top_n", self.sector_top_n)
         _validate_positive_integer("stock_top_n", self.stock_top_n)
+        _validate_positive_integer("sector_output_top_n", self.sector_output_top_n)
         _validate_open_unit_interval("repair_trigger_return", self.repair_trigger_return)
         _validate_open_unit_interval("residual_high_distance", self.residual_high_distance)
         if not isinstance(self.score_version, str) or not self.score_version.strip():

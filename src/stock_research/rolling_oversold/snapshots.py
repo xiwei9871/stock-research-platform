@@ -106,6 +106,10 @@ _ARTIFACT_NAMES = (
     "preflight.json",
     "backfill_requests.csv",
 )
+_BATCH_ARTIFACT_NAMES = (
+    "sector_daily_board.csv",
+    "sector_stock_candidates.csv",
+)
 _LEGACY_SECTOR_SCHEMA_ATTR = "_legacy_sector_schema"
 _LEGACY_REMOVED_SECTOR_KEYS_ATTR = "_legacy_removed_sector_keys"
 _LEGACY_SECTOR_SCHEMA_MANIFEST_KEY = "legacy_sector_schema"
@@ -120,6 +124,7 @@ def build_rolling_snapshot(
     previous_snapshot: dict[str, object] | None,
     score_version: str,
     runtime_metadata: Mapping[str, object] | None = None,
+    batch_mode: bool = False,
 ) -> dict[str, object]:
     """Build a normalized snapshot; same inputs are byte-stable."""
 
@@ -146,10 +151,17 @@ def build_rolling_snapshot(
         raise ValueError("market_regime must include a non-empty market_regime value")
     regime["market_regime"] = market_state.strip()
     snapshot_id = f"{score_version}|{anchor_date.isoformat()}"
-    previous_id, previous_stocks, previous_sectors = _previous_rows(previous_snapshot)
+    previous_id, previous_stocks, previous_sectors = _previous_rows(
+        previous_snapshot,
+        batch_mode=batch_mode,
+    )
 
     sectors = _normalize_sector_rows(sector_states)
-    stocks = _normalize_stock_rows(stock_candidates)
+    stocks = _normalize_stock_rows(
+        stock_candidates,
+        allow_duplicate_assets=batch_mode,
+        batch_mode=batch_mode,
+    )
     legacy_sector_schema = bool(sectors.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
     legacy_stock_schema = bool(stocks.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
     stocks = _apply_stock_metadata(
@@ -166,6 +178,7 @@ def build_rolling_snapshot(
         stocks,
         previous_stocks,
         previous_id,
+        batch_mode=batch_mode,
         snapshot_id=snapshot_id,
         anchor_date=anchor_date,
         data_cutoff_date=data_cutoff_date,
@@ -176,6 +189,7 @@ def build_rolling_snapshot(
         sectors.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     if legacy_stock_schema:
         stocks.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
+    stocks = _hydrate_stock_sector_context(stocks, sectors)
     _validate_stock_sector_context(stocks, sectors, previous_snapshot_id=previous_id)
 
     preflight = _normalize_preflight(regime.pop("preflight", None))
@@ -203,20 +217,34 @@ def write_rolling_snapshot(
     additional_artifacts: Mapping[str, bytes] | None = None,
     runtime_metadata_supplier: Callable[[], Mapping[str, object]] | None = None,
     runtime_publish_guard: Callable[[], object] | None = None,
+    batch_artifacts: bool = False,
+    batch_mode: bool | None = None,
 ) -> dict[str, object]:
     """Write one anchor directory without replacing an existing different snapshot."""
 
-    normalized = _validate_snapshot_for_write(snapshot)
+    if batch_mode is not None:
+        batch_artifacts = bool(batch_mode)
+    normalized = _validate_snapshot_for_write(snapshot, batch_mode=batch_artifacts)
     destination = (
         Path(output_dir).expanduser().resolve()
         / "rolling_sector_oversold"
         / f"anchor={normalized['anchor_date']}"
         / f"version={normalized['score_version']}"
     )
-    artifact_bytes = _artifact_bytes(normalized)
+    artifact_bytes = _artifact_bytes(normalized, batch_artifacts=batch_artifacts)
     extra_artifacts = _normalize_additional_artifacts(additional_artifacts)
     artifact_bytes.update(extra_artifacts)
-    artifact_names = tuple((*_ARTIFACT_NAMES, *extra_artifacts))
+    artifact_names = tuple(
+        (*_ARTIFACT_NAMES, *(_BATCH_ARTIFACT_NAMES if batch_artifacts else ()), *extra_artifacts)
+    )
+    manifest_row_counts = dict(normalized["row_counts"])
+    if batch_artifacts:
+        manifest_row_counts.update(
+            {
+                "sector_daily_board": int(len(normalized["sector_states"])),
+                "sector_stock_candidates": int(len(normalized["stock_candidates"])),
+            }
+        )
     manifest = {
         "snapshot_id": normalized["snapshot_id"],
         "anchor_date": normalized["anchor_date"],
@@ -224,7 +252,7 @@ def write_rolling_snapshot(
         "score_version": normalized["score_version"],
         "previous_snapshot_id": normalized["previous_snapshot_id"],
         "runtime_metadata": normalized["runtime_metadata"],
-        "row_counts": normalized["row_counts"],
+        "row_counts": manifest_row_counts,
         "artifact_hashes": {
             name: hashlib.sha256(contents).hexdigest() for name, contents in artifact_bytes.items()
         },
@@ -304,6 +332,8 @@ def write_rolling_snapshot(
 
 def _previous_rows(
     previous_snapshot: dict[str, object] | None,
+    *,
+    batch_mode: bool = False,
 ) -> tuple[str | None, pd.DataFrame | None, pd.DataFrame | None]:
     if previous_snapshot is None:
         return None, None, None
@@ -322,7 +352,11 @@ def _previous_rows(
         stocks = stocks.loc[stocks["stock_rank"].notna()].copy()
     if "sector_rank" in sectors:
         sectors = sectors.loc[sectors["sector_rank"].notna()].copy()
-    return previous_id, _normalize_stock_rows(stocks), _normalize_sector_rows(sectors)
+    return previous_id, _normalize_stock_rows(
+        stocks,
+        allow_duplicate_assets=batch_mode,
+        batch_mode=batch_mode,
+    ), _normalize_sector_rows(sectors)
 
 
 def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
@@ -341,7 +375,15 @@ def _ensure_sector_contract_columns(frame: pd.DataFrame, label: str) -> bool:
     )
     _require_columns(frame, base_columns, label)
     supplied_features = set(frame.columns).intersection(SECTOR_FEATURE_COLUMNS)
-    legacy = bool(frame.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR)) or not supplied_features
+    # Stock rows are a denormalized view of the sector context.  Older callers
+    # may provide only a subset of repair columns; those cells are hydrated
+    # from the canonical sector row before cross-artifact validation.  Sector
+    # board rows remain strict when they explicitly provide only part of v2.
+    legacy = (
+        bool(frame.attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR))
+        or not supplied_features
+        or label == "stock_candidates"
+    )
     if not legacy:
         _require_columns(frame, _SECTOR_INPUT_COLUMNS, label)
         return False
@@ -420,10 +462,15 @@ def _normalize_sector_feature_values(frame: pd.DataFrame, label: str) -> None:
 
 
 def _normalize_stock_rows(
-    frame: pd.DataFrame, *, allow_revision_rows: bool = False
+    frame: pd.DataFrame,
+    *,
+    allow_revision_rows: bool = False,
+    allow_duplicate_assets: bool = False,
+    batch_mode: bool = False,
 ) -> pd.DataFrame:
     if frame.empty:
-        return pd.DataFrame(columns=_STOCK_COLUMNS)
+        columns = (*_STOCK_COLUMNS, "sector_stock_rank") if batch_mode else _STOCK_COLUMNS
+        return pd.DataFrame(columns=columns)
     result = frame.copy(deep=True)
     legacy_sector_schema = _ensure_sector_contract_columns(result, "stock_candidates")
     _normalize_string_columns(result, ("asset_id", "sector_system", "sector_code", "sector_name"))
@@ -484,7 +531,9 @@ def _normalize_stock_rows(
     if invalid_rank.any():
         raise ValueError("stock_candidates stock_rank must contain positive integers")
     result["stock_rank"] = result["stock_rank"].astype("Int64")
-    if result["asset_id"].duplicated().any():
+    if batch_mode and "sector_stock_rank" not in result:
+        result["sector_stock_rank"] = pd.NA
+    if not allow_duplicate_assets and result["asset_id"].duplicated().any():
         duplicate = result.loc[result["asset_id"].duplicated(keep=False), "asset_id"].iloc[0]
         raise ValueError(f"stock_candidates has duplicate asset_id {duplicate}")
     _normalize_outcome_price_columns(result)
@@ -495,7 +544,8 @@ def _normalize_stock_rows(
         if column not in result:
             result[column] = ""
         result[column] = result[column].fillna("").astype("string")
-    normalized = _ordered_frame(result, _STOCK_COLUMNS, sort_columns=("stock_rank", "asset_id"))
+    ordered_columns = (*_STOCK_COLUMNS, "sector_stock_rank") if batch_mode else _STOCK_COLUMNS
+    normalized = _ordered_frame(result, ordered_columns, sort_columns=("stock_rank", "asset_id"))
     if legacy_sector_schema:
         normalized.attrs[_LEGACY_SECTOR_SCHEMA_ATTR] = True
     return normalized
@@ -627,36 +677,62 @@ def _apply_stock_revisions(
     current: pd.DataFrame,
     previous: pd.DataFrame | None,
     previous_snapshot_id: str | None,
+    batch_mode: bool = False,
     **metadata: object,
 ) -> pd.DataFrame:
     result = current.copy(deep=True)
     if previous is None:
         return result
-    prior_by_asset = previous.set_index("asset_id", drop=False)
-    current_assets = set(result["asset_id"])
+    previous_keys = [
+        _stock_revision_key(row, batch_mode=batch_mode)
+        for row in previous.to_dict(orient="records")
+    ]
+    current_keys = [
+        _stock_revision_key(row, batch_mode=batch_mode)
+        for row in result.to_dict(orient="records")
+    ]
+    prior_by_key = dict(zip(previous_keys, previous.to_dict(orient="records"), strict=True))
+    current_key_set = set(current_keys)
     for index, row in result.iterrows():
-        asset_id = row["asset_id"]
-        if asset_id not in prior_by_asset.index:
+        key = _stock_revision_key(row, batch_mode=batch_mode)
+        if key not in prior_by_key:
             result.at[index, "lifecycle_delta"] = f"absent->{row['stock_lifecycle']}"
             continue
-        old = prior_by_asset.loc[asset_id]
+        old = prior_by_key[key]
         result.at[index, "rank_delta"] = int(old["stock_rank"]) - int(row["stock_rank"])
         result.at[index, "lifecycle_delta"] = f"{old['stock_lifecycle']}->{row['stock_lifecycle']}"
 
-    removed = previous.loc[~previous["asset_id"].isin(current_assets)].copy(deep=True)
+    removed = previous.loc[
+        [key not in current_key_set for key in previous_keys]
+    ].copy(deep=True)
     if not removed.empty:
         removed = _apply_stock_metadata(removed, previous_snapshot_id=previous_snapshot_id, **metadata)
         removed["stock_rank"] = pd.NA
+        if "sector_stock_rank" in removed:
+            removed["sector_stock_rank"] = pd.NA
         removed["rank_delta"] = pd.NA
         removed["stock_lifecycle"] = "invalidated"
-        previous_lifecycles = previous.set_index("asset_id")["stock_lifecycle"]
+        previous_lifecycles = {
+            key: row["stock_lifecycle"]
+            for key, row in zip(previous_keys, previous.to_dict(orient="records"), strict=True)
+        }
         removed["lifecycle_delta"] = [
-            f"{previous_lifecycles.loc[asset_id]}->invalidated"
-            for asset_id in removed["asset_id"]
+            f"{previous_lifecycles[_stock_revision_key(row, batch_mode=batch_mode)]}->invalidated"
+            for row in removed.to_dict(orient="records")
         ]
         removed["score_reason"] = "sector_gate_or_data_change"
         result = pd.concat([result, removed], ignore_index=True, sort=False)
     return _ordered_frame(result, _STOCK_COLUMNS, sort_columns=("stock_rank", "asset_id"))
+
+
+def _stock_revision_key(row: Mapping[str, object], *, batch_mode: bool) -> object:
+    if not batch_mode:
+        return str(row["asset_id"])
+    return (
+        str(row["asset_id"]),
+        str(row["sector_system"]),
+        str(row["sector_code"]),
+    )
 
 
 def _apply_sector_revisions(
@@ -748,7 +824,9 @@ def _normalize_runtime_metadata(value: Mapping[str, object] | None) -> dict[str,
     return _normalize_mapping(value)
 
 
-def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, object]:
+def _validate_snapshot_for_write(
+    snapshot: dict[str, object], *, batch_mode: bool = False
+) -> dict[str, object]:
     if not isinstance(snapshot, dict):
         raise TypeError("snapshot must be a dictionary")
     required = {
@@ -788,7 +866,12 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
             "stock snapshot rows do not satisfy the required snapshot column contract: "
             + ", ".join(missing_stock)
         )
-    missing_stock_schema = sorted(set(_STOCK_COLUMNS) - set(snapshot["stock_candidates"].columns))
+    missing_stock_schema_set = set(_STOCK_COLUMNS) - set(snapshot["stock_candidates"].columns)
+    if batch_mode:
+        # Batch stock rows can be hydrated from the authoritative board below;
+        # do not reject a partially materialized repair-context projection.
+        missing_stock_schema_set -= set(SECTOR_FEATURE_COLUMNS)
+    missing_stock_schema = sorted(missing_stock_schema_set)
     if missing_stock_schema:
         raise ValueError("stock snapshot rows missing canonical columns: " + ", ".join(missing_stock_schema))
     missing_sector = validate_sector_columns(snapshot["sector_states"].columns)
@@ -820,12 +903,14 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
         score_version=version,
         market_state=market_state.strip(),
         previous_snapshot_id=previous_id,
+        batch_mode=batch_mode,
     )
     sector_rows = _validate_sector_snapshot_rows(
         snapshot["sector_states"],
         previous_snapshot_id=previous_id,
         structured_gaps=_structured_gap_rows(preflight, backfill_requests),
     )
+    stock_rows = _hydrate_stock_sector_context(stock_rows, sector_rows)
     _validate_stock_sector_context(
         stock_rows, sector_rows, previous_snapshot_id=previous_id
     )
@@ -858,9 +943,12 @@ def _validate_snapshot_for_write(snapshot: dict[str, object]) -> dict[str, objec
     if legacy_removed_keys:
         normalized["sector_states"].attrs[_LEGACY_REMOVED_SECTOR_KEYS_ATTR] = legacy_removed_keys
     normalized["stock_candidates"] = _ordered_frame(
-        stock_rows, _STOCK_COLUMNS,
+        stock_rows,
+        (*_STOCK_COLUMNS, "sector_stock_rank") if batch_mode else _STOCK_COLUMNS,
         sort_columns=("stock_rank", "asset_id"),
     )
+    if batch_mode and "sector_stock_rank" not in normalized["stock_candidates"]:
+        normalized["stock_candidates"]["sector_stock_rank"] = pd.NA
     normalized["row_counts"] = {
         "sector_states": expected_row_counts["sector_states"],
         "stock_candidates": expected_row_counts["stock_candidates"],
@@ -877,8 +965,14 @@ def _validate_stock_snapshot_rows(
     score_version: str,
     market_state: str,
     previous_snapshot_id: str | None,
+    batch_mode: bool = False,
 ) -> pd.DataFrame:
-    result = _normalize_stock_rows(frame, allow_revision_rows=True)
+    result = _normalize_stock_rows(
+        frame,
+        allow_revision_rows=True,
+        allow_duplicate_assets=batch_mode,
+        batch_mode=batch_mode,
+    )
     for column, expected in (
         ("snapshot_id", snapshot_id),
         ("anchor_date", anchor_date),
@@ -1093,6 +1187,26 @@ def _validate_sector_cross_artifact_metadata(
     frame["previous_snapshot_id"] = row_previous
 
 
+def _hydrate_stock_sector_context(
+    stock_rows: pd.DataFrame, sector_rows: pd.DataFrame
+) -> pd.DataFrame:
+    """Fill omitted denormalized sector fields from the board artifact."""
+
+    if stock_rows.empty or sector_rows.empty:
+        return stock_rows
+    result = stock_rows.copy(deep=True)
+    sector_index = sector_rows.set_index(["sector_system", "sector_code"], drop=False)
+    for index, row in result.iterrows():
+        key = (row["sector_system"], row["sector_code"])
+        if key not in sector_index.index:
+            continue
+        sector = sector_index.loc[key]
+        for column in _SECTOR_CONTEXT_VALUE_COLUMNS:
+            if column in result and _is_missing(result.at[index, column]):
+                result.at[index, column] = sector[column]
+    return result
+
+
 def _validate_stock_sector_context(
     stock_rows: pd.DataFrame,
     sector_rows: pd.DataFrame,
@@ -1165,7 +1279,9 @@ def _require_exact_column(frame: pd.DataFrame, column: str, expected: str, label
         raise ValueError(f"{label} {column} does not match snapshot metadata")
 
 
-def _artifact_bytes(snapshot: dict[str, object]) -> dict[str, bytes]:
+def _artifact_bytes(
+    snapshot: dict[str, object], *, batch_artifacts: bool = False
+) -> dict[str, bytes]:
     market = {
         "snapshot_id": snapshot["snapshot_id"],
         "anchor_date": snapshot["anchor_date"],
@@ -1174,13 +1290,45 @@ def _artifact_bytes(snapshot: dict[str, object]) -> dict[str, bytes]:
         **snapshot["market_regime"],
     }
     market_frame = pd.DataFrame([market]).reindex(columns=sorted(market))
-    return {
+    artifacts = {
         "market_regime.csv": _csv_bytes(market_frame),
         "sector_states.csv": _csv_bytes(snapshot["sector_states"]),
         "stock_candidates.csv": _csv_bytes(snapshot["stock_candidates"]),
         "preflight.json": _json_bytes(snapshot["preflight"]),
         "backfill_requests.csv": _csv_bytes(snapshot["backfill_requests"]),
     }
+    if batch_artifacts:
+        # Keep the compatibility artifact names and add stable, purpose-built
+        # aliases for the full-sector publication.  They intentionally share
+        # bytes so manifest hashes and row counts cannot drift.
+        artifacts["sector_daily_board.csv"] = artifacts["sector_states.csv"]
+        artifacts["sector_stock_candidates.csv"] = artifacts["stock_candidates.csv"]
+    return artifacts
+
+
+def write_sector_batch_snapshot(
+    snapshot: dict[str, object],
+    *,
+    output_dir: str | Path,
+    additional_artifacts: Mapping[str, bytes] | None = None,
+    runtime_metadata_supplier: Callable[[], Mapping[str, object]] | None = None,
+    runtime_publish_guard: Callable[[], object] | None = None,
+) -> dict[str, object]:
+    """Write a full-sector snapshot with batch aliases and duplicate assets.
+
+    The legacy writer remains byte-compatible by default.  Batch mode opts in
+    to the sector board aliases and permits one asset to occur in multiple
+    sector groups while preserving the per-sector rank in the stock artifact.
+    """
+
+    return write_rolling_snapshot(
+        snapshot,
+        output_dir=output_dir,
+        additional_artifacts=additional_artifacts,
+        runtime_metadata_supplier=runtime_metadata_supplier,
+        runtime_publish_guard=runtime_publish_guard,
+        batch_artifacts=True,
+    )
 
 
 def _normalize_additional_artifacts(value: Mapping[str, bytes] | None) -> dict[str, bytes]:

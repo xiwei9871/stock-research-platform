@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 from datetime import date
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -38,7 +39,11 @@ from .reporting import (
     load_rolling_oversold_snapshot,
 )
 from .sector_scoring import score_sector_states
-from .snapshots import build_rolling_snapshot, write_rolling_snapshot
+from .snapshots import (
+    build_rolling_snapshot,
+    write_rolling_snapshot,
+    write_sector_batch_snapshot,
+)
 from .stock_scoring import StockScoringDataGap, score_rolling_stock_candidates
 
 
@@ -314,6 +319,312 @@ def run_one_anchor(
     }
 
 
+def run_sector_batch(
+    *,
+    anchor_date: date,
+    config: RollingOversoldConfig,
+    output_dir: str | Path | None = None,
+    service: str | None = None,
+    inputs: RollingInputs | Any | None = None,
+    previous_snapshot: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Score the complete point-in-time sector universe in one batch.
+
+    The legacy ``run_one_anchor`` path intentionally keeps its mixed-universe
+    gates and one-asset snapshot contract.  This entry point is the explicit
+    full-sector path: it loads once, computes one market regime and one sector
+    frame, derives stock features once, then ranks independently by canonical
+    ``(sector_system, sector_code)``.  A supplied ``inputs`` object is useful
+    for deterministic tests and replay callers; when omitted the database
+    loader is invoked exactly once.
+    """
+
+    if not isinstance(anchor_date, date):
+        raise TypeError("anchor_date must be a date")
+    if not isinstance(config, RollingOversoldConfig):
+        raise TypeError("config must be a RollingOversoldConfig")
+    if config.anchor_end_date is not None and config.anchor_end_date < anchor_date:
+        raise ValueError("config anchor_end_date must not precede anchor_date")
+    assert_db_only_source(DB_ONLY)
+    existing = _load_existing_sector_batch_result(
+        output_dir=output_dir,
+        anchor_date=anchor_date,
+        score_version=config.score_version,
+    )
+    if existing is not None:
+        return existing
+    runtime = StrategyRuntimeBudget(timeout_seconds=config.runtime_budget_seconds)
+
+    if inputs is None:
+        inputs = _timed(
+            runtime,
+            "load",
+            lambda: load_rolling_inputs(
+                anchor_date=anchor_date,
+                config=config,
+                service=service or "stock_research",
+            ),
+        )
+    else:
+        runtime.begin_stage("load")
+        runtime.end_stage("load")
+    if not isinstance(inputs, RollingInputs) and not hasattr(inputs, "data_cutoff_date"):
+        raise TypeError("inputs must provide data_cutoff_date")
+    cutoff = _as_date(getattr(inputs, "data_cutoff_date"), "inputs.data_cutoff_date")
+    if cutoff > anchor_date:
+        raise ValueError("inputs.data_cutoff_date must not follow anchor_date")
+
+    market_regime = _timed(
+        runtime,
+        "regime",
+        lambda: compute_market_regime_features(inputs, anchor_date=anchor_date),
+    )
+    if not isinstance(market_regime, dict):
+        raise TypeError("compute_market_regime_features must return a dictionary")
+    market_regime = dict(market_regime)
+    market_regime["market_regime"] = (
+        str(market_regime.get("market_regime", "unknown")).strip() or "unknown"
+    )
+
+    sector_states = _timed(
+        runtime,
+        "sector",
+        lambda: _score_sector_batch_states(
+            inputs,
+            market_regime=market_regime,
+            anchor_date=anchor_date,
+        ),
+    )
+    if not isinstance(sector_states, pd.DataFrame):
+        raise TypeError("sector batch scorer must return a pandas DataFrame")
+    sector_states = sector_states.copy(deep=True)
+    sector_states["market_regime"] = market_regime["market_regime"]
+    selected_sectors = _batch_sector_selection(sector_states)
+    # Snapshot validation requires every blocked-data row with null repair
+    # fields to carry an auditable structured gap.  Derive those gaps from the
+    # same in-memory board rather than issuing per-sector follow-up queries.
+    blocked_gaps = [
+        {
+            "dataset": "sector_features",
+            "asset_id": f"{row['sector_system']}:{row['sector_code']}",
+            "sector_system": str(row["sector_system"]),
+            "sector_code": str(row["sector_code"]),
+            "start_date": cutoff.isoformat(),
+            "end_date": cutoff.isoformat(),
+            "expected_rows": 1,
+            "actual_rows": 0,
+            "reason": "blocked_data_sector_features",
+        }
+        for _, row in sector_states.iterrows()
+        if str(row.get("sector_research_eligibility", "")).strip().casefold()
+        == SectorResearchEligibility.BLOCKED_DATA.value
+    ]
+    if blocked_gaps:
+        existing_preflight = market_regime.get("preflight")
+        preflight = dict(existing_preflight) if isinstance(existing_preflight, dict) else {}
+        existing_gaps = preflight.get("gaps")
+        preflight["gaps"] = [
+            *(existing_gaps if isinstance(existing_gaps, list) else []),
+            *blocked_gaps,
+        ]
+        market_regime["preflight"] = preflight
+
+    if selected_sectors.empty:
+        runtime.stage_timings_seconds.setdefault("stock", 0.0)
+        stock_candidates = pd.DataFrame()
+    else:
+        def score_stocks() -> pd.DataFrame:
+            features = _call_batch_stock_feature_builder(
+                inputs,
+                anchor_date=anchor_date,
+                config=config,
+                sector_selection=selected_sectors,
+            )
+            if not isinstance(features, pd.DataFrame):
+                raise TypeError("_build_stock_features must return a pandas DataFrame")
+            if features.empty:
+                return pd.DataFrame()
+            return score_rolling_stock_candidates(
+                features,
+                sector_states,
+                top_n=config.sector_output_top_n,
+                config=config,
+                sector_selection=selected_sectors,
+            )
+
+        stock_candidates = _timed(runtime, "stock", score_stocks)
+
+    # Building the normalized probe outside publication keeps the stage timing
+    # focused on the immutable write itself while retaining one canonical
+    # snapshot representation for callers that do not request disk output.
+    snapshot = build_rolling_snapshot(
+        anchor_date=anchor_date,
+        data_cutoff_date=cutoff,
+        market_regime=market_regime,
+        sector_states=sector_states,
+        stock_candidates=stock_candidates,
+        previous_snapshot=previous_snapshot,
+        score_version=config.score_version,
+        runtime_metadata=runtime.metadata(),
+        batch_mode=True,
+    )
+
+    paths: dict[str, str] = {}
+    batch_manifest: dict[str, object] = {
+        "snapshot_id": snapshot["snapshot_id"],
+        "anchor_date": snapshot["anchor_date"],
+        "data_cutoff_date": snapshot["data_cutoff_date"],
+        "score_version": snapshot["score_version"],
+        "row_counts": {
+            "sector_states": int(len(snapshot["sector_states"])),
+            "stock_candidates": int(len(snapshot["stock_candidates"])),
+            "sector_daily_board": int(len(snapshot["sector_states"])),
+            "sector_stock_candidates": int(len(snapshot["stock_candidates"])),
+        },
+    }
+    runtime.begin_stage("publication")
+    publication_closed = False
+    supplier_calls = 0
+
+    def publish_runtime_metadata() -> dict[str, object]:
+        nonlocal publication_closed, supplier_calls
+        supplier_calls += 1
+        if supplier_calls > 1 and not publication_closed:
+            runtime.end_stage("publication")
+            publication_closed = True
+        return runtime.metadata()
+
+    def publish_runtime_guard() -> None:
+        runtime.checkpoint("publication")
+
+    try:
+        if output_dir is not None:
+            write_result = write_sector_batch_snapshot(
+                snapshot,
+                output_dir=output_dir,
+                runtime_metadata_supplier=publish_runtime_metadata,
+                runtime_publish_guard=publish_runtime_guard,
+            )
+            manifest_path = Path(str(write_result["manifest_path"]))
+            paths = {
+                "manifest": str(manifest_path),
+                "batch_manifest": str(manifest_path),
+                "snapshot_manifest": str(manifest_path),
+                "sector_states": str(manifest_path.parent / "sector_states.csv"),
+                "stock_candidates": str(manifest_path.parent / "stock_candidates.csv"),
+                "sector_daily_board": str(manifest_path.parent / "sector_daily_board.csv"),
+                "sector_stock_candidates": str(
+                    manifest_path.parent / "sector_stock_candidates.csv"
+                ),
+            }
+            try:
+                batch_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                batch_manifest = dict(batch_manifest)
+        else:
+            # No output directory is a pure in-memory run; still close and
+            # expose a deterministic publication timing in the result.
+            runtime.end_stage("publication")
+            publication_closed = True
+    finally:
+        if not publication_closed:
+            runtime.end_stage("publication")
+
+    metadata = runtime.metadata()
+    snapshot["runtime_metadata"] = metadata
+    batch_manifest = dict(batch_manifest)
+    batch_manifest["runtime_metadata"] = metadata
+    return {
+        "blocked": False,
+        "blocked_reason": "",
+        "anchor_date": anchor_date.isoformat(),
+        "data_cutoff_date": cutoff.isoformat(),
+        "sector_count": int(len(sector_states)),
+        "stock_candidate_count": int(len(stock_candidates)),
+        "sector_states": snapshot["sector_states"],
+        "sector_board": snapshot["sector_states"],
+        "sector_daily_board": snapshot["sector_states"],
+        "stock_candidates": snapshot["stock_candidates"],
+        "sector_stock_candidates": snapshot["stock_candidates"],
+        "snapshot": snapshot,
+        "batch_manifest": batch_manifest,
+        "manifest": batch_manifest,
+        "manifest_path": paths.get("manifest"),
+        "paths": paths,
+        "runtime_seconds": metadata["runtime_seconds"],
+        "runtime_metadata": metadata,
+    }
+
+
+def _load_existing_sector_batch_result(
+    *,
+    output_dir: str | Path | None,
+    anchor_date: date,
+    score_version: str,
+) -> dict[str, object] | None:
+    """Return a previously published batch without recomputing or replacing it."""
+
+    if output_dir is None:
+        return None
+    destination = (
+        Path(output_dir).expanduser().resolve()
+        / "rolling_sector_oversold"
+        / f"anchor={anchor_date.isoformat()}"
+        / f"version={score_version}"
+    )
+    manifest_path = destination / "manifest.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    hashes = manifest.get("artifact_hashes")
+    if not isinstance(hashes, dict) or not {
+        "sector_daily_board.csv",
+        "sector_stock_candidates.csv",
+    }.issubset(hashes):
+        return None
+    loaded = load_rolling_oversold_snapshot(destination)
+    sectors = loaded.get("sector_states", pd.DataFrame())
+    stocks = loaded.get("stock_candidates", pd.DataFrame())
+    metadata = manifest.get("runtime_metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    paths = {
+        "manifest": str(manifest_path),
+        "batch_manifest": str(manifest_path),
+        "snapshot_manifest": str(manifest_path),
+        "sector_states": str(destination / "sector_states.csv"),
+        "stock_candidates": str(destination / "stock_candidates.csv"),
+        "sector_daily_board": str(destination / "sector_daily_board.csv"),
+        "sector_stock_candidates": str(destination / "sector_stock_candidates.csv"),
+    }
+    snapshot = dict(loaded)
+    snapshot["row_counts"] = manifest.get("row_counts", {})
+    snapshot["runtime_metadata"] = metadata
+    return {
+        "blocked": False,
+        "blocked_reason": "",
+        "anchor_date": str(manifest.get("anchor_date", anchor_date.isoformat())),
+        "data_cutoff_date": str(manifest.get("data_cutoff_date", "")),
+        "sector_count": int(len(sectors)) if isinstance(sectors, pd.DataFrame) else 0,
+        "stock_candidate_count": int(len(stocks)) if isinstance(stocks, pd.DataFrame) else 0,
+        "sector_states": sectors,
+        "sector_board": sectors,
+        "sector_daily_board": sectors,
+        "stock_candidates": stocks,
+        "sector_stock_candidates": stocks,
+        "snapshot": snapshot,
+        "batch_manifest": dict(manifest),
+        "manifest": dict(manifest),
+        "manifest_path": str(manifest_path),
+        "paths": paths,
+        "runtime_seconds": metadata.get("runtime_seconds", 0.0),
+        "runtime_metadata": metadata,
+    }
+
+
 def run_rolling_replay(
     *,
     config: RollingOversoldConfig,
@@ -528,6 +839,181 @@ def _score_all_sector_states(
     return _canonicalize_sector_states(pd.concat([industry, concept], ignore_index=True, sort=False))
 
 
+def _score_sector_batch_states(
+    inputs: RollingInputs | Any,
+    *,
+    market_regime: dict[str, object],
+    anchor_date: date,
+) -> pd.DataFrame:
+    """Score canonical industry/concept inputs with one scorer invocation."""
+
+    bar_frames: list[pd.DataFrame] = []
+    membership_frames: list[pd.DataFrame] = []
+    family_by_key: dict[tuple[str, str], str] = {}
+    for family, source_bars, source_membership, system, code, name in (
+        (
+            "industry",
+            getattr(inputs, "industry_bars", pd.DataFrame()),
+            getattr(inputs, "industry_membership", pd.DataFrame()),
+            "industry_system",
+            "industry_code",
+            "industry_name",
+        ),
+        (
+            "concept",
+            getattr(inputs, "concept_bars", pd.DataFrame()),
+            getattr(inputs, "concept_membership", pd.DataFrame()),
+            "concept_system",
+            "concept_code",
+            "concept_name",
+        ),
+    ):
+        bars = _canonical_batch_frame(
+            source_bars,
+            family=family,
+            system=system,
+            code=code,
+            name=name,
+            membership=False,
+        )
+        members = _canonical_batch_frame(
+            source_membership,
+            family=family,
+            system=system,
+            code=code,
+            name=name,
+            membership=True,
+        )
+        if not bars.empty:
+            bar_frames.append(bars)
+        if not members.empty:
+            membership_frames.append(members)
+        for frame in (bars, members):
+            if frame.empty:
+                continue
+            for system_value, code_value in frame.loc[:, ["sector_system", "sector_code"]].itertuples(
+                index=False, name=None
+            ):
+                if pd.notna(system_value) and pd.notna(code_value):
+                    family_by_key[(str(system_value), str(code_value))] = family
+
+    bars = (
+        pd.concat(bar_frames, ignore_index=True, sort=False)
+        if bar_frames
+        else pd.DataFrame(
+            columns=[
+                "sector_system",
+                "sector_code",
+                "sector_name",
+                "trade_date",
+                "close",
+                "preclose",
+                "volume",
+                "amount",
+            ]
+        )
+    )
+    members = (
+        pd.concat(membership_frames, ignore_index=True, sort=False)
+        if membership_frames
+        else pd.DataFrame(
+            columns=[
+                "asset_id",
+                "sector_system",
+                "sector_code",
+                "sector_name",
+                "start_date",
+                "end_date",
+            ]
+        )
+    )
+    scored = score_sector_states(
+        bars,
+        membership=members,
+        market_regime=market_regime,
+        anchor_date=anchor_date,
+    ).copy(deep=True)
+    if scored.empty:
+        return _canonicalize_sector_states(scored)
+    scored["__sector_family"] = [
+        family_by_key.get((str(system_value), str(code_value)), "unknown")
+        for system_value, code_value in scored.loc[:, ["sector_system", "sector_code"]].itertuples(
+            index=False, name=None
+        )
+    ]
+    return _canonicalize_sector_states(scored)
+
+
+def _canonical_batch_frame(
+    frame: object,
+    *,
+    family: str,
+    system: str,
+    code: str,
+    name: str,
+    membership: bool,
+) -> pd.DataFrame:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return pd.DataFrame()
+    result = frame.copy(deep=True)
+    for canonical, source in (
+        ("sector_system", system),
+        ("sector_code", code),
+        ("sector_name", name),
+    ):
+        if canonical not in result:
+            result[canonical] = result.get(source, pd.NA)
+        elif source in result:
+            result[canonical] = result[canonical].fillna(result[source])
+        result[canonical] = result[canonical].astype("string").str.strip().replace("", pd.NA)
+    result["__sector_family"] = family
+    required = ["sector_system", "sector_code", "sector_name"]
+    if membership:
+        required = ["asset_id", *required, "start_date", "end_date"]
+    else:
+        required.extend(["trade_date", "close", "preclose", "volume", "amount"])
+    for column in required:
+        if column not in result:
+            result[column] = pd.NA
+    return result.loc[:, required + ["__sector_family"]]
+
+
+def _batch_sector_selection(sector_states: pd.DataFrame) -> pd.DataFrame:
+    """Return every research-visible sector without a global top-N gate."""
+
+    if sector_states.empty:
+        return sector_states.copy(deep=True)
+    eligibility = sector_states.get(
+        "sector_research_eligibility", pd.Series(pd.NA, index=sector_states.index)
+    )
+    explicit = eligibility.notna().any()
+    if explicit:
+        normalized = eligibility.astype("string").str.strip().str.casefold().replace("", pd.NA)
+        gate = sector_states["sector_gate_status"].astype("string").str.strip().str.casefold()
+        normalized = normalized.fillna(
+            gate.map(
+                {
+                    GateStatus.CONFIRMED.value: SectorResearchEligibility.ELIGIBLE.value,
+                    GateStatus.WATCH.value: SectorResearchEligibility.WATCH.value,
+                    GateStatus.BLOCKED.value: SectorResearchEligibility.BLOCKED_DATA.value,
+                }
+            )
+        )
+        selected = sector_states.loc[
+            normalized.isin(
+                {
+                    SectorResearchEligibility.ELIGIBLE.value,
+                    SectorResearchEligibility.WATCH.value,
+                }
+            )
+        ].copy()
+    else:
+        selected = sector_states.loc[
+            ~sector_states["sector_gate_status"].eq(GateStatus.BLOCKED.value)
+        ].copy()
+    return selected.reset_index(drop=True)
+
+
 def _canonicalize_sector_states(states: pd.DataFrame) -> pd.DataFrame:
     """Keep every source mapping, including malformed mappings, auditable."""
 
@@ -713,15 +1199,48 @@ def _score_gated_stock_candidates(
     )
 
 
+def _call_batch_stock_feature_builder(
+    inputs: RollingInputs | Any,
+    *,
+    anchor_date: date,
+    config: RollingOversoldConfig,
+    sector_selection: pd.DataFrame,
+) -> pd.DataFrame:
+    """Invoke stock feature builders with legacy monkeypatch compatibility."""
+
+    builder = _build_stock_features
+    try:
+        parameters = inspect.signature(builder).parameters.values()
+    except (TypeError, ValueError):
+        parameters = ()
+    accepts_selection = any(
+        parameter.name == "sector_selection"
+        or parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+    kwargs: dict[str, object] = {
+        "anchor_date": anchor_date,
+        "config": config,
+    }
+    if accepts_selection:
+        kwargs["sector_selection"] = sector_selection
+    return builder(inputs, **kwargs)
+
+
 def _build_stock_features(
     inputs: RollingInputs | Any,
     *,
     anchor_date: date,
     config: RollingOversoldConfig,
+    sector_selection: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Derive score inputs only from frozen rolling loader frames."""
 
-    memberships = _stock_memberships(inputs, anchor_date=anchor_date)
+    memberships = _stock_memberships(
+        inputs,
+        anchor_date=anchor_date,
+        sector_selection=sector_selection,
+    )
     if memberships.empty:
         return pd.DataFrame()
     bars = getattr(inputs, "stock_bars", pd.DataFrame())
@@ -810,7 +1329,12 @@ def _build_stock_features(
     return pd.DataFrame(rows)
 
 
-def _stock_memberships(inputs: RollingInputs | Any, *, anchor_date: date) -> pd.DataFrame:
+def _stock_memberships(
+    inputs: RollingInputs | Any,
+    *,
+    anchor_date: date,
+    sector_selection: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     for family, source, system, code, name in (
         ("industry", getattr(inputs, "industry_membership", pd.DataFrame()), "industry_system", "industry_code", "industry_name"),
@@ -837,7 +1361,15 @@ def _stock_memberships(inputs: RollingInputs | Any, *, anchor_date: date) -> pd.
         frames.append(frame.loc[:, ["asset_id", "sector_system", "sector_code", "sector_name", "__sector_family"]])
     if not frames:
         return pd.DataFrame(columns=["asset_id", "sector_system", "sector_code", "sector_name", "__sector_family"])
-    return pd.concat(frames, ignore_index=True, sort=False).sort_values(
+    result = pd.concat(frames, ignore_index=True, sort=False)
+    if isinstance(sector_selection, pd.DataFrame) and not sector_selection.empty:
+        keys = sector_selection.loc[:, ["sector_system", "sector_code"]].drop_duplicates()
+        selected_index = pd.MultiIndex.from_frame(keys)
+        membership_index = pd.MultiIndex.from_frame(
+            result.loc[:, ["sector_system", "sector_code"]]
+        )
+        result = result.loc[membership_index.isin(selected_index)].copy()
+    return result.sort_values(
         ["asset_id", "__sector_family", "sector_system", "sector_code"],
         kind="mergesort",
         na_position="last",
