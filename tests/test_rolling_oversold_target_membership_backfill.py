@@ -418,6 +418,7 @@ def test_ths_detail_constituent_adapter_paginates_and_extracts_second_column(mon
     assert frame["代码"].tolist() == ["000001", "600000"]
     assert frame["名称"].tolist() == ["样本一", "样本二"]
     assert "/code/300238/" in seen_urls[0]
+    assert "/field/199112/" in seen_urls[0]
     assert "?cb=1" in seen_urls[0]
     assert len(seen_urls) == 2
 

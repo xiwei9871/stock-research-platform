@@ -40,7 +40,7 @@ DEFAULT_OUTPUT_DIR = Path("outputs/research/rolling_sector_target_membership_bac
 TARGET_CODE_PATTERN = re.compile(r"^[0-9]{6}$")
 TARGET_CONCEPT_SYSTEM = "ths"
 BOARD_SOURCE = "akshare:stock_board_concept_name_ths"
-MEMBERSHIP_SOURCE = "ths:web_detail"
+MEMBERSHIP_SOURCE = "ths:q.10jqka.com.cn_gn_detail"
 
 BOARD_UPSERT_SQL = """
 INSERT INTO core.concept_board (
@@ -299,7 +299,7 @@ def _ths_detail_url(
 ) -> str:
     value = page if cache_buster is None else cache_buster
     return (
-        "https://q.10jqka.com.cn/gn/detail/board/0/field/10/order/desc/"
+        "https://q.10jqka.com.cn/gn/detail/board/0/field/199112/order/desc/"
         f"page/{page}/ajax/1/code/{concept_code}/?cb={value}"
     )
 
