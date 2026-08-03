@@ -585,8 +585,9 @@ def _load_existing_sector_batch_result(
     aliases = ("sector_daily_board.csv", "sector_stock_candidates.csv")
     if not isinstance(hashes, dict) or not set(aliases).issubset(hashes):
         return None
-    for name in aliases:
-        expected_hash = hashes.get(name)
+    for name, expected_hash in hashes.items():
+        if not isinstance(name, str) or not name or Path(name).name != name:
+            return None
         path = destination / name
         if not isinstance(expected_hash, str) or not expected_hash or not path.is_file():
             return None

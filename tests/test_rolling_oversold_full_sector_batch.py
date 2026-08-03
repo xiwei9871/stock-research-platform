@@ -271,6 +271,34 @@ def test_sector_batch_fast_path_requires_intact_alias_artifacts(monkeypatch, tmp
     ) is None
 
 
+def test_sector_batch_fast_path_requires_intact_canonical_artifacts(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+    manifest_path = Path(result["paths"]["manifest"])
+    canonical_path = manifest_path.parent / "sector_states.csv"
+    canonical_path.write_bytes(canonical_path.read_bytes() + b"corruption")
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=tmp_path,
+        anchor_date=ANCHOR,
+        score_version=config.score_version,
+    ) is None
+
+
 def test_batch_snapshot_requires_positive_contiguous_sector_stock_ranks(monkeypatch):
     inputs = _fixture_inputs()
     config = RollingOversoldConfig(anchor_start_date=ANCHOR)
