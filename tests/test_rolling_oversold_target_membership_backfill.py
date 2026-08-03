@@ -233,7 +233,95 @@ def test_900xxx_is_audited_without_being_written(monkeypatch, tmp_path: Path):
     assert result["valid_non_bj_memberships"] == 1
 
 
-def test_failed_source_concept_does_not_close_its_history(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize(
+    "malformed_response",
+    [
+        (item for item in []),
+        pd.DataFrame([{"名称": "没有代码列"}]),
+        ["not-a-mapping"],
+    ],
+)
+def test_empty_or_invalid_constituent_response_blocks_history_close(
+    monkeypatch, tmp_path: Path, malformed_response
+):
+    class FakeConnection:
+        pass
+
+    @contextmanager
+    def fake_connect(_service):
+        yield FakeConnection()
+
+    execute_calls: list[tuple[str, list[object]]] = []
+    monkeypatch.setattr(backfill, "connect", fake_connect)
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(backfill, "fetch_target_concept_constituents", lambda symbol: malformed_response)
+    monkeypatch.setattr(backfill, "execute_many", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda conn, sql, params: execute_calls.append((sql, list(params))),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["failed_concepts"] == ["300238"]
+    assert result["database_writes"] == 0
+    assert result["write_blocked_reason"] == "source_incomplete"
+    assert not execute_calls
+
+
+def test_source_missing_code_blocks_execute_before_any_database_write(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_constituents",
+        lambda symbol: pd.DataFrame([{"代码": "000001", "名称": "样本"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [_master("CN:SZ:000001")],
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: pytest.fail("partial source must not write"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda *args, **kwargs: pytest.fail("partial source must not close history"),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238", "309268"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["source_missing_codes"] == ["309268"]
+    assert result["write_blocked"] is True
+    assert result["write_blocked_reason"] == "source_incomplete"
+    assert result["database_writes"] == 0
+
+
+def test_failed_source_concept_blocks_all_writes_and_preserves_history(monkeypatch, tmp_path: Path):
     class FakeConnection:
         pass
 
@@ -286,10 +374,11 @@ def test_failed_source_concept_does_not_close_its_history(monkeypatch, tmp_path:
     )
 
     assert result["failed_concepts"] == ["309268"]
-    close_calls = [call for call in execute_calls if "UPDATE core.concept_membership" in call[0]]
-    assert len(close_calls) == 1
-    assert close_calls[0][1][2] == "300238"
-    assert all(call[1][2] != "309268" for call in close_calls)
+    assert result["database_writes"] == 0
+    assert result["write_blocked"] is True
+    assert result["write_blocked_reason"] == "source_incomplete"
+    assert execute_many_calls == []
+    assert execute_calls == []
 
 
 def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: Path):

@@ -5984,6 +5984,8 @@ def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
         "valid_non_bj_memberships",
         "database_writes",
         "dry_run",
+        "write_blocked",
+        "write_blocked_reason",
     ):
         print(
             f"rolling_sector_target_membership_backfill|{key}|"

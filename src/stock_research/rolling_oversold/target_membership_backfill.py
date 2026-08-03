@@ -317,6 +317,21 @@ def run_target_membership_backfill(
                         "900xxx B-share code is excluded",
                     )
                 )
+            if not normalized:
+                failed_concepts.append(code)
+                detail_rows.append(
+                    _detail(
+                        code,
+                        board["concept_name"],
+                        "",
+                        "source_failed",
+                        "empty_or_invalid_response",
+                    )
+                )
+                # No member rows from an invalid response may be interpreted
+                # as a legitimate empty board.  Do not add this concept to
+                # source_members, so it cannot close existing history.
+                continue
         except Exception as exc:  # noqa: BLE001 - preserve old history on source failure
             failed_concepts.append(code)
             detail_rows.append(_detail(code, board["concept_name"], "", "source_failed", str(exc)))
@@ -392,8 +407,11 @@ def run_target_membership_backfill(
         for item in valid_rows
     ]
 
+    source_incomplete = bool(source_error or source_missing_codes or failed_concepts)
+    write_blocked = bool(not dry_run and source_incomplete)
+    write_blocked_reason = "source_incomplete" if write_blocked else ""
     database_writes = 0
-    if not dry_run:
+    if not dry_run and not write_blocked:
         with connect(service) as conn:
             if board_rows:
                 execute_many(conn, BOARD_UPSERT_SQL, board_rows)
@@ -429,6 +447,8 @@ def run_target_membership_backfill(
         "invalid_status_counts": invalid_statuses,
         "database_writes": 0 if dry_run else database_writes,
         "dry_run": bool(dry_run),
+        "write_blocked": write_blocked,
+        "write_blocked_reason": write_blocked_reason,
         "upsert_conflict_key": ["asset_id", "concept_system", "concept_code", "start_date"],
         "close_history_only_for_successful_concepts": True,
         "paths": {},

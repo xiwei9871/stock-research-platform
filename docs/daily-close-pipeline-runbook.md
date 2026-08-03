@@ -136,7 +136,10 @@ must retain `source_missing_codes`, `failed_concepts`, `out_of_scope_bse`, and
 close its prior active membership history. Only active-at-cutoff,
 non-delisted, non-BSE assets present in `core.asset_master` are valid. A
 `900xxx` B-share code is explicitly audited and excluded rather than silently
-dropped.
+dropped. If any source code is missing or any concept response fails/has an
+invalid empty schema, execution is fail-closed: the summary reports
+`write_blocked=true`, `write_blocked_reason=source_incomplete`, and performs no
+board, membership, or history-close write.
 Execute explicitly with `--execute`. Board and membership writes share one
 database transaction, with the membership conflict key
 `(asset_id, concept_system, concept_code, start_date)`, so an identical rerun
