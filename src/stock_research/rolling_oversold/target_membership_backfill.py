@@ -107,6 +107,9 @@ DETAIL_COLUMNS = (
     "asset_id",
     "status",
     "reason",
+    "source_asof",
+    "source_effective_date",
+    "source_pit_status",
 )
 
 
@@ -305,6 +308,12 @@ def fetch_ths_detail_constituents(
         frame.attrs["source_contract_complete"] = True
         frame.attrs["source_total_pages"] = total_pages
         frame.attrs["source_member_cap"] = THS_MEMBER_CAP
+        # This endpoint is a live ranking sorted by field 199112 (涨跌幅).  It
+        # exposes no historical effective date, so callers must never infer
+        # that the returned constituents are valid for a requested past date.
+        frame.attrs["source_asof"] = None
+        frame.attrs["source_effective_date"] = None
+        frame.attrs["source_pit_status"] = "current_unknown_asof"
         return frame
     finally:
         close = getattr(session, "close", None)
@@ -486,10 +495,32 @@ def validate_target_membership_rows(
     return validated
 
 
+def validate_membership_source_asof(
+    *,
+    source_asof: date | str | None,
+    requested_date: date | str,
+) -> tuple[bool, str]:
+    """Return whether source metadata proves a point-in-time snapshot.
+
+    Historical writes require an explicit source effective date that is no
+    later than the requested snapshot date.  Missing metadata and live/future
+    snapshots fail closed with stable machine-readable reasons.
+    """
+
+    requested = _parse_date(requested_date)
+    effective = _parse_source_asof(source_asof)
+    if effective is None:
+        return False, "source_asof_unknown"
+    if effective > requested:
+        return False, "source_asof_after_requested_date"
+    return True, ""
+
+
 def run_target_membership_backfill(
     *,
     trade_date: date | str,
     target_codes: str | Path | Iterable[object] | pd.DataFrame,
+    source_asof: date | str | None = None,
     service: str = SETTINGS.research_service,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     dry_run: bool = True,
@@ -500,6 +531,18 @@ def run_target_membership_backfill(
     """Preview or execute a frozen target-scoped THS membership backfill."""
 
     cutoff = _parse_date(trade_date)
+    source_effective = _parse_source_asof(source_asof)
+    source_pit_verified, source_asof_reason = validate_membership_source_asof(
+        source_asof=source_effective,
+        requested_date=cutoff,
+    )
+    source_effective_text = source_effective.isoformat() if source_effective else None
+    if source_pit_verified:
+        source_pit_status = "verified"
+    elif source_asof_reason == "source_asof_unknown":
+        source_pit_status = "current_unknown_asof"
+    else:
+        source_pit_status = "after_requested_date"
     codes = load_target_codes(target_codes)
     fetch_boards = board_fetcher or fetch_target_concept_boards
     fetch_constituents = constituent_fetcher or fetch_target_concept_constituents
@@ -688,8 +731,13 @@ def run_target_membership_backfill(
     ]
 
     source_incomplete = bool(source_error or source_missing_codes or failed_concepts)
-    write_blocked = source_incomplete
-    write_blocked_reason = "source_incomplete" if write_blocked else ""
+    write_blocked = not source_pit_verified or source_incomplete
+    if not source_pit_verified:
+        write_blocked_reason = source_asof_reason
+    elif source_incomplete:
+        write_blocked_reason = "source_incomplete"
+    else:
+        write_blocked_reason = ""
     database_writes = 0
     if not dry_run and not write_blocked:
         with connect(service) as conn:
@@ -712,6 +760,9 @@ def run_target_membership_backfill(
     summary: dict[str, Any] = {
         "schema_version": "rolling_sector_target_membership_backfill_v1",
         "trade_date": cutoff.isoformat(),
+        "source_asof": source_effective_text,
+        "source_effective_date": source_effective_text,
+        "source_pit_status": source_pit_status,
         "target_codes": list(codes),
         "target_code_count": len(codes),
         "source_board_count": len(boards_by_code),
@@ -925,10 +976,23 @@ def _write_reports(
     payload = dict(summary)
     payload["paths"] = {"json": str(json_path), "csv": str(csv_path)}
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    source_fields = {
+        "source_asof": summary.get("source_asof"),
+        "source_effective_date": summary.get("source_effective_date"),
+        "source_pit_status": summary.get("source_pit_status", ""),
+    }
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=DETAIL_COLUMNS, lineterminator="\n")
         writer.writeheader()
-        writer.writerows([{key: row.get(key, "") for key in DETAIL_COLUMNS} for row in detail_rows])
+        writer.writerows(
+            [
+                {
+                    key: row.get(key, source_fields.get(key, ""))
+                    for key in DETAIL_COLUMNS
+                }
+                for row in detail_rows
+            ]
+        )
     return {"json": str(json_path), "csv": str(csv_path)}
 
 
@@ -941,6 +1005,19 @@ def _parse_date(value: date | str) -> date:
         return date.fromisoformat(str(value).strip()[:10])
     except ValueError as exc:
         raise ValueError(f"trade_date must be an ISO date: {value!r}") from exc
+
+
+def _parse_source_asof(value: date | str | None) -> date | None:
+    if value is None or not str(value).strip():
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value).strip()[:10])
+    except ValueError as exc:
+        raise ValueError(f"source_asof must be an ISO date: {value!r}") from exc
 
 
 def _optional_date(value: object) -> date | None:

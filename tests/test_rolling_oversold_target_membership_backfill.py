@@ -30,6 +30,94 @@ def _master(
     }
 
 
+def test_current_ths_source_is_not_accepted_as_historical_snapshot():
+    result = backfill.validate_membership_source_asof(
+        source_asof=None,
+        requested_date=date(2026, 7, 31),
+    )
+
+    assert result == (False, "source_asof_unknown")
+
+
+def test_membership_source_asof_must_not_be_after_requested_date():
+    assert backfill.validate_membership_source_asof(
+        source_asof=date(2026, 7, 31),
+        requested_date=date(2026, 7, 31),
+    ) == (True, "")
+    assert backfill.validate_membership_source_asof(
+        source_asof=date(2026, 8, 4),
+        requested_date=date(2026, 7, 31),
+    ) == (False, "source_asof_after_requested_date")
+
+
+@pytest.mark.parametrize(
+    ("source_asof", "expected_effective_date", "expected_status", "expected_reason"),
+    [
+        (None, None, "current_unknown_asof", "source_asof_unknown"),
+        (
+            date(2026, 8, 4),
+            "2026-08-04",
+            "after_requested_date",
+            "source_asof_after_requested_date",
+        ),
+    ],
+)
+def test_unverified_membership_source_asof_blocks_execute_writes(
+    monkeypatch,
+    tmp_path: Path,
+    source_asof,
+    expected_effective_date,
+    expected_status,
+    expected_reason,
+):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_constituents",
+        lambda symbol: pd.DataFrame([{"代码": "000001", "名称": "样本"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [_master("CN:SZ:000001")],
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: pytest.fail("unknown source-as-of must not write"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda *args, **kwargs: pytest.fail("unknown source-as-of must not close history"),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes=["300238"],
+        source_asof=source_asof,
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["source_asof"] == expected_effective_date
+    assert result["source_effective_date"] == expected_effective_date
+    assert result["source_pit_status"] == expected_status
+    assert result["write_blocked"] is True
+    assert result["write_blocked_reason"] == expected_reason
+    assert result["database_writes"] == 0
+
+    csv_header = Path(result["paths"]["csv"]).read_text(encoding="utf-8").splitlines()[0]
+    assert "source_asof" in csv_header
+    assert "source_effective_date" in csv_header
+    assert "source_pit_status" in csv_header
+
+
 def test_load_target_codes_accepts_concept_csv_and_plain_code_list(tmp_path: Path):
     csv_path = tmp_path / "targets.csv"
     csv_path.write_text("concept_code,concept_name\n300238,核电\n309268,样本\n", encoding="utf-8")
@@ -180,6 +268,7 @@ def test_empty_constituent_response_is_failed_and_does_not_close_history(
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -226,6 +315,7 @@ def test_900xxx_is_audited_without_being_written(monkeypatch, tmp_path: Path):
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=True,
@@ -265,6 +355,7 @@ def test_concept_with_only_out_of_scope_members_is_failed_closed(
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -309,6 +400,7 @@ def test_concept_with_only_pit_ineligible_members_is_failed_closed(monkeypatch, 
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -358,6 +450,7 @@ def test_empty_or_invalid_constituent_response_blocks_history_close(
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -399,6 +492,7 @@ def test_source_missing_code_blocks_execute_before_any_database_write(monkeypatc
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238", "309268"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -457,6 +551,7 @@ def test_failed_source_concept_blocks_all_writes_and_preserves_history(monkeypat
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238", "309268"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -506,6 +601,9 @@ def test_ths_detail_constituent_adapter_paginates_and_extracts_second_column(mon
 
     assert frame["代码"].tolist() == ["000001", "600000"]
     assert frame["名称"].tolist() == ["样本一", "样本二"]
+    assert frame.attrs["source_asof"] is None
+    assert frame.attrs["source_effective_date"] is None
+    assert frame.attrs["source_pit_status"] == "current_unknown_asof"
     assert "/code/300238/" in seen_urls[0]
     assert "/field/199112/" in seen_urls[0]
     assert "/ajax/1/" not in seen_urls[0]
@@ -633,6 +731,7 @@ def test_target_summary_audits_concepts_reaching_source_member_cap(monkeypatch, 
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=True,
@@ -789,6 +888,7 @@ def test_target_membership_uses_idempotent_conflict_key(monkeypatch, tmp_path: P
     result = backfill.run_target_membership_backfill(
         trade_date=date(2026, 7, 31),
         target_codes={"300238"},
+        source_asof=date(2026, 7, 31),
         service="research-test",
         output_dir=tmp_path,
         dry_run=False,
@@ -820,6 +920,8 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
             "2026-07-31",
             "--concept-codes-file",
             str(tmp_path / "targets.csv"),
+            "--source-asof",
+            "2026-07-31",
             "--service",
             "research-test",
             "--output-dir",
@@ -829,6 +931,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
     )
     assert parsed.trade_date == "2026-07-31"
     assert parsed.concept_codes_file == str(tmp_path / "targets.csv")
+    assert parsed.source_asof == "2026-07-31"
     assert parsed.dry_run is True
 
     captured: dict[str, object] = {}
@@ -844,6 +947,9 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
             "source_missing_codes": [],
             "failed_concepts": [],
             "out_of_scope_bse": [],
+            "source_asof": None,
+            "source_effective_date": None,
+            "source_pit_status": "current_unknown_asof",
         }
 
     monkeypatch.setattr(cli, "run_target_membership_backfill", fake_run, raising=False)
@@ -855,6 +961,8 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
                 "2026-07-31",
                 "--concept-codes-file",
                 str(tmp_path / "targets.csv"),
+                "--source-asof",
+                "2026-07-31",
                 "--service",
                 "research-test",
                 "--output-dir",
@@ -866,7 +974,13 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
     )
     assert captured["trade_date"] == date(2026, 7, 31)
     assert captured["target_codes"] == str(tmp_path / "targets.csv")
+    assert captured["source_asof"] == date(2026, 7, 31)
     assert captured["dry_run"] is True
     output = capsys.readouterr().out
     assert "rolling_sector_target_membership_backfill|json|" in output
     assert "rolling_sector_target_membership_backfill|database_writes|0" in output
+    assert "rolling_sector_target_membership_backfill|source_asof|" in output
+    assert (
+        "rolling_sector_target_membership_backfill|source_pit_status|current_unknown_asof"
+        in output
+    )

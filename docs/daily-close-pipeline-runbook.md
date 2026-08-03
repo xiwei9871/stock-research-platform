@@ -128,6 +128,16 @@ page. The EastMoney/AkShare adapter is available only as an explicit fallback
 function.
 The strategy itself remains database-only and never calls this source boundary.
 
+The THS detail URL is a live current ranking sorted by `field=199112`
+(`涨跌幅`) and exposes no effective date or historical snapshot parameter. The
+default adapter therefore reports `source_asof=null`,
+`source_effective_date=null`, and
+`source_pit_status=current_unknown_asof`; it must not be treated as membership
+for an earlier `--trade-date`. The optional `--source-asof YYYY-MM-DD` CLI
+argument carries the effective date declared by a PIT-verified source. It is
+not an operator override that makes the live THS response historical, and must
+remain omitted for the default current endpoint.
+
 Preview first (the CLI defaults to `--dry-run`):
 
 ```bash
@@ -141,21 +151,31 @@ PYTHONPATH=src .venv/bin/python -m stock_research.cli \
 ```
 
 Review `target_membership_backfill_summary.json` before executing. The report
-must retain `source_missing_codes`, `failed_concepts`, `out_of_scope_bse`, and
+and CSV retain `source_asof`, `source_effective_date`, `source_pit_status`,
+`source_missing_codes`, `failed_concepts`, `out_of_scope_bse`, and
 `out_of_scope_900xxx`; a failed or empty source response is never allowed to
 close its prior active membership history. Only active-at-cutoff,
 non-delisted, non-BSE assets present in `core.asset_master` are valid. A
 `900xxx` B-share code is explicitly audited and excluded rather than silently
-dropped. If any source code is missing or any concept response fails/has an
-invalid empty schema, execution is fail-closed: the summary reports
+dropped. Historical writes additionally require an explicit source effective
+date no later than the requested trade date. Missing metadata reports
+`write_blocked_reason=source_asof_unknown`; a later effective date reports
+`write_blocked_reason=source_asof_after_requested_date`. If any source code is
+missing or any concept response fails/has an invalid empty schema, execution
+is also fail-closed: the summary reports
 `write_blocked=true`, `write_blocked_reason=source_incomplete`, and performs no
 board, membership, or history-close write.
 For each successful concept, the current cutoff snapshot is upserted first and
 then every older active membership row (`start_date < trade_date`) is closed at
 the cutoff; this deliberately removes stale duplicate active rows while
 leaving failed or missing concepts untouched.
-Execute explicitly with `--execute`. Board and membership writes share one
-database transaction, with the membership conflict key
+`--execute` only enables writes after every gate passes; it does not override
+unknown source dates. Consequently, the current THS CLI source is blocked for
+the requested 2026-07-31 historical snapshot and leaves the database
+unchanged. A PIT-verified replacement source must declare its effective date
+through the backfill source contract before execution can proceed. Board and
+membership writes then share one database transaction, with the membership
+conflict key
 `(asset_id, concept_system, concept_code, start_date)`, so an identical rerun
 is idempotent. `database_writes` is always zero in a dry-run.
 

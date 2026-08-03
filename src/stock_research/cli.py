@@ -4595,6 +4595,10 @@ def build_parser() -> argparse.ArgumentParser:
     rolling_target_membership.add_argument("--trade-date", required=True)
     rolling_target_membership.add_argument("--concept-codes-file", required=True)
     rolling_target_membership.add_argument(
+        "--source-asof",
+        help="PIT source effective date (YYYY-MM-DD); omitted for live current sources",
+    )
+    rolling_target_membership.add_argument(
         "--service", default=SETTINGS.research_service
     )
     rolling_target_membership.add_argument(
@@ -5980,6 +5984,9 @@ def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
         )
     for key in (
         "trade_date",
+        "source_asof",
+        "source_effective_date",
+        "source_pit_status",
         "target_code_count",
         "source_member_cap",
         "source_contract",
@@ -8703,6 +8710,11 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         result = run_target_membership_backfill(
             trade_date=dt.date.fromisoformat(args.trade_date),
             target_codes=args.concept_codes_file,
+            source_asof=(
+                dt.date.fromisoformat(args.source_asof)
+                if args.source_asof
+                else None
+            ),
             service=args.service,
             output_dir=args.output_dir,
             dry_run=args.dry_run,
