@@ -131,9 +131,12 @@ PYTHONPATH=src .venv/bin/python -m stock_research.cli \
 ```
 
 Review `target_membership_backfill_summary.json` before executing. The report
-must retain `source_missing_codes` and `failed_concepts`; a failed source
-concept is never allowed to close its prior active membership history. Only
-active, non-delisted, non-BSE assets present in `core.asset_master` are valid.
+must retain `source_missing_codes`, `failed_concepts`, `out_of_scope_bse`, and
+`out_of_scope_900xxx`; a failed or empty source response is never allowed to
+close its prior active membership history. Only active-at-cutoff,
+non-delisted, non-BSE assets present in `core.asset_master` are valid. A
+`900xxx` B-share code is explicitly audited and excluded rather than silently
+dropped.
 Execute explicitly with `--execute`. Board and membership writes share one
 database transaction, with the membership conflict key
 `(asset_id, concept_system, concept_code, start_date)`, so an identical rerun

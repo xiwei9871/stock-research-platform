@@ -10,14 +10,21 @@ import pytest
 from stock_research.rolling_oversold import target_membership_backfill as backfill
 
 
-def _master(asset_id: str, *, exchange: str = "SZ", is_active: bool = True) -> dict[str, object]:
+def _master(
+    asset_id: str,
+    *,
+    exchange: str = "SZ",
+    is_active: bool = True,
+    list_date: date | None = date(2020, 1, 1),
+    delist_date: date | None = None,
+) -> dict[str, object]:
     return {
         "asset_id": asset_id,
         "symbol": asset_id.rsplit(":", 1)[-1],
         "name": asset_id,
         "exchange": exchange,
-        "list_date": date(2020, 1, 1),
-        "delist_date": None,
+        "list_date": list_date,
+        "delist_date": delist_date,
         "is_active": is_active,
         "is_beijing": exchange == "BJ",
     }
@@ -95,6 +102,135 @@ def test_target_membership_backfill_rejects_bj_members():
 
     with pytest.raises(ValueError, match="out_of_scope_bse"):
         backfill.validate_target_membership_rows(rows, target_codes={"300238"})
+
+
+def test_asset_eligibility_is_point_in_time_around_delist_date():
+    cutoff = date(2026, 7, 31)
+
+    # Current master status may already be inactive, but a future delist proves
+    # that the asset was eligible at the frozen cutoff.
+    assert backfill._asset_eligibility(
+        _master(
+            "CN:SZ:000001",
+            is_active=False,
+            delist_date=date(2026, 8, 15),
+        ),
+        cutoff,
+    ) == ("valid", "")
+    assert backfill._asset_eligibility(
+        _master(
+            "CN:SZ:000001",
+            is_active=True,
+            delist_date=date(2026, 7, 31),
+        ),
+        cutoff,
+    )[0] == "delisted"
+    assert backfill._asset_eligibility(
+        _master(
+            "CN:SZ:000001",
+            is_active=True,
+            delist_date=date(2026, 7, 30),
+        ),
+        cutoff,
+    )[0] == "delisted"
+    assert backfill._asset_eligibility(
+        _master(
+            "CN:SZ:000001",
+            is_active=True,
+            list_date=date(2026, 8, 1),
+        ),
+        cutoff,
+    )[0] == "inactive_pit"
+
+
+@pytest.mark.parametrize("empty_response", [None, pd.DataFrame(), []])
+def test_empty_constituent_response_is_failed_and_does_not_close_history(
+    monkeypatch, tmp_path: Path, empty_response
+):
+    class FakeConnection:
+        pass
+
+    @contextmanager
+    def fake_connect(_service):
+        yield FakeConnection()
+
+    execute_calls: list[tuple[str, list[object]]] = []
+    monkeypatch.setattr(backfill, "connect", fake_connect)
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(backfill, "fetch_target_concept_constituents", lambda symbol: empty_response)
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda conn, sql, params: execute_calls.append((sql, list(params))),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+    )
+
+    assert result["failed_concepts"] == ["300238"]
+    assert result["valid_non_bj_memberships"] == 0
+    assert not [call for call in execute_calls if "UPDATE core.concept_membership" in call[0]]
+
+
+def test_900xxx_is_audited_without_being_written(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_constituents",
+        lambda symbol: pd.DataFrame(
+            [
+                {"代码": "900001", "名称": "沪市B股"},
+                {"代码": "920001", "名称": "北交所"},
+                {"代码": "000001", "名称": "样本"},
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [_master("CN:SZ:000001")],
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda *args, **kwargs: pytest.fail("dry-run must not write"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda *args, **kwargs: pytest.fail("dry-run must not write"),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes={"300238"},
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=True,
+    )
+
+    assert result["out_of_scope_900xxx"] == ["900001"]
+    assert result["out_of_scope_900xxx_count"] == 1
+    assert result["out_of_scope_bse"] == ["CN:BJ:920001"]
+    assert result["valid_non_bj_memberships"] == 1
 
 
 def test_failed_source_concept_does_not_close_its_history(monkeypatch, tmp_path: Path):

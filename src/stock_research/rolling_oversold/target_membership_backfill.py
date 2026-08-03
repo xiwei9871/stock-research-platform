@@ -285,6 +285,7 @@ def run_target_membership_backfill(
     detail_rows: list[dict[str, Any]] = []
     candidate_assets: set[str] = set()
     out_of_scope_bse: list[str] = []
+    out_of_scope_900xxx: list[str] = []
 
     for code in codes:
         board = boards_by_code.get(code)
@@ -295,7 +296,27 @@ def run_target_membership_backfill(
             continue
         try:
             raw_constituents = fetch_constituents(board["concept_name"])
-            normalized = _normalize_constituent_rows(raw_constituents, concept_code=code)
+            if _is_empty_source_response(raw_constituents):
+                failed_concepts.append(code)
+                detail_rows.append(
+                    _detail(code, board["concept_name"], "", "source_failed", "empty_response")
+                )
+                continue
+            normalized, excluded_900xxx = _normalize_constituent_rows_with_exclusions(
+                raw_constituents,
+                concept_code=code,
+            )
+            for raw_code in excluded_900xxx:
+                out_of_scope_900xxx.append(raw_code)
+                detail_rows.append(
+                    _detail(
+                        code,
+                        board["concept_name"],
+                        raw_code,
+                        "out_of_scope_900xxx",
+                        "900xxx B-share code is excluded",
+                    )
+                )
         except Exception as exc:  # noqa: BLE001 - preserve old history on source failure
             failed_concepts.append(code)
             detail_rows.append(_detail(code, board["concept_name"], "", "source_failed", str(exc)))
@@ -403,6 +424,8 @@ def run_target_membership_backfill(
         "valid_non_bj_membership_rows": valid_rows,
         "out_of_scope_bse": out_of_scope_bse,
         "out_of_scope_bse_count": len(out_of_scope_bse),
+        "out_of_scope_900xxx": sorted(set(out_of_scope_900xxx)),
+        "out_of_scope_900xxx_count": len(set(out_of_scope_900xxx)),
         "invalid_status_counts": invalid_statuses,
         "database_writes": 0 if dry_run else database_writes,
         "dry_run": bool(dry_run),
@@ -449,8 +472,20 @@ def _normalize_board_rows(frame: Any) -> list[dict[str, str]]:
 
 
 def _normalize_constituent_rows(frame: Any, *, concept_code: str) -> list[dict[str, str]]:
+    rows, _excluded_900xxx = _normalize_constituent_rows_with_exclusions(
+        frame,
+        concept_code=concept_code,
+    )
+    return rows
+
+
+def _normalize_constituent_rows_with_exclusions(
+    frame: Any,
+    *,
+    concept_code: str,
+) -> tuple[list[dict[str, str]], list[str]]:
     if frame is None:
-        return []
+        return [], []
     if isinstance(frame, pd.DataFrame):
         records = frame.to_dict("records")
     elif isinstance(frame, Mapping):
@@ -458,11 +493,17 @@ def _normalize_constituent_rows(frame: Any, *, concept_code: str) -> list[dict[s
     else:
         records = list(frame)
     rows: list[dict[str, str]] = []
+    excluded_900xxx: list[str] = []
     seen: set[str] = set()
     for item in records:
         if not isinstance(item, Mapping):
             continue
         raw = _row_asset_value(item)
+        raw_900xxx = _raw_900xxx_code(raw)
+        if raw_900xxx is not None:
+            if raw_900xxx not in excluded_900xxx:
+                excluded_900xxx.append(raw_900xxx)
+            continue
         asset_id = _normalize_source_asset_id(raw)
         if asset_id is None:
             continue
@@ -470,7 +511,31 @@ def _normalize_constituent_rows(frame: Any, *, concept_code: str) -> list[dict[s
             continue
         seen.add(asset_id)
         rows.append({"concept_code": concept_code, "asset_id": asset_id})
-    return rows
+    return rows, excluded_900xxx
+
+
+def _is_empty_source_response(frame: Any) -> bool:
+    if frame is None:
+        return True
+    if isinstance(frame, pd.DataFrame):
+        return frame.empty
+    if isinstance(frame, Mapping):
+        return not frame
+    if isinstance(frame, (str, bytes)):
+        return not frame.strip()
+    if isinstance(frame, (list, tuple, set, frozenset)):
+        return len(frame) == 0
+    return False
+
+
+def _raw_900xxx_code(raw: object) -> str | None:
+    value = str(raw or "").strip().upper()
+    if not value:
+        return None
+    digits = "".join(char for char in value if char.isdigit())
+    if len(digits) == 6 and digits.startswith("900"):
+        return digits
+    return None
 
 
 def _normalize_source_asset_id(raw: object) -> str | None:
@@ -508,14 +573,19 @@ def _asset_eligibility(master: Mapping[str, object] | None, cutoff: date) -> tup
     exchange = str(master.get("exchange") or "").upper()
     if exchange == "BJ" or asset_id.startswith("CN:BJ:") or bool(master.get("is_beijing")):
         return "out_of_scope_bse", "BSE is excluded"
-    if not bool(master.get("is_active", True)):
-        return "inactive_pit", "asset_master.is_active is false"
     list_date = _optional_date(master.get("list_date"))
     delist_date = _optional_date(master.get("delist_date"))
     if list_date is not None and list_date > cutoff:
         return "inactive_pit", "asset was listed after trade_date"
     if delist_date is not None and delist_date <= cutoff:
         return "delisted", "asset was delisted by trade_date"
+    if not bool(master.get("is_active", True)):
+        # A current inactive flag can be observed before the frozen cutoff
+        # because the asset was delisted later.  Only a known delist date after
+        # the cutoff proves PIT eligibility; without that proof fail closed.
+        if delist_date is not None and delist_date > cutoff:
+            return "valid", ""
+        return "inactive_pit", "asset_master.is_active is false without post-cutoff delist proof"
     return "valid", ""
 
 

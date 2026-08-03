@@ -5989,7 +5989,12 @@ def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
             f"rolling_sector_target_membership_backfill|{key}|"
             f"{_rolling_oversold_machine_value(result.get(key, ''))}"
         )
-    for key in ("source_missing_codes", "failed_concepts", "out_of_scope_bse"):
+    for key in (
+        "source_missing_codes",
+        "failed_concepts",
+        "out_of_scope_bse",
+        "out_of_scope_900xxx",
+    ):
         value = result.get(key, [])
         if isinstance(value, (list, tuple, set)):
             value = ",".join(str(item) for item in value)
