@@ -179,6 +179,28 @@ conflict key
 `(asset_id, concept_system, concept_code, start_date)`, so an identical rerun
 is idempotent. `database_writes` is always zero in a dry-run.
 
+When a provider supplies a dated export, pass it explicitly with
+`--membership-snapshot-file`. CSV, JSON, and Parquet are accepted. The file
+must contain `concept_code`, `concept_name`, and `asset_id`, plus one uniform
+`source_asof` (or `source_effective_date`) no later than `--trade-date`; every
+target concept must have at least one row. Duplicate concept/member pairs,
+outside-target codes, missing names, invalid asset IDs, and mixed or unknown
+effective dates fail closed before any source fetch or database write. A JSON
+object may use a top-level `source_asof` and a `rows`/`memberships` array. The
+report records `source_kind`, `membership_snapshot_file`, and
+`snapshot_payload_sha256` for lineage. Example:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_research.cli \
+  rolling-sector-target-membership-backfill \
+  --trade-date 2026-07-31 \
+  --concept-codes-file outputs/research/concept_drawdown_over24_2026-08-01.csv \
+  --membership-snapshot-file /path/to/ths_memberships_2026-07-31.csv \
+  --service stock_research \
+  --output-dir outputs/research/rolling_sector_target_membership_backfill \
+  --dry-run
+```
+
 ## Cron
 
 Install a crontab similar to:

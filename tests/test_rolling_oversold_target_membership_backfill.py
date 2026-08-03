@@ -50,6 +50,128 @@ def test_membership_source_asof_must_not_be_after_requested_date():
     ) == (False, "source_asof_after_requested_date")
 
 
+def test_historical_membership_snapshot_loader_requires_explicit_pit_metadata(tmp_path: Path):
+    snapshot = tmp_path / "memberships.csv"
+    snapshot.write_text(
+        "source_asof,concept_code,concept_name,asset_id\n"
+        "2026-07-31,300238,核电,CN:SZ:000001\n"
+        "2026-07-31,309268,样本,CN:SZ:000002\n",
+        encoding="utf-8",
+    )
+
+    frame, source_asof = backfill.load_historical_membership_snapshot(
+        snapshot,
+        target_codes=["300238", "309268"],
+        requested_date=date(2026, 7, 31),
+    )
+
+    assert source_asof == date(2026, 7, 31)
+    assert frame[["concept_code", "concept_name", "asset_id"]].to_dict("records") == [
+        {"concept_code": "300238", "concept_name": "核电", "asset_id": "CN:SZ:000001"},
+        {"concept_code": "309268", "concept_name": "样本", "asset_id": "CN:SZ:000002"},
+    ]
+    assert frame.attrs["source_pit_status"] == "verified"
+
+
+@pytest.mark.parametrize(
+    "contents, error",
+    [
+        (
+            "concept_code,concept_name,asset_id\n300238,核电,CN:SZ:000001\n",
+            "source_asof_unknown",
+        ),
+        (
+            "source_asof,concept_code,concept_name,asset_id\n2026-08-01,300238,核电,CN:SZ:000001\n",
+            "source_asof_after_requested_date",
+        ),
+        (
+            "source_asof,concept_code,concept_name,asset_id\n"
+            "2026-07-31,300238,核电,CN:SZ:000001\n"
+            "2026-07-31,300238,核电,CN:SZ:000001\n",
+            "duplicate_membership",
+        ),
+    ],
+)
+def test_historical_membership_snapshot_loader_fails_closed(
+    tmp_path: Path, contents: str, error: str
+):
+    snapshot = tmp_path / "memberships.csv"
+    snapshot.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=error):
+        backfill.load_historical_membership_snapshot(
+            snapshot,
+            target_codes=["300238"],
+            requested_date=date(2026, 7, 31),
+        )
+
+
+def test_target_membership_backfill_uses_verified_snapshot_file(monkeypatch, tmp_path: Path):
+    snapshot = tmp_path / "memberships.csv"
+    snapshot.write_text(
+        "source_asof,concept_code,concept_name,asset_id\n"
+        "2026-07-31,300238,核电,CN:SZ:000001\n"
+        "2026-07-31,309268,样本,CN:SZ:000002\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pytest.fail("verified snapshot must not fetch live board list"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_constituents",
+        lambda symbol: pytest.fail("verified snapshot must not fetch live members"),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [
+            _master("CN:SZ:000001"),
+            _master("CN:SZ:000002"),
+        ],
+    )
+    execute_many_calls: list[list[tuple[object, ...]]] = []
+    execute_calls: list[list[object]] = []
+
+    @contextmanager
+    def fake_connect(_service):
+        yield object()
+
+    monkeypatch.setattr(backfill, "connect", fake_connect)
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda conn, sql, rows: execute_many_calls.append(list(rows)),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda conn, sql, params: execute_calls.append(list(params)),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes=["300238", "309268"],
+        membership_snapshot_file=snapshot,
+        service="research-test",
+        output_dir=tmp_path / "report",
+        dry_run=False,
+    )
+
+    assert result["source_asof"] == "2026-07-31"
+    assert result["source_pit_status"] == "verified"
+    assert result["source_kind"] == "historical_membership_snapshot"
+    assert result["snapshot_payload_sha256"]
+    assert result["source_board_count"] == 2
+    assert result["valid_non_bj_memberships"] == 2
+    assert result["write_blocked"] is False
+    assert result["database_writes"] == 6
+    assert len(execute_many_calls) == 2
+    assert len(execute_calls) == 2
+
+
 @pytest.mark.parametrize(
     ("source_asof", "expected_effective_date", "expected_status", "expected_reason"),
     [
@@ -920,6 +1042,8 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
             "2026-07-31",
             "--concept-codes-file",
             str(tmp_path / "targets.csv"),
+            "--membership-snapshot-file",
+            str(tmp_path / "memberships.csv"),
             "--source-asof",
             "2026-07-31",
             "--service",
@@ -931,6 +1055,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
     )
     assert parsed.trade_date == "2026-07-31"
     assert parsed.concept_codes_file == str(tmp_path / "targets.csv")
+    assert parsed.membership_snapshot_file == tmp_path / "memberships.csv"
     assert parsed.source_asof == "2026-07-31"
     assert parsed.dry_run is True
 
@@ -961,6 +1086,8 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
                 "2026-07-31",
                 "--concept-codes-file",
                 str(tmp_path / "targets.csv"),
+                "--membership-snapshot-file",
+                str(tmp_path / "memberships.csv"),
                 "--source-asof",
                 "2026-07-31",
                 "--service",
@@ -974,6 +1101,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
     )
     assert captured["trade_date"] == date(2026, 7, 31)
     assert captured["target_codes"] == str(tmp_path / "targets.csv")
+    assert captured["membership_snapshot_file"] == tmp_path / "memberships.csv"
     assert captured["source_asof"] == date(2026, 7, 31)
     assert captured["dry_run"] is True
     output = capsys.readouterr().out

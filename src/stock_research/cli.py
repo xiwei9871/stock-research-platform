@@ -4599,6 +4599,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="PIT source effective date (YYYY-MM-DD); omitted for live current sources",
     )
     rolling_target_membership.add_argument(
+        "--membership-snapshot-file",
+        type=Path,
+        help=(
+            "explicit historical membership snapshot (CSV/JSON/Parquet); "
+            "must carry a source_asof not later than --trade-date"
+        ),
+    )
+    rolling_target_membership.add_argument(
         "--service", default=SETTINGS.research_service
     )
     rolling_target_membership.add_argument(
@@ -5987,6 +5995,9 @@ def _print_target_membership_machine_lines(result: dict[str, object]) -> None:
         "source_asof",
         "source_effective_date",
         "source_pit_status",
+        "source_kind",
+        "membership_snapshot_file",
+        "snapshot_payload_sha256",
         "target_code_count",
         "source_member_cap",
         "source_contract",
@@ -8715,6 +8726,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 if args.source_asof
                 else None
             ),
+            membership_snapshot_file=args.membership_snapshot_file,
             service=args.service,
             output_dir=args.output_dir,
             dry_run=args.dry_run,

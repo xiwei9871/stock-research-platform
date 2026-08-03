@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+from hashlib import sha256
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 from functools import lru_cache
@@ -112,6 +113,9 @@ DETAIL_COLUMNS = (
     "source_pit_status",
 )
 
+SNAPSHOT_REQUIRED_COLUMNS = ("concept_code", "concept_name", "asset_id")
+SNAPSHOT_ASOF_COLUMNS = ("source_asof", "source_effective_date", "effective_date")
+
 
 def load_target_codes(source: str | Path | Sequence[object] | pd.DataFrame) -> tuple[str, ...]:
     """Read and validate a target code CSV or one-code-per-line list.
@@ -194,6 +198,152 @@ def _load_codes_from_path(path: Path) -> tuple[str, ...]:
             raise ValueError("plain target concept code list must contain one code per line")
         values.append(row[0])
     return normalize_target_codes(values)
+
+
+def load_historical_membership_snapshot(
+    source: str | Path | pd.DataFrame,
+    *,
+    target_codes: Iterable[object],
+    requested_date: date | str,
+    source_asof: date | str | None = None,
+) -> tuple[pd.DataFrame, date]:
+    """Load and validate an explicit point-in-time membership snapshot.
+
+    This is the file/import boundary for historical backfills.  The payload
+    must carry (or the operator must explicitly provide) one effective date;
+    current provider responses without that metadata are rejected.  The
+    normalized frame contains one row per ``concept_code``/``asset_id`` and
+    preserves the concept name needed by the board upsert.
+    """
+
+    requested = _parse_date(requested_date)
+    codes = normalize_target_codes(target_codes)
+    frame, metadata_asof = _read_membership_snapshot_payload(source)
+    if not isinstance(frame, pd.DataFrame):
+        frame = pd.DataFrame(frame)
+    frame = frame.copy()
+    frame.columns = [str(column).strip() for column in frame.columns]
+    missing = [column for column in SNAPSHOT_REQUIRED_COLUMNS if column not in frame.columns]
+    if missing:
+        raise ValueError(f"snapshot_missing_columns:{','.join(missing)}")
+    if frame.empty:
+        raise ValueError("snapshot_empty")
+
+    asof_values: list[date] = []
+    for column in SNAPSHOT_ASOF_COLUMNS:
+        if column not in frame.columns:
+            continue
+        for value in frame[column].tolist():
+            parsed = _parse_source_asof(value)
+            if parsed is not None:
+                asof_values.append(parsed)
+    if metadata_asof is not None:
+        asof_values.append(metadata_asof)
+    if source_asof is not None:
+        asof_values.append(_parse_source_asof(source_asof))
+    distinct_asof = sorted({value for value in asof_values if value is not None})
+    if not distinct_asof:
+        raise ValueError("source_asof_unknown")
+    if len(distinct_asof) != 1:
+        raise ValueError("source_asof_mismatch")
+    effective = distinct_asof[0]
+    valid_asof, reason = validate_membership_source_asof(
+        source_asof=effective,
+        requested_date=requested,
+    )
+    if not valid_asof:
+        raise ValueError(reason)
+
+    target_set = set(codes)
+    normalized_rows: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for record in frame.to_dict("records"):
+        concept_code = str(record.get("concept_code") or "").strip()
+        if not TARGET_CODE_PATTERN.fullmatch(concept_code):
+            raise ValueError(f"invalid_snapshot_concept_code:{concept_code!r}")
+        if concept_code not in target_set:
+            raise ValueError(f"snapshot_concept_code_outside_target:{concept_code}")
+        concept_name = str(record.get("concept_name") or "").strip()
+        if not concept_name:
+            raise ValueError(f"snapshot_concept_name_missing:{concept_code}")
+        asset_id = _normalize_source_asset_id(record.get("asset_id"))
+        if asset_id is None:
+            raise ValueError(f"invalid_snapshot_asset_id:{record.get('asset_id')!r}")
+        key = (concept_code, asset_id)
+        if key in seen:
+            raise ValueError(f"duplicate_membership:{concept_code}:{asset_id}")
+        seen.add(key)
+        normalized_rows.append(
+            {
+                "concept_code": concept_code,
+                "concept_name": concept_name,
+                "asset_id": asset_id,
+            }
+        )
+    present = {row["concept_code"] for row in normalized_rows}
+    missing_codes = sorted(target_set - present)
+    if missing_codes:
+        raise ValueError(f"snapshot_missing_target_codes:{','.join(missing_codes)}")
+    normalized = pd.DataFrame(
+        sorted(normalized_rows, key=lambda row: (row["concept_code"], row["asset_id"])),
+        columns=list(SNAPSHOT_REQUIRED_COLUMNS),
+    )
+    normalized.attrs["source_asof"] = effective
+    normalized.attrs["source_effective_date"] = effective
+    normalized.attrs["source_pit_status"] = "verified"
+    normalized.attrs["source_payload_sha256"] = _snapshot_payload_sha256(source)
+    normalized.attrs["source_kind"] = "historical_membership_snapshot"
+    return normalized, effective
+
+
+def _read_membership_snapshot_payload(
+    source: str | Path | pd.DataFrame,
+) -> tuple[pd.DataFrame, date | None]:
+    if isinstance(source, pd.DataFrame):
+        attrs = getattr(source, "attrs", {}) or {}
+        metadata = _parse_source_asof(
+            attrs.get("source_asof") or attrs.get("source_effective_date")
+        )
+        return source, metadata
+    path = Path(source).expanduser()
+    if not path.exists() or not path.is_file():
+        raise ValueError(f"snapshot_file_not_found:{path}")
+    suffix = path.suffix.lower()
+    metadata_asof: date | None = None
+    if suffix == ".csv":
+        frame = pd.read_csv(path, dtype=str, keep_default_na=False)
+    elif suffix in {".parquet", ".pq"}:
+        frame = pd.read_parquet(path)
+    elif suffix == ".json":
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"snapshot_json_invalid:{path}") from exc
+        if isinstance(payload, Mapping):
+            metadata_asof = _parse_source_asof(
+                payload.get("source_asof") or payload.get("source_effective_date")
+            )
+            records = payload.get("rows") or payload.get("memberships") or payload.get("data")
+        else:
+            records = payload
+        if not isinstance(records, list):
+            raise ValueError("snapshot_json_rows_missing")
+        frame = pd.DataFrame(records)
+    else:
+        raise ValueError(f"snapshot_file_type_unsupported:{suffix or 'none'}")
+    return frame, metadata_asof
+
+
+def _snapshot_payload_sha256(source: str | Path | pd.DataFrame) -> str | None:
+    if isinstance(source, pd.DataFrame):
+        payload = source.to_csv(index=False).encode("utf-8")
+    else:
+        path = Path(source).expanduser()
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            return None
+    return sha256(payload).hexdigest()
 
 
 def fetch_target_concept_boards() -> Any:
@@ -521,6 +671,7 @@ def run_target_membership_backfill(
     trade_date: date | str,
     target_codes: str | Path | Iterable[object] | pd.DataFrame,
     source_asof: date | str | None = None,
+    membership_snapshot_file: str | Path | pd.DataFrame | None = None,
     service: str = SETTINGS.research_service,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     dry_run: bool = True,
@@ -531,7 +682,34 @@ def run_target_membership_backfill(
     """Preview or execute a frozen target-scoped THS membership backfill."""
 
     cutoff = _parse_date(trade_date)
+    codes = load_target_codes(target_codes)
     source_effective = _parse_source_asof(source_asof)
+    snapshot_frame: pd.DataFrame | None = None
+    snapshot_error = ""
+    snapshot_payload_sha256: str | None = None
+    source_kind = "ths_current_unknown_asof"
+    board_source = BOARD_SOURCE
+    membership_source = MEMBERSHIP_SOURCE
+    if membership_snapshot_file is not None:
+        try:
+            snapshot_frame, snapshot_effective = load_historical_membership_snapshot(
+                membership_snapshot_file,
+                target_codes=codes,
+                requested_date=cutoff,
+                source_asof=source_effective,
+            )
+            source_effective = snapshot_effective
+            source_kind = str(snapshot_frame.attrs.get("source_kind") or "historical_membership_snapshot")
+            snapshot_payload_sha256 = snapshot_frame.attrs.get("source_payload_sha256")
+            source_label = (
+                f"file:{Path(membership_snapshot_file).name}"
+                if not isinstance(membership_snapshot_file, pd.DataFrame)
+                else "file:in_memory_snapshot"
+            )
+            board_source = source_label
+            membership_source = source_label
+        except Exception as exc:  # noqa: BLE001 - import boundary fails closed
+            snapshot_error = str(exc)
     source_pit_verified, source_asof_reason = validate_membership_source_asof(
         source_asof=source_effective,
         requested_date=cutoff,
@@ -543,15 +721,42 @@ def run_target_membership_backfill(
         source_pit_status = "current_unknown_asof"
     else:
         source_pit_status = "after_requested_date"
-    codes = load_target_codes(target_codes)
-    fetch_boards = board_fetcher or fetch_target_concept_boards
-    fetch_constituents = constituent_fetcher or fetch_target_concept_constituents
-    custom_constituent_fetcher = constituent_fetcher is not None
+    if snapshot_frame is not None:
+        snapshot_boards = (
+            snapshot_frame[["concept_code", "concept_name"]]
+            .drop_duplicates(subset=["concept_code"])
+            .to_dict("records")
+        )
+
+        def fetch_boards_from_snapshot():
+            return snapshot_boards
+
+        def fetch_constituents_from_snapshot(symbol):
+            frame = snapshot_frame.loc[
+                snapshot_frame["concept_code"].astype(str) == str(symbol).strip(),
+                ["asset_id", "concept_name"],
+            ].copy()
+            frame.attrs.update(snapshot_frame.attrs)
+            return frame
+
+        fetch_boards = fetch_boards_from_snapshot
+        fetch_constituents = fetch_constituents_from_snapshot
+        custom_constituent_fetcher = False
+    elif membership_snapshot_file is not None:
+        # A requested snapshot file that failed validation must not fall back
+        # to the live THS endpoint.  Keep the report auditable and preserve DB.
+        fetch_boards = lambda: []
+        fetch_constituents = lambda _symbol: []
+        custom_constituent_fetcher = False
+    else:
+        fetch_boards = board_fetcher or fetch_target_concept_boards
+        fetch_constituents = constituent_fetcher or fetch_target_concept_constituents
+        custom_constituent_fetcher = constituent_fetcher is not None
     load_master = asset_master_loader or load_target_asset_master
 
     source_missing_codes: list[str] = []
     failed_concepts: list[str] = []
-    source_error = ""
+    source_error = snapshot_error
     boards_by_code: dict[str, dict[str, str]] = {}
     try:
         for board in _normalize_board_rows(fetch_boards()):
@@ -714,7 +919,7 @@ def run_target_membership_backfill(
     for code in valid_assets_by_concept:
         valid_assets_by_concept[code] = sorted(set(valid_assets_by_concept[code]))
     board_rows = [
-        (TARGET_CONCEPT_SYSTEM, code, boards_by_code[code]["concept_name"], BOARD_SOURCE, True)
+        (TARGET_CONCEPT_SYSTEM, code, boards_by_code[code]["concept_name"], board_source, True)
         for code in codes
         if code in boards_by_code
     ]
@@ -725,7 +930,7 @@ def run_target_membership_backfill(
             item["concept_code"],
             item["concept_name"],
             cutoff,
-            MEMBERSHIP_SOURCE,
+            membership_source,
         )
         for item in valid_rows
     ]
@@ -763,6 +968,11 @@ def run_target_membership_backfill(
         "source_asof": source_effective_text,
         "source_effective_date": source_effective_text,
         "source_pit_status": source_pit_status,
+        "source_kind": source_kind,
+        "membership_snapshot_file": (
+            str(membership_snapshot_file) if membership_snapshot_file is not None else None
+        ),
+        "snapshot_payload_sha256": snapshot_payload_sha256,
         "target_codes": list(codes),
         "target_code_count": len(codes),
         "source_board_count": len(boards_by_code),
