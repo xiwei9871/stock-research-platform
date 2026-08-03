@@ -90,6 +90,7 @@ def evaluate_snapshot(
     evaluation_cutoff: date,
     horizons: Sequence[int] = (1, 3, 5),
     allow_duplicate_assets: bool = False,
+    _sector_eligibility_mode: bool = False,
 ) -> pd.DataFrame:
     """Evaluate only bars strictly after anchor_date and not after evaluation_cutoff.
 
@@ -117,7 +118,7 @@ def evaluate_snapshot(
     sources = {
         row["adjusted_close_source"]
         for row in candidate_rows.to_dict(orient="records")
-        if _evaluation_exclusion(row) is None
+        if _evaluation_exclusion(row, sector_mode=_sector_eligibility_mode) is None
     }
     if sources:
         normalized_bars, available_sources = _normalize_bars(bars)
@@ -179,7 +180,9 @@ def evaluate_snapshot(
                 row["target_trade_date"] = pd.NA
                 row["endpoint_close"] = float("nan")
                 row["status"] = "pending"
-            exclusion = _evaluation_exclusion(candidate)
+            exclusion = _evaluation_exclusion(
+                candidate, sector_mode=_sector_eligibility_mode
+            )
             if exclusion is not None:
                 row["evaluation_status"] = exclusion
                 row["data_status"] = exclusion
@@ -258,6 +261,7 @@ def evaluate_sector_snapshot(
         evaluation_cutoff=evaluation_cutoff,
         horizons=horizons,
         allow_duplicate_assets=True,
+        _sector_eligibility_mode=True,
     )
     if detail.empty:
         return detail
@@ -360,17 +364,43 @@ def completed_outcomes_before_anchor(
     normalized = _normalize_sector_detail(detail)
     if normalized.empty:
         return normalized.copy(deep=True)
+    row_anchor = _strict_date_series(normalized["anchor_date"], "anchor_date")
     cutoff = _strict_date_series(normalized["evaluation_cutoff"], "evaluation_cutoff")
     if (cutoff > anchor).any():
         raise ValueError("evaluation_cutoff must not follow next_anchor")
     target = _strict_date_series(normalized["target_trade_date"], "target_trade_date")
     status = normalized["status"].astype("string").fillna("").str.strip().str.casefold()
+    evaluation_status = normalized["_evaluation_status"]
+    data_status = (
+        normalized["data_status"].astype("string").fillna("").str.strip().str.casefold()
+    )
+    if not evaluation_status.eq("complete").all():
+        raise ValueError("evaluation_status must be complete")
+    if not data_status.eq("ok").all():
+        raise ValueError("data_status must be ok")
     complete = status.eq("complete") & normalized["forward_Nd_status"].astype("string").str.casefold().eq("complete")
     if not complete.all():
         raise ValueError("calibration outcomes must be complete")
+    returns = pd.to_numeric(normalized["forward_Nd_return"], errors="coerce")
+    finite_returns = returns.map(
+        lambda value: isfinite(float(value)) if pd.notna(value) else False
+    )
+    if not finite_returns.all():
+        raise ValueError("forward_Nd_return must be finite")
+    for column in ("forward_endpoint_close", "endpoint_close"):
+        endpoint = pd.to_numeric(normalized[column], errors="coerce")
+        finite_endpoint = endpoint.map(
+            lambda value: isfinite(float(value)) and float(value) > 0
+            if pd.notna(value)
+            else False
+        )
+        if not finite_endpoint.all():
+            raise ValueError("endpoint_close must be finite and positive")
     if (target >= anchor).any():
         raise ValueError("target_trade_date must precede next_anchor")
-    result = normalized.loc[complete].copy(deep=True).reset_index(drop=True)
+    if (target <= row_anchor).any():
+        raise ValueError("target_trade_date must follow anchor_date")
+    result = normalized.loc[complete, list(_SECTOR_DETAIL_COLUMNS)].copy(deep=True).reset_index(drop=True)
     return result
 
 
@@ -417,6 +447,8 @@ def _normalize_sector_detail(detail: pd.DataFrame) -> pd.DataFrame:
         normalized["endpoint_close"] = normalized.get(
             "forward_endpoint_close", pd.Series(float("nan"), index=normalized.index)
         )
+    if "data_status" not in normalized:
+        normalized["data_status"] = pd.NA
     for column in (
         "sector_system",
         "sector_code",
@@ -694,11 +726,23 @@ def _anchor_close(value: object) -> tuple[float, str, str]:
     return normalized, "ok", ""
 
 
-def _evaluation_exclusion(candidate: dict[str, object]) -> str | None:
-    if str(candidate["sector_gate_status"]).strip().lower() == "blocked":
-        return "excluded_blocked"
+def _evaluation_exclusion(
+    candidate: dict[str, object], *, sector_mode: bool = False
+) -> str | None:
     if str(candidate["stock_lifecycle"]).strip().lower() == "invalidated":
         return "excluded_invalidated"
+    if sector_mode:
+        raw_eligibility = candidate.get("sector_research_eligibility")
+        has_eligibility = raw_eligibility is not None and not pd.isna(raw_eligibility)
+        if has_eligibility:
+            eligibility = str(raw_eligibility).strip().casefold()
+            if eligibility in {"eligible", "watch"}:
+                return None
+            if eligibility == "blocked_data":
+                return "excluded_blocked_data"
+            return "excluded_sector_ineligible"
+    if str(candidate["sector_gate_status"]).strip().lower() == "blocked":
+        return "excluded_blocked"
     return None
 
 

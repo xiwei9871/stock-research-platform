@@ -104,6 +104,17 @@ def test_sector_outcomes_use_strictly_future_sessions_and_keep_cross_sector_dupl
     assert detail.loc[detail["status"].eq("complete"), "endpoint_close"].tolist() == [10.4, 10.4]
 
 
+def test_sector_evaluator_uses_research_eligibility_over_legacy_gate():
+    snapshot = _snapshot()
+    snapshot["stock_candidates"] = snapshot["stock_candidates"].copy()
+    snapshot["stock_candidates"].loc[:, "sector_gate_status"] = "blocked"
+    detail = evaluate_sector_snapshot(
+        snapshot, bars=_bars(), evaluation_cutoff=date(2026, 8, 1), horizons=(1,)
+    )
+    assert detail["status"].eq("complete").all()
+    assert not detail["status"].str.startswith("excluded").any()
+
+
 def test_sector_summary_has_sector_and_sector_stock_rank_buckets_and_metrics():
     detail = evaluate_sector_snapshot(
         _snapshot(), bars=_bars(), evaluation_cutoff=date(2026, 8, 3), horizons=(1, 3)
@@ -153,6 +164,37 @@ def test_calibration_rejects_leakage_and_incomplete_rows():
         completed_outcomes_before_anchor(detail, next_anchor=date(2026, 8, 2))
     with pytest.raises(ValueError, match="complete"):
         completed_outcomes_before_anchor(detail, next_anchor=date(2026, 8, 4))
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    [
+        ("forward_Nd_return", float("nan"), "forward_Nd_return"),
+        ("forward_endpoint_close", float("nan"), "endpoint_close"),
+        ("endpoint_close", float("nan"), "endpoint_close"),
+        ("evaluation_status", "pending", "evaluation_status"),
+        ("data_status", "pending", "data_status"),
+        ("target_trade_date", "2026-07-31", "target_trade_date"),
+        ("anchor_date", "not-a-date", "anchor_date"),
+    ],
+)
+def test_calibration_rejects_invalid_or_leaking_rows(column, value, message):
+    detail = evaluate_sector_snapshot(
+        _snapshot(), bars=_bars(), evaluation_cutoff=date(2026, 8, 1), horizons=(1,)
+    )
+    invalid = detail.copy(deep=True)
+    invalid.loc[invalid.index[0], column] = value
+    with pytest.raises(ValueError, match=message):
+        completed_outcomes_before_anchor(invalid, next_anchor=date(2026, 8, 3))
+
+
+def test_calibration_returns_canonical_detail_without_internal_summary_columns():
+    detail = evaluate_sector_snapshot(
+        _snapshot(), bars=_bars(), evaluation_cutoff=date(2026, 8, 1), horizons=(1,)
+    )
+    result = completed_outcomes_before_anchor(detail, next_anchor=date(2026, 8, 3))
+    assert "_evaluation_status" not in result.columns
+    assert set(detail.columns).issubset(result.columns)
 
 
 def test_pipeline_batch_outcome_helper_returns_detail_and_summary_without_reloading():
