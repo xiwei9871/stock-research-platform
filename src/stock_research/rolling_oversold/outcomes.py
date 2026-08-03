@@ -61,9 +61,19 @@ _CONTEXT_COLUMNS = (
     "sector_code",
     "sector_name",
     "sector_gate_status",
+    "sector_research_eligibility",
     "sector_recovery_state",
     "stock_lifecycle",
     "stock_rank",
+)
+_SECTOR_DETAIL_COLUMNS = (
+    *_DETAIL_COLUMNS,
+    "sector_stock_rank",
+    "sector_rank",
+    "sector_research_eligibility",
+    "target_trade_date",
+    "endpoint_close",
+    "status",
 )
 _PRICE_SOURCE_COLUMNS = {
     "raw": ("raw_close",),
@@ -79,6 +89,7 @@ def evaluate_snapshot(
     bars: pd.DataFrame,
     evaluation_cutoff: date,
     horizons: Sequence[int] = (1, 3, 5),
+    allow_duplicate_assets: bool = False,
 ) -> pd.DataFrame:
     """Evaluate only bars strictly after anchor_date and not after evaluation_cutoff.
 
@@ -100,7 +111,9 @@ def evaluate_snapshot(
         raise TypeError("snapshot stock_candidates must be a pandas DataFrame")
     if not isinstance(bars, pd.DataFrame):
         raise TypeError("bars must be a pandas DataFrame")
-    candidate_rows = _normalize_candidates(candidates)
+    candidate_rows = _normalize_candidates(
+        candidates, allow_duplicate_assets=allow_duplicate_assets
+    )
     sources = {
         row["adjusted_close_source"]
         for row in candidate_rows.to_dict(orient="records")
@@ -158,19 +171,33 @@ def evaluate_snapshot(
                 "data_status": anchor_status,
                 "data_error": anchor_error,
             }
+            if allow_duplicate_assets:
+                row["sector_stock_rank"] = candidate.get("sector_stock_rank", pd.NA)
+                row["sector_research_eligibility"] = candidate.get(
+                    "sector_research_eligibility", pd.NA
+                )
+                row["target_trade_date"] = pd.NA
+                row["endpoint_close"] = float("nan")
+                row["status"] = "pending"
             exclusion = _evaluation_exclusion(candidate)
             if exclusion is not None:
                 row["evaluation_status"] = exclusion
                 row["data_status"] = exclusion
                 row["data_error"] = ""
+                if allow_duplicate_assets:
+                    row["status"] = exclusion
                 rows.append(row)
                 continue
             if anchor_status != "ok":
                 row["evaluation_status"] = "data_error"
+                if allow_duplicate_assets:
+                    row["status"] = "data_error"
                 rows.append(row)
                 continue
             if len(future) < horizon:
                 row["data_status"] = "ok"
+                if allow_duplicate_assets and not future.empty:
+                    row["target_trade_date"] = future.iloc[-1]["trade_date"].isoformat()
                 rows.append(row)
                 continue
             endpoint = future.iloc[horizon - 1]
@@ -189,8 +216,249 @@ def evaluate_snapshot(
                     "data_status": "ok",
                 }
             )
+            if allow_duplicate_assets:
+                row.update(
+                    {
+                        "target_trade_date": endpoint["trade_date"].isoformat(),
+                        "endpoint_close": endpoint_close,
+                        "status": "complete",
+                    }
+                )
             rows.append(row)
-    return pd.DataFrame(rows, columns=_DETAIL_COLUMNS)
+    columns = _SECTOR_DETAIL_COLUMNS if allow_duplicate_assets else _DETAIL_COLUMNS
+    return pd.DataFrame(rows, columns=columns)
+
+
+def evaluate_sector_snapshot(
+    snapshot: dict[str, object],
+    *,
+    bars: pd.DataFrame,
+    evaluation_cutoff: date,
+    horizons: Sequence[int] = (1, 3, 5),
+) -> pd.DataFrame:
+    """Evaluate a full-sector snapshot without collapsing shared assets.
+
+    Batch snapshots intentionally allow an asset to occur in more than one
+    sector.  The identity of an outcome is therefore the composite
+    ``(asset_id, sector_system, sector_code, forward_horizon_days)`` rather
+    than the asset alone.  Prices are still looked up once per asset/date;
+    the same future bar may legitimately support multiple sector outcomes.
+
+    ``target_trade_date``/``endpoint_close``/``status`` are stable, concise
+    aliases for the existing ``forward_endpoint_date``/
+    ``forward_endpoint_close``/``forward_Nd_status`` columns.  For a pending
+    horizon with at least one observed future session, the target date is the
+    latest observed session at the cutoff so that the pending boundary is
+    auditable without pretending that the return is complete.
+    """
+
+    detail = evaluate_snapshot(
+        snapshot,
+        bars=bars,
+        evaluation_cutoff=evaluation_cutoff,
+        horizons=horizons,
+        allow_duplicate_assets=True,
+    )
+    if detail.empty:
+        return detail
+
+    candidate_frame = snapshot.get("stock_candidates")
+    if not isinstance(candidate_frame, pd.DataFrame):
+        raise TypeError("snapshot stock_candidates must be a pandas DataFrame")
+    candidate_rank: dict[tuple[str, str, str], object] = {}
+    for row in candidate_frame.to_dict(orient="records"):
+        key = _sector_identity(row.get("asset_id"), row.get("sector_system"), row.get("sector_code"))
+        if key in candidate_rank:
+            raise ValueError("snapshot stock_candidates contains duplicate asset/sector composite key")
+        candidate_rank[key] = row.get("sector_rank", pd.NA)
+
+    sector_states = snapshot.get("sector_states")
+    if isinstance(sector_states, pd.DataFrame) and not sector_states.empty:
+        for row in sector_states.to_dict(orient="records"):
+            key = _sector_identity(None, row.get("sector_system"), row.get("sector_code"))
+            value = row.get("sector_rank", pd.NA)
+            for candidate_key in tuple(candidate_rank):
+                if candidate_key[1:] == key[1:]:
+                    if pd.isna(candidate_rank[candidate_key]) and pd.notna(value):
+                        candidate_rank[candidate_key] = value
+
+    detail = detail.copy(deep=True)
+    detail["sector_rank"] = [
+        candidate_rank.get(
+            _sector_identity(asset_id, system, code),
+            pd.NA,
+        )
+        for asset_id, system, code in zip(
+            detail["asset_id"], detail["sector_system"], detail["sector_code"], strict=True
+        )
+    ]
+    detail["sector_rank"] = pd.to_numeric(detail["sector_rank"], errors="coerce").astype("Int64")
+    detail["target_trade_date"] = detail["target_trade_date"].astype("string")
+    detail["status"] = detail["status"].astype("string")
+    return detail.loc[:, _SECTOR_DETAIL_COLUMNS]
+
+
+def summarize_sector_rolling_evaluation(detail: pd.DataFrame) -> pd.DataFrame:
+    """Summarize batch outcomes by sector and both ranking dimensions.
+
+    Unlike :func:`summarize_rolling_evaluation`, this function deliberately
+    treats duplicate assets in different sectors as separate observations and
+    groups on the sector-local ``sector_stock_rank`` field.
+    """
+
+    normalized = _normalize_sector_detail(detail)
+    if normalized.empty:
+        return pd.DataFrame(columns=_SUMMARY_COLUMNS)
+    normalized["_sector"] = [
+        _sector_key(system, code)
+        for system, code in zip(
+            normalized["sector_system"], normalized["sector_code"], strict=True
+        )
+    ]
+    normalized["_sector_rank_bucket"] = normalized["sector_rank"].map(_rank_bucket)
+    normalized["_sector_stock_rank_bucket"] = normalized["sector_stock_rank"].map(_rank_bucket)
+    groups: tuple[tuple[str, str | None], ...] = (
+        ("overall", None),
+        ("sector", "_sector"),
+        ("sector_recovery_state", "sector_recovery_state"),
+        ("sector_research_eligibility", "sector_research_eligibility"),
+        ("sector_rank_bucket", "_sector_rank_bucket"),
+        ("sector_stock_rank_bucket", "_sector_stock_rank_bucket"),
+    )
+    rows: list[dict[str, object]] = []
+    for group_by, column in groups:
+        if column is None:
+            grouped = [("all", normalized)]
+        else:
+            values = normalized[column].fillna("unknown").astype(str)
+            grouped = [
+                (str(value), normalized.loc[values.eq(value)])
+                for value in sorted(values.unique())
+            ]
+        for group_value, frame in grouped:
+            for horizon, horizon_frame in frame.groupby("forward_horizon_days", sort=True):
+                rows.append(_summarize_group(group_by, group_value, int(horizon), horizon_frame))
+    return pd.DataFrame(rows, columns=_SUMMARY_COLUMNS).sort_values(
+        ["group_by", "group_value", "forward_horizon_days"], kind="mergesort"
+    ).reset_index(drop=True)
+
+
+def completed_outcomes_before_anchor(
+    detail: pd.DataFrame, *, next_anchor: date
+) -> pd.DataFrame:
+    """Return immutable, complete outcomes available before ``next_anchor``.
+
+    The helper is intentionally fail-closed: a mixed complete/pending frame,
+    a target on/after the next anchor, or an evaluation cutoff after that
+    anchor is rejected instead of silently allowing future information into
+    calibration.
+    """
+
+    if not isinstance(detail, pd.DataFrame):
+        raise TypeError("detail must be a pandas DataFrame")
+    anchor = _normalize_date(next_anchor, "next_anchor")
+    normalized = _normalize_sector_detail(detail)
+    if normalized.empty:
+        return normalized.copy(deep=True)
+    cutoff = _strict_date_series(normalized["evaluation_cutoff"], "evaluation_cutoff")
+    if (cutoff > anchor).any():
+        raise ValueError("evaluation_cutoff must not follow next_anchor")
+    target = _strict_date_series(normalized["target_trade_date"], "target_trade_date")
+    status = normalized["status"].astype("string").fillna("").str.strip().str.casefold()
+    complete = status.eq("complete") & normalized["forward_Nd_status"].astype("string").str.casefold().eq("complete")
+    if not complete.all():
+        raise ValueError("calibration outcomes must be complete")
+    if (target >= anchor).any():
+        raise ValueError("target_trade_date must precede next_anchor")
+    result = normalized.loc[complete].copy(deep=True).reset_index(drop=True)
+    return result
+
+
+def calibration_outcomes_before(
+    detail: pd.DataFrame, next_anchor: date
+) -> pd.DataFrame:
+    """Compatibility alias for :func:`completed_outcomes_before_anchor`."""
+
+    return completed_outcomes_before_anchor(detail, next_anchor=next_anchor)
+
+
+def _sector_identity(asset_id: object, system: object, code: object) -> tuple[str, str, str]:
+    def text(value: object) -> str:
+        return "" if value is None or pd.isna(value) else str(value).strip()
+
+    return text(asset_id), text(system), text(code)
+
+
+def _normalize_sector_detail(detail: pd.DataFrame) -> pd.DataFrame:
+    if not isinstance(detail, pd.DataFrame):
+        raise TypeError("detail must be a pandas DataFrame")
+    if detail.empty:
+        return pd.DataFrame(columns=_SECTOR_DETAIL_COLUMNS)
+    normalized = detail.copy(deep=True)
+    required = {"forward_horizon_days", "forward_Nd_return"}
+    missing = required - set(normalized.columns)
+    if missing:
+        raise ValueError(f"detail is missing required columns: {', '.join(sorted(missing))}")
+    if "forward_Nd_status" not in normalized:
+        normalized["forward_Nd_status"] = normalized.get(
+            "status", pd.Series("pending", index=normalized.index)
+        )
+    if "evaluation_status" not in normalized:
+        normalized["evaluation_status"] = normalized.get(
+            "status", normalized["forward_Nd_status"]
+        )
+    if "status" not in normalized:
+        normalized["status"] = normalized["forward_Nd_status"]
+    if "target_trade_date" not in normalized:
+        normalized["target_trade_date"] = normalized.get(
+            "forward_endpoint_date", pd.Series(pd.NA, index=normalized.index)
+        )
+    if "endpoint_close" not in normalized:
+        normalized["endpoint_close"] = normalized.get(
+            "forward_endpoint_close", pd.Series(float("nan"), index=normalized.index)
+        )
+    for column in (
+        "sector_system",
+        "sector_code",
+        "sector_name",
+        "sector_recovery_state",
+        "sector_research_eligibility",
+    ):
+        if column not in normalized:
+            normalized[column] = pd.NA
+    if "sector_stock_rank" not in normalized:
+        normalized["sector_stock_rank"] = pd.NA
+    if "sector_rank" not in normalized:
+        normalized["sector_rank"] = pd.NA
+    normalized["forward_horizon_days"] = pd.to_numeric(
+        normalized["forward_horizon_days"], errors="coerce"
+    )
+    if normalized["forward_horizon_days"].isna().any():
+        raise ValueError("detail forward_horizon_days must be numeric")
+    normalized["forward_Nd_return"] = pd.to_numeric(
+        normalized["forward_Nd_return"], errors="coerce"
+    )
+    normalized["_evaluation_status"] = (
+        normalized["evaluation_status"].astype("string").fillna("data_error").str.strip().str.casefold()
+    )
+    normalized["forward_Nd_status"] = (
+        normalized["forward_Nd_status"].astype("string").fillna("pending").str.strip().str.casefold()
+    )
+    normalized["status"] = normalized["status"].astype("string").fillna("pending").str.strip().str.casefold()
+    normalized["sector_recovery_state"] = normalized["sector_recovery_state"].astype("string").str.strip().replace("", pd.NA)
+    normalized["sector_research_eligibility"] = normalized["sector_research_eligibility"].astype("string").str.strip().replace("", pd.NA)
+    normalized["sector_stock_rank"] = pd.to_numeric(normalized["sector_stock_rank"], errors="coerce")
+    normalized["sector_rank"] = pd.to_numeric(normalized["sector_rank"], errors="coerce")
+    return normalized
+
+
+def _strict_date_series(values: pd.Series, field_name: str) -> pd.Series:
+    result: list[date] = []
+    for value in values:
+        if value is None or pd.isna(value):
+            raise ValueError(f"{field_name} must contain dates")
+        result.append(_normalize_date(value, field_name))
+    return pd.Series(result, index=values.index, dtype="object")
 
 
 def summarize_rolling_evaluation(detail: pd.DataFrame) -> pd.DataFrame:
@@ -274,7 +542,9 @@ def _normalize_horizons(horizons: Sequence[int]) -> tuple[int, ...]:
     return tuple(sorted(horizons))
 
 
-def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
+def _normalize_candidates(
+    candidates: pd.DataFrame, *, allow_duplicate_assets: bool = False
+) -> pd.DataFrame:
     required = {"asset_id", "anchor_close"}
     missing = required - set(candidates.columns)
     if missing:
@@ -283,11 +553,18 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     result["asset_id"] = result["asset_id"].astype("string").str.strip()
     if result["asset_id"].isna().any() or result["asset_id"].eq("").any():
         raise ValueError("snapshot stock_candidates asset_id must be non-empty")
-    if result["asset_id"].duplicated().any():
+    if not allow_duplicate_assets and result["asset_id"].duplicated().any():
         raise ValueError("snapshot stock_candidates contains duplicate asset_id values")
     for column in _CONTEXT_COLUMNS:
         if column not in result:
             result[column] = pd.NA
+    if allow_duplicate_assets:
+        if result.duplicated(["asset_id", "sector_system", "sector_code"]).any():
+            raise ValueError(
+                "snapshot stock_candidates contains duplicate asset/sector composite key"
+            )
+        if "sector_stock_rank" not in result:
+            result["sector_stock_rank"] = pd.NA
     if "adjusted_close_source" not in result:
         result["adjusted_close_source"] = pd.NA
     result["adjusted_close_source"] = result["adjusted_close_source"].astype("string").str.strip().replace("", pd.NA)

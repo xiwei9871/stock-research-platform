@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+from collections.abc import Sequence
 from typing import Any, Iterable
 
 import pandas as pd
@@ -32,7 +33,12 @@ from stock_research.strategy_data_policy import (
 from .contracts import GateStatus, RollingOversoldConfig, SectorResearchEligibility, StockLifecycle
 from .loaders import RollingInputs, load_rolling_inputs
 from .market_regime import compute_market_regime_features
-from .outcomes import evaluate_snapshot, summarize_rolling_evaluation
+from .outcomes import (
+    evaluate_sector_snapshot,
+    evaluate_snapshot,
+    summarize_rolling_evaluation,
+    summarize_sector_rolling_evaluation,
+)
 from .preflight import PreflightResult, run_rolling_preflight
 from .reporting import (
     latest_rolling_evaluation_directory,
@@ -85,6 +91,35 @@ _SECTOR_BATCH_ROW_COUNT_KEYS = frozenset(
         "sector_stock_candidates",
     }
 )
+
+
+def evaluate_sector_batch_outcomes(
+    snapshot: dict[str, object],
+    *,
+    bars: pd.DataFrame,
+    evaluation_cutoff: date,
+    horizons: Sequence[int] = (1, 3, 5),
+) -> dict[str, pd.DataFrame]:
+    """Evaluate and summarize a published sector batch in memory.
+
+    This orchestration helper deliberately accepts already-loaded database
+    bars.  It performs no provider fallback and no per-sector reload, so a
+    batch caller can reuse the one stock-bar frame produced for the anchor.
+    The returned frames are independent copies owned by the caller.
+    """
+
+    detail = evaluate_sector_snapshot(
+        snapshot,
+        bars=bars,
+        evaluation_cutoff=evaluation_cutoff,
+        horizons=horizons,
+    )
+    summary = summarize_sector_rolling_evaluation(detail)
+    return {"detail": detail, "summary": summary}
+
+
+# Descriptive alias for callers that use the snapshot-oriented naming.
+evaluate_sector_snapshot_outcomes = evaluate_sector_batch_outcomes
 
 
 def run_one_anchor(
