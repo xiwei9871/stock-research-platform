@@ -640,6 +640,16 @@ def _load_existing_sector_batch_result(
         or manifest.get("snapshot_id") != expected_snapshot_id
     ):
         return None
+    manifest_cutoff = manifest.get("data_cutoff_date")
+    if not isinstance(manifest_cutoff, str) or not manifest_cutoff.strip():
+        return None
+    manifest_cutoff = manifest_cutoff.strip()
+    try:
+        cutoff_date = date.fromisoformat(manifest_cutoff)
+    except ValueError:
+        return None
+    if cutoff_date.isoformat() != manifest_cutoff or cutoff_date > anchor_date:
+        return None
     hashes = manifest.get("artifact_hashes")
     if not isinstance(hashes, dict) or not _SECTOR_BATCH_REQUIRED_ARTIFACTS.issubset(hashes):
         return None
@@ -686,10 +696,26 @@ def _load_existing_sector_batch_result(
     except (OSError, ValueError, pd.errors.ParserError):
         return None
     _assert_existing_snapshot_lineage(loaded, previous_snapshot)
+    if loaded.get("data_cutoff_date") != manifest_cutoff:
+        return None
+    market_artifact = loaded.get("market_regime")
+    if not isinstance(market_artifact, dict):
+        return None
+    if market_artifact.get("data_cutoff_date") != manifest_cutoff:
+        return None
     sectors = loaded.get("sector_states", pd.DataFrame())
     stocks = loaded.get("stock_candidates", pd.DataFrame())
     if not isinstance(sectors, pd.DataFrame) or not isinstance(stocks, pd.DataFrame):
         return None
+    for frame in (sectors, stocks):
+        if frame.empty:
+            continue
+        if "data_cutoff_date" not in frame:
+            return None
+        values = frame["data_cutoff_date"].astype("string").str.strip().replace("", pd.NA)
+        values = values.dropna()
+        if not values.eq(manifest_cutoff).all():
+            return None
     if (
         len(sectors) != normalized_counts["sector_states"]
         or len(stocks) != normalized_counts["stock_candidates"]

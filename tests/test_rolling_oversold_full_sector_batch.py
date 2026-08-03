@@ -417,6 +417,35 @@ def test_sector_batch_fast_path_requires_consistent_manifest_row_counts(monkeypa
     ) is None
 
 
+def test_sector_batch_fast_path_requires_consistent_manifest_data_cutoff(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+    manifest_path = Path(result["paths"]["manifest"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["data_cutoff_date"] = "1900-01-01"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=tmp_path,
+        anchor_date=ANCHOR,
+        score_version=config.score_version,
+    ) is None
+
+
 def test_batch_snapshot_requires_positive_contiguous_sector_stock_ranks(monkeypatch):
     inputs = _fixture_inputs()
     config = RollingOversoldConfig(anchor_start_date=ANCHOR)
