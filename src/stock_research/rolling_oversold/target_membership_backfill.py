@@ -553,7 +553,7 @@ def run_target_membership_backfill(
     ]
 
     source_incomplete = bool(source_error or source_missing_codes or failed_concepts)
-    write_blocked = bool(not dry_run and source_incomplete)
+    write_blocked = source_incomplete
     write_blocked_reason = "source_incomplete" if write_blocked else ""
     database_writes = 0
     if not dry_run and not write_blocked:
