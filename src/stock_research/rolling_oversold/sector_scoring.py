@@ -294,8 +294,11 @@ def _finalize_scores_and_states(result: pd.DataFrame, market_regime: dict[str, o
     )
     insufficient_history = result["history_observations"] < 6
     invalid_mapping = ~result["sector_mapping_valid"].astype(bool)
+    incomplete_feature_data = result["sector_feature_data_status"].isin(
+        ("missing_feature_data", "insufficient_history")
+    )
     result.loc[
-        insufficient_history | invalid_mapping,
+        insufficient_history | invalid_mapping | incomplete_feature_data,
         ["sector_oversold_score", "sector_repairability_score", "sector_direction_score"],
     ] = float("nan")
     result["sector_recovery_state"] = result.apply(_recovery_state, axis=1)
@@ -321,7 +324,15 @@ def _recovery_state(row: pd.Series) -> str:
 
 
 def _gate_status(row: pd.Series, regime: str) -> str:
-    if not row["sector_mapping_valid"] or row["membership_count"] == 0 or row["history_observations"] < 6:
+    if (
+        not row["sector_mapping_valid"]
+        or row["membership_count"] == 0
+        or row["history_observations"] < 6
+        or row.get("sector_feature_data_status") in {
+            "missing_feature_data",
+            "insufficient_history",
+        }
+    ):
         return GateStatus.BLOCKED.value
     if row["sector_recovery_state"] in {RecoveryState.REPAIRED.value, RecoveryState.STRUCTURALLY_WEAK.value, RecoveryState.UNKNOWN.value}:
         return GateStatus.WATCH.value
@@ -538,7 +549,7 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
 
     breadth_status = "ok"
     count_windows: dict[str, tuple[bool, pd.Series, bool]] = {}
-    for column in ("up_count", "down_count", "new_low_count"):
+    for column in ("up_count", "down_count"):
         count_windows[column] = _count_window_ratio(frame, column, window=20)
         present, _, complete = count_windows[column]
         if present and not complete:
@@ -562,10 +573,14 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
             if not valid.empty:
                 result[output] = float(valid.tail(20).mean())
     for window, output in ((20, "sector_new_low_ratio_20d"), (60, "sector_new_low_ratio_60d")):
-        has_new_low_counts, count_ratio, new_low_complete = count_windows["new_low_count"]
+        has_new_low_counts, count_ratio, new_low_complete = _count_window_ratio(
+            frame, "new_low_count", window=window
+        )
         if has_new_low_counts and new_low_complete:
             result[output] = float(count_ratio.tail(window).mean())
-        elif not has_new_low_counts:
+        elif has_new_low_counts:
+            breadth_status = "missing_feature_data"
+        else:
             result[output] = float(
                 closes.iloc[-1] <= np.min(closes.to_numpy(dtype=float)[-window:])
             )
@@ -719,6 +734,8 @@ def _last_optional_feature(frame: pd.DataFrame, columns: tuple[str, ...]) -> flo
         if column not in frame:
             continue
         values = pd.to_numeric(frame[column], errors="coerce")
+        if values.dropna().empty:
+            continue
         recent = values.tail(min(20, len(values)))
         if not recent.empty and not recent.isna().any():
             return float(recent.iloc[-1])

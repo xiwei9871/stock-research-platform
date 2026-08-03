@@ -222,6 +222,26 @@ def test_interior_breadth_count_missing_is_not_ignored_by_window_means() -> None
     assert pd.isna(row["up_ratio_20d"])
     assert row["sector_feature_data_status"] == "missing_feature_data"
     assert row["sector_research_eligibility"] == "blocked_data"
+    assert pd.isna(row["sector_repairability_score"])
+    assert row["sector_gate_status"] != "confirmed"
+
+
+def test_new_low_60d_checks_its_own_window_for_missing_counts() -> None:
+    bars = make_sector_bars(
+        [120 - index for index in range(59)] + [100, 95, 90, 88, 92, 94],
+        volumes=[100] * 65,
+        amounts=[1000] * 65,
+    )
+    bars["stock_count"] = 100.0
+    bars["new_low_count"] = 1.0
+    bars.loc[30, "new_low_count"] = float("nan")
+
+    row = make_scored_sector_row(bars)
+
+    assert pd.notna(row["sector_new_low_ratio_20d"])
+    assert pd.isna(row["sector_new_low_ratio_60d"])
+    assert row["sector_feature_data_status"] == "missing_feature_data"
+    assert row["sector_research_eligibility"] == "blocked_data"
 
 
 def test_latest_leader_missing_does_not_fall_back_to_stale_value() -> None:
@@ -238,6 +258,20 @@ def test_latest_leader_missing_does_not_fall_back_to_stale_value() -> None:
     assert pd.isna(row["sector_leader_return_1d"])
     assert row["sector_feature_data_status"] == "missing_feature_data"
     assert row["sector_research_eligibility"] == "blocked_data"
+
+
+def test_empty_leader_alias_can_use_a_later_populated_alias() -> None:
+    bars = make_sector_bars(
+        [120 - index for index in range(19)] + [100, 95, 90, 88, 92, 94],
+        volumes=[100] * 25,
+        amounts=[1000] * 25,
+    )
+    bars["leader_return_1d"] = float("nan")
+    bars["sector_leader_return_1d"] = 0.03
+
+    row = make_scored_sector_row(bars)
+
+    assert row["sector_leader_return_1d"] == pytest.approx(0.03)
 
 
 def test_future_bar_after_anchor_does_not_change_frozen_features() -> None:
