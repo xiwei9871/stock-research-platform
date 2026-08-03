@@ -178,6 +178,32 @@ def test_partial_volume_history_is_blocked_instead_of_dropna_substitution(
     assert row["sector_research_eligibility"] == "blocked_data"
 
 
+@pytest.mark.parametrize("missing_index", [10, 24])
+def test_partial_close_history_does_not_compress_trading_day_windows(
+    missing_index: int,
+) -> None:
+    closes = [120 - index for index in range(19)] + [100, 95, 90, 88, 92, 94]
+    closes[missing_index] = float("nan")
+    row = make_scored_sector_row(
+        make_sector_bars(
+            closes,
+            volumes=[100] * 25,
+            amounts=[1000] * 25,
+        )
+    )
+
+    assert pd.isna(row["sector_low_close_20d"])
+    assert pd.isna(row["sector_return_20d"])
+    if missing_index == 10:
+        assert pd.isna(row["sector_ma20"])
+    else:
+        assert pd.isna(row["sector_ma5"])
+        assert pd.isna(row["sector_ma10"])
+        assert pd.isna(row["sector_ma20"])
+    assert row["sector_feature_data_status"] == "missing_feature_data"
+    assert row["sector_research_eligibility"] == "blocked_data"
+
+
 def test_future_bar_after_anchor_does_not_change_frozen_features() -> None:
     history = make_sector_bars(
         [100, 95, 90, 88, 92, 94],

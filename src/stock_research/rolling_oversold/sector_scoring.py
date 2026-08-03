@@ -189,12 +189,12 @@ def _score_one_sector(
     if not sector.empty:
         sector = sector.drop_duplicates("trade_date", keep="last")
     close_rows = (
-        sector.loc[sector["close"].notna() & sector["trade_date"].notna()]
+        sector.loc[sector["trade_date"].notna()]
         if not sector.empty
         else sector
     )
     closes = (
-        close_rows["close"].to_numpy(dtype=float)
+        _numeric_series(close_rows["close"]).to_numpy(dtype=float)
         if not close_rows.empty
         else np.array([], dtype=float)
     )
@@ -398,15 +398,19 @@ def _low_point_features(
             "close": close_values.iloc[:length].to_numpy(dtype=float),
             "trade_date": date_values[:length],
         }
-    ).dropna(subset=["close", "trade_date"])
+    )
     if len(frame) < _MIN_FEATURE_HISTORY:
         return result
     frame = frame.sort_values("trade_date", kind="mergesort").reset_index(drop=True)
-    latest_close = float(frame["close"].iloc[-1])
     for window in windows:
         subset = frame.tail(int(window)).reset_index(drop=True)
-        if subset.empty:
+        if (
+            len(subset) < _MIN_FEATURE_HISTORY
+            or subset["close"].isna().any()
+            or subset["trade_date"].isna().any()
+        ):
             continue
+        latest_close = float(subset["close"].iloc[-1])
         low_value = float(subset["close"].min())
         # “Recent low” means the latest occurrence when equal lows repeat.
         low_positions = np.flatnonzero(np.isclose(subset["close"].to_numpy(), low_value))
@@ -442,7 +446,7 @@ def _trend_features(closes: object, dates: object) -> dict[str, object]:
             "sector_close_above_ma20": np.nan,
         }
     )
-    values = _numeric_array(closes)
+    values = _numeric_series(closes).to_numpy(dtype=float)
     if len(values) < _MIN_FEATURE_HISTORY:
         return result
     for period in (1, 3, 5, 10, 20):
@@ -458,9 +462,9 @@ def _trend_features(closes: object, dates: object) -> dict[str, object]:
     result["sector_ma5_slope_5d"] = _moving_average_slope(values, 5, 5)
     result["sector_ma10_slope_10d"] = _moving_average_slope(values, 10, 10)
     latest = float(series.iloc[-1])
-    if np.isfinite(moving[5]):
+    if np.isfinite(latest) and np.isfinite(moving[5]):
         result["sector_close_above_ma5"] = bool(latest > moving[5])
-    if np.isfinite(moving[20]):
+    if np.isfinite(latest) and np.isfinite(moving[20]):
         result["sector_close_above_ma20"] = bool(latest > moving[20])
     if np.isfinite(moving[5]) and np.isfinite(moving[10]):
         previous_ma5 = _moving_average_value(values, 5, offset=1)
@@ -512,30 +516,37 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
         if "trade_date" in sector_frame
         else sector_frame.copy(deep=True)
     )
-    closes = _numeric_array(frame.get("close", []))
-    if len(closes) >= 2:
-        daily_up = np.diff(closes) > 0
-        result["sector_up_ratio_1d"] = float(daily_up[-1])
-        result["sector_up_ratio_5d"] = float(np.mean(daily_up[-5:]))
-        result["sector_up_ratio_20d"] = float(np.mean(daily_up[-20:]))
+    closes = _numeric_series(frame.get("close", []))
+    if len(closes) < _MIN_FEATURE_HISTORY:
+        return result
+    if closes.tail(min(20, len(closes))).isna().any() or pd.isna(closes.iloc[-1]):
+        return result
+    daily_up = np.diff(closes.to_numpy(dtype=float)) > 0
+    has_up_counts = {"up_count", "stock_count"}.issubset(frame.columns)
     count_ratio = _count_ratio(frame, "up_count")
     if count_ratio is not None:
         result["sector_up_ratio_1d"] = float(count_ratio.iloc[-1])
         result["sector_up_ratio_5d"] = float(count_ratio.tail(5).mean())
         result["sector_up_ratio_20d"] = float(count_ratio.tail(20).mean())
+    elif not has_up_counts:
+        result["sector_up_ratio_1d"] = float(daily_up[-1])
+        result["sector_up_ratio_5d"] = float(np.mean(daily_up[-5:]))
+        result["sector_up_ratio_20d"] = float(np.mean(daily_up[-20:]))
 
     for window, output in ((5, "sector_above_ma5_ratio"), (20, "sector_above_ma20_ratio")):
         if len(closes) >= window:
-            moving = pd.Series(closes).rolling(window, min_periods=window).mean()
-            valid = (pd.Series(closes) > moving).dropna()
+            moving = closes.rolling(window, min_periods=window).mean()
+            valid = (closes > moving).dropna()
             if not valid.empty:
                 result[output] = float(valid.tail(20).mean())
     for window, output in ((20, "sector_new_low_ratio_20d"), (60, "sector_new_low_ratio_60d")):
         count_ratio = _count_ratio(frame, "new_low_count")
         if count_ratio is not None:
             result[output] = float(count_ratio.tail(window).mean())
-        elif len(closes):
-            result[output] = float(closes[-1] <= np.min(closes[-window:]))
+        elif "new_low_count" not in frame or "stock_count" not in frame:
+            result[output] = float(
+                closes.iloc[-1] <= np.min(closes.to_numpy(dtype=float)[-window:])
+            )
 
     for period in (1, 3, 5):
         result[f"sector_leader_return_{period}d"] = _last_optional_feature(
@@ -556,8 +567,8 @@ def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
     ):
         leader_count = pd.to_numeric(frame["leader_count"], errors="coerce")
         stock_count = pd.to_numeric(frame["stock_count"], errors="coerce")
-        ratio = (leader_count / stock_count.replace(0, np.nan)).dropna()
-        if not ratio.empty:
+        ratio = leader_count / stock_count.replace(0, np.nan)
+        if not ratio.empty and pd.notna(ratio.iloc[-1]):
             result["sector_leader_breadth"] = float(ratio.iloc[-1])
 
     supplied_dispersion = pd.to_numeric(
@@ -627,7 +638,12 @@ def _ratio_5_20(values: np.ndarray) -> float:
 
 
 def _volume_ratio_5_20(values: object) -> float:
-    """Return a volume ratio only when both windows are fully observed."""
+    """Return a volume ratio only when both windows are fully observed.
+
+    With six to nineteen observations, ``tail(20)`` is the available history
+    rather than an invented twenty-session baseline; any missing value in that
+    available baseline still makes the ratio unavailable.
+    """
 
     series = _numeric_series(values)
     if len(series) < _MIN_FEATURE_HISTORY:
@@ -646,8 +662,8 @@ def _count_ratio(frame: pd.DataFrame, numerator_column: str) -> pd.Series | None
         return None
     numerator = pd.to_numeric(frame[numerator_column], errors="coerce")
     denominator = pd.to_numeric(frame["stock_count"], errors="coerce").replace(0, np.nan)
-    ratio = (numerator / denominator).dropna()
-    return ratio if not ratio.empty else None
+    ratio = numerator / denominator
+    return ratio if not ratio.empty and pd.notna(ratio.iloc[-1]) else None
 
 
 def _last_optional_feature(frame: pd.DataFrame, columns: tuple[str, ...]) -> float:
@@ -661,48 +677,61 @@ def _last_optional_feature(frame: pd.DataFrame, columns: tuple[str, ...]) -> flo
 
 
 def _return(values: np.ndarray, periods: int) -> float:
-    if len(values) <= periods or values[-periods - 1] == 0:
+    if len(values) <= periods:
         return float("nan")
-    return float(values[-1] / values[-periods - 1] - 1.0)
+    subset = values[-periods - 1 :]
+    if not np.isfinite(subset).all() or subset[0] == 0:
+        return float("nan")
+    return float(subset[-1] / subset[0] - 1.0)
 
 
 def _drawdown(values: np.ndarray, window: int) -> float:
     subset = values[-window:]
-    return float(subset[-1] / np.max(subset) - 1.0) if len(subset) and np.max(subset) > 0 else float("nan")
+    if not len(subset) or not np.isfinite(subset).all() or np.max(subset) <= 0:
+        return float("nan")
+    return float(subset[-1] / np.max(subset) - 1.0)
 
 
 def _position(values: np.ndarray, window: int) -> float:
     subset = values[-window:]
-    if not len(subset) or np.max(subset) == np.min(subset):
+    if not len(subset) or not np.isfinite(subset).all():
+        return float("nan")
+    if np.max(subset) == np.min(subset):
         return 1.0 if len(subset) else float("nan")
     return float((subset[-1] - np.min(subset)) / (np.max(subset) - np.min(subset)))
 
 
 def _breadth_or_price(sector: pd.DataFrame, closes: np.ndarray, window: int) -> float:
-    if "down_count" in sector and "stock_count" in sector:
-        ratios = (sector["down_count"] / sector["stock_count"].replace(0, np.nan)).dropna()
-        if len(ratios):
+    has_counts = {"down_count", "stock_count"}.issubset(sector.columns)
+    if has_counts:
+        ratios = sector["down_count"] / sector["stock_count"].replace(0, np.nan)
+        if not ratios.empty and pd.notna(ratios.iloc[-1]):
             return float(ratios.tail(window).mean())
-    if len(closes) < 2:
+        return float("nan")
+    if len(closes) < _MIN_FEATURE_HISTORY or not np.isfinite(closes).all():
         return float("nan")
     series = pd.Series(closes)
     return float((series < series.rolling(window, min_periods=1).mean()).tail(window).mean())
 
 
 def _new_low_ratio(sector: pd.DataFrame, closes: np.ndarray) -> float:
-    if "new_low_count" in sector and "stock_count" in sector:
-        ratios = (sector["new_low_count"] / sector["stock_count"].replace(0, np.nan)).dropna()
-        if len(ratios):
-            return float(ratios.iloc[-1])
-    return float(closes[-1] <= np.min(closes[-60:])) if len(closes) else float("nan")
+    has_counts = {"new_low_count", "stock_count"}.issubset(sector.columns)
+    if has_counts:
+        ratios = sector["new_low_count"] / sector["stock_count"].replace(0, np.nan)
+        return float(ratios.iloc[-1]) if not ratios.empty and pd.notna(ratios.iloc[-1]) else float("nan")
+    if len(closes) < _MIN_FEATURE_HISTORY or not np.isfinite(closes).all():
+        return float("nan")
+    return float(closes[-1] <= np.min(closes[-60:]))
 
 
 def _up_ratio(sector: pd.DataFrame, closes: np.ndarray) -> float:
-    if "up_count" in sector and "stock_count" in sector:
-        ratios = (sector["up_count"] / sector["stock_count"].replace(0, np.nan)).dropna()
-        if len(ratios):
+    has_counts = {"up_count", "stock_count"}.issubset(sector.columns)
+    if has_counts:
+        ratios = sector["up_count"] / sector["stock_count"].replace(0, np.nan)
+        if not ratios.empty and pd.notna(ratios.iloc[-1]):
             return float(ratios.tail(20).mean())
-    if len(closes) < 2:
+        return float("nan")
+    if len(closes) < _MIN_FEATURE_HISTORY or not np.isfinite(closes).all():
         return float("nan")
     return float((np.diff(closes[-20:]) > 0).mean())
 
