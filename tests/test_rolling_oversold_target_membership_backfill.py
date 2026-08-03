@@ -418,6 +418,7 @@ def test_ths_detail_constituent_adapter_paginates_and_extracts_second_column(mon
     assert frame["代码"].tolist() == ["000001", "600000"]
     assert frame["名称"].tolist() == ["样本一", "样本二"]
     assert "/code/300238/" in seen_urls[0]
+    assert "?cb=1" in seen_urls[0]
     assert len(seen_urls) == 2
 
 
@@ -448,6 +449,53 @@ def test_ths_detail_constituent_adapter_fails_closed_for_bad_or_empty_response(
     monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
     monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
     with pytest.raises(RuntimeError, match="401|non_html|empty_response"):
+        backfill.fetch_ths_detail_constituents("300238")
+
+
+def test_ths_detail_single_page_without_page_info_is_accepted(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+        text = """
+        <table class='m-table m-pager-table'><tbody>
+          <tr><td>1</td><td>000001</td><td>样本</td></tr>
+        </tbody></table>
+        """
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+
+    frame = backfill.fetch_ths_detail_constituents("309185")
+
+    assert frame["代码"].tolist() == ["000001"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "",
+        "<html><body>请先登录后继续</body></html>",
+        "<html><body>captcha challenge</body></html>",
+        '<script>location.href="//upass.10jqka.com.cn/login"</script>',
+    ],
+)
+def test_ths_detail_empty_body_or_auth_challenge_is_explicit(monkeypatch, body):
+    class FakeResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/html"}
+        text = body
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(backfill, "_get_ths_v_code", lambda: "test-v")
+    monkeypatch.setattr(backfill.requests, "Session", lambda: FakeSession())
+    with pytest.raises(RuntimeError, match="ths_auth_challenge"):
         backfill.fetch_ths_detail_constituents("300238")
 
 

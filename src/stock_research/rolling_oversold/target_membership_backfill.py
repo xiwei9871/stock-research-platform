@@ -291,18 +291,28 @@ def fetch_ths_detail_constituents(
             close()
 
 
-def _ths_detail_url(concept_code: str, page: int) -> str:
+def _ths_detail_url(
+    concept_code: str,
+    page: int,
+    *,
+    cache_buster: str | int | None = None,
+) -> str:
+    value = page if cache_buster is None else cache_buster
     return (
         "https://q.10jqka.com.cn/gn/detail/board/0/field/10/order/desc/"
-        f"page/{page}/ajax/1/code/{concept_code}/"
+        f"page/{page}/ajax/1/code/{concept_code}/?cb={value}"
     )
 
 
 def _validate_ths_response(response: Any):
     status_code = int(getattr(response, "status_code", 0) or 0)
+    text = str(getattr(response, "text", "") or "")
+    if status_code == 401:
+        raise RuntimeError("ths_auth_challenge HTTP 401")
     if status_code != 200:
         raise RuntimeError(f"HTTP {status_code}")
-    text = str(getattr(response, "text", "") or "")
+    if not text.strip() or _looks_like_ths_auth_challenge(text):
+        raise RuntimeError("ths_auth_challenge")
     headers = getattr(response, "headers", {}) or {}
     content_type = str(headers.get("Content-Type", headers.get("content-type", ""))).lower()
     if "html" not in content_type and "<html" not in text.lower():
@@ -318,11 +328,42 @@ def _parse_ths_total_pages(soup: Any) -> int:
     text = page_info.get_text(" ", strip=True) if page_info is not None else ""
     match = re.search(r"/\s*(\d+)", text)
     if match is None:
+        table = soup.select_one(".m-table.m-pager-table")
+        if table is not None and _table_has_code_row(table):
+            return 1
         raise RuntimeError("page_count_unavailable")
     total = int(match.group(1))
     if total < 1 or total > 10000:
         raise RuntimeError("invalid_page_count")
     return total
+
+
+def _table_has_code_row(table: Any) -> bool:
+    for tr in table.select("tbody tr"):
+        cells = tr.find_all("td")
+        if len(cells) < 2:
+            continue
+        if re.search(r"\d{6}", cells[1].get_text(" ", strip=True)):
+            return True
+    return False
+
+
+def _looks_like_ths_auth_challenge(text: str) -> bool:
+    lower = text.lower()
+    return any(
+        marker in lower
+        for marker in (
+            "请先登录",
+            "请登录",
+            "登录后",
+            "captcha",
+            "challenge",
+            "verify you are human",
+            "upass.10jqka.com.cn/login",
+            "location.href",
+            "chameleon",
+        )
+    )
 
 
 def _parse_ths_detail_table(soup: Any) -> list[dict[str, str]]:
