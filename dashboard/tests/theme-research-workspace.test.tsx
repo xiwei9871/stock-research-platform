@@ -22,6 +22,7 @@ const payload = vi.hoisted(() => ({
         evidence_gap_count: 3,
         deep_research_node_count: 2,
         review_queue_count: 9,
+        analysis_report: { status: 'researching' },
         research_only: true,
         used_for_signal: false,
         used_for_admission: false
@@ -41,6 +42,7 @@ const payload = vi.hoisted(() => ({
         evidence_gap_count: 12,
         deep_research_node_count: 0,
         review_queue_count: 12,
+        analysis_report: { status: 'researching' },
         research_only: true,
         used_for_signal: false,
         used_for_admission: false
@@ -56,6 +58,7 @@ const payload = vi.hoisted(() => ({
       status: 'draft',
       created_from: 'mixed',
       last_updated: '2026-07-10',
+      analysis_report: { status: 'researching' },
       research_only: true,
       used_for_signal: false,
       used_for_admission: false
@@ -313,6 +316,15 @@ const api = vi.hoisted(() => ({
 
 vi.mock('../src/api/themeResearch', () => api);
 
+vi.mock('../src/components/ThemeResearchReportReader', () => ({
+  ThemeResearchReportReader: ({ themeId, reportVersionId }: { themeId: string; reportVersionId: string }) => (
+    <section aria-label="报告阅读器测试替身">
+      <span>{themeId}</span>
+      <span>{reportVersionId}</span>
+    </section>
+  )
+}));
+
 describe('ThemeResearchWorkspace', () => {
   beforeEach(() => {
     api.fetchThemeResearchThemes.mockResolvedValue(payload.themes);
@@ -447,5 +459,102 @@ describe('ThemeResearchWorkspace', () => {
     expect(screen.getByRole('heading', { name: '重点公司' })).toBeInTheDocument();
     expect(screen.getByText('欧陆通')).toBeInTheDocument();
     expect(screen.getByText('覆盖缺口')).toBeInTheDocument();
+  });
+
+  it('shows a researching report card without generation or upload controls', async () => {
+    render(
+      <ThemeResearchWorkspace
+        pathname="/theme-research/ai_power_value_capture_v1"
+        onNavigate={vi.fn()}
+        onOpenStock={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByRole('heading', { name: '分析报告' })).toBeInTheDocument();
+    expect(screen.getByText('研究中')).toBeInTheDocument();
+    expect(screen.queryByText('生成报告')).not.toBeInTheDocument();
+    expect(screen.queryByText('上传报告')).not.toBeInTheDocument();
+  });
+
+  it('shows published online-reading and PDF actions', async () => {
+    api.fetchThemeResearchTheme.mockResolvedValueOnce({
+      ...payload.detail,
+      theme: {
+        ...payload.detail.theme,
+        analysis_report: {
+          status: 'published',
+          report_version_id: 'report/v2',
+          version: '2.0',
+          published_at: '2026-07-31T10:00:00+08:00',
+          has_pdf: true
+        }
+      }
+    });
+    const navigate = vi.fn();
+    render(
+      <ThemeResearchWorkspace
+        pathname="/theme-research/ai_power_value_capture_v1"
+        onNavigate={navigate}
+        onOpenStock={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText('已发布')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '在线阅读' }));
+    expect(navigate).toHaveBeenCalledWith(
+      '/theme-research/ai_power_value_capture_v1/report/report%2Fv2'
+    );
+    expect(screen.getByRole('link', { name: '下载 PDF' })).toHaveAttribute(
+      'href',
+      '/api/research/theme-decomposition/themes/ai_power_value_capture_v1/reports/report%2Fv2/pdf'
+    );
+    expect(screen.queryByText('生成报告')).not.toBeInTheDocument();
+    expect(screen.queryByText('上传报告')).not.toBeInTheDocument();
+  });
+
+  it('accepts an encoded approved-report route without loading theme detail', () => {
+    render(
+      <ThemeResearchWorkspace
+        pathname="/theme-research/theme%2Fa/report/report%2Fv2"
+        onNavigate={vi.fn()}
+        onOpenStock={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('报告阅读器测试替身')).toHaveTextContent('theme/a');
+    expect(screen.getByLabelText('报告阅读器测试替身')).toHaveTextContent('report/v2');
+    expect(api.fetchThemeResearchTheme).not.toHaveBeenCalled();
+  });
+
+  it('encodes theme identifiers when opening index and tab routes', async () => {
+    const specialTheme = {
+      ...payload.themes.items[0],
+      theme_id: 'theme/a%研究',
+      theme_name: '特殊主题'
+    };
+    api.fetchThemeResearchThemes.mockResolvedValueOnce({ total: 1, items: [specialTheme] });
+    const navigate = vi.fn();
+    const { unmount } = render(
+      <ThemeResearchWorkspace pathname="/theme-research" onNavigate={navigate} onOpenStock={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开特殊主题' }));
+    expect(navigate).toHaveBeenCalledWith('/theme-research/theme%2Fa%25%E7%A0%94%E7%A9%B6');
+    unmount();
+
+    api.fetchThemeResearchTheme.mockResolvedValueOnce({
+      ...payload.detail,
+      theme: { ...payload.detail.theme, theme_id: 'theme/a%研究' }
+    });
+    render(
+      <ThemeResearchWorkspace
+        pathname="/theme-research/theme%2Fa%25%E7%A0%94%E7%A9%B6"
+        onNavigate={navigate}
+        onOpenStock={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: '产业链节点' }));
+    expect(navigate).toHaveBeenLastCalledWith('/theme-research/theme%2Fa%25%E7%A0%94%E7%A9%B6/nodes');
   });
 });

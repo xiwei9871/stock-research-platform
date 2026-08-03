@@ -18,7 +18,7 @@
 
 - [x] Write gate tests for exactly 25 desired themes, exactly two current themes, 23 theme inserts, and zero updates/deactivations.
 - [x] Verify RED before the script existed.
-- [x] Implement a read-only guard that never calls `bootstrap_package()`.
+- [x] Implement a read-only-by-default guard; permit `bootstrap_package()` only behind explicit authenticated `--execute` after the additive gate passes.
 - [x] Verify all five gate tests pass.
 - [x] Commit as `feat: guard 25-theme production restore`.
 
@@ -28,7 +28,7 @@
 - Modify: `src/stock_research/theme_decomposition.py`
 - Modify: `tests/test_theme_decomposition.py`
 
-- [ ] **Step 1: Add failing v1.6 contract tests**
+- [x] **Step 1: Add failing v1.6 contract tests**
 
 Add tests proving:
 
@@ -40,7 +40,7 @@ assert {"catalyst", "risk"} <= CLAIM_TYPES
 
 Add a minimal v1.6 artifact with a complete `research_profile` and assert it validates. Add negative cases for a missing research-profile field and a catalyst/risk claim reference that does not exist.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_theme_decomposition.py -k 'v1_6 or research_profile'
@@ -48,7 +48,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_theme_decompositi
 
 Expected: failure because the current validator rejects v1.6 and lacks research-profile validation.
 
-- [ ] **Step 3: Implement the minimal validator changes**
+- [x] **Step 3: Implement the minimal validator changes**
 
 Keep `ARTIFACT_VERSION = "theme_decomposition_v1_5"` and add:
 
@@ -61,11 +61,11 @@ SUPPORTED_ARTIFACT_VERSIONS = {
 
 Accept `new_energy_storage`, `catalyst`, and `risk`; expose `research_profiles` from `load_theme_package()`; validate nonempty profile strings, string-list fields, `research_kind == "industry_chain_deep_research"`, and catalyst/risk claim references.
 
-- [ ] **Step 4: Run focused and complete decomposition tests**
+- [x] **Step 4: Run focused and complete decomposition tests**
 
 Require the focused tests and all of `tests/test_theme_decomposition.py` to pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit with message `feat: support theme research artifact v1.6`.
 
@@ -79,7 +79,7 @@ Commit with message `feat: support theme research artifact v1.6`.
 - Modify: `tests/test_theme_research_store.py`
 - Modify: `tests/test_dashboard_theme_research_db.py`
 
-- [ ] **Step 1: Add failing parity tests**
+- [x] **Step 1: Add failing parity tests**
 
 Assert normalization stores:
 
@@ -89,19 +89,19 @@ theme["artifact_metadata"]["research_profile"] == artifact["research_profile"]
 
 Assert store snapshot/export and DB dashboard reconstruction retain the same value. Add source-identity tests proving URLs differing only by case, fragment, or trailing slash are treated canonically and duplicate identities fail closed.
 
-- [ ] **Step 2: Run the three focused test files and verify RED**
+- [x] **Step 2: Run the three focused test files and verify RED**
 
 Run the import, store, and dashboard DB test files. Expected failures must reference missing research-profile parity or source identity behavior.
 
-- [ ] **Step 3: Implement normalization and parity**
+- [x] **Step 3: Implement normalization and parity**
 
 Add `research_profile` to theme `artifact_metadata`; compute source content hashes without provenance; compare duplicate source rows without notes/content hash; normalize source URLs before detecting duplicate identities; preserve `research_profile` in store artifact reconstruction and dashboard DB context.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Require all import, store, and dashboard DB tests to pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit with message `fix: preserve v1.6 theme research parity`.
 
@@ -112,7 +112,7 @@ Commit with message `fix: preserve v1.6 theme research parity`.
 - Modify: `tests/test_theme_research_db_schema.py`
 - Modify: `tests/integration/test_theme_research_db_schema_postgres.py`
 
-- [ ] **Step 1: Add failing schema-contract tests**
+- [x] **Step 1: Add failing schema-contract tests**
 
 Require named constraints containing:
 
@@ -123,21 +123,21 @@ ck_theme_research_claim_type: catalyst, risk
 
 Test that the exact production legacy DDL/catalog contract is accepted as a migration predecessor, while partial or unknown drift is rejected. Test that migration acquires a dedicated advisory lock and updates the migration record only after post-inspection succeeds.
 
-- [ ] **Step 2: Run unit schema tests and verify RED**
+- [x] **Step 2: Run unit schema tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_theme_research_db_schema.py
 ```
 
-- [ ] **Step 3: Implement the schema migration**
+- [x] **Step 3: Implement the schema migration**
 
 Widen only the two enum checks. Introduce a `LegacyThemeResearchSchemaContract` for the production digest `1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce` and its catalog digest. Acquire `THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY`, reject unknown drift, apply DDL transactionally, re-inspect, then update the migration row.
 
-- [ ] **Step 4: Run unit and configured PostgreSQL integration tests**
+- [x] **Step 4: Run unit and configured PostgreSQL integration tests**
 
 Run the schema unit suite. If the configured integration database is available, run the dedicated PostgreSQL schema migration file and require pass; otherwise record the explicit skip reason and rely on the production dry-run/status gate before apply.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit with message `fix: migrate theme research schema for v1.6`.
 
@@ -147,12 +147,12 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - Read: checkpoint `eba5cdfc700a02d961e441cc1b92824ff9e35c7e`.
 - Use temporary staging directory `/tmp/theme-research-25-eba5cdfc.*`.
 
-- [ ] Extract only `artifacts/theme_decomposition` with `git archive`.
-- [ ] Generate and hash the exact 25-theme ID manifest.
-- [ ] Normalize and validate the isolated checkpoint with the upgraded current code.
-- [ ] Require counts of 25 themes, 270 nodes, 282 sources, 320 claims, and 248 company mappings.
-- [ ] Run all Theme Research backend tests, the complete dashboard frontend suite, and production frontend build.
-- [ ] Run `rtk git diff --check` and review the compatibility diff against the design.
+- [x] Extract only `artifacts/theme_decomposition` with `git archive`.
+- [x] Generate and hash the exact 25-theme ID manifest.
+- [x] Normalize and validate the isolated checkpoint with the upgraded current code.
+- [x] Require counts of 25 themes, 270 nodes, 282 sources, 320 claims, and 248 company mappings.
+- [x] Run all Theme Research backend tests, the complete dashboard frontend suite, and production frontend build.
+- [x] Run `rtk git diff --check` and review the compatibility diff against the design.
 
 ### Task 6: Publish the Compatibility Release
 
@@ -160,10 +160,10 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - Canonical release root: `/Users/xiwei/stock_research_release_20260727`.
 - Production URL: `https://stock.manqiaotechnology.com`.
 
-- [ ] Fast-forward the clean canonical release root to the verified compatibility commit.
-- [ ] Publish through `deploy/sync_dashboard_release.sh` with expected trade date `2026-07-29`.
-- [ ] Confirm external `release.json` matches the new commit.
-- [ ] Before schema changes, require the existing two-theme list and one detail to return HTTP 200.
+- [x] Fast-forward the clean canonical release root to the verified compatibility commit.
+- [x] Publish through `deploy/sync_dashboard_release.sh` with expected trade date `2026-07-29`.
+- [x] Confirm external `release.json` matches the new commit.
+- [x] Before schema changes, require the existing two-theme list and one detail to return HTTP 200.
 
 ### Task 7: Back Up and Migrate the Production Schema
 
@@ -171,39 +171,41 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - Backup directory: `/home/jqz/backups/theme-research-25-restore-20260731`.
 - API container: `stock_research_dashboard-api-1`.
 
-- [ ] Verify `pg_dump` and `pg_restore` tooling without printing credentials.
-- [ ] Create a timestamped custom-format backup of the production `research` schema through the migration service.
-- [ ] Require `pg_restore --list` entries for Theme Research theme, node, import-run, and store-state tables.
-- [ ] Run the new schema status and require recognition of the known legacy contract.
-- [ ] Apply the schema through the authenticated admin CLI.
-- [ ] Require current schema status and verify the existing two-theme reads remain HTTP 200.
+- [x] Verify `pg_dump` and `pg_restore` tooling without printing credentials.
+- [x] Create a timestamped custom-format backup of the production `research` schema through the migration service.
+- [x] Require `pg_restore --list` entries for Theme Research theme, node, import-run, and store-state tables.
+- [x] Run the new schema status and require recognition of the known legacy contract.
+- [x] Apply the schema through the authenticated admin CLI.
+- [x] Require current schema status and verify the existing two-theme reads remain HTTP 200.
 
 ### Task 8: Run the Production Import Gate and Transaction
 
 **Remote staging:**
 - Container directory: `/tmp/theme-research-25-eba5cdfc`.
 - Evidence directory: `/home/jqz/backups/theme-research-25-restore-20260731`.
-- Idempotency key: `theme-research-25-eba5cdfc-20260731`.
+- Idempotency key: `theme-research-25-eba5cdfc-additive-20260731`.
 
-- [ ] Copy only the checkpoint artifact tree, 25-ID manifest, and read-only guard into container staging.
-- [ ] Run the guard and save `preflight.json` outside the container.
-- [ ] Require 25 desired themes, two current themes, 23 theme inserts, zero updates, and zero deactivations in every family.
-- [ ] Re-read and match the generation immediately before execution.
-- [ ] Confirm the admin credential environment is nonempty without displaying it.
-- [ ] Execute the authenticated transactional import with the recorded generation and deterministic idempotency key.
-- [ ] Save import/change-set IDs, package SHA, generations, counts, and backup path in migration evidence.
+- [x] Copy only the checkpoint artifact tree, 25-ID manifest, and read-only guard into container staging.
+- [x] Run the guard and save preflight evidence outside the container.
+- [x] When the raw checkpoint updates the existing two themes, build the additive desired package from current production plus only the 23 missing themes.
+- [x] Require 25 desired themes, two current themes, 23 theme inserts, zero updates, and zero deactivations in every family.
+- [x] Re-read and match the generation immediately before execution.
+- [x] Confirm the admin credential is available without displaying it.
+- [x] Execute the authenticated transactional import with the recorded generation and deterministic idempotency key.
+- [x] Bind checkpoint/database/desired hashes to preflight and enforce the zero-update/zero-deactivate gate again on the authoritative diff inside the locked transaction.
+- [x] Save import/change-set IDs, package SHA, generations, counts, and backup path in migration evidence.
 
 ### Task 9: Verify Production and Record Evidence
 
 **Files:**
 - Create: `docs/ops/theme-research-25-production-restore-20260731.md`
 
-- [ ] Reload the DB package and require the exact 25-theme ID set.
-- [ ] Require the original two theme versions and content hashes to match preflight evidence.
-- [ ] Require server-side list total 25 and nonzero nodes on at least three new details.
-- [ ] Reload the authenticated external list, verify visible total 25, and open a newly imported detail without console errors.
-- [ ] Require Theme Research list/detail HTTP 200 and no new HTTP 500 or priority-policy-directory errors in production logs.
-- [ ] Confirm the release root and feature worktree are clean and `git diff --check` passes.
-- [ ] Record non-secret backup, release, schema, dry-run, import, count, browser, and log evidence in the operations document.
-- [ ] Commit with message `docs: record 25-theme production restore`.
-- [ ] Re-read the design and plan requirement by requirement before reporting completion.
+- [x] Reload the DB package and require the exact 25-theme ID set.
+- [x] Require the original two theme versions and content hashes to match preflight evidence.
+- [x] Require server-side list total 25 and nonzero nodes on at least three new details.
+- [x] Reload the authenticated external list, verify visible total 25, and open a newly imported detail without console errors.
+- [x] Require Theme Research list/detail HTTP 200 and no new HTTP 500 or priority-policy-directory errors in production logs.
+- [x] Confirm the release root and feature worktree are clean and `git diff --check` passes.
+- [x] Record non-secret backup, release, schema, dry-run, import, count, browser, and log evidence in the operations document.
+- [x] Commit with message `docs: record 25-theme production restore`.
+- [x] Re-read the design and plan requirement by requirement before reporting completion.

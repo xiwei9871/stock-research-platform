@@ -11,10 +11,12 @@ from stock_research.theme_research_import import normalize_artifact_package
 from stock_research.theme_research_store import (
     _assert_runtime_connection,
     _assert_rollback_has_no_shared_source_changes,
+    _bootstrap_request_fingerprint,
     build_theme_artifact_from_package,
     create_snapshot,
     package_for_theme,
     rollback_theme,
+    validate_authoritative_import_diff,
     validate_bootstrap_request,
 )
 
@@ -60,6 +62,76 @@ def test_validate_bootstrap_request_requires_actor_and_idempotency_key() -> None
         )
 
     assert exc_info.value.code == "THEME_RESEARCH_IMPORT_REQUEST_INVALID"
+
+
+def test_authoritative_import_diff_rejects_updates_inside_transaction() -> None:
+    diff = {
+        "families": {
+            "themes": {"insert": ["new-theme"], "update": [], "deactivate": []},
+            "nodes": {"insert": [], "update": ["existing-node"], "deactivate": []},
+        }
+    }
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        validate_authoritative_import_diff(
+            diff,
+            required_theme_inserts=1,
+            forbid_updates=True,
+            forbid_deactivations=True,
+        )
+
+    assert exc_info.value.code == "THEME_RESEARCH_AUTHORITATIVE_DIFF_REJECTED"
+    assert exc_info.value.details["violations"] == ["updates_present:nodes:1"]
+
+
+def test_authoritative_import_diff_accepts_exact_additive_change() -> None:
+    diff = {
+        "families": {
+            "themes": {
+                "insert": ["new-theme-1", "new-theme-2"],
+                "update": [],
+                "deactivate": [],
+            },
+            "nodes": {"insert": ["new-node"], "update": [], "deactivate": []},
+        }
+    }
+
+    validate_authoritative_import_diff(
+        diff,
+        required_theme_inserts=2,
+        forbid_updates=True,
+        forbid_deactivations=True,
+    )
+
+
+def test_bootstrap_idempotency_fingerprint_includes_guard_policy() -> None:
+    strict = _bootstrap_request_fingerprint(
+        package_sha256="package",
+        replace_theme="",
+        expected_generation=4,
+        required_theme_inserts=23,
+        forbid_updates=True,
+        forbid_deactivations=True,
+    )
+    repeated = _bootstrap_request_fingerprint(
+        package_sha256="package",
+        replace_theme="",
+        expected_generation=4,
+        required_theme_inserts=23,
+        forbid_updates=True,
+        forbid_deactivations=True,
+    )
+    unguarded = _bootstrap_request_fingerprint(
+        package_sha256="package",
+        replace_theme="",
+        expected_generation=4,
+        required_theme_inserts=None,
+        forbid_updates=False,
+        forbid_deactivations=False,
+    )
+
+    assert strict == repeated
+    assert strict != unguarded
 
 
 def test_package_for_theme_keeps_only_owned_rows() -> None:

@@ -12,6 +12,7 @@ import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
 import { ThemeResearchWorkspace } from './ThemeResearchWorkspace';
+import { ThemeResearchReportReviewWorkspace } from './ThemeResearchReportReviewWorkspace';
 import { UserManagementView } from './UserManagementView';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
 import type { SectorType } from './market-monitor/mockData';
@@ -43,6 +44,7 @@ type WorkspaceMode =
   | 'factors'
   | 'strategyLab'
   | 'generatedReports'
+  | 'themeReportReview'
   | 'userManagement';
 
 type WorkspaceHandoff = {
@@ -103,6 +105,7 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
 ];
 
 const ADMIN_NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }> = [
+  { mode: 'themeReportReview', label: '报告审核', ariaLabel: 'Open Theme Research report review workspace' },
   { mode: 'userManagement', label: '用户管理', ariaLabel: 'Open User Management workspace' }
 ];
 
@@ -112,13 +115,15 @@ const TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH = '/research/tech-bottleneck/review-u
 const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
 const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
 const THEME_RESEARCH_PATH = '/theme-research';
+const THEME_REPORT_REVIEW_PATH = '/admin/theme-research/report-review';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
 
 function firstDate(...dates: Array<string | null | undefined>) {
   return dates.map((date) => date?.trim()).find(Boolean) ?? '';
 }
 
-function workspaceModeFromPath(pathname: string): WorkspaceMode {
+function workspaceModeFromPath(pathname: string, isAdmin = false): WorkspaceMode {
+  if (pathname === THEME_REPORT_REVIEW_PATH) return isAdmin ? 'themeReportReview' : 'home';
   if (pathname === THEME_RESEARCH_PATH || pathname.startsWith(`${THEME_RESEARCH_PATH}/`)) return 'themeResearch';
   if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReviewUniverse';
   if (pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) return 'techBottleneckReviewUniverse';
@@ -264,7 +269,9 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
   const initialTechBottleneckStockHandoff =
     typeof window === 'undefined' ? null : techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
-    typeof window === 'undefined' ? 'home' : workspaceModeFromPath(window.location.pathname)
+    typeof window === 'undefined'
+      ? 'home'
+      : workspaceModeFromPath(window.location.pathname, currentUser?.role === 'admin')
   );
   const [selectedAssetId, setSelectedAssetId] = useState(initialTechBottleneckStockHandoff?.assetId ?? '000001.SZ');
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
@@ -306,10 +313,15 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
 
   useEffect(() => {
     const handleLocationChange = () => {
+      if (window.location.pathname === THEME_REPORT_REVIEW_PATH && currentUser?.role !== 'admin') {
+        window.history.replaceState({}, '', '/');
+        setWorkspaceMode('home');
+        return;
+      }
       if (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH) {
         window.history.replaceState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
       }
-      const nextMode = workspaceModeFromPath(window.location.pathname);
+      const nextMode = workspaceModeFromPath(window.location.pathname, currentUser?.role === 'admin');
       if (nextMode === 'themeResearch') {
         setThemeResearchPathname(window.location.pathname);
       }
@@ -330,7 +342,7 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
     };
-  }, []);
+  }, [currentUser?.role]);
 
   useEffect(() => {
     if (
@@ -383,11 +395,18 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
   }
 
   function openWorkspaceMode(mode: WorkspaceMode) {
+    if (mode === 'themeReportReview' && currentUser?.role !== 'admin') {
+      if (window.location.pathname === THEME_REPORT_REVIEW_PATH) window.history.replaceState({}, '', '/');
+      setWorkspaceMode('home');
+      return;
+    }
     if (mode === 'stock') {
       openStockWorkspace(selectedAssetId);
       return;
     }
-    if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
+    if (mode === 'themeReportReview' && window.location.pathname !== THEME_REPORT_REVIEW_PATH) {
+      window.history.pushState({}, '', THEME_REPORT_REVIEW_PATH);
+    } else if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
       window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
     } else if (mode === 'themeResearch' && window.location.pathname !== THEME_RESEARCH_PATH) {
       window.history.pushState({}, '', THEME_RESEARCH_PATH);
@@ -398,9 +417,11 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
       mode !== 'techBottleneckReviewUniverse' &&
       mode !== 'themeResearch' &&
       mode !== 'dataToBriefDocling90' &&
+      mode !== 'themeReportReview' &&
       (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH ||
         window.location.pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH ||
         window.location.pathname === DATA_TO_BRIEF_DOCLING_90_PATH ||
+        window.location.pathname === THEME_REPORT_REVIEW_PATH ||
         window.location.pathname.startsWith(THEME_RESEARCH_PATH) ||
         window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
     ) {
@@ -655,6 +676,9 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
             />
           ) : null}
           {workspaceMode === 'userManagement' ? <UserManagementView /> : null}
+          {workspaceMode === 'themeReportReview' && currentUser?.role === 'admin' ? (
+            <ThemeResearchReportReviewWorkspace />
+          ) : null}
           {workspaceMode === 'factors' ? <FactorLabWorkspace defaultTradeDate={displayTradeDate} /> : null}
           {workspaceMode === 'news' ? (
             <NewsWorkspace

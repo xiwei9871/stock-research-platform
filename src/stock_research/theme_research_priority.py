@@ -669,10 +669,14 @@ def _build_company_priorities(
         )
         integration = integration_by_mapping.get(mapping["mapping_id"])
         if integration is None:
-            raise ThemeResearchPriorityValidationError(
-                f"mapping missing Phase 5 integration state: {mapping['mapping_id']}",
-                code="MAPPING_MISSING_INTEGRATION_STATE",
-            )
+            integration = {
+                "integration_status": "not_crosswalk_scoped",
+                "integration_ref": f"theme_mapping:{mapping['mapping_id']}",
+                "existing_review_context": {
+                    "status": "not_evaluated",
+                    "reviewer_decision": "",
+                },
+            }
         action = _company_action(node, score, integration["integration_status"], policy)
         rationale = _company_rationale_codes(
             node, relevance, materiality, integration["integration_status"]

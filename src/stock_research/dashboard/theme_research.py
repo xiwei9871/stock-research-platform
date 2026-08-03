@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
+import copy
 import hashlib
 import json
 import os
 from typing import Any
 from urllib.parse import quote
 
+from stock_research.dashboard._theme_research_safety import (
+    normalize_aware_iso8601_timestamp,
+    normalize_report_identity,
+)
 from stock_research.theme_research_priority import (
     load_theme_research_priority_package,
 )
@@ -73,7 +79,10 @@ def _get_theme_research_theme(
         row for row in context["review_queue"] if row["theme_id"] == theme_id
     ]
     return {
-        "theme": _with_guardrails(theme),
+        "theme": {
+            **_with_guardrails(theme),
+            "analysis_report": _analysis_report_summary(context, theme_id),
+        },
         "node_summary": {
             "total": len(nodes),
             "by_priority_class": _count_by(nodes, "priority_class"),
@@ -209,15 +218,40 @@ def _serve(builder, *, read_source: str | None) -> dict[str, Any]:
 
 
 def _compare_payloads(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
-    left_json = json.dumps(left, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    right_json = json.dumps(right, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    differences = _difference_paths(left, right)
+    comparable_left = _without_runtime_overlays(left)
+    comparable_right = _without_runtime_overlays(right)
+    left_json = json.dumps(
+        comparable_left, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    right_json = json.dumps(
+        comparable_right, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    differences = _difference_paths(comparable_left, comparable_right)
     return {
         "status": "match" if not differences else "mismatch",
         "artifact_sha256": hashlib.sha256(left_json.encode("utf-8")).hexdigest(),
         "database_sha256": hashlib.sha256(right_json.encode("utf-8")).hexdigest(),
         "differences": differences,
     }
+
+
+def _without_runtime_overlays(value: Any) -> Any:
+    result = copy.deepcopy(value)
+    if not isinstance(result, dict):
+        return result
+    items = result.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if (
+                isinstance(item, dict)
+                and "theme_id" in item
+                and "node_count" in item
+            ):
+                item.pop("analysis_report", None)
+    theme = result.get("theme")
+    if isinstance(theme, dict) and "node_summary" in result:
+        theme.pop("analysis_report", None)
+    return result
 
 
 def _difference_paths(left: Any, right: Any, path: str = "$") -> list[str]:
@@ -279,12 +313,48 @@ def _theme_index_row(
             row["priority_class"] == "deep_research_priority" for row in nodes
         ),
         "review_queue_count": len(queue),
+        "analysis_report": _analysis_report_summary(context, theme_id),
         "research_only": True,
         "used_for_signal": False,
         "used_for_admission": False,
     }
 
 
+def _analysis_report_summary(
+    context: dict[str, Any], theme_id: str
+) -> dict[str, Any]:
+    researching = {"status": "researching"}
+    try:
+        reports = context.get("analysis_reports_by_theme", {})
+        if not isinstance(reports, Mapping):
+            return researching
+        report = reports.get(theme_id)
+        if not isinstance(report, Mapping):
+            return researching
+        report_version_id = normalize_report_identity(
+            report.get("report_version_id")
+        )
+        version = normalize_report_identity(report.get("version"))
+        published_at = normalize_aware_iso8601_timestamp(
+            report.get("published_at")
+        )
+        has_pdf = report.get("has_pdf")
+    except Exception:
+        return researching
+    if (
+        not report_version_id
+        or not version
+        or not published_at
+        or type(has_pdf) is not bool
+    ):
+        return researching
+    return {
+        "status": "published",
+        "report_version_id": report_version_id,
+        "version": version,
+        "published_at": published_at,
+        "has_pdf": has_pdf,
+    }
 def _theme_node_rows(
     context: dict[str, Any], theme_id: str
 ) -> list[dict[str, Any]]:

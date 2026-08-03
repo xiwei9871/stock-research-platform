@@ -11,6 +11,8 @@ ssh_opts_override="${SSH_OPTS:-}"
 ssh_config_override="${STOCK_RESEARCH_SSH_CONFIG:-}"
 base_url_override="${BASE_URL:-}"
 dashboard_auth_override="${DASHBOARD_AUTH:-}"
+dashboard_login_username_override="${DASHBOARD_LOGIN_USERNAME:-}"
+dashboard_login_password_override="${DASHBOARD_LOGIN_PASSWORD:-}"
 container_root_override="${REMOTE_CONTAINER_RELEASE_ROOT:-}"
 strategy_output_root_override="${STRATEGY_OUTPUT_ROOT:-}"
 strategy_source_root_override="${STRATEGY_SOURCE_ROOT:-}"
@@ -20,6 +22,14 @@ remote_pgservice_file_override="${DASHBOARD_PGSERVICE_FILE:-}"
 compose_project_override="${STOCK_RESEARCH_COMPOSE_PROJECT:-}"
 api_bind_port_override="${DASHBOARD_API_BIND_PORT:-}"
 frontend_bind_port_override="${DASHBOARD_FRONTEND_BIND_PORT:-}"
+theme_research_report_host_root_override="${THEME_RESEARCH_REPORT_HOST_ROOT:-}"
+theme_research_migration_service_override="${THEME_RESEARCH_MIGRATION_SERVICE:-}"
+theme_research_runtime_service_override_set="${THEME_RESEARCH_RUNTIME_SERVICE+x}"
+theme_research_runtime_service_override="${THEME_RESEARCH_RUNTIME_SERVICE-}"
+theme_research_report_index_service_override_set="${THEME_RESEARCH_REPORT_INDEX_SERVICE+x}"
+theme_research_report_index_service_override="${THEME_RESEARCH_REPORT_INDEX_SERVICE-}"
+theme_research_report_review_service_override_set="${THEME_RESEARCH_REPORT_REVIEW_SERVICE+x}"
+theme_research_report_review_service_override="${THEME_RESEARCH_REPORT_REVIEW_SERVICE-}"
 
 env_file="${DASHBOARD_SYNC_ENV:-/Users/xiwei/.stock_research_dashboard_sync.env}"
 if [[ -f "$env_file" ]]; then
@@ -36,6 +46,8 @@ SSH_OPTS="${ssh_opts_override:-${SSH_OPTS:-}}"
 STOCK_RESEARCH_SSH_CONFIG="${ssh_config_override:-${STOCK_RESEARCH_SSH_CONFIG:-}}"
 BASE_URL="${base_url_override:-${BASE_URL:-https://stock.manqiaotechnology.com}}"
 DASHBOARD_AUTH="${dashboard_auth_override:-${DASHBOARD_AUTH:-}}"
+DASHBOARD_LOGIN_USERNAME="${dashboard_login_username_override:-${DASHBOARD_LOGIN_USERNAME:-}}"
+DASHBOARD_LOGIN_PASSWORD="${dashboard_login_password_override:-${DASHBOARD_LOGIN_PASSWORD:-}}"
 REMOTE_CONTAINER_RELEASE_ROOT="${container_root_override:-${REMOTE_CONTAINER_RELEASE_ROOT:-/app}}"
 STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$ROOT/outputs/research}}"
 STRATEGY_SOURCE_ROOT="${strategy_source_root_override:-${STRATEGY_SOURCE_ROOT:-$ROOT}}"
@@ -45,8 +57,26 @@ DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVIC
 STOCK_RESEARCH_COMPOSE_PROJECT="${compose_project_override:-${STOCK_RESEARCH_COMPOSE_PROJECT:-stock_research_dashboard}}"
 DASHBOARD_API_BIND_PORT="${api_bind_port_override:-${DASHBOARD_API_BIND_PORT:-8765}}"
 DASHBOARD_FRONTEND_BIND_PORT="${frontend_bind_port_override:-${DASHBOARD_FRONTEND_BIND_PORT:-5174}}"
+THEME_RESEARCH_REPORT_HOST_ROOT="${theme_research_report_host_root_override:-${THEME_RESEARCH_REPORT_HOST_ROOT:-}}"
+THEME_RESEARCH_MIGRATION_SERVICE="${theme_research_migration_service_override:-${THEME_RESEARCH_MIGRATION_SERVICE:-stock_research}}"
+if [[ -n "$theme_research_runtime_service_override_set" ]]; then
+  THEME_RESEARCH_RUNTIME_SERVICE="$theme_research_runtime_service_override"
+else
+  THEME_RESEARCH_RUNTIME_SERVICE="${THEME_RESEARCH_RUNTIME_SERVICE-theme_research_runtime}"
+fi
+if [[ -n "$theme_research_report_index_service_override_set" ]]; then
+  THEME_RESEARCH_REPORT_INDEX_SERVICE="$theme_research_report_index_service_override"
+else
+  THEME_RESEARCH_REPORT_INDEX_SERVICE="${THEME_RESEARCH_REPORT_INDEX_SERVICE-theme_research_report_indexer}"
+fi
+if [[ -n "$theme_research_report_review_service_override_set" ]]; then
+  THEME_RESEARCH_REPORT_REVIEW_SERVICE="$theme_research_report_review_service_override"
+else
+  THEME_RESEARCH_REPORT_REVIEW_SERVICE="${THEME_RESEARCH_REPORT_REVIEW_SERVICE-theme_research_report_reviewer}"
+fi
 EXPECTED_API_BASE_IMAGE="python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
 EXPECTED_FRONTEND_BASE_IMAGE="nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
+EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="5"
 
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
@@ -103,6 +133,26 @@ if [[ "$REMOTE_CONTAINER_RELEASE_ROOT" != "/app" ]]; then
 fi
 if [[ ! "$DASHBOARD_REMOTE_ENV_FILE" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ ! "$DASHBOARD_PGSERVICE_FILE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
   echo "DASHBOARD_REMOTE_ENV_FILE or DASHBOARD_PGSERVICE_FILE contains unsupported characters" >&2
+  exit 2
+fi
+if ! bash "$ROOT/deploy/check_dashboard_report_mount.sh" --validate-path "$THEME_RESEARCH_REPORT_HOST_ROOT" >/dev/null; then
+  echo "THEME_RESEARCH_REPORT_HOST_ROOT must be a safe dedicated path" >&2
+  exit 2
+fi
+if [[ -z "$THEME_RESEARCH_RUNTIME_SERVICE" ]] \
+  || [[ -z "$THEME_RESEARCH_REPORT_INDEX_SERVICE" ]] \
+  || [[ -z "$THEME_RESEARCH_REPORT_REVIEW_SERVICE" ]] \
+  || [[ "$THEME_RESEARCH_RUNTIME_SERVICE" == "$THEME_RESEARCH_REPORT_INDEX_SERVICE" ]] \
+  || [[ "$THEME_RESEARCH_RUNTIME_SERVICE" == "$THEME_RESEARCH_REPORT_REVIEW_SERVICE" ]] \
+  || [[ "$THEME_RESEARCH_REPORT_INDEX_SERVICE" == "$THEME_RESEARCH_REPORT_REVIEW_SERVICE" ]]; then
+  echo "Theme Research runtime, index, and review services must be distinct non-empty values" >&2
+  exit 2
+fi
+if [[ ! "$THEME_RESEARCH_MIGRATION_SERVICE" =~ ^[A-Za-z0-9._-]+$ ]] \
+  || [[ ! "$THEME_RESEARCH_RUNTIME_SERVICE" =~ ^[A-Za-z0-9._-]+$ ]] \
+  || [[ ! "$THEME_RESEARCH_REPORT_INDEX_SERVICE" =~ ^[A-Za-z0-9._-]+$ ]] \
+  || [[ ! "$THEME_RESEARCH_REPORT_REVIEW_SERVICE" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "Theme Research database service names contain unsupported characters" >&2
   exit 2
 fi
 if [[ -n "$python_override" ]]; then
@@ -217,8 +267,9 @@ fi
   --trade-date "$EXPECTED_TRADE_DATE"
 
 manifest_snapshot="$(mktemp)"
+theme_research_report_health_snapshot="$(mktemp)"
 cleanup_manifest_snapshot() {
-  rm -f "$manifest_snapshot"
+  rm -f "$manifest_snapshot" "$theme_research_report_health_snapshot"
 }
 trap cleanup_manifest_snapshot EXIT
 PYTHONPATH="$ROOT/src" "$STOCK_RESEARCH_PYTHON" -m stock_research.strategy_manifest_transfer export \
@@ -227,8 +278,12 @@ PYTHONPATH="$ROOT/src" "$STOCK_RESEARCH_PYTHON" -m stock_research.strategy_manif
   --target-root "$REMOTE_CONTAINER_RELEASE_ROOT" > "$manifest_snapshot"
 
 check_release_state() {
+  validate_theme_research_report_mount || return 1
+  capture_theme_research_report_health "$1" "$2" || return 1
   BASE_URL="$BASE_URL" \
   DASHBOARD_AUTH="$DASHBOARD_AUTH" \
+  DASHBOARD_LOGIN_USERNAME="$DASHBOARD_LOGIN_USERNAME" \
+  DASHBOARD_LOGIN_PASSWORD="$DASHBOARD_LOGIN_PASSWORD" \
   EXPECTED_TRADE_DATE="$EXPECTED_TRADE_DATE" \
   EXPECTED_RELEASE_ID="$release_id" \
   EXPECTED_REMOTE_SOURCE_ROOT="$REMOTE_CONTAINER_RELEASE_ROOT" \
@@ -237,18 +292,13 @@ check_release_state() {
   EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="$REMOTE_CONTAINER_RELEASE_ROOT/src/stock_research" \
   EXPECTED_API_BASE_IMAGE="$EXPECTED_API_BASE_IMAGE" \
   EXPECTED_FRONTEND_BASE_IMAGE="$EXPECTED_FRONTEND_BASE_IMAGE" \
+  EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="$EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION" \
+  THEME_RESEARCH_REPORT_HEALTH_JSON="$theme_research_report_health_snapshot" \
+  EXPECTED_THEME_RESEARCH_REPORT_ROOT="/app/reports/theme-research" \
   RELEASE_CHECK_TIMEOUT_SECONDS="$1" \
   RELEASE_CHECK_RETRY_SECONDS="$2" \
     "$ROOT/deploy/check_dashboard_release.sh"
 }
-
-if check_release_state \
-  "${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
-  "${DASHBOARD_DESIRED_STATE_RETRY_SECONDS:-2}" >/dev/null 2>&1; then
-  echo "Dashboard desired state already live for ${EXPECTED_TRADE_DATE} (${release_id}); deployment skipped."
-  exit 0
-fi
-echo "Dashboard desired-state gate not yet satisfied; continuing idempotent deployment."
 
 ssh_opts=()
 if [[ -n "$STOCK_RESEARCH_SSH_CONFIG" ]]; then
@@ -305,6 +355,13 @@ printf -v release_id_q '%q' "$release_id"
 printf -v compose_project_q '%q' "$STOCK_RESEARCH_COMPOSE_PROJECT"
 printf -v api_bind_port_q '%q' "$DASHBOARD_API_BIND_PORT"
 printf -v frontend_bind_port_q '%q' "$DASHBOARD_FRONTEND_BIND_PORT"
+printf -v theme_research_report_host_root_q '%q' "$THEME_RESEARCH_REPORT_HOST_ROOT"
+theme_research_artifact_host_root="$REMOTE_DIR/artifacts/theme_decomposition"
+printf -v theme_research_artifact_host_root_q '%q' "$theme_research_artifact_host_root"
+printf -v theme_research_migration_service_q '%q' "$THEME_RESEARCH_MIGRATION_SERVICE"
+printf -v theme_research_runtime_service_q '%q' "$THEME_RESEARCH_RUNTIME_SERVICE"
+printf -v theme_research_report_index_service_q '%q' "$THEME_RESEARCH_REPORT_INDEX_SERVICE"
+printf -v theme_research_report_review_service_q '%q' "$THEME_RESEARCH_REPORT_REVIEW_SERVICE"
 api_container="${STOCK_RESEARCH_COMPOSE_PROJECT}-api-1"
 printf -v api_container_q '%q' "$api_container"
 case "$DASHBOARD_REMOTE_ENV_FILE" in
@@ -317,6 +374,56 @@ case "$DASHBOARD_PGSERVICE_FILE" in
 esac
 printf -v remote_env_file_q '%q' "$remote_env_file"
 printf -v pgservice_file_q '%q' "$pgservice_file"
+
+validate_theme_research_report_host_root() {
+  ssh "${ssh_opts[@]}" -- "$remote" \
+    "bash -s -- --host-only ${theme_research_report_host_root_q}" \
+    < "$ROOT/deploy/check_dashboard_report_mount.sh"
+}
+
+validate_theme_research_report_mount() {
+  ssh "${ssh_opts[@]}" -- "$remote" \
+    "bash -s -- --require-mount ${theme_research_report_host_root_q} ${api_container_q} /app/reports/theme-research" \
+    < "$ROOT/deploy/check_dashboard_report_mount.sh"
+}
+
+capture_theme_research_report_health() {
+  local timeout_seconds="$1"
+  local retry_seconds="$2"
+  local health_deadline=$((SECONDS + timeout_seconds))
+  while (( SECONDS <= health_deadline )); do
+    if ssh "${ssh_opts[@]}" -- "$remote" \
+      "docker exec ${api_container_q} python /app/deploy/check_theme_research_report_runtime.py --expected-root /app/reports/theme-research --migration-service ${theme_research_migration_service_q} --runtime-service ${theme_research_runtime_service_q} --index-service ${theme_research_report_index_service_q} --review-service ${theme_research_report_review_service_q}" \
+      > "$theme_research_report_health_snapshot" \
+      && jq -e . "$theme_research_report_health_snapshot" >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( SECONDS + retry_seconds > health_deadline )); then
+      break
+    fi
+    sleep "$retry_seconds"
+  done
+  return 1
+}
+
+if ! validate_theme_research_report_host_root >/dev/null; then
+  echo "Theme Research report host root validation failed: $THEME_RESEARCH_REPORT_HOST_ROOT" >&2
+  exit 2
+fi
+if ! ssh "${ssh_opts[@]}" -- "$remote" \
+  "bash -s -- ${theme_research_artifact_host_root_q} 25 ai_compute_infrastructure_value_chain_v1" \
+  < "$ROOT/deploy/check_theme_research_artifacts.sh" >/dev/null; then
+  echo "Theme Research canonical artifact validation failed: $theme_research_artifact_host_root" >&2
+  exit 2
+fi
+
+if check_release_state \
+  "${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
+  "${DASHBOARD_DESIRED_STATE_RETRY_SECONDS:-2}" >/dev/null 2>&1; then
+  echo "Dashboard desired state already live for ${EXPECTED_TRADE_DATE} (${release_id}); deployment skipped."
+  exit 0
+fi
+echo "Dashboard desired-state gate not yet satisfied; continuing idempotent deployment."
 
 echo "Building canonical frontend for release ${release_id}"
 CI=true rtk pnpm --dir "$ROOT/dashboard" install --frozen-lockfile
@@ -342,7 +449,7 @@ echo "Preparing remote release directories"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/artifacts/theme_decomposition/priority_policies ${remote_dir_q}/artifacts/theme_decomposition/tech_bottleneck_crosswalks ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
+  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
 
 echo "Syncing backend source"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
@@ -352,19 +459,13 @@ rsync -az -e "$rsync_rsh" -- \
   "$ROOT/deploy/dashboard-api.Dockerfile" \
   "$ROOT/deploy/dashboard-api-requirements.in" \
   "$ROOT/deploy/dashboard-api-requirements.lock" \
+  "$ROOT/deploy/check_dashboard_report_mount.sh" \
+  "$ROOT/deploy/check_theme_research_report_runtime.py" \
   "$ROOT/deploy/dashboard-frontend.Dockerfile" \
   "$ROOT/deploy/dashboard-nginx.conf" \
   "$ROOT/deploy/check_dashboard_remote_host.sh" \
   "$ROOT/deploy/dashboard-release.compose.yml" \
   "$remote:$REMOTE_DIR/deploy/"
-
-echo "Syncing Theme Research priority support"
-rsync -az --delete -e "$rsync_rsh" -- \
-  "$ROOT/artifacts/theme_decomposition/priority_policies/" \
-  "$remote:$REMOTE_DIR/artifacts/theme_decomposition/priority_policies/"
-rsync -az --delete -e "$rsync_rsh" -- \
-  "$ROOT/artifacts/theme_decomposition/tech_bottleneck_crosswalks/" \
-  "$remote:$REMOTE_DIR/artifacts/theme_decomposition/tech_bottleneck_crosswalks/"
 
 echo "Syncing canonical frontend build"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
@@ -375,7 +476,7 @@ rsync -az --delete -e "$rsync_rsh" -- "$strategy_output/" \
 
 echo "Restarting Docker Compose API and dashboard services"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate --remove-orphans api dashboard"
+  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q} THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q} THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q} THEME_RESEARCH_REPORT_INDEX_SERVICE=${theme_research_report_index_service_q} THEME_RESEARCH_REPORT_REVIEW_SERVICE=${theme_research_report_review_service_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q} THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q} THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q} THEME_RESEARCH_REPORT_INDEX_SERVICE=${theme_research_report_index_service_q} THEME_RESEARCH_REPORT_REVIEW_SERVICE=${theme_research_report_review_service_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml run --rm --no-deps -e PGSERVICE=${theme_research_migration_service_q} api python -m stock_research.theme_research_report_schema --apply --service ${theme_research_migration_service_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q} THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q} THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q} THEME_RESEARCH_REPORT_INDEX_SERVICE=${theme_research_report_index_service_q} THEME_RESEARCH_REPORT_REVIEW_SERVICE=${theme_research_report_review_service_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml run --rm --no-deps -e PGSERVICE=${theme_research_migration_service_q} api python /app/deploy/check_theme_research_report_runtime.py --schema-only --migration-service ${theme_research_migration_service_q} --runtime-service ${theme_research_runtime_service_q} --index-service ${theme_research_report_index_service_q} --review-service ${theme_research_report_review_service_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} THEME_RESEARCH_REPORT_HOST_ROOT=${theme_research_report_host_root_q} THEME_RESEARCH_MIGRATION_SERVICE=${theme_research_migration_service_q} THEME_RESEARCH_RUNTIME_SERVICE=${theme_research_runtime_service_q} THEME_RESEARCH_REPORT_INDEX_SERVICE=${theme_research_report_index_service_q} THEME_RESEARCH_REPORT_REVIEW_SERVICE=${theme_research_report_review_service_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate --remove-orphans api dashboard"
 
 echo "Synchronizing trusted strategy manifest into remote database"
 ssh "${ssh_opts[@]}" -- "$remote" \

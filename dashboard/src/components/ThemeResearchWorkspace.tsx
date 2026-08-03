@@ -1,5 +1,6 @@
-import { ArrowLeft, ExternalLink, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, RefreshCw, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { themeResearchReportPdfUrl } from '../api/client';
 import {
   fetchThemeResearchClaims,
   fetchThemeResearchCompanies,
@@ -16,6 +17,7 @@ import type {
   ThemeResearchThemeCollection,
   ThemeResearchThemeDetail
 } from '../types/themeResearch';
+import { ThemeResearchReportReader } from './ThemeResearchReportReader';
 
 type ThemeResearchTab = 'overview' | 'nodes' | 'sources' | 'companies';
 
@@ -28,6 +30,7 @@ type Props = {
 type RouteState = {
   themeId: string;
   tab: ThemeResearchTab;
+  reportVersionId?: string;
 };
 
 const TAB_LABELS: Record<ThemeResearchTab, string> = {
@@ -88,16 +91,36 @@ function nodeLabel(nodeId: string, fallback = '') {
 }
 
 function parseRoute(pathname: string): RouteState | null {
+  const reportMatch = pathname.match(/^\/theme-research\/([^/]+)\/report\/([^/]+)\/?$/);
+  if (reportMatch) {
+    try {
+      return {
+        themeId: decodeURIComponent(reportMatch[1]),
+        tab: 'overview',
+        reportVersionId: decodeURIComponent(reportMatch[2])
+      };
+    } catch {
+      return null;
+    }
+  }
   const match = pathname.match(/^\/theme-research\/([^/]+)(?:\/(nodes|sources|companies))?\/?$/);
   if (!match) return null;
-  return {
-    themeId: decodeURIComponent(match[1]),
-    tab: (match[2] as ThemeResearchTab | undefined) ?? 'overview'
-  };
+  try {
+    return {
+      themeId: decodeURIComponent(match[1]),
+      tab: (match[2] as ThemeResearchTab | undefined) ?? 'overview'
+    };
+  } catch {
+    return null;
+  }
+}
+
+function themePath(themeId: string) {
+  return `/theme-research/${encodeURIComponent(themeId)}`;
 }
 
 function tabPath(themeId: string, tab: ThemeResearchTab) {
-  return tab === 'overview' ? `/theme-research/${themeId}` : `/theme-research/${themeId}/${tab}`;
+  return tab === 'overview' ? themePath(themeId) : `${themePath(themeId)}/${tab}`;
 }
 
 function readableStatus(value: string) {
@@ -218,7 +241,9 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
     setSources([]);
     setClaims([]);
     setCompanies([]);
-    const request = !route
+    const request = route?.reportVersionId
+      ? Promise.resolve()
+      : !route
       ? fetchThemeResearchThemes().then((nextThemes) => {
           if (!cancelled) setThemes(nextThemes);
         })
@@ -263,6 +288,16 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
       return matchesQuery && (!nodeState || node.priority_class === nodeState || node.node_review_status === nodeState);
     });
   }, [nodeState, nodes, query]);
+
+  if (route?.reportVersionId) {
+    return (
+      <ThemeResearchReportReader
+        themeId={route.themeId}
+        reportVersionId={route.reportVersionId}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   if (loading) {
     return <section className="workspace-band theme-research-state" aria-busy="true">正在加载主题研究数据...</section>;
@@ -310,7 +345,7 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
                 {filteredThemes.map((theme) => (
                   <tr key={theme.theme_id}>
                     <td>
-                      <button className="theme-research-primary-link" type="button" onClick={() => onNavigate(`/theme-research/${theme.theme_id}`)} aria-label={`打开${theme.theme_name}`}>
+                      <button className="theme-research-primary-link" type="button" onClick={() => onNavigate(themePath(theme.theme_id))} aria-label={`打开${theme.theme_name}`}>
                         <strong>{theme.theme_name}</strong><small>{readableStatus(theme.theme_type)}</small>
                       </button>
                     </td>
@@ -361,7 +396,7 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
           </button>
         ))}
       </nav>
-      {route.tab === 'overview' ? <Overview detail={detail} /> : null}
+      {route.tab === 'overview' ? <Overview detail={detail} onNavigate={onNavigate} /> : null}
       {route.tab === 'nodes' ? (
         <NodesView nodes={filteredNodes} query={query} setQuery={setQuery} nodeState={nodeState} setNodeState={setNodeState} />
       ) : null}
@@ -375,9 +410,44 @@ function Metric({ label, value, tone = '' }: { label: string; value: number; ton
   return <div className={`theme-research-metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function Overview({ detail }: { detail: ThemeResearchThemeDetail }) {
+function Overview({ detail, onNavigate }: { detail: ThemeResearchThemeDetail; onNavigate: (path: string) => void }) {
+  const report = detail.theme.analysis_report;
   return (
     <div className="theme-research-view">
+      <section className="theme-research-section theme-report-card">
+        <div>
+          <h2>分析报告</h2>
+          {report.status === 'published' ? (
+            <p>版本 {report.version} · 发布于 {report.published_at}</p>
+          ) : (
+            <p>研究与报告生成正在后台持续推进，审核发布后即可阅读。</p>
+          )}
+        </div>
+        {report.status === 'published' ? (
+          <div className="theme-report-actions">
+            <span className="theme-research-status is-positive">已发布</span>
+            <button
+              className="icon-text-button"
+              type="button"
+              onClick={() => onNavigate(
+                `/theme-research/${encodeURIComponent(detail.theme.theme_id)}/report/${encodeURIComponent(report.report_version_id)}`
+              )}
+            >
+              在线阅读
+            </button>
+            {report.has_pdf ? (
+              <a
+                className="icon-text-button"
+                href={themeResearchReportPdfUrl(detail.theme.theme_id, report.report_version_id)}
+              >
+                <Download size={16} aria-hidden="true" /> 下载 PDF
+              </a>
+            ) : null}
+          </div>
+        ) : (
+          <span className="theme-research-status is-warning">研究中</span>
+        )}
+      </section>
       <section className="theme-research-section">
         <h2>优先节点</h2>
         <NodeTable nodes={detail.top_node_priorities} compact />

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 import copy
 from functools import lru_cache
 import json
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard._theme_research_safety import (
+    normalize_aware_iso8601_timestamp,
+    normalize_report_identity,
+)
 from stock_research.db import connect, fetch_all
 from stock_research.theme_research_store import (
     build_theme_artifact_from_package,
@@ -17,8 +22,9 @@ from stock_research import theme_research_priority as priority
 def load_db_context(
     service: str | None = None,
 ) -> dict[str, Any]:
+    selected_service = service or SETTINGS.theme_research_runtime_service
     normalized = load_database_package(
-        service=service or SETTINGS.theme_research_runtime_service
+        service=selected_service
     )
     theme_package = _theme_package(normalized)
     mapping_package = _mapping_package(normalized, theme_package)
@@ -26,6 +32,7 @@ def load_db_context(
         theme_package["nodes"],
         mapping_package["company_mappings"],
     )
+    analysis_reports_by_theme = _load_published_report_summaries(selected_service)
     return {
         "policy": priority_context["policy"],
         "priority_status": priority_context["priority_status"],
@@ -35,9 +42,57 @@ def load_db_context(
         "company_priorities": priority_context["company_priorities"],
         "evidence_gap_priorities": priority_context["evidence_gap_priorities"],
         "review_queue": priority_context["review_queue"],
+        "analysis_reports_by_theme": analysis_reports_by_theme,
     }
 
 
+def _load_published_report_summaries(service: str) -> dict[str, dict[str, Any]]:
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            """
+            SELECT theme_id, report_version_id, version, published_at,
+                   (NULLIF(BTRIM(pdf_relative_path), '') IS NOT NULL) AS has_pdf
+            FROM research.theme_research_report_version
+            WHERE status = 'published'
+            ORDER BY theme_id, published_at DESC NULLS LAST, report_version_id
+            """,
+        )
+
+    summaries: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        try:
+            theme_id = normalize_report_identity(row.get("theme_id"))
+            report_version_id = normalize_report_identity(
+                row.get("report_version_id")
+            )
+            version = normalize_report_identity(row.get("version"))
+            published_at = normalize_aware_iso8601_timestamp(
+                row.get("published_at")
+            )
+            has_pdf = row.get("has_pdf")
+        except Exception:
+            continue
+        if (
+            not theme_id
+            or not report_version_id
+            or not version
+            or not published_at
+            or type(has_pdf) is not bool
+        ):
+            continue
+        summaries.setdefault(
+            theme_id,
+            {
+                "report_version_id": report_version_id,
+                "version": version,
+                "published_at": published_at,
+                "has_pdf": has_pdf,
+            },
+        )
+    return summaries
 def load_asset_db_context(
     company_code: str,
     *,

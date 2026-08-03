@@ -16,11 +16,28 @@ services:
       STOCK_RESEARCH_RELEASE_ID: ${STOCK_RESEARCH_RELEASE_ID:?required}
       STOCK_RESEARCH_FRONTEND_BUILD_ID: ${STOCK_RESEARCH_FRONTEND_BUILD_ID:?required}
       STOCK_RESEARCH_FRONTEND_METADATA_FILE: /app/dashboard/dist/release.json
+      THEME_RESEARCH_REPORT_ROOT: /app/reports/theme-research
+      THEME_RESEARCH_MIGRATION_SERVICE: ${THEME_RESEARCH_MIGRATION_SERVICE:-stock_research}
+      THEME_RESEARCH_RUNTIME_SERVICE: ${THEME_RESEARCH_RUNTIME_SERVICE:-theme_research_runtime}
+      THEME_RESEARCH_REPORT_INDEX_SERVICE: ${THEME_RESEARCH_REPORT_INDEX_SERVICE:-theme_research_report_indexer}
+      THEME_RESEARCH_REPORT_REVIEW_SERVICE: ${THEME_RESEARCH_REPORT_REVIEW_SERVICE:-theme_research_report_reviewer}
     ports:
       - "127.0.0.1:${DASHBOARD_API_BIND_PORT:-8765}:8765"
     volumes:
       - ../outputs/research:/app/outputs/research:ro
       - ${DASHBOARD_PGSERVICE_FILE:-./.pg_service.conf}:/app/.pg_service.conf:ro
+      - type: bind
+        source: ../artifacts/theme_decomposition
+        target: /app/artifacts/theme_decomposition
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${THEME_RESEARCH_REPORT_HOST_ROOT:?required}
+        target: /app/reports/theme-research
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - dashboard_release
 

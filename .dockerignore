@@ -11,9 +11,3 @@
 !dashboard/
 !dashboard/dist/
 !dashboard/dist/**
-!artifacts/
-!artifacts/theme_decomposition/
-!artifacts/theme_decomposition/priority_policies/
-!artifacts/theme_decomposition/priority_policies/**
-!artifacts/theme_decomposition/tech_bottleneck_crosswalks/
-!artifacts/theme_decomposition/tech_bottleneck_crosswalks/**

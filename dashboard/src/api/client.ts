@@ -1,6 +1,9 @@
 import type {
   AssetNewsResponse,
   AssetSearchResponse,
+  AdminThemeResearchReport,
+  AdminThemeResearchReportDocument,
+  AdminThemeResearchReportListResponse,
   AdminUserActionResponse,
   AdminUsersResponse,
   AssetProfile,
@@ -85,6 +88,11 @@ import type {
   StrategyTrade,
   StrategyValidationRun,
   ThemeResearchUpdatesPayload,
+  ThemeResearchReportDocument,
+  ThemeResearchReportIndexDiagnostics,
+  ThemeResearchReportListResponse,
+  ThemeResearchReportPublishRequest,
+  ThemeResearchReportRejectRequest,
   UpdateOperatorDecisionRequest,
   WatchlistResponse,
   WatchlistSignalRow
@@ -491,6 +499,77 @@ export async function fetchThemeResearchUpdates(
       ? `/api/research/theme-decomposition/updates?${query}`
       : '/api/research/theme-decomposition/updates'
   );
+}
+
+const THEME_RESEARCH_REPORT_BASE = '/api/research/theme-decomposition/themes';
+const ADMIN_THEME_RESEARCH_REPORT_BASE = '/api/admin/theme-research/reports';
+
+function themeResearchReportPath(themeId: string, suffix = ''): string {
+  return `${THEME_RESEARCH_REPORT_BASE}/${encodeURIComponent(themeId)}/reports${suffix}`;
+}
+
+function adminThemeResearchReportPath(reportVersionId: string, suffix = ''): string {
+  return `${ADMIN_THEME_RESEARCH_REPORT_BASE}/${encodeURIComponent(reportVersionId)}${suffix}`;
+}
+
+export async function fetchThemeResearchReports(
+  themeId: string
+): Promise<ThemeResearchReportListResponse> {
+  return getJson(themeResearchReportPath(themeId), { credentials: 'include' });
+}
+
+export async function fetchThemeResearchReportDocument(
+  themeId: string,
+  reportVersionId: string
+): Promise<ThemeResearchReportDocument> {
+  return getJson(themeResearchReportPath(themeId, `/${encodeURIComponent(reportVersionId)}`), {
+    credentials: 'include'
+  });
+}
+
+export function themeResearchReportPdfUrl(themeId: string, reportVersionId: string): string {
+  return themeResearchReportPath(themeId, `/${encodeURIComponent(reportVersionId)}/pdf`);
+}
+
+export async function fetchAdminThemeResearchReports(
+  status?: 'pending_review' | 'rejected'
+): Promise<AdminThemeResearchReportListResponse> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return getJson(`${ADMIN_THEME_RESEARCH_REPORT_BASE}${query}`, { credentials: 'include' });
+}
+
+export async function fetchAdminThemeResearchReport(
+  reportVersionId: string
+): Promise<AdminThemeResearchReportDocument> {
+  return getJson(adminThemeResearchReportPath(reportVersionId), { credentials: 'include' });
+}
+
+export function adminThemeResearchReportPdfUrl(reportVersionId: string): string {
+  return adminThemeResearchReportPath(reportVersionId, '/pdf');
+}
+
+export async function publishThemeResearchReport(
+  reportVersionId: string,
+  request: ThemeResearchReportPublishRequest
+): Promise<{ report: AdminThemeResearchReport }> {
+  return postJson(adminThemeResearchReportPath(reportVersionId, '/publish'), request, {
+    credentials: 'include',
+    csrfToken: csrfTokenFromCookie()
+  });
+}
+
+export async function rejectThemeResearchReport(
+  reportVersionId: string,
+  request: ThemeResearchReportRejectRequest
+): Promise<{ report: AdminThemeResearchReport }> {
+  return postJson(adminThemeResearchReportPath(reportVersionId, '/reject'), request, {
+    credentials: 'include',
+    csrfToken: csrfTokenFromCookie()
+  });
+}
+
+export async function fetchThemeResearchReportIndexDiagnostics(): Promise<ThemeResearchReportIndexDiagnostics> {
+  return getJson('/api/admin/theme-research/report-index/status', { credentials: 'include' });
 }
 
 export async function fetchStrategyScoreAudit(tradeDate: string): Promise<StrategyScoreAuditSummary> {

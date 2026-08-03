@@ -108,13 +108,13 @@ No table, column, row, or unrelated constraint is removed.
 7. Apply the schema migration using the authenticated admin and migration service.
 8. Recheck schema status and existing two-theme reads.
 9. Extract and stage only the 25-theme checkpoint artifacts.
-10. Run the production dry-run gate.
-11. Import the package through the existing authenticated transactional CLI with generation locking and a deterministic idempotency key.
+10. Run the production dry-run gate. If the checkpoint contains newer revisions of the two production themes, construct an additive desired package from the current database package plus only the 23 missing checkpoint themes.
+11. Import the guarded additive package through the existing authenticated transactional writer with generation locking and a deterministic idempotency key.
 12. Verify database, API, browser, and logs.
 
 ## Data Import Gate
 
-The isolated artifact tree is normalized with current upgraded code. The gate requires:
+The isolated artifact tree is normalized with current upgraded code. The desired write package preserves the current database objects for the two existing themes and adds only theme-scoped objects for the 23 missing checkpoint themes. The gate requires:
 
 - expected theme count equals 25;
 - current production theme IDs equal the two known IDs;
@@ -127,15 +127,15 @@ If any gate fails, stop before importing and report the exact semantic differenc
 
 ## Production Write
 
-Call the existing `bootstrap_package()` path through the authenticated CLI with:
+Call the existing `bootstrap_package()` path through the authenticated restore guard with:
 
 - actor role `admin`;
 - the freshly read production generation;
-- idempotency key `theme-research-25-eba5cdfc-20260731`;
-- the validated full 25-theme package;
+- idempotency key `theme-research-25-eba5cdfc-additive-20260731`;
+- the validated additive 25-theme package built from the current two-theme package plus the 23 missing checkpoint themes;
 - no `replace_theme`.
 
-The writer provides a serializable transaction, advisory locking, generation conflict protection, change-set and import-run audit records, relationship replacement for changed themes, and snapshots for changed existing themes. The zero-update gate ensures only the 23 missing themes are written.
+The writer provides a serializable transaction, advisory locking, generation conflict protection, and change-set/import-run audit records. Identity collisions between existing objects and missing-theme objects are rejected before execution. Checkpoint, database, desired-package, and generation values are bound to the approved preflight. After acquiring the transaction lock and reloading the authoritative database package, the writer requires exactly 23 theme inserts and rejects every update or deactivation before any write.
 
 ## Verification
 

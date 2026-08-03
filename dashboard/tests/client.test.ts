@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DASHBOARD_AUTH_EXPIRED_EVENT,
   fetchCurrentUser,
   fetchAdminUsers,
   createAdminUser,
@@ -16,6 +17,8 @@ import {
   fetchAssetOutcomes,
   fetchAssetResearchReports,
   fetchAssetThemeResearchContext,
+  fetchAdminThemeResearchReport,
+  fetchAdminThemeResearchReports,
   fetchDailyReviewLite,
   fetchExperimentProposals,
   fetchExperimentReplay,
@@ -50,6 +53,9 @@ import {
   fetchStockHeatmap,
   fetchStockMarketContextHeatmap,
   fetchThemeResearchUpdates,
+  fetchThemeResearchReportDocument,
+  fetchThemeResearchReportIndexDiagnostics,
+  fetchThemeResearchReports,
   fetchEvidenceDigestSnapshot,
   fetchEvidenceDigestSnapshots,
   fetchReviewQueue,
@@ -63,10 +69,245 @@ import {
   fetchShadowOutcomes,
   fetchShadowWatchlist,
   runBacktest,
-  runFreshBacktest
+  runFreshBacktest,
+  adminThemeResearchReportPdfUrl,
+  publishThemeResearchReport,
+  rejectThemeResearchReport,
+  themeResearchReportPdfUrl
 } from '../src/api/client';
+import type {
+  AdminThemeResearchReport,
+  ThemeResearchReportDocument,
+  ThemeResearchReportIndexResult,
+  ThemeResearchReportPublishRequest,
+  ThemeResearchReportSummary,
+  ThemeResearchReportVersion
+} from '../src/api/types';
+import type { ThemeResearchTheme } from '../src/types/themeResearch';
 
 describe('dashboard API client', () => {
+  it('types approved theme report summaries and documents without internal artifacts', () => {
+    const publishWithoutComment: ThemeResearchReportPublishRequest = {
+      expected_row_version: 1,
+      idempotency_key: 'publish-1'
+    };
+    const summary: ThemeResearchReportSummary = {
+      status: 'published',
+      report_version_id: 'report-1',
+      version: 'v1',
+      published_at: '2026-08-01T09:30:00+08:00',
+      has_pdf: true
+    };
+    const researchingTheme: ThemeResearchTheme = {
+      theme_id: 'theme-1',
+      theme_name: 'Theme',
+      theme_type: 'industry',
+      summary: 'summary',
+      status: 'reviewed',
+      created_from: 'seed',
+      last_updated: '2026-08-01',
+      analysis_report: { status: 'researching' },
+      research_only: true,
+      used_for_signal: false,
+      used_for_admission: false
+    };
+    const version: ThemeResearchReportVersion = {
+      report_version_id: 'report-1',
+      theme_id: 'theme-1',
+      version: 'v1',
+      title: 'Title',
+      summary: 'Summary',
+      status: 'published',
+      generated_at: '2026-08-01T08:00:00+08:00',
+      published_at: '2026-08-01T09:30:00+08:00',
+      has_pdf: true
+    };
+    const document: ThemeResearchReportDocument = {
+      report_version_id: 'report-1',
+      theme_id: 'theme-1',
+      version: 'v1',
+      title: 'Title',
+      summary: 'Summary',
+      status: 'published',
+      generated_at: '2026-08-01T08:00:00+08:00',
+      published_at: '2026-08-01T09:30:00+08:00',
+      has_pdf: true,
+      html: '<h1>Title</h1>'
+    };
+    const indexResult: ThemeResearchReportIndexResult = {
+      discovered: 0,
+      indexed: 0,
+      unchanged: 0,
+      invalid: 0,
+      errors: [],
+      started_at: '2026-08-01T08:00:00+08:00',
+      completed_at: '2026-08-01T08:00:01+08:00',
+      root_exists: false,
+      root_readable: false,
+      error_code: 'REPORT_ROOT_MISSING'
+    };
+
+    expect(summary.status).toBe('published');
+    expect(publishWithoutComment.idempotency_key).toBe('publish-1');
+    expect(researchingTheme.analysis_report.status).toBe('researching');
+    expect(version.has_pdf).toBe(true);
+    expect(document.html).toContain('Title');
+    expect(indexResult.root_exists).toBe(false);
+  });
+
+  it('fetches approved theme reports and document through encoded paths', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 0, items: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ report_version_id: 'report/1', html: '<p>ok</p>' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchThemeResearchReports('theme/a b');
+    await fetchThemeResearchReportDocument('theme/a b', 'report/1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports',
+      { credentials: 'include' }
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports/report%2F1',
+      { credentials: 'include' }
+    );
+    expect(themeResearchReportPdfUrl('theme/a b', 'report/1')).toBe(
+      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports/report%2F1/pdf'
+    );
+  });
+
+  it('fetches admin report queues, preview, PDF, and index diagnostics', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ total: 0, items: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchAdminThemeResearchReports();
+    await fetchAdminThemeResearchReports('rejected');
+    await fetchAdminThemeResearchReport('report/1');
+    await fetchThemeResearchReportIndexDiagnostics();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/theme-research/reports', {
+      credentials: 'include'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/theme-research/reports?status=rejected', {
+      credentials: 'include'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/admin/theme-research/reports/report%2F1', {
+      credentials: 'include'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/admin/theme-research/report-index/status', {
+      credentials: 'include'
+    });
+    expect(adminThemeResearchReportPdfUrl('report/1')).toBe(
+      '/api/admin/theme-research/reports/report%2F1/pdf'
+    );
+  });
+
+  it('publishes and rejects theme reports with cookie credentials and csrf', async () => {
+    const published: AdminThemeResearchReport = {
+      report_version_id: 'report/1',
+      theme_id: 'theme-1',
+      version: 'v1',
+      title: 'Title',
+      summary: 'Summary',
+      status: 'published',
+      generated_at: '2026-08-01T08:00:00+08:00',
+      indexed_at: '2026-08-01T08:05:00+08:00',
+      published_at: '2026-08-01T09:30:00+08:00',
+      published_by_user_id: 'user:admin',
+      row_version: 2,
+      metadata: {},
+      created_at: '2026-08-01T08:05:00+08:00',
+      updated_at: '2026-08-01T09:30:00+08:00',
+      rejected_at: null,
+      rejected_by_user_id: null,
+      rejection_reason: null
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ report: published }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ report: { ...published, status: 'rejected' } }) });
+    vi.stubGlobal('fetch', fetchMock);
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: 'stock_research_csrf=csrf-token'
+    });
+
+    await publishThemeResearchReport('report/1', {
+      expected_row_version: 1,
+      idempotency_key: 'publish-1',
+      comment: 'approved'
+    });
+    await rejectThemeResearchReport('report/1', {
+      expected_row_version: 2,
+      idempotency_key: 'reject-1',
+      reason: 'needs revision'
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/theme-research/reports/report%2F1/publish',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
+        body: JSON.stringify({ expected_row_version: 1, idempotency_key: 'publish-1', comment: 'approved' })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/theme-research/reports/report%2F1/reject',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
+        body: JSON.stringify({ expected_row_version: 2, idempotency_key: 'reject-1', reason: 'needs revision' })
+      })
+    );
+  });
+
+  it('propagates theme report GET and review errors through shared client conventions', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ detail: 'missing' }) })
+      .mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: 'stale' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: 'stock_research_csrf=csrf-token'
+    });
+
+    await expect(fetchThemeResearchReportDocument('theme', 'missing')).rejects.toThrow(
+      'GET /api/research/theme-decomposition/themes/theme/reports/missing failed with 404'
+    );
+    await expect(
+      publishThemeResearchReport('report', {
+        expected_row_version: 1,
+        idempotency_key: 'publish-1',
+        comment: ''
+      })
+    ).rejects.toThrow('POST /api/admin/theme-research/reports/report/publish failed with 409: stale');
+  });
+
+  it('dispatches auth-expired when a protected theme report GET returns 401', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+    const listener = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, listener);
+
+    try {
+      await expect(fetchAdminThemeResearchReports()).rejects.toThrow(
+        'GET /api/admin/theme-research/reports failed with 401'
+      );
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, listener);
+    }
+  });
+
   it('uses cookie credentials for auth session endpoints and csrf for logout', async () => {
     const fetchMock = vi
       .fn()

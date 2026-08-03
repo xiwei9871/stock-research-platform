@@ -5,12 +5,17 @@ BASE_URL="${BASE_URL:-https://stock.manqiaotechnology.com}"
 EXPECTED_TRADE_DATE="${EXPECTED_TRADE_DATE:?EXPECTED_TRADE_DATE is required (YYYY-MM-DD)}"
 EXPECTED_RELEASE_ID="${EXPECTED_RELEASE_ID:?EXPECTED_RELEASE_ID is required}"
 DASHBOARD_AUTH="${DASHBOARD_AUTH:-}"
+DASHBOARD_LOGIN_USERNAME="${DASHBOARD_LOGIN_USERNAME:-}"
+DASHBOARD_LOGIN_PASSWORD="${DASHBOARD_LOGIN_PASSWORD:-}"
 EXPECTED_REMOTE_SOURCE_ROOT="${EXPECTED_REMOTE_SOURCE_ROOT:-}"
 EXPECTED_FRONTEND_BUILD_ID="${EXPECTED_FRONTEND_BUILD_ID:-$EXPECTED_RELEASE_ID}"
 EXPECTED_STRATEGY_ARTIFACT_DATE="${EXPECTED_STRATEGY_ARTIFACT_DATE:-$EXPECTED_TRADE_DATE}"
 EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="${EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT:-${EXPECTED_REMOTE_SOURCE_ROOT:+$EXPECTED_REMOTE_SOURCE_ROOT/src/stock_research}}"
 EXPECTED_API_BASE_IMAGE="${EXPECTED_API_BASE_IMAGE:-python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7}"
 EXPECTED_FRONTEND_BASE_IMAGE="${EXPECTED_FRONTEND_BASE_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}"
+EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION="${EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION:-5}"
+THEME_RESEARCH_REPORT_HEALTH_JSON="${THEME_RESEARCH_REPORT_HEALTH_JSON:?THEME_RESEARCH_REPORT_HEALTH_JSON is required}"
+EXPECTED_THEME_RESEARCH_REPORT_ROOT="${EXPECTED_THEME_RESEARCH_REPORT_ROOT:-/app/reports/theme-research}"
 RELEASE_CHECK_TIMEOUT_SECONDS="${RELEASE_CHECK_TIMEOUT_SECONDS:-120}"
 RELEASE_CHECK_RETRY_SECONDS="${RELEASE_CHECK_RETRY_SECONDS:-3}"
 DATE_VALIDATION_PYTHON="${STOCK_RESEARCH_PYTHON:-python3}"
@@ -58,14 +63,75 @@ if [[ ! "$RELEASE_CHECK_RETRY_SECONDS" =~ ^[0-9]+$ ]] || (( RELEASE_CHECK_RETRY_
   exit 2
 fi
 
-curl_auth=()
-if [[ -n "$DASHBOARD_AUTH" ]]; then
-  curl_auth=(-u "$DASHBOARD_AUTH")
-fi
-
+umask 077
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+curl_config="$tmp_dir/curl.conf"
+cookie_jar="$tmp_dir/cookies.txt"
+login_payload="$tmp_dir/login.json"
+: > "$curl_config"
+: > "$cookie_jar"
+: > "$login_payload"
+chmod 600 "$curl_config" "$cookie_jar" "$login_payload"
+if [[ -n "$DASHBOARD_AUTH" ]]; then
+  curl_auth_escaped="${DASHBOARD_AUTH//\\/\\\\}"
+  curl_auth_escaped="${curl_auth_escaped//\"/\\\"}"
+  curl_auth_escaped="${curl_auth_escaped//$'\n'/\\n}"
+  curl_auth_escaped="${curl_auth_escaped//$'\r'/\\r}"
+  printf 'user = "%s"\n' "$curl_auth_escaped" > "$curl_config"
+fi
+if [[ -n "$DASHBOARD_LOGIN_USERNAME" || -n "$DASHBOARD_LOGIN_PASSWORD" ]]; then
+  if [[ -z "$DASHBOARD_LOGIN_USERNAME" || -z "$DASHBOARD_LOGIN_PASSWORD" ]]; then
+    echo "DASHBOARD_LOGIN_USERNAME and DASHBOARD_LOGIN_PASSWORD must be set together" >&2
+    exit 2
+  fi
+  "$DATE_VALIDATION_PYTHON" - "$login_payload" <<'PY'
+import json
+import os
+import sys
+
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(
+        {
+            "username": os.environ["DASHBOARD_LOGIN_USERNAME"],
+            "password": os.environ["DASHBOARD_LOGIN_PASSWORD"],
+        },
+        handle,
+    )
+PY
+fi
 deadline=$((SECONDS + RELEASE_CHECK_TIMEOUT_SECONDS))
+
+login_session() {
+  local remaining
+  local status
+
+  if [[ -z "$DASHBOARD_LOGIN_USERNAME" ]]; then
+    return 0
+  fi
+  while (( SECONDS <= deadline )); do
+    remaining=$((deadline - SECONDS))
+    if (( remaining < 1 )); then
+      break
+    fi
+    if (( remaining > 15 )); then
+      remaining=15
+    fi
+    status="$(curl --config "$curl_config" -sS --connect-timeout 5 --max-time "$remaining" \
+      -X POST -H 'Content-Type: application/json' --data-binary "@$login_payload" \
+      --cookie-jar "$cookie_jar" -o "$tmp_dir/login-response.json" -w '%{http_code}' \
+      "${BASE_URL%/}/api/auth/login" || true)"
+    if [[ "$status" == "200" ]] \
+      && jq -e '.user | type == "object"' "$tmp_dir/login-response.json" >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( SECONDS + RELEASE_CHECK_RETRY_SECONDS > deadline )); then
+      break
+    fi
+    sleep "$RELEASE_CHECK_RETRY_SECONDS"
+  done
+  return 1
+}
 
 fetch_json() {
   local url="$1"
@@ -80,10 +146,10 @@ fetch_json() {
   if (( remaining > 15 )); then
     remaining=15
   fi
-  if (( ${#curl_auth[@]} )); then
-    status="$(curl -sS --connect-timeout 5 --max-time "$remaining" "${curl_auth[@]}" -o "$output" -w '%{http_code}' "$url" || true)"
+  if [[ -n "$DASHBOARD_LOGIN_USERNAME" ]]; then
+    status="$(curl --config "$curl_config" --cookie "$cookie_jar" -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
   else
-    status="$(curl -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
+    status="$(curl --config "$curl_config" -sS --connect-timeout 5 --max-time "$remaining" -o "$output" -w '%{http_code}' "$url" || true)"
   fi
   [[ "$status" == "200" ]] && jq -e . "$output" >/dev/null 2>&1
 }
@@ -173,14 +239,74 @@ queue_matches_release() {
     ' "$1" >/dev/null
 }
 
+theme_research_matches_release() {
+  jq -e '
+    (.total | type == "number" and . >= 25)
+    and (.items | type == "array")
+    and ((.items | length) == .total)
+    and ([.items[].theme_id] | length == (unique | length))
+    and any(.items[]; .theme_id == "ai_compute_infrastructure_value_chain_v1")
+  ' "$1" >/dev/null
+}
+
+report_health_matches_release() {
+  jq -e \
+    --arg root "$EXPECTED_THEME_RESEARCH_REPORT_ROOT" \
+    --arg schema_version "$EXPECTED_THEME_RESEARCH_REPORT_SCHEMA_VERSION" \
+    '
+      .status == "ok"
+      and .root.path == $root
+      and .root.exists == true
+      and .root.readable == true
+      and .root.readonly == true
+      and .schema.status == "current"
+      and .schema.schema_version == $schema_version
+      and .service_permissions.runtime.status == "ok"
+      and .service_permissions.indexer.status == "ok"
+      and .service_permissions.reviewer.status == "ok"
+      and .service_identity.status == "ok"
+      and (.service_identity.server_version_nums as $versions
+        | ($versions | type == "object")
+        and (($versions | keys | sort) == ["indexer", "reviewer", "runtime"])
+        and ([$versions.runtime, $versions.indexer, $versions.reviewer]
+          | all(type == "number" and . > 0))
+      )
+      and (.service_identity.login_attributes as $attributes
+        | ($attributes | type == "object")
+        and (($attributes | keys | sort) == ["indexer", "reviewer", "runtime"])
+        and ([$attributes.runtime, $attributes.indexer, $attributes.reviewer]
+          | all(
+            type == "object"
+            and .rolcanlogin == true
+            and .rolsuper == false
+            and .rolcreatedb == false
+            and .rolcreaterole == false
+            and .rolreplication == false
+            and .rolbypassrls == false
+          ))
+      )
+      and .scheduler_index_diagnostics.status == "ok"
+      and .scheduler_index_diagnostics.invalid == 0
+      and .scheduler_index_diagnostics.errors == []
+    ' "$1" >/dev/null
+}
+
+if ! login_session; then
+  echo "Dashboard session login failed at ${BASE_URL%/}/api/auth/login" >&2
+  exit 1
+fi
+
 echo "Waiting for dashboard release ${EXPECTED_RELEASE_ID} at ${BASE_URL%/}"
 while (( SECONDS <= deadline )); do
   if fetch_json "${BASE_URL%/}/api/platform/readiness" "$tmp_dir/readiness.json" \
     && readiness_matches_release "$tmp_dir/readiness.json" \
+    && fetch_json "${BASE_URL%/}/api/research/theme-decomposition/themes" "$tmp_dir/theme-research.json" \
+    && theme_research_matches_release "$tmp_dir/theme-research.json" \
     && fetch_json "${BASE_URL%/}/release.json" "$tmp_dir/frontend-release.json" \
     && frontend_matches_release "$tmp_dir/frontend-release.json" \
     && fetch_json "${BASE_URL%/}/api/review-queue?trade_date=${EXPECTED_TRADE_DATE}&limit=10&lookback_days=90" "$tmp_dir/review-queue.json" \
-    && queue_matches_release "$tmp_dir/review-queue.json"; then
+    && queue_matches_release "$tmp_dir/review-queue.json" \
+    && report_health_matches_release "$THEME_RESEARCH_REPORT_HEALTH_JSON"; then
     echo "Dashboard release check passed for ${EXPECTED_TRADE_DATE} (${EXPECTED_RELEASE_ID})."
     exit 0
   fi
@@ -199,7 +325,13 @@ fi
 if [[ -s "$tmp_dir/frontend-release.json" ]]; then
   jq '{release_id}' "$tmp_dir/frontend-release.json" >&2 || true
 fi
+if [[ -s "$tmp_dir/theme-research.json" ]]; then
+  jq '{total, required_theme_present: any(.items[]?; .theme_id == "ai_compute_infrastructure_value_chain_v1")}' "$tmp_dir/theme-research.json" >&2 || true
+fi
 if [[ -s "$tmp_dir/review-queue.json" ]]; then
   jq '{requested_trade_date, trade_date, groups: [.groups[]? | {strategy_id, count, data_trade_date, freshness_status}]}' "$tmp_dir/review-queue.json" >&2 || true
+fi
+if [[ -s "$THEME_RESEARCH_REPORT_HEALTH_JSON" ]]; then
+  jq '{status, root, schema, service_permissions, service_identity, scheduler_index_diagnostics}' "$THEME_RESEARCH_REPORT_HEALTH_JSON" >&2 || true
 fi
 exit 1
