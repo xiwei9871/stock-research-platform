@@ -431,6 +431,10 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
   }
 
   function navigateThemeResearch(path: string) {
+    if (path === THEME_REPORT_REVIEW_PATH) {
+      openWorkspaceMode('themeReportReview');
+      return;
+    }
     if (!path.startsWith(THEME_RESEARCH_PATH)) return;
     if (`${window.location.pathname}${window.location.search}` !== path) {
       window.history.pushState({}, '', path);

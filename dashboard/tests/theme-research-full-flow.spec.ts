@@ -135,8 +135,9 @@ test('theme report publication keeps pending versions private and approved histo
     await page.goto(`/theme-research/${fixtureThemeId}`);
     await expect(page.getByText('主题已审核', { exact: true })).toBeVisible();
     await expect(page.getByText('待审核', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: '进入报告审核' })).toBeVisible();
-    await page.goto('/admin/theme-research/report-review');
+    const enterReviewButton = page.getByRole('button', { name: '进入报告审核' });
+    await expect(enterReviewButton).toBeVisible();
+    await enterReviewButton.click();
     await expect(page).toHaveURL(/\/admin\/theme-research\/report-review$/);
     await expect(page.getByText('报告审核', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '主题报告审核' })).toBeVisible();
