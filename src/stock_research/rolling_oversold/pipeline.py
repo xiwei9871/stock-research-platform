@@ -353,6 +353,7 @@ def run_sector_batch(
         previous_snapshot=previous_snapshot,
     )
     if existing is not None:
+        _assert_existing_snapshot_adjust_type(existing, config.adjust_type)
         return existing
     runtime = StrategyRuntimeBudget(timeout_seconds=config.runtime_budget_seconds)
 
@@ -400,6 +401,19 @@ def run_sector_batch(
         raise TypeError("sector batch scorer must return a pandas DataFrame")
     sector_states = sector_states.copy(deep=True)
     sector_states["market_regime"] = market_regime["market_regime"]
+    if sector_states.empty:
+        return _batch_blocked_result(
+            anchor_date=anchor_date,
+            cutoff=cutoff,
+            config=config,
+            output_dir=output_dir,
+            market_regime=market_regime,
+            sector_states=sector_states,
+            gaps=_batch_sector_universe_gaps(inputs, cutoff=cutoff),
+            runtime=runtime,
+            blocked_reason="sector_universe_data_gap",
+            status="blocked_missing_sector_universe",
+        )
     selected_sectors = _batch_sector_selection(sector_states)
     # Snapshot validation requires every blocked-data row with null repair
     # fields to carry an auditable structured gap.  Derive those gaps from the
@@ -453,7 +467,21 @@ def run_sector_batch(
                 sector_selection=selected_sectors,
             )
 
-        stock_candidates = _timed(runtime, "stock", score_stocks)
+        try:
+            stock_candidates = _timed(runtime, "stock", score_stocks)
+        except StockScoringDataGap as exc:
+            return _batch_blocked_result(
+                anchor_date=anchor_date,
+                cutoff=cutoff,
+                config=config,
+                output_dir=output_dir,
+                market_regime=market_regime,
+                sector_states=sector_states,
+                gaps=(exc.gap,),
+                runtime=runtime,
+                blocked_reason="stock_scoring_data_gap",
+                status="blocked_missing_stock_data",
+            )
 
     # Building the normalized probe outside publication keeps the stage timing
     # focused on the immutable write itself while retaining one canonical
@@ -532,9 +560,13 @@ def run_sector_batch(
             runtime.end_stage("publication")
 
     metadata = runtime.metadata()
-    snapshot["runtime_metadata"] = metadata
-    batch_manifest = dict(batch_manifest)
-    batch_manifest["runtime_metadata"] = metadata
+    persisted_manifest = output_dir is not None and bool(paths.get("manifest"))
+    if persisted_manifest and isinstance(batch_manifest, dict):
+        snapshot["runtime_metadata"] = batch_manifest.get("runtime_metadata", metadata)
+    else:
+        snapshot["runtime_metadata"] = metadata
+        batch_manifest = dict(batch_manifest)
+        batch_manifest["runtime_metadata"] = metadata
     return {
         "blocked": False,
         "blocked_reason": "",
@@ -580,6 +612,14 @@ def _load_existing_sector_batch_result(
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    expected_anchor = anchor_date.isoformat()
+    expected_snapshot_id = f"{score_version}|{expected_anchor}"
+    if (
+        manifest.get("anchor_date") != expected_anchor
+        or manifest.get("score_version") != score_version
+        or manifest.get("snapshot_id") != expected_snapshot_id
+    ):
         return None
     hashes = manifest.get("artifact_hashes")
     aliases = ("sector_daily_board.csv", "sector_stock_candidates.csv")
@@ -1025,6 +1065,57 @@ def _batch_sector_selection(sector_states: pd.DataFrame) -> pd.DataFrame:
             ~sector_states["sector_gate_status"].eq(GateStatus.BLOCKED.value)
         ].copy()
     return selected.reset_index(drop=True)
+
+
+def _batch_sector_universe_gaps(
+    inputs: RollingInputs | Any, *, cutoff: date
+) -> tuple[DataGap, ...]:
+    """Describe missing source frames when no canonical sector row can be scored."""
+
+    gaps: list[DataGap] = []
+    for family, membership_dataset, bars_dataset in (
+        ("industry", "core.industry_membership", "market.industry_daily_bar"),
+        ("concept", "core.concept_membership", "market.concept_daily_bar"),
+    ):
+        membership = getattr(inputs, f"{family}_membership", pd.DataFrame())
+        bars = getattr(inputs, f"{family}_bars", pd.DataFrame())
+        if not isinstance(membership, pd.DataFrame) or membership.empty:
+            gaps.append(
+                DataGap(
+                    dataset=membership_dataset,
+                    asset_id=f"__{family}_universe__",
+                    start_date=cutoff.isoformat(),
+                    end_date=cutoff.isoformat(),
+                    expected_rows=1,
+                    actual_rows=0,
+                    reason=f"missing_{family}_sector_universe",
+                )
+            )
+        if not isinstance(bars, pd.DataFrame) or bars.empty:
+            gaps.append(
+                DataGap(
+                    dataset=bars_dataset,
+                    asset_id=f"__{family}_universe__",
+                    start_date=cutoff.isoformat(),
+                    end_date=cutoff.isoformat(),
+                    expected_rows=1,
+                    actual_rows=0,
+                    reason=f"missing_{family}_sector_bars",
+                )
+            )
+    if not gaps:
+        gaps.append(
+            DataGap(
+                dataset="sector_universe",
+                asset_id="__all__",
+                start_date=cutoff.isoformat(),
+                end_date=cutoff.isoformat(),
+                expected_rows=1,
+                actual_rows=0,
+                reason="no_sector_rows_scored",
+            )
+        )
+    return tuple(gaps)
 
 
 def _canonicalize_sector_states(states: pd.DataFrame) -> pd.DataFrame:
@@ -1958,6 +2049,103 @@ def _blocked_result(
         "stock_candidate_count": 0,
         "runtime_seconds": metadata["runtime_seconds"],
         "runtime_metadata": metadata,
+        "future_rows_used_for_scoring": 0,
+    }
+
+
+def _batch_blocked_result(
+    *,
+    anchor_date: date,
+    cutoff: date,
+    config: RollingOversoldConfig,
+    output_dir: str | Path | None,
+    market_regime: dict[str, object],
+    sector_states: pd.DataFrame,
+    gaps: Iterable[DataGap],
+    runtime: StrategyRuntimeBudget,
+    blocked_reason: str,
+    status: str,
+) -> dict[str, object]:
+    """Return a structured, optionally persisted fail-closed batch result."""
+
+    gap_tuple = tuple(gaps)
+    payload = {
+        "blocked": True,
+        "status": status,
+        "anchor_date": anchor_date.isoformat(),
+        "score_version": config.score_version,
+        "data_cutoff_date": cutoff.isoformat(),
+        "checked_datasets": [],
+        "coverage_rows": [],
+        "gaps": [asdict(gap) for gap in gap_tuple],
+        "backfill_request_path": None,
+    }
+    artifacts: dict[str, str | None] = {}
+    if output_dir is not None:
+        artifacts = _persist_blocked_artifacts(
+            _blocked_artifact_dir(
+                output_dir,
+                anchor_date=anchor_date,
+                score_version=config.score_version,
+            ),
+            payload=payload,
+            gaps=gap_tuple,
+            anchor_date=anchor_date,
+            score_version=config.score_version,
+            status=status,
+        )
+    metadata = _snapshot_runtime_metadata(runtime)
+    board = sector_states.copy(deep=True)
+    stocks = pd.DataFrame()
+    batch_manifest = {
+        "blocked": True,
+        "status": status,
+        "snapshot_id": None,
+        "anchor_date": anchor_date.isoformat(),
+        "data_cutoff_date": cutoff.isoformat(),
+        "score_version": config.score_version,
+        "market_regime": str(market_regime.get("market_regime", "unknown")),
+        "row_counts": {
+            "sector_states": int(len(board)),
+            "stock_candidates": 0,
+            "sector_daily_board": int(len(board)),
+            "sector_stock_candidates": 0,
+        },
+        "preflight": payload,
+        "backfill_requests": [asdict(gap) for gap in gap_tuple],
+        "runtime_metadata": metadata,
+    }
+    paths = {
+        "manifest": None,
+        "batch_manifest": None,
+        "snapshot_manifest": None,
+        "sector_states": None,
+        "stock_candidates": None,
+        "sector_daily_board": None,
+        "sector_stock_candidates": None,
+        **artifacts,
+    }
+    return {
+        "blocked": True,
+        "blocked_reason": blocked_reason,
+        "status": status,
+        "anchor_date": anchor_date.isoformat(),
+        "data_cutoff_date": cutoff.isoformat(),
+        "sector_count": int(len(board)),
+        "stock_candidate_count": 0,
+        "sector_states": board,
+        "sector_board": board,
+        "sector_daily_board": board,
+        "stock_candidates": stocks,
+        "sector_stock_candidates": stocks,
+        "snapshot": None,
+        "batch_manifest": batch_manifest,
+        "manifest": batch_manifest,
+        "manifest_path": None,
+        "paths": paths,
+        "runtime_seconds": metadata["runtime_seconds"],
+        "runtime_metadata": metadata,
+        "market_regime": market_regime,
         "future_rows_used_for_scoring": 0,
     }
 

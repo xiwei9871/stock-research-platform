@@ -192,6 +192,7 @@ def test_sector_batch_alias_artifacts_round_trip_sector_stock_rank(monkeypatch, 
     manifest_path = Path(result["paths"]["manifest"])
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     artifact_dir = manifest_path.parent
+    assert result["batch_manifest"] == manifest
     assert {"sector_daily_board.csv", "sector_stock_candidates.csv"}.issubset(
         manifest["artifact_hashes"]
     )
@@ -238,6 +239,35 @@ def test_sector_batch_fast_path_rejects_requested_previous_snapshot_lineage(monk
             output_dir=tmp_path,
             inputs=inputs,
             previous_snapshot={"snapshot_id": "different|2026-07-30"},
+            service="research-test",
+        )
+
+
+def test_sector_batch_fast_path_rejects_adjust_type_mismatch(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    qfq_config = RollingOversoldConfig(anchor_start_date=ANCHOR, adjust_type="qfq")
+    hfq_config = RollingOversoldConfig(anchor_start_date=ANCHOR, adjust_type="hfq")
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=qfq_config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+
+    with pytest.raises(ValueError, match="adjusted close source"):
+        pipeline.run_sector_batch(
+            anchor_date=ANCHOR,
+            config=hfq_config,
+            output_dir=tmp_path,
+            inputs=inputs,
             service="research-test",
         )
 
@@ -299,6 +329,35 @@ def test_sector_batch_fast_path_requires_intact_canonical_artifacts(monkeypatch,
     ) is None
 
 
+def test_sector_batch_fast_path_requires_manifest_identity_match(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "load_rolling_inputs", lambda **kwargs: inputs)
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *args, **kwargs: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *args, **kwargs: _fake_stock_features())
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+    manifest_path = Path(result["paths"]["manifest"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["anchor_date"] = "2026-07-30"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=tmp_path,
+        anchor_date=ANCHOR,
+        score_version=config.score_version,
+    ) is None
+
+
 def test_batch_snapshot_requires_positive_contiguous_sector_stock_ranks(monkeypatch):
     inputs = _fixture_inputs()
     config = RollingOversoldConfig(anchor_start_date=ANCHOR)
@@ -346,6 +405,63 @@ def test_batch_snapshot_requires_positive_contiguous_sector_stock_ranks(monkeypa
             score_version=config.score_version,
             batch_mode=True,
         )
+
+
+def test_sector_batch_empty_sector_universe_fails_closed_with_gap(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    inputs.concept_membership = pd.DataFrame()
+    inputs.concept_bars = pd.DataFrame()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "compute_market_regime_features", lambda *args, **kwargs: {"market_regime": "risk_off"})
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        inputs=inputs,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+
+    assert result["blocked"] is True
+    assert result["sector_count"] == 0
+    gaps = result["batch_manifest"]["preflight"]["gaps"]
+    assert gaps
+    assert any("concept" in str(gap["dataset"]) for gap in gaps)
+
+
+def test_sector_batch_stock_scoring_gap_is_structured_and_blocked(monkeypatch, tmp_path):
+    inputs = _fixture_inputs()
+    config = RollingOversoldConfig(anchor_start_date=ANCHOR)
+    monkeypatch.setattr(pipeline, "compute_market_regime_features", lambda *args, **kwargs: {"market_regime": "risk_off"})
+
+    def fake_features(*args, **kwargs):
+        raise pipeline.StockScoringDataGap(
+            pipeline.DataGap(
+                dataset="market_daily_bar",
+                asset_id="A000-0",
+                start_date=ANCHOR.isoformat(),
+                end_date=ANCHOR.isoformat(),
+                expected_rows=1,
+                actual_rows=0,
+                reason="missing_cutoff_bar",
+            )
+        )
+
+    monkeypatch.setattr(pipeline, "_build_stock_features", fake_features)
+
+    result = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=config,
+        inputs=inputs,
+        output_dir=tmp_path,
+        service="research-test",
+    )
+
+    assert result["blocked"] is True
+    assert result["stock_candidate_count"] == 0
+    gaps = result["batch_manifest"]["preflight"]["gaps"]
+    assert gaps and gaps[0]["asset_id"] == "A000-0"
+    assert Path(result["paths"]["backfill_requests"]).is_file()
 
 
 def test_batch_snapshot_missing_sector_stock_rank_is_rejected(monkeypatch):
