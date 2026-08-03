@@ -18,9 +18,22 @@ _NUMERIC_COLUMNS = (
     "turnover_or_activity_score", "dispersion_20d", "recent_recovery_ratio",
     "fundamental_quality_score", "valuation_support_score", "risk_concentration_score",
     "sector_oversold_score", "sector_repairability_score", "sector_direction_score",
+    "sector_low_close_20d", "sector_low_close_30d", "sector_low_close_60d",
+    "sector_recovery_from_low_20d", "sector_recovery_from_low_30d",
+    "sector_recovery_from_low_60d", "sector_days_since_low_20d",
+    "sector_days_since_low_30d", "sector_days_since_low_60d", "sector_return_1d",
+    "sector_return_3d", "sector_return_5d", "sector_return_10d", "sector_return_20d",
+    "sector_ma5", "sector_ma10", "sector_ma20", "sector_ma5_slope_5d",
+    "sector_ma10_slope_10d", "sector_amount_ratio_5_20", "sector_volume_ratio_5_20",
+    "sector_up_ratio_1d", "sector_up_ratio_5d", "sector_up_ratio_20d",
+    "sector_above_ma5_ratio", "sector_above_ma20_ratio", "sector_new_low_ratio_20d",
+    "sector_new_low_ratio_60d", "sector_leader_return_1d", "sector_leader_return_3d",
+    "sector_leader_return_5d", "sector_leader_breadth", "sector_dispersion_20d",
 )
 _MISSING_SYSTEM = "__missing_sector_system__"
 _MISSING_CODE = "__missing_sector_code__"
+_LOW_POINT_WINDOWS = (20, 30, 60)
+_MIN_FEATURE_HISTORY = 6
 
 
 def score_sector_states(
@@ -103,8 +116,15 @@ def _canonicalize(frame: pd.DataFrame, *, is_membership: bool, anchor_date: date
         else pd.Series(pd.NaT, index=result.index, dtype="datetime64[ns]")
     )
     result["trade_date"] = pd.to_datetime(trade_dates, errors="coerce")
-    result["close"] = pd.to_numeric(result.get("close"), errors="coerce")
-    result["amount"] = pd.to_numeric(result.get("amount"), errors="coerce")
+    result["close"] = pd.to_numeric(
+        result.get("close", pd.Series(pd.NA, index=result.index)), errors="coerce"
+    )
+    result["amount"] = pd.to_numeric(
+        result.get("amount", pd.Series(pd.NA, index=result.index)), errors="coerce"
+    )
+    result["volume"] = pd.to_numeric(
+        result.get("volume", pd.Series(pd.NA, index=result.index)), errors="coerce"
+    )
     for column in ("up_count", "down_count", "stock_count", "new_low_count", "dispersion_20d", *(_NUMERIC_COLUMNS[16:19])):
         if column in result:
             result[column] = pd.to_numeric(result[column], errors="coerce")
@@ -159,29 +179,64 @@ def _score_one_sector(
     sector = all_sector_bars.loc[all_sector_bars["_usable_bar"]].copy() if not all_sector_bars.empty else all_sector_bars
     if not sector.empty:
         sector = sector.drop_duplicates("trade_date", keep="last")
-    closes = sector["close"].dropna().to_numpy(dtype=float) if not sector.empty else np.array([], dtype=float)
+    close_rows = (
+        sector.loc[sector["close"].notna() & sector["trade_date"].notna()]
+        if not sector.empty
+        else sector
+    )
+    closes = (
+        close_rows["close"].to_numpy(dtype=float)
+        if not close_rows.empty
+        else np.array([], dtype=float)
+    )
+    dates = (
+        close_rows["trade_date"].tolist()
+        if not close_rows.empty
+        else []
+    )
     history = len(closes)
-    amounts = sector["amount"].dropna().to_numpy(dtype=float) if not sector.empty else np.array([], dtype=float)
+    amounts = (
+        sector["amount"].dropna().to_numpy(dtype=float)
+        if not sector.empty
+        else np.array([], dtype=float)
+    )
+    volumes = (
+        sector["volume"].dropna().to_numpy(dtype=float)
+        if not sector.empty and "volume" in sector
+        else np.array([], dtype=float)
+    )
+    low_features = _low_point_features(closes, dates, windows=_LOW_POINT_WINDOWS)
+    trend_features = _trend_features(closes, dates)
+    volume_features = _volume_features(volumes, amounts)
+    breadth_features = _breadth_features(sector)
     features = {
         "sector_system": mapping["sector_system"], "sector_code": mapping["sector_code"],
         "sector_name": mapping["sector_name"], "sector_mapping_valid": mapping["valid"],
         "sector_mapping_reason": mapping["reason"],
         "data_cutoff_date": sector["trade_date"].max().date() if not sector.empty else pd.NaT,
         "membership_count": int(membership_count), "history_observations": history,
-        "ret_5d": _return(closes, 5), "ret_10d": _return(closes, 10), "ret_20d": _return(closes, 20),
+        "ret_5d": trend_features["sector_return_5d"],
+        "ret_10d": trend_features["sector_return_10d"],
+        "ret_20d": trend_features["sector_return_20d"],
         "relative_ret_20d": _relative_return(_return(closes, 20), market_regime),
         "drawdown_60d": _drawdown(closes, 60), "drawdown_120d": _drawdown(closes, 120),
         "drawdown_252d": _drawdown(closes, 252), "price_position_252d": _position(closes, 252),
         "below_ma20_ratio": _breadth_or_price(sector, closes, 20),
         "below_ma60_ratio": _breadth_or_price(sector, closes, 60),
         "new_low_60d_ratio": _new_low_ratio(sector, closes), "up_ratio_20d": _up_ratio(sector, closes),
-        "amount_ratio_5_20": _amount_ratio(amounts), "turnover_or_activity_score": float("nan"),
+        "amount_ratio_5_20": volume_features["sector_amount_ratio_5_20"],
+        "turnover_or_activity_score": float("nan"),
         "amount_20d": float(np.mean(amounts[-20:])) if len(amounts) else float("nan"),
-        "dispersion_20d": _dispersion(sector, closes), "recent_recovery_ratio": _recovery(closes),
+        "dispersion_20d": breadth_features["sector_dispersion_20d"],
+        "recent_recovery_ratio": low_features["sector_recovery_from_low_20d"],
         "fundamental_quality_score": _optional_score(sector, "fundamental_quality_score"),
         "valuation_support_score": _optional_score(sector, "valuation_support_score"),
         "risk_concentration_score": _optional_score(sector, "risk_concentration_score"),
     }
+    features.update(low_features)
+    features.update(trend_features)
+    features.update(volume_features)
+    features.update(breadth_features)
     return features
 
 
@@ -230,6 +285,7 @@ def _finalize_scores_and_states(result: pd.DataFrame, market_regime: dict[str, o
     ] = float("nan")
     result["sector_recovery_state"] = result.apply(_recovery_state, axis=1)
     result["sector_gate_status"] = result.apply(lambda row: _gate_status(row, regime), axis=1)
+    result["sector_research_eligibility"] = result.apply(_research_eligibility, axis=1)
     return result
 
 
@@ -263,6 +319,304 @@ def _gate_status(row: pd.Series, regime: str) -> str:
     ):
         return GateStatus.CONFIRMED.value
     return GateStatus.WATCH.value
+
+
+def _research_eligibility(row: pd.Series) -> str:
+    """Map the legacy gate to the explicit research visibility status.
+
+    Task 3 may refine this policy.  For now, preserve the legacy gate semantics
+    while distinguishing data blockage from an ordinary watch row.
+    """
+
+    if (
+        not bool(row.get("sector_mapping_valid", False))
+        or int(row.get("history_observations", 0) or 0) < _MIN_FEATURE_HISTORY
+        or int(row.get("membership_count", 0) or 0) == 0
+    ):
+        return "blocked_data"
+    if row.get("sector_gate_status") == GateStatus.CONFIRMED.value:
+        return "eligible"
+    return "watch"
+
+
+def _low_point_features(
+    closes: object,
+    dates: object,
+    windows: tuple[int, ...] = _LOW_POINT_WINDOWS,
+) -> dict[str, object]:
+    """Return recent-low levels, dates, recovery, and trading-day distance.
+
+    A complete six-observation sector history is the minimum needed for a
+    research feature row.  Longer named windows intentionally use the available
+    point-in-time history when a synthetic or newly listed sector has fewer than
+    the nominal 20/30/60 sessions.
+    """
+
+    result: dict[str, object] = {}
+    for window in windows:
+        result.update(
+            {
+                f"sector_low_close_{window}d": float("nan"),
+                f"sector_low_date_{window}d": pd.NaT,
+                f"sector_recovery_from_low_{window}d": float("nan"),
+                f"sector_days_since_low_{window}d": float("nan"),
+            }
+        )
+    close_values = _numeric_series(closes)
+    date_values = _date_array(dates)
+    length = min(len(close_values), len(date_values))
+    if length < _MIN_FEATURE_HISTORY:
+        return result
+    frame = pd.DataFrame(
+        {
+            "close": close_values.iloc[:length].to_numpy(dtype=float),
+            "trade_date": date_values[:length],
+        }
+    ).dropna(subset=["close", "trade_date"])
+    if len(frame) < _MIN_FEATURE_HISTORY:
+        return result
+    frame = frame.sort_values("trade_date", kind="mergesort").reset_index(drop=True)
+    latest_close = float(frame["close"].iloc[-1])
+    for window in windows:
+        subset = frame.tail(int(window)).reset_index(drop=True)
+        if subset.empty:
+            continue
+        low_value = float(subset["close"].min())
+        # “Recent low” means the latest occurrence when equal lows repeat.
+        low_positions = np.flatnonzero(np.isclose(subset["close"].to_numpy(), low_value))
+        low_position = int(low_positions[-1]) if len(low_positions) else 0
+        low_date = pd.Timestamp(subset["trade_date"].iloc[low_position]).date()
+        result[f"sector_low_close_{window}d"] = low_value
+        result[f"sector_low_date_{window}d"] = low_date.isoformat()
+        result[f"sector_recovery_from_low_{window}d"] = (
+            latest_close / low_value - 1.0 if low_value > 0 else float("nan")
+        )
+        result[f"sector_days_since_low_{window}d"] = float(
+            len(subset) - 1 - low_position
+        )
+    return result
+
+
+def _trend_features(closes: object, dates: object) -> dict[str, object]:
+    """Return point-in-time returns, moving averages, and trend states."""
+
+    result: dict[str, object] = {
+        f"sector_return_{period}d": float("nan")
+        for period in (1, 3, 5, 10, 20)
+    }
+    result.update(
+        {
+            "sector_ma5": float("nan"),
+            "sector_ma10": float("nan"),
+            "sector_ma20": float("nan"),
+            "sector_ma5_slope_5d": float("nan"),
+            "sector_ma10_slope_10d": float("nan"),
+            "sector_ma5_cross_ma10": pd.NA,
+            "sector_close_above_ma5": np.nan,
+            "sector_close_above_ma20": np.nan,
+        }
+    )
+    values = _numeric_array(closes)
+    if len(values) < _MIN_FEATURE_HISTORY:
+        return result
+    for period in (1, 3, 5, 10, 20):
+        result[f"sector_return_{period}d"] = _return(values, period)
+    series = pd.Series(values, dtype="float64")
+    moving = {
+        window: _moving_average_value(values, window)
+        for window in (5, 10, 20)
+    }
+    result["sector_ma5"] = moving[5]
+    result["sector_ma10"] = moving[10]
+    result["sector_ma20"] = moving[20]
+    result["sector_ma5_slope_5d"] = _moving_average_slope(values, 5, 5)
+    result["sector_ma10_slope_10d"] = _moving_average_slope(values, 10, 10)
+    latest = float(series.iloc[-1])
+    if np.isfinite(moving[5]):
+        result["sector_close_above_ma5"] = bool(latest > moving[5])
+    if np.isfinite(moving[20]):
+        result["sector_close_above_ma20"] = bool(latest > moving[20])
+    if np.isfinite(moving[5]) and np.isfinite(moving[10]):
+        previous_ma5 = _moving_average_value(values, 5, offset=1)
+        previous_ma10 = _moving_average_value(values, 10, offset=1)
+        if np.isfinite(previous_ma5) and np.isfinite(previous_ma10):
+            if moving[5] > moving[10] and previous_ma5 <= previous_ma10:
+                result["sector_ma5_cross_ma10"] = "golden_cross"
+            elif moving[5] < moving[10] and previous_ma5 >= previous_ma10:
+                result["sector_ma5_cross_ma10"] = "death_cross"
+            elif moving[5] > moving[10]:
+                result["sector_ma5_cross_ma10"] = "above"
+            elif moving[5] < moving[10]:
+                result["sector_ma5_cross_ma10"] = "below"
+            else:
+                result["sector_ma5_cross_ma10"] = "flat"
+    return result
+
+
+def _volume_features(volume: object, amount: object) -> dict[str, float]:
+    """Return independent 5/20 volume and amount ratios."""
+
+    return {
+        "sector_volume_ratio_5_20": _ratio_5_20(_numeric_array(volume)),
+        "sector_amount_ratio_5_20": _ratio_5_20(_numeric_array(amount)),
+    }
+
+
+def _breadth_features(sector_frame: pd.DataFrame) -> dict[str, object]:
+    """Derive available breadth fields without inventing missing constituents."""
+
+    result: dict[str, object] = {
+        "sector_up_ratio_1d": float("nan"),
+        "sector_up_ratio_5d": float("nan"),
+        "sector_up_ratio_20d": float("nan"),
+        "sector_above_ma5_ratio": float("nan"),
+        "sector_above_ma20_ratio": float("nan"),
+        "sector_new_low_ratio_20d": float("nan"),
+        "sector_new_low_ratio_60d": float("nan"),
+        "sector_leader_return_1d": float("nan"),
+        "sector_leader_return_3d": float("nan"),
+        "sector_leader_return_5d": float("nan"),
+        "sector_leader_breadth": float("nan"),
+        "sector_dispersion_20d": float("nan"),
+    }
+    if not isinstance(sector_frame, pd.DataFrame) or sector_frame.empty:
+        return result
+    frame = (
+        sector_frame.sort_values("trade_date", kind="mergesort")
+        if "trade_date" in sector_frame
+        else sector_frame.copy(deep=True)
+    )
+    closes = _numeric_array(frame.get("close", []))
+    if len(closes) >= 2:
+        daily_up = np.diff(closes) > 0
+        result["sector_up_ratio_1d"] = float(daily_up[-1])
+        result["sector_up_ratio_5d"] = float(np.mean(daily_up[-5:]))
+        result["sector_up_ratio_20d"] = float(np.mean(daily_up[-20:]))
+    count_ratio = _count_ratio(frame, "up_count")
+    if count_ratio is not None:
+        result["sector_up_ratio_1d"] = float(count_ratio.iloc[-1])
+        result["sector_up_ratio_5d"] = float(count_ratio.tail(5).mean())
+        result["sector_up_ratio_20d"] = float(count_ratio.tail(20).mean())
+
+    for window, output in ((5, "sector_above_ma5_ratio"), (20, "sector_above_ma20_ratio")):
+        if len(closes) >= window:
+            moving = pd.Series(closes).rolling(window, min_periods=window).mean()
+            valid = (pd.Series(closes) > moving).dropna()
+            if not valid.empty:
+                result[output] = float(valid.tail(20).mean())
+    for window, output in ((20, "sector_new_low_ratio_20d"), (60, "sector_new_low_ratio_60d")):
+        count_ratio = _count_ratio(frame, "new_low_count")
+        if count_ratio is not None:
+            result[output] = float(count_ratio.tail(window).mean())
+        elif len(closes):
+            result[output] = float(closes[-1] <= np.min(closes[-window:]))
+
+    for period in (1, 3, 5):
+        result[f"sector_leader_return_{period}d"] = _last_optional_feature(
+            frame,
+            (
+                f"leader_return_{period}d",
+                f"sector_leader_return_{period}d",
+                f"top_return_{period}d",
+            ),
+        )
+    result["sector_leader_breadth"] = _last_optional_feature(
+        frame, ("leader_breadth", "sector_leader_breadth")
+    )
+    if (
+        pd.isna(result["sector_leader_breadth"])
+        and "leader_count" in frame
+        and "stock_count" in frame
+    ):
+        leader_count = pd.to_numeric(frame["leader_count"], errors="coerce")
+        stock_count = pd.to_numeric(frame["stock_count"], errors="coerce")
+        ratio = (leader_count / stock_count.replace(0, np.nan)).dropna()
+        if not ratio.empty:
+            result["sector_leader_breadth"] = float(ratio.iloc[-1])
+
+    supplied_dispersion = pd.to_numeric(
+        frame.get("dispersion_20d", pd.Series(pd.NA, index=frame.index)), errors="coerce"
+    ).dropna()
+    if not supplied_dispersion.empty:
+        result["sector_dispersion_20d"] = float(supplied_dispersion.tail(20).mean())
+    elif len(closes) >= 3:
+        returns = np.diff(closes[-20:]) / closes[-20:-1]
+        result["sector_dispersion_20d"] = (
+            float(np.std(returns)) if len(returns) else float("nan")
+        )
+    return result
+
+
+def _numeric_array(values: object) -> np.ndarray:
+    if values is None:
+        return np.array([], dtype=float)
+    if isinstance(values, pd.Series):
+        numeric = pd.to_numeric(values, errors="coerce")
+    else:
+        numeric = pd.to_numeric(pd.Series(values), errors="coerce")
+    return numeric.dropna().to_numpy(dtype=float)
+
+
+def _numeric_series(values: object) -> pd.Series:
+    if values is None:
+        return pd.Series(dtype="float64")
+    if isinstance(values, pd.Series):
+        return pd.to_numeric(values, errors="coerce").reset_index(drop=True)
+    return pd.to_numeric(pd.Series(values), errors="coerce").reset_index(drop=True)
+
+
+def _date_array(values: object) -> pd.Series:
+    if values is None:
+        return pd.Series(dtype="datetime64[ns]")
+    if isinstance(values, pd.Series):
+        dates = pd.to_datetime(values, errors="coerce")
+    else:
+        dates = pd.to_datetime(pd.Series(values), errors="coerce")
+    return dates.reset_index(drop=True)
+
+
+def _moving_average_value(values: np.ndarray, window: int, *, offset: int = 0) -> float:
+    end = len(values) - offset
+    start = end - window
+    if start < 0 or end <= 0:
+        return float("nan")
+    subset = values[start:end]
+    return float(np.mean(subset)) if len(subset) == window else float("nan")
+
+
+def _moving_average_slope(values: np.ndarray, window: int, lookback: int) -> float:
+    current = _moving_average_value(values, window)
+    previous = _moving_average_value(values, window, offset=lookback)
+    if not np.isfinite(current) or not np.isfinite(previous) or previous == 0:
+        return float("nan")
+    return float(current / previous - 1.0)
+
+
+def _ratio_5_20(values: np.ndarray) -> float:
+    if len(values) < _MIN_FEATURE_HISTORY:
+        return float("nan")
+    recent = float(np.mean(values[-5:]))
+    baseline = float(np.mean(values[-20:]))
+    return float(recent / baseline) if baseline else float("nan")
+
+
+def _count_ratio(frame: pd.DataFrame, numerator_column: str) -> pd.Series | None:
+    if numerator_column not in frame or "stock_count" not in frame:
+        return None
+    numerator = pd.to_numeric(frame[numerator_column], errors="coerce")
+    denominator = pd.to_numeric(frame["stock_count"], errors="coerce").replace(0, np.nan)
+    ratio = (numerator / denominator).dropna()
+    return ratio if not ratio.empty else None
+
+
+def _last_optional_feature(frame: pd.DataFrame, columns: tuple[str, ...]) -> float:
+    for column in columns:
+        if column not in frame:
+            continue
+        values = pd.to_numeric(frame[column], errors="coerce").dropna()
+        if not values.empty:
+            return float(values.iloc[-1])
+    return float("nan")
 
 
 def _return(values: np.ndarray, periods: int) -> float:
@@ -404,7 +758,10 @@ def _output_columns() -> list[str]:
     return [
         "sector_system", "sector_code", "sector_name", "data_cutoff_date", "membership_count",
         "history_observations", "sector_mapping_valid", "sector_mapping_reason", "amount_20d",
-        *_NUMERIC_COLUMNS, "sector_recovery_state",
+        *_NUMERIC_COLUMNS,
+        "sector_low_date_20d", "sector_low_date_30d", "sector_low_date_60d",
+        "sector_ma5_cross_ma10", "sector_close_above_ma5", "sector_close_above_ma20",
+        "sector_research_eligibility", "sector_recovery_state",
         "sector_gate_status",
     ]
 
