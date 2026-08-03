@@ -111,6 +111,7 @@ def test_sector_feature_columns_are_emitted() -> None:
         "sector_leader_breadth",
         "sector_dispersion_20d",
         "sector_research_eligibility",
+        "sector_feature_data_status",
     }
 
     assert expected.issubset(row.index)
@@ -126,6 +127,36 @@ def test_missing_volume_does_not_substitute_amount_ratio() -> None:
 
     assert pd.isna(row["sector_volume_ratio_5_20"])
     assert row["sector_amount_ratio_5_20"] > 1
+    assert row["sector_research_eligibility"] == "blocked_data"
+    assert row["sector_feature_data_status"] == "missing_volume"
+
+
+def test_six_bar_history_is_blocked_when_required_repair_features_are_missing() -> None:
+    row = make_scored_sector_row(
+        make_sector_bars(
+            [100, 95, 90, 88, 92, 94],
+            volumes=[100, 100, 120, 140, 180, 220],
+            amounts=[1000, 1000, 1200, 1400, 1800, 2200],
+        )
+    )
+
+    assert row["sector_research_eligibility"] == "blocked_data"
+    assert row["sector_feature_data_status"] == "insufficient_history"
+    assert pd.isna(row["sector_ma5_slope_5d"])
+    assert pd.isna(row["sector_ma10_slope_10d"])
+
+
+def test_complete_history_has_ok_feature_status() -> None:
+    row = make_scored_sector_row(
+        make_sector_bars(
+            [120 - index for index in range(19)] + [100, 95, 90, 88, 92, 94],
+            volumes=[100] * 19 + [100, 100, 120, 140, 180, 220],
+            amounts=[1000] * 19 + [1000, 1000, 1200, 1400, 1800, 2200],
+        )
+    )
+
+    assert row["sector_feature_data_status"] == "ok"
+    assert row["sector_research_eligibility"] in {"eligible", "watch"}
 
 
 def test_future_bar_after_anchor_does_not_change_frozen_features() -> None:
@@ -181,4 +212,3 @@ def test_short_history_returns_empty_low_and_trend_features() -> None:
         "sector_ma10_slope_10d",
     ):
         assert pd.isna(row[column]), column
-

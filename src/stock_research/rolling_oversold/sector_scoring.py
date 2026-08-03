@@ -34,6 +34,15 @@ _MISSING_SYSTEM = "__missing_sector_system__"
 _MISSING_CODE = "__missing_sector_code__"
 _LOW_POINT_WINDOWS = (20, 30, 60)
 _MIN_FEATURE_HISTORY = 6
+_REQUIRED_REPAIR_FEATURE_COLUMNS = (
+    "sector_low_close_20d",
+    "sector_low_date_20d",
+    "sector_recovery_from_low_20d",
+    "sector_days_since_low_20d",
+    "sector_volume_ratio_5_20",
+    "sector_ma5_slope_5d",
+    "sector_ma10_slope_10d",
+)
 
 
 def score_sector_states(
@@ -237,6 +246,9 @@ def _score_one_sector(
     features.update(trend_features)
     features.update(volume_features)
     features.update(breadth_features)
+    features["sector_feature_data_status"] = _feature_data_status(
+        features, history_observations=history
+    )
     return features
 
 
@@ -332,11 +344,25 @@ def _research_eligibility(row: pd.Series) -> str:
         not bool(row.get("sector_mapping_valid", False))
         or int(row.get("history_observations", 0) or 0) < _MIN_FEATURE_HISTORY
         or int(row.get("membership_count", 0) or 0) == 0
+        or row.get("sector_feature_data_status") != "ok"
+        or any(pd.isna(row.get(column)) for column in _REQUIRED_REPAIR_FEATURE_COLUMNS)
     ):
         return "blocked_data"
     if row.get("sector_gate_status") == GateStatus.CONFIRMED.value:
         return "eligible"
     return "watch"
+
+
+def _feature_data_status(features: dict[str, object], *, history_observations: int) -> str:
+    """Classify whether required repair features are publishable at this cutoff."""
+
+    if pd.isna(features.get("sector_volume_ratio_5_20")):
+        return "missing_volume"
+    if any(
+        pd.isna(features.get(column)) for column in _REQUIRED_REPAIR_FEATURE_COLUMNS
+    ):
+        return "insufficient_history" if history_observations < 20 else "missing_feature_data"
+    return "ok"
 
 
 def _low_point_features(
@@ -761,7 +787,7 @@ def _output_columns() -> list[str]:
         *_NUMERIC_COLUMNS,
         "sector_low_date_20d", "sector_low_date_30d", "sector_low_date_60d",
         "sector_ma5_cross_ma10", "sector_close_above_ma5", "sector_close_above_ma20",
-        "sector_research_eligibility", "sector_recovery_state",
+        "sector_research_eligibility", "sector_feature_data_status", "sector_recovery_state",
         "sector_gate_status",
     ]
 
