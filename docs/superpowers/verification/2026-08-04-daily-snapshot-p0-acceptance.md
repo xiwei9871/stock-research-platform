@@ -53,6 +53,34 @@ the 2026-08-04 snapshot becomes available only at an anchor on or after
 The concept index table currently has no 2026-08-04 daily bar. The daily
 sector signal should run after the 2026-08-04 market close bars are loaded.
 
+## Fresh verification under the new standard
+
+The database was rechecked after the standard changed to “a successfully
+captured daily membership snapshot is the latest PIT for that capture date”:
+
+| Check | Fresh result | Status |
+|---|---:|---|
+| Target concept codes | 302 unique | pass |
+| Concept bars through 2026-07-31 | 302/302 | pass |
+| 2026-08-04 snapshot rows | 13,080 | pass |
+| Concepts with 2026-08-04 snapshot rows | 297/302 | pass, partial snapshot |
+| Distinct snapshot assets | 3,598 | pass |
+| Snapshot BSE assets | 0 | pass |
+| Duplicate `(asset, concept, start_date)` groups | 0 | pass |
+| Active old rows left for successful concepts | 0 | pass |
+| 2026-07-31 active target concepts | 192/302 | pass, historical proxy coverage |
+| 2026-08-04 rows visible to a 2026-07-31 replay | 0 | pass |
+
+The five failed live fetches remain explicitly classified rather than silently
+invented: `309264`, `308972`, and `300358` retain their prior 2026-07-09
+active proxy rows; `300037` and `308874` have no prior eligible row and remain
+visible as unmapped coverage gaps. This is the expected fail-closed behavior
+for a partial daily snapshot.
+
+The fresh database audit was run against the same target set; the implementation
+invariants are independently exercised by the test suite below. No data rows
+or pre-existing `artifacts/` outputs were modified by the audit.
+
 ## Verification commands
 
 ```text
