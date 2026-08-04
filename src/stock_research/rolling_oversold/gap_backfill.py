@@ -69,6 +69,103 @@ class GapWorkplan(TypedDict):
     gap_rows: list[GapAuditRow]
 
 
+def audit_sector_target_gaps(
+    *, target_codes: set[str], sector_rows: pd.DataFrame
+) -> dict[str, object]:
+    """Classify published sector rows against the frozen THS target.
+
+    This is a read-only classifier.  Only ``ths`` rows whose codes occur in
+    ``target_codes`` are target rows; every other row is retained in the
+    deferred count so optional board history cannot be mistaken for target
+    backfill work.
+    """
+
+    if not isinstance(sector_rows, pd.DataFrame):
+        raise TypeError("sector_rows must be a pandas DataFrame")
+    if not isinstance(target_codes, (set, frozenset)):
+        raise TypeError("target_codes must be a set of strings")
+    normalized_targets = sorted(
+        {str(value).strip() for value in target_codes if str(value).strip()}
+    )
+    if len(normalized_targets) != len(target_codes):
+        raise ValueError("target_codes must contain non-empty, unique values")
+    required = {"sector_system", "sector_code"}
+    missing = sorted(required - set(sector_rows.columns))
+    if missing:
+        raise ValueError("sector_rows missing required columns: " + ", ".join(missing))
+
+    frame = sector_rows.copy(deep=True)
+    frame["__system"] = frame["sector_system"].astype("string").str.strip().fillna("")
+    frame["__code"] = frame["sector_code"].astype("string").str.strip().fillna("")
+    membership = pd.to_numeric(
+        frame.get("membership_count", pd.Series(0, index=frame.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    history = pd.to_numeric(
+        frame.get("history_observations", pd.Series(0, index=frame.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    status = frame.get(
+        "sector_feature_data_status",
+        pd.Series("missing_feature_data", index=frame.index),
+    ).astype("string").str.strip().str.casefold().fillna("missing_feature_data")
+    frame["__membership"] = membership
+    frame["__history"] = history
+    frame["__status"] = status
+
+    target_mask = frame["__system"].eq("ths") & frame["__code"].isin(normalized_targets)
+    target_membership_gaps: list[str] = []
+    target_history_gaps: list[str] = []
+    target_volume_gaps: list[str] = []
+    for code in normalized_targets:
+        rows = frame.loc[target_mask & frame["__code"].eq(code)]
+        if rows.empty or not rows["__membership"].gt(0).any():
+            target_membership_gaps.append(code)
+        # Membership-only gaps are reported in their own bucket.  A row with
+        # sufficient history and status=ok must not be downgraded merely
+        # because its member list is empty.
+        publishable = rows["__history"].ge(6) & rows["__status"].eq("ok")
+        if rows.empty or not publishable.any():
+            if rows["__status"].eq("missing_volume").any():
+                target_volume_gaps.append(code)
+            elif rows["__membership"].gt(0).any():
+                target_history_gaps.append(code)
+
+    non_target = frame.loc[~target_mask]
+    history_gap_mask = non_target["__history"].lt(6) | non_target["__status"].eq(
+        "insufficient_history"
+    )
+    volume_gap_mask = non_target["__status"].eq("missing_volume")
+    membership_gap_mask = (
+        non_target["__membership"].le(0)
+        & ~history_gap_mask
+        & ~volume_gap_mask
+    )
+    deferred_mask = history_gap_mask | volume_gap_mask | membership_gap_mask
+    deferred_rows = non_target.loc[deferred_mask]
+    deferred_keys = sorted(
+        {
+            f"{system}:{code}"
+            for system, code in deferred_rows[["__system", "__code"]].itertuples(
+                index=False, name=None
+            )
+            if system and code
+        }
+    )
+    return {
+        "target_codes": normalized_targets,
+        "target_code_count": len(normalized_targets),
+        "target_membership_gap_codes": sorted(target_membership_gaps),
+        "target_history_gap_codes": sorted(target_history_gaps),
+        "target_volume_gap_codes": sorted(target_volume_gaps),
+        "deferred_non_target_gap_rows": int(len(deferred_rows)),
+        "deferred_non_target_history_gap_rows": int(history_gap_mask.sum()),
+        "deferred_non_target_volume_gap_rows": int(volume_gap_mask.sum()),
+        "deferred_non_target_membership_gap_rows": int(membership_gap_mask.sum()),
+        "deferred_non_target_gap_keys": deferred_keys,
+    }
+
+
 def audit_target_asset_coverage(
     *,
     asset_ids: Iterable[object],
