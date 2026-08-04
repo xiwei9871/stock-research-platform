@@ -21,6 +21,48 @@ from stock_research.rolling_oversold.stock_scoring import StockScoringDataGap
 from stock_research.strategy_data_policy import DataGap
 
 
+def test_legacy_anchor_adds_structured_gaps_for_blocked_sector_features():
+    sector_states = pd.DataFrame(
+        [
+            {
+                "sector_system": "ths",
+                "sector_code": "308874",
+                "sector_research_eligibility": "blocked_data",
+                "sector_ma10_slope_10d": pd.NA,
+            },
+            {
+                "sector_system": "ths",
+                "sector_code": "309030",
+                "sector_research_eligibility": "eligible",
+                "sector_ma10_slope_10d": 0.1,
+            },
+        ]
+    )
+
+    market_regime = {"market_regime": "risk_off", "preflight": {"gaps": []}}
+
+    augmented = pipeline._append_blocked_sector_feature_gaps(
+        market_regime,
+        sector_states,
+        cutoff=date(2026, 7, 31),
+    )
+
+    assert augmented["preflight"]["gaps"] == [
+        {
+            "dataset": "sector_features",
+            "asset_id": "ths:308874",
+            "sector_system": "ths",
+            "sector_code": "308874",
+            "start_date": "2026-07-31",
+            "end_date": "2026-07-31",
+            "expected_rows": 1,
+            "actual_rows": 0,
+            "reason": "blocked_data_sector_features",
+        }
+    ]
+    assert market_regime["preflight"]["gaps"] == []
+
+
 def test_latest_pit_field_falls_back_when_latest_report_field_is_null():
     frame = pd.DataFrame(
         {

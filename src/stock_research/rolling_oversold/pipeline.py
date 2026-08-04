@@ -259,6 +259,11 @@ def run_one_anchor(
 
     snapshot_market_regime = dict(market_regime)
     snapshot_market_regime["preflight"] = _preflight_payload(preflight)
+    snapshot_market_regime = _append_blocked_sector_feature_gaps(
+        snapshot_market_regime,
+        sector_states,
+        cutoff=cutoff,
+    )
     snapshot_market_regime["backfill_requests"] = _gaps_frame(preflight.gaps)
 
     # Assemble a probe snapshot first so outcome evaluation can complete before
@@ -469,34 +474,11 @@ def run_sector_batch(
             status="blocked_missing_sector_universe",
         )
     selected_sectors = _batch_sector_selection(sector_states)
-    # Snapshot validation requires every blocked-data row with null repair
-    # fields to carry an auditable structured gap.  Derive those gaps from the
-    # same in-memory board rather than issuing per-sector follow-up queries.
-    blocked_gaps = [
-        {
-            "dataset": "sector_features",
-            "asset_id": f"{row['sector_system']}:{row['sector_code']}",
-            "sector_system": str(row["sector_system"]),
-            "sector_code": str(row["sector_code"]),
-            "start_date": cutoff.isoformat(),
-            "end_date": cutoff.isoformat(),
-            "expected_rows": 1,
-            "actual_rows": 0,
-            "reason": "blocked_data_sector_features",
-        }
-        for _, row in sector_states.iterrows()
-        if str(row.get("sector_research_eligibility", "")).strip().casefold()
-        == SectorResearchEligibility.BLOCKED_DATA.value
-    ]
-    if blocked_gaps:
-        existing_preflight = market_regime.get("preflight")
-        preflight = dict(existing_preflight) if isinstance(existing_preflight, dict) else {}
-        existing_gaps = preflight.get("gaps")
-        preflight["gaps"] = [
-            *(existing_gaps if isinstance(existing_gaps, list) else []),
-            *blocked_gaps,
-        ]
-        market_regime["preflight"] = preflight
+    market_regime = _append_blocked_sector_feature_gaps(
+        market_regime,
+        sector_states,
+        cutoff=cutoff,
+    )
 
     if selected_sectors.empty:
         runtime.stage_timings_seconds.setdefault("stock", 0.0)
@@ -1020,6 +1002,63 @@ def _score_all_sector_states(
     ).copy(deep=True)
     concept["__sector_family"] = "concept"
     return _canonicalize_sector_states(pd.concat([industry, concept], ignore_index=True, sort=False))
+
+
+def _append_blocked_sector_feature_gaps(
+    market_regime: dict[str, object],
+    sector_states: pd.DataFrame,
+    *,
+    cutoff: date,
+) -> dict[str, object]:
+    """Attach auditable gaps for blocked sector rows before snapshot validation.
+
+    Sector scoring can intentionally retain a blocked row with null repair
+    features.  Snapshot validation requires that state to carry a structured
+    gap, even when database preflight itself passed.  Keep this normalization
+    shared by the legacy anchor path and the full-sector batch path.
+    """
+
+    result = dict(market_regime)
+    existing_preflight = result.get("preflight")
+    preflight = dict(existing_preflight) if isinstance(existing_preflight, dict) else {}
+    existing = preflight.get("gaps")
+    gaps = [item for item in existing if isinstance(item, dict)] if isinstance(existing, list) else []
+    seen = {
+        (str(item.get("dataset") or ""), str(item.get("asset_id") or ""))
+        for item in gaps
+    }
+    if isinstance(sector_states, pd.DataFrame) and not sector_states.empty:
+        for row in sector_states.to_dict(orient="records"):
+            if (
+                str(row.get("sector_research_eligibility") or "").strip().casefold()
+                != SectorResearchEligibility.BLOCKED_DATA.value
+            ):
+                continue
+            system = str(row.get("sector_system") or "").strip()
+            code = str(row.get("sector_code") or "").strip()
+            if not system or not code:
+                continue
+            asset_id = f"{system}:{code}"
+            key = ("sector_features", asset_id)
+            if key in seen:
+                continue
+            gaps.append(
+                {
+                    "dataset": "sector_features",
+                    "asset_id": asset_id,
+                    "sector_system": system,
+                    "sector_code": code,
+                    "start_date": cutoff.isoformat(),
+                    "end_date": cutoff.isoformat(),
+                    "expected_rows": 1,
+                    "actual_rows": 0,
+                    "reason": "blocked_data_sector_features",
+                }
+            )
+            seen.add(key)
+    preflight["gaps"] = gaps
+    result["preflight"] = preflight
+    return result
 
 
 def _score_sector_batch_states(
