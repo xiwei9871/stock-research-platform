@@ -43,8 +43,8 @@ separate operational/data-continuity items.
 | Eligible qfq anchor closes | 3,592/3,592 | pass |
 | Eligible qfq anchor activity | 3,592/3,592 | pass |
 | Distinct open sessions audited | 252 | pass |
-| Eligible qfq rows in 252-session window | 997,005 | audited |
-| Matching eligible status rows in 252-session window | 997,005 | audited |
+| Eligible qfq rows on those 252 sessions | 896,546 | audited |
+| Matching eligible status rows on those 252 sessions | 896,546 | audited |
 | Missing qfq/status/activity rows | 0 | pass |
 | Finance loader rows | 39,480 | pass |
 | Assets with usable `roe` | 3,598/3,598 | pass |
@@ -77,8 +77,10 @@ The 2026-08-04 snapshot membership was supplied to the real
 This smoke is intentionally anchored at 2026-08-04 so the 2026-08-04
 membership snapshot is visible.  Market bars and status are frozen at
 2026-07-31, and the finance/valuation loaders are called with an explicit
-2026-07-31 as-of cutoff.  It does not make the 8/4 snapshot visible to a 7/31
-replay.
+2026-07-31 as-of cutoff.  The 998,684 qfq rows are the raw target-union loader
+rows through the cutoff, including lifecycle/non-calendar rows; the strict
+252-open-session audit above uses the deduplicated 896,546 eligible keys.  It
+does not make the 8/4 snapshot visible to a 7/31 replay.
 
 The reproducible target-asset audit API was run on the 3,592 assets eligible at
 the 2026-07-31 cutoff, with the explicit 252-session calendar supplied.  It

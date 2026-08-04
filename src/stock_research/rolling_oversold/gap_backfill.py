@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import os
 import tempfile
 from collections.abc import Iterable, Mapping, Sequence
@@ -90,10 +91,11 @@ def audit_target_asset_coverage(
     Market coverage is checked on the supplied expected trading dates (or the
     observed union when no explicit calendar is supplied) where a matching
     status row says the asset was tradable, non-ST, and not suspended.  Status
-    coverage itself is required for every expected date and every observed qfq
-    market date.  This prevents a suspended stock's null activity from
-    becoming a false market-download task while still surfacing an absent
-    cutoff row.
+    coverage is required wherever a qfq market date is observed and for the
+    latest cutoff date; sparse lifecycle/non-trading dates without a market
+    bar are not treated as download tasks.  This prevents a suspended stock's
+    null activity from becoming a false market-download task while still
+    surfacing an absent cutoff row.
     """
 
     if not isinstance(start_date, date) or not isinstance(end_date, date):
@@ -333,7 +335,7 @@ def _positive_number(value: object) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return number if pd.notna(number) and number > 0 else None
+    return number if math.isfinite(number) and number > 0 else None
 
 
 def _non_negative_number(value: object) -> float | None:
@@ -341,7 +343,7 @@ def _non_negative_number(value: object) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return number if pd.notna(number) and number >= 0 else None
+    return number if math.isfinite(number) and number >= 0 else None
 
 
 def _missing_finance_assets(
@@ -410,7 +412,7 @@ def _finite_number(value: object) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return number if pd.notna(number) and number == number else None
+    return number if math.isfinite(number) else None
 
 
 def load_preflight_gaps(path: str | Path) -> tuple[DataGap, ...]:
