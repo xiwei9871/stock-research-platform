@@ -129,14 +129,15 @@ function.
 The strategy itself remains database-only and never calls this source boundary.
 
 The THS detail URL is a live current ranking sorted by `field=199112`
-(`涨跌幅`) and exposes no effective date or historical snapshot parameter. The
-default adapter therefore reports `source_asof=null`,
-`source_effective_date=null`, and
-`source_pit_status=current_unknown_asof`; it must not be treated as membership
-for an earlier `--trade-date`. The optional `--source-asof YYYY-MM-DD` CLI
-argument carries the effective date declared by a PIT-verified source. It is
-not an operator override that makes the live THS response historical, and must
-remain omitted for the default current endpoint.
+(`涨跌幅`) and exposes no provider-side effective-date parameter. For strict
+historical work the default adapter reports
+`source_pit_status=current_unknown_asof` and remains write-blocked. For the
+daily research workflow, the explicitly enabled `--assume-daily-snapshot-pit`
+policy treats a successfully captured snapshot on `--trade-date` as the
+latest PIT snapshot for that date. The report records
+`source_pit_status=assumed_daily_snapshot` and
+`source_kind=ths_assumed_daily_snapshot`; this is an operational assumption,
+not a claim that the provider supplied a historical timestamp.
 
 Preview first (the CLI defaults to `--dry-run`):
 
@@ -157,27 +158,36 @@ and CSV retain `source_asof`, `source_effective_date`, `source_pit_status`,
 close its prior active membership history. Only active-at-cutoff,
 non-delisted, non-BSE assets present in `core.asset_master` are valid. A
 `900xxx` B-share code is explicitly audited and excluded rather than silently
-dropped. Historical writes additionally require an explicit source effective
-date no later than the requested trade date. Missing metadata reports
-`write_blocked_reason=source_asof_unknown`; a later effective date reports
-`write_blocked_reason=source_asof_after_requested_date`. If any source code is
-missing or any concept response fails/has an invalid empty schema, execution
-is also fail-closed: the summary reports
-`write_blocked=true`, `write_blocked_reason=source_incomplete`, and performs no
-board, membership, or history-close write.
+dropped. Strict historical writes additionally require an explicit source
+effective date no later than the requested trade date. Missing metadata
+reports `write_blocked_reason=source_asof_unknown`; a later effective date
+reports `write_blocked_reason=source_asof_after_requested_date`. With
+`--assume-daily-snapshot-pit`, a partial live snapshot may write only the
+successful concepts; failed or missing concepts remain untouched and are
+listed in `failed_concepts`/`source_missing_codes`.
 For each successful concept, the current cutoff snapshot is upserted first and
 then every older active membership row (`start_date < trade_date`) is closed at
 the cutoff; this deliberately removes stale duplicate active rows while
 leaving failed or missing concepts untouched.
-`--execute` only enables writes after every gate passes; it does not override
-unknown source dates. Consequently, the current THS CLI source is blocked for
-the requested 2026-07-31 historical snapshot and leaves the database
-unchanged. A PIT-verified replacement source must declare its effective date
-through the backfill source contract before execution can proceed. Board and
-membership writes then share one database transaction, with the membership
+`--execute` only enables writes after the selected policy gates pass. Without
+`--assume-daily-snapshot-pit`, it does not override unknown source dates. Board
+and membership writes then share one database transaction, with the membership
 conflict key
 `(asset_id, concept_system, concept_code, start_date)`, so an identical rerun
 is idempotent. `database_writes` is always zero in a dry-run.
+
+For the daily operational snapshot, run:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_research.cli \
+  rolling-sector-target-membership-backfill \
+  --trade-date 2026-08-04 \
+  --concept-codes-file outputs/research/concept_drawdown_over24_2026-08-01.csv \
+  --service stock_research \
+  --output-dir outputs/research/rolling_sector_target_membership_2026-08-04 \
+  --assume-daily-snapshot-pit \
+  --execute
+```
 
 When a provider supplies a dated export, pass it explicitly with
 `--membership-snapshot-file`. CSV, JSON, and Parquet are accepted. The file

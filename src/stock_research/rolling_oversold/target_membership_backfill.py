@@ -678,6 +678,7 @@ def run_target_membership_backfill(
     target_codes: str | Path | Iterable[object] | pd.DataFrame,
     source_asof: date | str | None = None,
     membership_snapshot_file: str | Path | pd.DataFrame | None = None,
+    assume_daily_snapshot_pit: bool = False,
     service: str = SETTINGS.research_service,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     dry_run: bool = True,
@@ -685,7 +686,13 @@ def run_target_membership_backfill(
     constituent_fetcher=None,
     asset_master_loader=None,
 ) -> dict[str, Any]:
-    """Preview or execute a frozen target-scoped THS membership backfill."""
+    """Preview or execute a target-scoped THS membership snapshot.
+
+    ``assume_daily_snapshot_pit`` is an explicit operational policy for the
+    live endpoint: the capture date is recorded as the snapshot's effective
+    date while the report keeps ``assumed_daily_snapshot`` distinct from a
+    provider-verified historical PIT date.
+    """
 
     cutoff = _parse_date(trade_date)
     codes = load_target_codes(target_codes)
@@ -693,9 +700,16 @@ def run_target_membership_backfill(
     snapshot_frame: pd.DataFrame | None = None
     snapshot_error = ""
     snapshot_payload_sha256: str | None = None
-    source_kind = "ths_current_unknown_asof"
+    source_kind = (
+        "ths_assumed_daily_snapshot"
+        if assume_daily_snapshot_pit and membership_snapshot_file is None
+        else "ths_current_unknown_asof"
+    )
     board_source = BOARD_SOURCE
     membership_source = MEMBERSHIP_SOURCE
+    if assume_daily_snapshot_pit and membership_snapshot_file is None:
+        board_source = f"{board_source}:daily_snapshot"
+        membership_source = f"{membership_source}:daily_snapshot"
     if membership_snapshot_file is not None:
         try:
             snapshot_frame, snapshot_effective = load_historical_membership_snapshot(
@@ -962,7 +976,17 @@ def run_target_membership_backfill(
 
     source_incomplete = bool(source_error or source_missing_codes or failed_concepts)
     if using_live_ths_source:
-        if live_source_asof_unknown:
+        if assume_daily_snapshot_pit:
+            # Operator-approved policy: a successfully captured daily
+            # snapshot is treated as effective on its capture date.  The
+            # report keeps this distinct from a vendor-proven historical PIT
+            # date so the assumption remains visible to downstream audits.
+            source_effective = cutoff
+            source_effective_text = source_effective.isoformat()
+            source_pit_verified = False
+            source_asof_reason = "assumed_daily_snapshot"
+            source_pit_status = "assumed_daily_snapshot"
+        elif live_source_asof_unknown:
             source_pit_verified = False
             source_asof_reason = "source_asof_unknown"
             source_pit_status = "current_unknown_asof"
@@ -984,10 +1008,18 @@ def run_target_membership_backfill(
                 source_pit_verified = False
                 source_asof_reason = "source_asof_mismatch"
                 source_pit_status = "current_unknown_asof"
-    write_blocked = not source_pit_verified or source_incomplete
-    if not source_pit_verified:
+    allow_assumed_snapshot_write = assume_daily_snapshot_pit and using_live_ths_source
+    partial_assumed_snapshot = bool(allow_assumed_snapshot_write and source_incomplete)
+    write_blocked = (
+        (not source_pit_verified and not allow_assumed_snapshot_write)
+        or (
+            source_incomplete
+            and not (allow_assumed_snapshot_write and bool(valid_rows))
+        )
+    )
+    if write_blocked and not source_pit_verified and not allow_assumed_snapshot_write:
         write_blocked_reason = source_asof_reason
-    elif source_incomplete:
+    elif write_blocked and source_incomplete:
         write_blocked_reason = "source_incomplete"
     else:
         write_blocked_reason = ""
@@ -1017,6 +1049,8 @@ def run_target_membership_backfill(
         "source_effective_date": source_effective_text,
         "source_pit_status": source_pit_status,
         "source_kind": source_kind,
+        "assume_daily_snapshot_pit": bool(assume_daily_snapshot_pit),
+        "partial_assumed_snapshot": partial_assumed_snapshot,
         "membership_snapshot_file": (
             str(membership_snapshot_file) if membership_snapshot_file is not None else None
         ),

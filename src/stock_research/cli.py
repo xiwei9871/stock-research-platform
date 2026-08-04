@@ -4607,6 +4607,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     rolling_target_membership.add_argument(
+        "--assume-daily-snapshot-pit",
+        action="store_true",
+        help=(
+            "treat the live snapshot captured on --trade-date as the latest "
+            "PIT snapshot; status is reported as assumed_daily_snapshot"
+        ),
+    )
+    rolling_target_membership.add_argument(
         "--service", default=SETTINGS.research_service
     )
     rolling_target_membership.add_argument(
@@ -8727,6 +8735,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 else None
             ),
             membership_snapshot_file=args.membership_snapshot_file,
+            assume_daily_snapshot_pit=args.assume_daily_snapshot_pit,
             service=args.service,
             output_dir=args.output_dir,
             dry_run=args.dry_run,

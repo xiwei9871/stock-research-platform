@@ -218,6 +218,63 @@ def test_live_ths_source_cannot_be_blessed_by_manual_source_asof(
     assert result["database_writes"] == 0
 
 
+def test_assumed_daily_snapshot_can_write_unannotated_live_source(
+    monkeypatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        backfill,
+        "fetch_target_concept_boards",
+        lambda: pd.DataFrame([{"name": "核电", "code": "300238"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "fetch_ths_detail_constituents",
+        lambda symbol: pd.DataFrame([{"代码": "000001", "名称": "样本"}]),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "load_target_asset_master",
+        lambda asset_ids, trade_date, service: [_master("CN:SZ:000001")],
+    )
+    execute_many_calls: list[list[tuple[object, ...]]] = []
+    execute_calls: list[list[object]] = []
+
+    @contextmanager
+    def fake_connect(_service):
+        yield object()
+
+    monkeypatch.setattr(backfill, "connect", fake_connect)
+    monkeypatch.setattr(
+        backfill,
+        "execute_many",
+        lambda conn, sql, rows: execute_many_calls.append(list(rows)),
+    )
+    monkeypatch.setattr(
+        backfill,
+        "execute",
+        lambda conn, sql, params: execute_calls.append(list(params)),
+    )
+
+    result = backfill.run_target_membership_backfill(
+        trade_date=date(2026, 7, 31),
+        target_codes=["300238"],
+        service="research-test",
+        output_dir=tmp_path,
+        dry_run=False,
+        assume_daily_snapshot_pit=True,
+    )
+
+    assert result["source_asof"] == "2026-07-31"
+    assert result["source_pit_status"] == "assumed_daily_snapshot"
+    assert result["source_kind"] == "ths_assumed_daily_snapshot"
+    assert result["assume_daily_snapshot_pit"] is True
+    assert result["partial_assumed_snapshot"] is False
+    assert result["write_blocked"] is False
+    assert result["database_writes"] == 3
+    assert len(execute_many_calls) == 2
+    assert len(execute_calls) == 1
+
+
 @pytest.mark.parametrize(
     ("source_asof", "expected_effective_date", "expected_status", "expected_reason"),
     [
@@ -1092,6 +1149,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
             str(tmp_path / "memberships.csv"),
             "--source-asof",
             "2026-07-31",
+            "--assume-daily-snapshot-pit",
             "--service",
             "research-test",
             "--output-dir",
@@ -1103,6 +1161,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
     assert parsed.concept_codes_file == str(tmp_path / "targets.csv")
     assert parsed.membership_snapshot_file == tmp_path / "memberships.csv"
     assert parsed.source_asof == "2026-07-31"
+    assert parsed.assume_daily_snapshot_pit is True
     assert parsed.dry_run is True
 
     captured: dict[str, object] = {}
@@ -1136,6 +1195,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
                 str(tmp_path / "memberships.csv"),
                 "--source-asof",
                 "2026-07-31",
+                "--assume-daily-snapshot-pit",
                 "--service",
                 "research-test",
                 "--output-dir",
@@ -1149,6 +1209,7 @@ def test_target_membership_cli_parser_and_dispatch(monkeypatch, tmp_path: Path, 
     assert captured["target_codes"] == str(tmp_path / "targets.csv")
     assert captured["membership_snapshot_file"] == tmp_path / "memberships.csv"
     assert captured["source_asof"] == date(2026, 7, 31)
+    assert captured["assume_daily_snapshot_pit"] is True
     assert captured["dry_run"] is True
     output = capsys.readouterr().out
     assert "rolling_sector_target_membership_backfill|json|" in output
