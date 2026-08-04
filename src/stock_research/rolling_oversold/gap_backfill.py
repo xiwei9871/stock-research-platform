@@ -12,6 +12,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict
 
+import pandas as pd
+
 from stock_research.strategy_data_policy import DataGap
 
 
@@ -64,6 +66,351 @@ class GapWorkplan(TypedDict):
     out_of_scope_bse: list[str]
     out_of_scope_index: list[str]
     gap_rows: list[GapAuditRow]
+
+
+def audit_target_asset_coverage(
+    *,
+    asset_ids: Iterable[object],
+    market_rows: pd.DataFrame,
+    status_rows: pd.DataFrame,
+    finance_rows: pd.DataFrame,
+    valuation_rows: pd.DataFrame,
+    start_date: date,
+    end_date: date,
+    expected_trade_dates: Iterable[date] | None = None,
+) -> dict[str, object]:
+    """Audit the required database coverage for a PIT target asset union.
+
+    ``asset_ids`` is expected to be the already-filtered active, master-present
+    non-BSE union produced by the membership backfill.  The helper remains
+    read-only and deliberately accepts frames so callers can freeze the
+    database extracts and serialize an auditable result without any source
+    fallback.
+
+    Market coverage is checked on the supplied expected trading dates (or the
+    observed union when no explicit calendar is supplied) where a matching
+    status row says the asset was tradable, non-ST, and not suspended.  Status
+    coverage itself is required for every expected date and every observed qfq
+    market date.  This prevents a suspended stock's null activity from
+    becoming a false market-download task while still surfacing an absent
+    cutoff row.
+    """
+
+    if not isinstance(start_date, date) or not isinstance(end_date, date):
+        raise TypeError("start_date and end_date must be date values")
+    if end_date < start_date:
+        raise ValueError("end_date must not precede start_date")
+    eligible_assets, excluded_bse_assets = _normalize_target_asset_ids(asset_ids)
+    expected_dates = _normalize_expected_trade_dates(
+        expected_trade_dates,
+        market_rows=market_rows,
+        status_rows=status_rows,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    market = _coverage_frame(market_rows, start_date=start_date, end_date=end_date)
+    status = _coverage_frame(status_rows, start_date=start_date, end_date=end_date)
+    market = _select_qfq_rows(market)
+
+    market_presence_keys = {
+        (str(row.asset_id), row.trade_date.date())
+        for row in market.itertuples(index=False)
+    }
+    market_dates_by_asset: dict[str, set[date]] = {}
+    for asset_id, trade_date in market_presence_keys:
+        market_dates_by_asset.setdefault(asset_id, set()).add(trade_date)
+    market_keys = {
+        (str(row.asset_id), row.trade_date.date())
+        for row in market.itertuples(index=False)
+        if _positive_number(getattr(row, "close", None)) is not None
+    }
+    market_activity_keys = {
+        (str(row.asset_id), row.trade_date.date())
+        for row in market.itertuples(index=False)
+        if _positive_number(getattr(row, "close", None)) is not None
+        and _non_negative_number(getattr(row, "amount", None)) is not None
+    }
+    status_by_asset_date: dict[tuple[str, date], dict[str, object]] = {}
+    for row in status.to_dict(orient="records"):
+        asset_id = str(row.get("asset_id") or "").strip()
+        trade_date = row.get("trade_date")
+        if asset_id and isinstance(trade_date, pd.Timestamp):
+            status_by_asset_date[(asset_id, trade_date.date())] = row
+
+    status_missing_rows: list[dict[str, object]] = []
+    market_missing_rows: list[dict[str, object]] = []
+    market_activity_missing_rows: list[dict[str, object]] = []
+    for asset_id in eligible_assets:
+        observed_dates = {
+            trade_date
+            for (status_asset, trade_date) in status_by_asset_date
+            if status_asset == asset_id
+        }
+        observed_dates.update(market_dates_by_asset.get(asset_id, set()))
+        for trade_date in sorted(set(expected_dates).union(observed_dates)):
+            status_row = status_by_asset_date.get((asset_id, trade_date))
+            if status_row is None:
+                # Status history is sparse on lifecycle/non-trading dates.  A
+                # missing row is actionable when a qfq bar exists for that
+                # date, or when the date is the required latest cutoff row.
+                if (
+                    trade_date in market_dates_by_asset.get(asset_id, set())
+                    or trade_date == end_date
+                ):
+                    status_missing_rows.append(
+                        {"asset_id": asset_id, "trade_date": trade_date.isoformat()}
+                    )
+                continue
+            if not _status_is_tradable(status_row):
+                continue
+            key = (asset_id, trade_date)
+            if key not in market_keys:
+                market_missing_rows.append(
+                    {"asset_id": asset_id, "trade_date": trade_date.isoformat()}
+                )
+            elif key not in market_activity_keys:
+                market_activity_missing_rows.append(
+                    {"asset_id": asset_id, "trade_date": trade_date.isoformat()}
+                )
+    finance_missing_assets = _missing_finance_assets(
+        eligible_assets, finance_rows, end_date=end_date
+    )
+    valuation_missing_assets = _missing_valuation_assets(
+        eligible_assets, valuation_rows, end_date=end_date
+    )
+    market_missing_assets = sorted(
+        {str(row["asset_id"]) for row in market_missing_rows}
+    )
+    market_activity_missing_assets = sorted(
+        {str(row["asset_id"]) for row in market_activity_missing_rows}
+    )
+    status_missing_assets = sorted(
+        {str(row["asset_id"]) for row in status_missing_rows}
+    )
+    return {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "expected_trade_dates": [trade_date.isoformat() for trade_date in expected_dates],
+        "eligible_asset_ids": eligible_assets,
+        "excluded_bse_assets": excluded_bse_assets,
+        "market_missing_assets": market_missing_assets,
+        "market_missing_rows": market_missing_rows,
+        "market_activity_missing_assets": market_activity_missing_assets,
+        "market_activity_missing_rows": market_activity_missing_rows,
+        "status_missing_assets": status_missing_assets,
+        "status_missing_rows": status_missing_rows,
+        "finance_missing_assets": finance_missing_assets,
+        "valuation_missing_assets": valuation_missing_assets,
+        "summary": {
+            "eligible_assets": len(eligible_assets),
+            "excluded_bse_assets": len(excluded_bse_assets),
+            "expected_trade_dates": len(expected_dates),
+            "market_missing_assets": len(market_missing_assets),
+            "market_activity_missing_assets": len(market_activity_missing_assets),
+            "status_missing_assets": len(status_missing_assets),
+            "finance_missing_assets": len(finance_missing_assets),
+            "valuation_missing_assets": len(valuation_missing_assets),
+        },
+    }
+
+
+def _normalize_target_asset_ids(
+    asset_ids: Iterable[object],
+) -> tuple[list[str], list[str]]:
+    normalized = {str(asset_id).strip() for asset_id in asset_ids if str(asset_id).strip()}
+    excluded = sorted(asset_id for asset_id in normalized if asset_id.startswith("CN:BJ:"))
+    eligible = sorted(normalized - set(excluded))
+    return eligible, excluded
+
+
+def _coverage_frame(
+    frame: object,
+    *,
+    start_date: date,
+    end_date: date,
+) -> pd.DataFrame:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return pd.DataFrame(columns=["asset_id", "trade_date"])
+    if not {"asset_id", "trade_date"}.issubset(frame.columns):
+        return pd.DataFrame(columns=["asset_id", "trade_date"])
+    result = frame.copy(deep=True)
+    result["asset_id"] = result["asset_id"].astype("string").str.strip()
+    result["trade_date"] = pd.to_datetime(result["trade_date"], errors="coerce")
+    result = result.loc[
+        result["asset_id"].notna()
+        & result["trade_date"].notna()
+        & result["trade_date"].ge(pd.Timestamp(start_date))
+        & result["trade_date"].le(pd.Timestamp(end_date))
+    ].copy()
+    return result.drop_duplicates(["asset_id", "trade_date"], keep="last")
+
+
+def _select_qfq_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty or "adjust_type" not in frame.columns:
+        return frame
+    return frame.loc[frame["adjust_type"].astype("string").str.casefold().eq("qfq")].copy()
+
+
+def _normalize_expected_trade_dates(
+    expected_trade_dates: Iterable[date] | None,
+    *,
+    market_rows: object,
+    status_rows: object,
+    start_date: date,
+    end_date: date,
+) -> list[date]:
+    if expected_trade_dates is not None:
+        dates = {
+            value
+            for value in (_coerce_date(item) for item in expected_trade_dates)
+            if value is not None and start_date <= value <= end_date
+        }
+        dates.update((start_date, end_date))
+        return sorted(dates)
+    return _coverage_window_dates(
+        market_rows=market_rows,
+        status_rows=status_rows,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+def _coverage_window_dates(
+    *,
+    market_rows: object,
+    status_rows: object,
+    start_date: date,
+    end_date: date,
+) -> list[date]:
+    dates: set[date] = {start_date, end_date}
+    for frame in (market_rows, status_rows):
+        if not isinstance(frame, pd.DataFrame) or "trade_date" not in frame.columns:
+            continue
+        values = pd.to_datetime(frame["trade_date"], errors="coerce").dropna()
+        dates.update(
+            value.date()
+            for value in values
+            if start_date <= value.date() <= end_date
+        )
+    return sorted(dates)
+
+
+def _coerce_date(value: object) -> date | None:
+    if isinstance(value, date):
+        return value
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.date()
+
+
+def _status_is_tradable(row: Mapping[str, object]) -> bool:
+    if "is_trade" in row and not _status_flag(row.get("is_trade")):
+        return False
+    if _status_flag(row.get("is_st")):
+        return False
+    if _status_flag(row.get("is_suspended")):
+        return False
+    return True
+
+
+def _status_flag(value: object) -> bool:
+    if value is None:
+        return False
+    try:
+        if bool(pd.isna(value)):
+            return False
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "t", "yes", "y"}
+    return bool(value)
+
+
+def _positive_number(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if pd.notna(number) and number > 0 else None
+
+
+def _non_negative_number(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if pd.notna(number) and number >= 0 else None
+
+
+def _missing_finance_assets(
+    asset_ids: Sequence[str], frame: object, *, end_date: date
+) -> list[str]:
+    if not isinstance(frame, pd.DataFrame) or frame.empty or "asset_id" not in frame.columns:
+        return list(asset_ids)
+    normalized = frame.copy(deep=True)
+    normalized["asset_id"] = normalized["asset_id"].astype("string").str.strip()
+    date_column = _first_date_column(normalized, ("announcement_date",))
+    if date_column is None:
+        return list(asset_ids)
+    normalized[date_column] = pd.to_datetime(normalized[date_column], errors="coerce")
+    normalized = normalized.loc[
+        normalized[date_column].notna()
+        & normalized[date_column].le(pd.Timestamp(end_date))
+    ]
+    supported: set[str] = set()
+    for row in normalized.to_dict(orient="records"):
+        asset_id = str(row.get("asset_id") or "").strip()
+        if not asset_id:
+            continue
+        if _finite_number(row.get("roe")) is not None and _positive_number(row.get("total_share")) is not None:
+            supported.add(asset_id)
+    return sorted(set(asset_ids) - supported)
+
+
+def _missing_valuation_assets(
+    asset_ids: Sequence[str], frame: object, *, end_date: date
+) -> list[str]:
+    if not isinstance(frame, pd.DataFrame) or frame.empty or "asset_id" not in frame.columns:
+        return list(asset_ids)
+    normalized = frame.copy(deep=True)
+    normalized["asset_id"] = normalized["asset_id"].astype("string").str.strip()
+    date_column = _first_date_column(normalized, ("valuation_date", "trade_date"))
+    if date_column is None:
+        return list(asset_ids)
+    normalized[date_column] = pd.to_datetime(normalized[date_column], errors="coerce")
+    normalized = normalized.loc[
+        normalized[date_column].notna()
+        & normalized[date_column].le(pd.Timestamp(end_date))
+    ]
+    supported: set[str] = set()
+    if "factor_name" in normalized.columns and "factor_value" in normalized.columns:
+        for row in normalized.to_dict(orient="records"):
+            if str(row.get("factor_name") or "").strip() not in {"pe_ttm", "ps_ttm"}:
+                continue
+            if _positive_number(row.get("factor_value")) is not None:
+                supported.add(str(row.get("asset_id") or "").strip())
+    else:
+        for row in normalized.to_dict(orient="records"):
+            asset_id = str(row.get("asset_id") or "").strip()
+            if not asset_id:
+                continue
+            if _positive_number(row.get("pe_ttm")) is not None or _positive_number(row.get("ps_ttm")) is not None:
+                supported.add(asset_id)
+    return sorted(set(asset_ids) - supported)
+
+
+def _first_date_column(frame: pd.DataFrame, candidates: Sequence[str]) -> str | None:
+    return next((name for name in candidates if name in frame.columns), None)
+
+
+def _finite_number(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if pd.notna(number) and number == number else None
 
 
 def load_preflight_gaps(path: str | Path) -> tuple[DataGap, ...]:
