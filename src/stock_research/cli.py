@@ -5991,7 +5991,7 @@ def _rolling_oversold_target_codes_from_args(args) -> tuple[str, ...] | None:
 def _rolling_oversold_config_from_args(args, *, anchor_date: dt.date, anchor_end_date: dt.date | None) -> RollingOversoldConfig:
     target_codes = _rolling_oversold_target_codes_from_args(args)
     score_version = args.score_version
-    if target_codes is not None and score_version == "rolling_oversold_v1":
+    if target_codes is not None and not score_version.startswith("rolling_oversold_sector_"):
         score_version = "rolling_oversold_sector_v2"
     return RollingOversoldConfig(
         anchor_start_date=anchor_date,

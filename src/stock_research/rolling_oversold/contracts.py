@@ -221,9 +221,9 @@ def _normalize_optional_concept_codes(
     normalized: list[str] = []
     seen: set[str] = set()
     for raw in values:
-        value = raw.strip() if isinstance(raw, str) else str(raw).strip()
-        if not value:
+        if not isinstance(raw, str) or not raw.strip():
             raise ValueError("concept_codes must not contain empty values")
+        value = raw.strip()
         if not TARGET_CONCEPT_CODE_PATTERN.fullmatch(value):
             raise ValueError(f"concept_codes must contain six-digit THS codes: {value!r}")
         if value in seen:

@@ -114,6 +114,99 @@ def test_target_loader_sql_filters_concept_codes_without_affecting_industry_sql(
     ) == ["2026-01-01", "2026-07-31", ["ths"], ["300238", "300239"]]
 
 
+def test_target_replay_forces_sector_v2_route_for_non_sector_score_version(tmp_path):
+    codes_path = tmp_path / "targets.txt"
+    codes_path.write_text("300238\n300239\n", encoding="utf-8")
+    args = cli.build_parser().parse_args(
+        [
+            "rolling-sector-oversold-replay",
+            "--anchor-start-date",
+            "2026-07-31",
+            "--output-dir",
+            str(tmp_path / "replay"),
+            "--score-version",
+            "rolling_oversold_v1_custom",
+            "--concept-codes-file",
+            str(codes_path),
+        ]
+    )
+
+    config = cli._rolling_oversold_config_from_args(
+        args,
+        anchor_date=ANCHOR,
+        anchor_end_date=ANCHOR,
+    )
+
+    assert config.score_version.startswith("rolling_oversold_sector_")
+    assert config.concept_systems == ("ths",)
+    assert config.concept_codes == ("300238", "300239")
+
+
+def test_scope_fingerprint_is_persisted_and_bidirectionally_isolates_cache(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        pipeline,
+        "compute_market_regime_features",
+        lambda *a, **k: {"market_regime": "risk_off"},
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_score_sector_batch_states",
+        lambda *a, **k: pd.concat(
+            [_target_states("300238", "300239"), _target_states("300240")],
+            ignore_index=True,
+        ),
+    )
+    monkeypatch.setattr(pipeline, "_build_stock_features", lambda *a, **k: pd.DataFrame())
+
+    unscoped_config = RollingOversoldConfig(
+        anchor_start_date=ANCHOR,
+        score_version="rolling_oversold_sector_v2",
+    )
+    target_config = RollingOversoldConfig(
+        anchor_start_date=ANCHOR,
+        score_version="rolling_oversold_sector_v2",
+        concept_systems=("ths",),
+        concept_codes=("300238", "300239"),
+    )
+    unscoped_dir = tmp_path / "unscoped"
+    target_dir = tmp_path / "target"
+    unscoped = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=unscoped_config,
+        inputs=_empty_inputs(),
+        output_dir=unscoped_dir,
+        service="research-test",
+    )
+    target = pipeline.run_sector_batch(
+        anchor_date=ANCHOR,
+        config=target_config,
+        inputs=_empty_inputs(),
+        output_dir=target_dir,
+        service="research-test",
+    )
+
+    unscoped_manifest = unscoped["batch_manifest"]
+    target_manifest = target["batch_manifest"]
+    assert unscoped_manifest["scope_fingerprint"] == "unscoped"
+    assert target_manifest["scope_fingerprint"] == pipeline._scope_fingerprint(target_config)
+    assert target_manifest["scope_fingerprint"] != unscoped_manifest["scope_fingerprint"]
+
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=unscoped_dir,
+        anchor_date=ANCHOR,
+        score_version=unscoped_config.score_version,
+        expected_scope_fingerprint=pipeline._scope_fingerprint(target_config),
+    ) is None
+    assert pipeline._load_existing_sector_batch_result(
+        output_dir=target_dir,
+        anchor_date=ANCHOR,
+        score_version=target_config.score_version,
+        expected_scope_fingerprint=pipeline._scope_fingerprint(unscoped_config),
+    ) is None
+
+
 def test_target_batch_publishes_only_requested_ths_rows(monkeypatch, tmp_path):
     config = RollingOversoldConfig(
         anchor_start_date=ANCHOR,

@@ -258,6 +258,9 @@ def write_rolling_snapshot(
             name: hashlib.sha256(contents).hexdigest() for name, contents in artifact_bytes.items()
         },
     }
+    scope_fingerprint = normalized["runtime_metadata"].get("scope_fingerprint")
+    if scope_fingerprint is not None:
+        manifest["scope_fingerprint"] = str(scope_fingerprint)
     if bool(normalized["sector_states"].attrs.get(_LEGACY_SECTOR_SCHEMA_ATTR)):
         manifest[_LEGACY_SECTOR_SCHEMA_MANIFEST_KEY] = True
     legacy_removed_keys = _legacy_removed_sector_keys(

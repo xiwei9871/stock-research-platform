@@ -93,6 +93,23 @@ _SECTOR_BATCH_ROW_COUNT_KEYS = frozenset(
 )
 
 
+def _scope_fingerprint(config: RollingOversoldConfig) -> str:
+    """Return a stable cache identity for the batch target scope."""
+
+    if config.concept_codes is None:
+        return "unscoped"
+    payload = json.dumps(
+        {
+            "concept_systems": list(config.concept_systems or ()),
+            "concept_codes": sorted(config.concept_codes),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"ths:{hashlib.sha256(payload).hexdigest()}"
+
+
 def evaluate_sector_batch_outcomes(
     snapshot: dict[str, object],
     *,
@@ -405,25 +422,14 @@ def run_sector_batch(
     if config.anchor_end_date is not None and config.anchor_end_date < anchor_date:
         raise ValueError("config anchor_end_date must not precede anchor_date")
     assert_db_only_source(DB_ONLY)
+    scope_fingerprint = _scope_fingerprint(config)
     existing = _load_existing_sector_batch_result(
         output_dir=output_dir,
         anchor_date=anchor_date,
         score_version=config.score_version,
         previous_snapshot=previous_snapshot,
+        expected_scope_fingerprint=scope_fingerprint,
     )
-    if existing is not None and config.concept_codes is not None:
-        cached_board = existing.get("sector_states")
-        scoped_cached, cached_gaps = _apply_target_concept_scope(
-            cached_board if isinstance(cached_board, pd.DataFrame) else pd.DataFrame(),
-            target_codes=config.concept_codes,
-            cutoff=anchor_date,
-        )
-        # Never reuse an unscoped (or partially scoped) artifact for an
-        # explicit target run.  Recompute so the target contract is applied at
-        # source and the persisted artifact is independently auditable.
-        cached_count = len(cached_board) if isinstance(cached_board, pd.DataFrame) else -1
-        if cached_gaps or len(scoped_cached) != cached_count:
-            existing = None
     if existing is not None:
         _assert_existing_snapshot_adjust_type(existing, config.adjust_type)
         return existing
@@ -554,6 +560,8 @@ def run_sector_batch(
     # Building the normalized probe outside publication keeps the stage timing
     # focused on the immutable write itself while retaining one canonical
     # snapshot representation for callers that do not request disk output.
+    runtime_metadata = dict(runtime.metadata())
+    runtime_metadata["scope_fingerprint"] = scope_fingerprint
     snapshot = build_rolling_snapshot(
         anchor_date=anchor_date,
         data_cutoff_date=cutoff,
@@ -562,7 +570,7 @@ def run_sector_batch(
         stock_candidates=stock_candidates,
         previous_snapshot=previous_snapshot,
         score_version=config.score_version,
-        runtime_metadata=runtime.metadata(),
+        runtime_metadata=runtime_metadata,
         batch_mode=True,
     )
 
@@ -572,6 +580,7 @@ def run_sector_batch(
         "anchor_date": snapshot["anchor_date"],
         "data_cutoff_date": snapshot["data_cutoff_date"],
         "score_version": snapshot["score_version"],
+        "scope_fingerprint": scope_fingerprint,
         "row_counts": {
             "sector_states": int(len(snapshot["sector_states"])),
             "stock_candidates": int(len(snapshot["stock_candidates"])),
@@ -589,7 +598,9 @@ def run_sector_batch(
         if supplier_calls > 1 and not publication_closed:
             runtime.end_stage("publication")
             publication_closed = True
-        return runtime.metadata()
+        metadata = dict(runtime.metadata())
+        metadata["scope_fingerprint"] = scope_fingerprint
+        return metadata
 
     def publish_runtime_guard() -> None:
         runtime.checkpoint("publication")
@@ -630,7 +641,8 @@ def run_sector_batch(
         if not publication_closed:
             runtime.end_stage("publication")
 
-    metadata = runtime.metadata()
+    metadata = dict(runtime.metadata())
+    metadata["scope_fingerprint"] = scope_fingerprint
     persisted_manifest = output_dir is not None and bool(paths.get("manifest"))
     if persisted_manifest and isinstance(batch_manifest, dict):
         snapshot["runtime_metadata"] = batch_manifest.get("runtime_metadata", metadata)
@@ -666,6 +678,7 @@ def _load_existing_sector_batch_result(
     anchor_date: date,
     score_version: str,
     previous_snapshot: dict[str, object] | None = None,
+    expected_scope_fingerprint: str | None = None,
 ) -> dict[str, object] | None:
     """Return a previously published batch without recomputing or replacing it."""
 
@@ -690,6 +703,11 @@ def _load_existing_sector_batch_result(
         manifest.get("anchor_date") != expected_anchor
         or manifest.get("score_version") != score_version
         or manifest.get("snapshot_id") != expected_snapshot_id
+    ):
+        return None
+    if (
+        expected_scope_fingerprint is not None
+        and manifest.get("scope_fingerprint") != expected_scope_fingerprint
     ):
         return None
     manifest_cutoff = manifest.get("data_cutoff_date")
