@@ -17,8 +17,11 @@ from stock_research.rolling_oversold.preflight import PreflightResult
 ANCHORS = [date(2026, 7, 21), date(2026, 7, 22), date(2026, 7, 23)]
 WALK_FORWARD_ANCHORS = [date(2026, 7, day) for day in range(27, 32)]
 WALK_FORWARD_CUTOFF = date(2026, 8, 3)
-WALK_FORWARD_SECTOR_CODES = ["300238", *[f"C{index:03d}" for index in range(301)]]
-WALK_FORWARD_GAP_CODE = "C300"
+WALK_FORWARD_SECTOR_CODES = [
+    "300238",
+    *[f"{300300 + index:06d}" for index in range(301)],
+]
+WALK_FORWARD_GAP_CODE = "300600"
 
 
 def _walk_forward_inputs(anchor_date: date) -> SimpleNamespace:
@@ -133,6 +136,8 @@ def _walk_forward_config() -> RollingOversoldConfig:
     return RollingOversoldConfig(
         anchor_start_date=WALK_FORWARD_ANCHORS[0],
         anchor_end_date=WALK_FORWARD_ANCHORS[-1],
+        concept_systems=("ths",),
+        concept_codes=tuple(WALK_FORWARD_SECTOR_CODES),
         score_version="rolling_oversold_sector_v2",
         sector_top_n=302,
         sector_output_top_n=10,
@@ -394,7 +399,19 @@ def test_sector_v2_acceptance_freezes_five_anchors_and_validates_future_states(
         board = result["sector_states"]
         assert isinstance(board, pd.DataFrame)
         assert len(board) == 302
+        assert set(board["sector_system"]) == {"ths"}
+        assert set(board["sector_code"]) == set(WALK_FORWARD_SECTOR_CODES)
         assert not board.duplicated(["sector_system", "sector_code"]).any()
+        membership_counts = (
+            inputs.concept_membership.groupby(
+                ["concept_system", "concept_code"], dropna=False
+            )
+            .size()
+        )
+        assert all(
+            membership_counts.get(("ths", code), 0) > 0
+            for code in WALK_FORWARD_SECTOR_CODES
+        )
 
         missing_sector = board.loc[board["sector_code"].eq(WALK_FORWARD_GAP_CODE)].iloc[0]
         assert missing_sector["sector_research_eligibility"] == "blocked_data"
