@@ -8,6 +8,16 @@
 
 **Tech Stack:** Python 3.14, pandas, PostgreSQL/psycopg, existing `stock_research` CLI, existing AkShare/THS adapter only inside the backfill task, pytest, immutable rolling snapshot artifacts.
 
+## Operational acceptance policy (approved 2026-08-04)
+
+The sector-first operational workflow does not block on an exact historical
+2026-07-31 membership export.  It uses the 2026-07-09 snapshot as the
+historical replay proxy and the 2026-08-04 daily snapshot as the latest
+membership snapshot.  A current snapshot with 300/302 positive target
+concepts is accepted; the two unmapped concepts remain explicit blocked-data
+rows.  The strict historical PIT source plan remains available only for
+stock-level attribution audits.
+
 ---
 
 ## Current evidence and scope gate

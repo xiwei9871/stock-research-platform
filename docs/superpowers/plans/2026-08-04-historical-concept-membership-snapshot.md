@@ -8,6 +8,12 @@
 
 **Tech Stack:** PostgreSQL via `psycopg`, Python, pandas, pytest, existing `core.concept_membership` SCD2 schema, THS/AkShare only for source validation.
 
+> Operational policy update (2026-08-04): this strict historical-PIT plan is
+> no longer a blocker for sector-first P2 acceptance. The production workflow
+> uses the 2026-07-09 snapshot as the 2026-07-31 replay proxy and the
+> 2026-08-04 snapshot as the latest snapshot; the strict source path remains
+> optional for stock-level historical attribution.
+
 ---
 
 ### Task 1: Inventory locally available historical membership evidence

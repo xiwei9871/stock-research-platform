@@ -2,11 +2,13 @@
 
 ## Status
 
-`P0 incomplete / write-blocked`.
+`Archived strict-PIT check / non-blocking under the operational latest-snapshot policy`.
 
-No database write was performed in this check. The existing source-as-of gate
-must remain closed until a complete, explicitly dated 2026-07-31 membership
-snapshot is available.
+No database write was performed in this strict-source check. The report
+remains valid for users who require vendor-verified 2026-07-31 stock-level
+attribution, but that requirement is no longer a blocker for the operational
+sector-first P2 workflow. That workflow uses the 2026-07-09 snapshot as the
+historical proxy and the 2026-08-04 snapshot as the latest snapshot.
 
 The reproducible inventory for this check is
 `/tmp/historical_membership_inventory_20260731.json` (SHA-256
@@ -76,7 +78,7 @@ are retained only as rejected evidence, not substituted for the target codes.
 - No local serialized PIT membership file with an explicit date and complete
   302-code coverage was found.
 
-## Acceptance consequence
+## Strict-PIT acceptance consequence (optional attribution path)
 
 The import contract requires all 302 target concepts, a uniform explicit
 `source_asof`/`source_effective_date` no later than 2026-07-31, and non-empty
@@ -86,10 +88,10 @@ complete-source nor the complete-coverage requirement. Therefore:
 - no `core.concept_board` or `core.concept_membership` rows were written;
 - no SCD2 intervals were closed;
 - no 2026-07-31 replay is claimed as complete;
-- P0 remains open until a dated snapshot export or an authorized provider
-  endpoint is supplied.
+- the strict-PIT attribution path remains open until a dated snapshot export
+  or an authorized provider endpoint is supplied.
 
-## Next unblock
+## Optional strict-PIT unblock
 
 Provide a CSV/JSON/Parquet snapshot containing
 `concept_code`, `concept_name`, `asset_id`, and one uniform

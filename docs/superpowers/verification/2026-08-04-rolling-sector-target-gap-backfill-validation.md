@@ -8,9 +8,11 @@ Adjust type: `qfq`
 Database service: `stock_research`  
 Target file: `/Users/xiwei/stock_research/outputs/research/concept_drawdown_over24_2026-08-01.csv`
 
-Status: the structural target replay passes; the historical positive-membership
-gate remains blocked.  The replay therefore must not be interpreted as a fully
-publishable 302-sector universe yet.
+Status: accepted for the operational latest-snapshot policy.  The structural
+target replay, 302-code scope gate, and forward outcome checks pass.  The
+historical positive-membership count remains a diagnostic only; it is not a
+P2 blocker under the approved 2026-07-09 proxy / 2026-08-04 latest-snapshot
+policy.
 
 ## Implemented gates and tests
 
@@ -81,7 +83,7 @@ membership but only 18/19 observations at those earlier cutoffs.  It becomes
 publishable at 20+ observations on 2026-07-29.  This is a feature-history
 boundary, not a membership backfill result.
 
-## Historical membership gate
+## Historical membership diagnostic (non-blocking)
 
 A read-only database audit using the same active-membership predicates as the
 loader found:
@@ -95,14 +97,16 @@ loader found:
 | 2026-07-31 | 302 | 192 | 110 |
 
 Thus the 302 board-row assertion is satisfied by retaining blocked rows, but
-the stronger “every target has a positive member set” assertion is not.  The
-110 missing codes are represented as `blocked_data`/`sector_features` gaps in
-the target manifests; they are not silently scored as complete sectors.
+the stronger “every target has a positive member set” assertion is not for the
+historical proxy.  The 110 historical gaps are represented as
+`blocked_data`/`sector_features` diagnostics; they are not silently treated
+as a historical membership fact.
 
 The current 2026-08-04 membership snapshot has 300/302 positive target
-concepts, but its `start_date=2026-08-04` rows cannot be back-projected into a
-2026-07-27–31 point-in-time replay.  A historical source snapshot with
-`source_asof <= 2026-07-31` is required to close this gate without look-ahead.
+concepts.  Under the approved operational policy it is the latest membership
+snapshot, while the 2026-07-09 capture is the historical replay proxy.  The
+two current unmapped concepts are retained as explicit non-fatal coverage
+gaps rather than being fabricated.
 
 The read-only classifier also reproduces the old full-board audit buckets on
 the 1,379-row replay: 302 target codes, 110 target membership gaps, and
@@ -127,13 +131,15 @@ strictly later than their anchor.  Outcome states were:
 The complete/pending split is correct for the available future window; no
 future bar was used to score an earlier anchor.
 
-## Acceptance decision and next action
+## Acceptance decision
 
-P2 is **not fully accepted**: scope isolation, 302-row target publication,
-nuclear visibility, no leakage, and outcome-state semantics pass, but the
-historical positive-membership gate fails consistently at 192/302.  The next
-authorized task is a target-membership backfill from a source snapshot whose
-effective date is no later than 2026-07-31, followed by a targeted market,
-status, finance, and valuation audit for newly exposed assets.  Until that
-source-as-of requirement is met, the 110 sectors remain visible only as
-blocked-data rows and must not be treated as complete research candidates.
+P2 is **accepted for operational sector-first research**: scope isolation,
+302-row target publication, nuclear visibility, latest-snapshot coverage,
+no-leakage semantics, and forward outcome states pass.  The strict historical
+membership result (192/302) remains available for attribution audits, but it no
+longer blocks the rolling sector signal.  The current 8/4 snapshot has 300/302
+positive concepts; `300037 智能电网` and `308874 国资云` remain explicit
+blocked-data rows.
+
+The latest-snapshot batch acceptance is recorded in
+`docs/superpowers/verification/2026-08-04-rolling-sector-p2-latest-snapshot-acceptance.md`.
