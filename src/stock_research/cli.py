@@ -1,4 +1,5 @@
 import argparse
+import csv
 import datetime as dt
 import fcntl
 import hashlib
@@ -50,6 +51,7 @@ from stock_research.rolling_oversold.fundamental_backfill import (
     run_fundamental_backfill,
 )
 from stock_research.rolling_oversold.target_membership_backfill import (
+    load_target_codes,
     run_target_membership_backfill,
 )
 
@@ -4564,6 +4566,11 @@ def build_parser() -> argparse.ArgumentParser:
     rolling_oversold_replay.add_argument("--anchor-end-date")
     rolling_oversold_replay.add_argument("--output-dir", required=True)
     rolling_oversold_replay.add_argument("--service", default=SETTINGS.research_service)
+    rolling_oversold_replay.add_argument(
+        "--concept-codes-file",
+        type=Path,
+        help="explicit THS concept target file (CSV concept_code or one six-digit code per line)",
+    )
     rolling_oversold_replay.add_argument("--sector-top-n", type=int, default=30)
     rolling_oversold_replay.add_argument("--stock-top-n", type=int, default=20)
     rolling_oversold_replay.add_argument("--score-version", default="rolling_oversold_v1")
@@ -4586,6 +4593,11 @@ def build_parser() -> argparse.ArgumentParser:
     rolling_oversold_batch.add_argument("--anchor-date", required=True)
     rolling_oversold_batch.add_argument("--output-dir", required=True)
     rolling_oversold_batch.add_argument("--service", default=SETTINGS.research_service)
+    rolling_oversold_batch.add_argument(
+        "--concept-codes-file",
+        type=Path,
+        help="explicit THS concept target file (CSV concept_code or one six-digit code per line)",
+    )
     rolling_oversold_batch.add_argument("--sector-stock-top-n", type=int, default=10)
     rolling_oversold_batch.add_argument("--runtime-budget-seconds", type=int, default=3600)
 
@@ -5944,14 +5956,52 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
     return versions == {DIAGNOSTICS_RULE_VERSION}
 
 
+def _load_rolling_concept_codes_file(source: str | Path) -> tuple[str, ...]:
+    """Load a strict THS concept allowlist for rolling-sector commands."""
+
+    path = Path(source).expanduser()
+    if not path.is_file():
+        raise ValueError(f"concept_codes_file does not exist: {path}")
+    try:
+        rows = list(csv.reader(path.read_text(encoding="utf-8-sig").splitlines()))
+    except OSError as exc:
+        raise ValueError(f"unable to read concept_codes_file: {path}") from exc
+    if rows:
+        header = [str(value).strip() for value in rows[0]]
+        if "concept_system" in header:
+            system_index = header.index("concept_system")
+            systems = {
+                str(row[system_index]).strip().casefold()
+                if len(row) > system_index
+                else ""
+                for row in rows[1:]
+            }
+            if systems != {"ths"}:
+                raise ValueError("concept_codes_file must contain only ths concept_system rows")
+    return tuple(load_target_codes(path))
+
+
+def _rolling_oversold_target_codes_from_args(args) -> tuple[str, ...] | None:
+    source = getattr(args, "concept_codes_file", None)
+    if source is None:
+        return None
+    return _load_rolling_concept_codes_file(source)
+
+
 def _rolling_oversold_config_from_args(args, *, anchor_date: dt.date, anchor_end_date: dt.date | None) -> RollingOversoldConfig:
+    target_codes = _rolling_oversold_target_codes_from_args(args)
+    score_version = args.score_version
+    if target_codes is not None and score_version == "rolling_oversold_v1":
+        score_version = "rolling_oversold_sector_v2"
     return RollingOversoldConfig(
         anchor_start_date=anchor_date,
         anchor_end_date=anchor_end_date,
         sector_top_n=args.sector_top_n,
         stock_top_n=args.stock_top_n,
-        score_version=args.score_version,
+        score_version=score_version,
         adjust_type=args.adjust_type,
+        concept_systems=("ths",) if target_codes is not None else None,
+        concept_codes=target_codes,
     )
 
 
@@ -8669,10 +8719,20 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         _print_rolling_oversold_machine_lines(result)
     elif args.command == "rolling-sector-oversold-batch":
         anchor_date = dt.date.fromisoformat(args.anchor_date)
+        target_codes = _rolling_oversold_target_codes_from_args(args)
         config = RollingOversoldConfig(
             anchor_start_date=anchor_date,
             anchor_end_date=anchor_date,
-            sector_output_top_n=args.sector_stock_top_n,
+            concept_systems=("ths",) if target_codes is not None else None,
+            concept_codes=target_codes,
+            score_version=(
+                "rolling_oversold_sector_v2"
+                if target_codes is not None
+                else "rolling_oversold_v1"
+            ),
+            sector_output_top_n=(
+                10 if target_codes is not None else args.sector_stock_top_n
+            ),
             runtime_budget_seconds=args.runtime_budget_seconds,
         )
         result = run_sector_batch(

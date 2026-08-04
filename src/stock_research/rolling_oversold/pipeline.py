@@ -411,6 +411,19 @@ def run_sector_batch(
         score_version=config.score_version,
         previous_snapshot=previous_snapshot,
     )
+    if existing is not None and config.concept_codes is not None:
+        cached_board = existing.get("sector_states")
+        scoped_cached, cached_gaps = _apply_target_concept_scope(
+            cached_board if isinstance(cached_board, pd.DataFrame) else pd.DataFrame(),
+            target_codes=config.concept_codes,
+            cutoff=anchor_date,
+        )
+        # Never reuse an unscoped (or partially scoped) artifact for an
+        # explicit target run.  Recompute so the target contract is applied at
+        # source and the persisted artifact is independently auditable.
+        cached_count = len(cached_board) if isinstance(cached_board, pd.DataFrame) else -1
+        if cached_gaps or len(scoped_cached) != cached_count:
+            existing = None
     if existing is not None:
         _assert_existing_snapshot_adjust_type(existing, config.adjust_type)
         return existing
@@ -460,6 +473,25 @@ def run_sector_batch(
         raise TypeError("sector batch scorer must return a pandas DataFrame")
     sector_states = sector_states.copy(deep=True)
     sector_states["market_regime"] = market_regime["market_regime"]
+    if config.concept_codes is not None:
+        sector_states, scope_gaps = _apply_target_concept_scope(
+            sector_states,
+            target_codes=config.concept_codes,
+            cutoff=cutoff,
+        )
+        if scope_gaps:
+            return _batch_blocked_result(
+                anchor_date=anchor_date,
+                cutoff=cutoff,
+                config=config,
+                output_dir=output_dir,
+                market_regime=market_regime,
+                sector_states=sector_states,
+                gaps=scope_gaps,
+                runtime=runtime,
+                blocked_reason="target_scope",
+                status="blocked_target_scope",
+            )
     if sector_states.empty:
         return _batch_blocked_result(
             anchor_date=anchor_date,
@@ -1234,6 +1266,65 @@ def _batch_sector_selection(sector_states: pd.DataFrame) -> pd.DataFrame:
             ~sector_states["sector_gate_status"].eq(GateStatus.BLOCKED.value)
         ].copy()
     return selected.reset_index(drop=True)
+
+
+def _apply_target_concept_scope(
+    sector_states: pd.DataFrame,
+    *,
+    target_codes: Sequence[str],
+    cutoff: date,
+) -> tuple[pd.DataFrame, tuple[DataGap, ...]]:
+    """Filter a v2 board to the explicit THS target and enforce its cardinality.
+
+    The scorer may receive optional industry/other-concept rows for legacy
+    compatibility.  An explicit target scope is stricter: only ``ths`` rows
+    whose code is in the allowlist can be published, and every requested code
+    must occur exactly once.  Missing or duplicate rows return structured gaps
+    so batch publication fails closed instead of silently shrinking the target
+    universe.
+    """
+
+    if not isinstance(sector_states, pd.DataFrame):
+        raise TypeError("sector_states must be a pandas DataFrame")
+    frame = sector_states.copy(deep=True)
+    if frame.empty:
+        counts: dict[str, int] = {}
+    else:
+        systems = frame.get(
+            "sector_system", pd.Series(pd.NA, index=frame.index)
+        ).astype("string").str.strip()
+        codes = frame.get(
+            "sector_code", pd.Series(pd.NA, index=frame.index)
+        ).astype("string").str.strip()
+        target_set = set(target_codes)
+        target_mask = systems.eq("ths") & codes.isin(target_set)
+        frame = frame.loc[target_mask].copy()
+        frame["__target_order"] = codes.loc[target_mask].map(
+            {code: index for index, code in enumerate(target_codes)}
+        )
+        frame = frame.sort_values("__target_order", kind="stable").drop(
+            columns=["__target_order"]
+        )
+        counts = frame["sector_code"].astype("string").str.strip().value_counts().to_dict()
+
+    gaps: list[DataGap] = []
+    for code in target_codes:
+        actual = int(counts.get(code, 0))
+        if actual == 1:
+            continue
+        reason = "target_scope_missing_code" if actual == 0 else "target_scope_duplicate_code"
+        gaps.append(
+            DataGap(
+                dataset="rolling_sector_target_scope",
+                asset_id=f"ths:{code}",
+                start_date=cutoff.isoformat(),
+                end_date=cutoff.isoformat(),
+                expected_rows=1,
+                actual_rows=actual,
+                reason=reason,
+            )
+        )
+    return frame.reset_index(drop=True), tuple(gaps)
 
 
 def _batch_sector_universe_gaps(

@@ -141,8 +141,13 @@ def load_rolling_inputs(
         )
         concept_membership_rows = fetch_all(
             conn,
-            _membership_sql("core.concept_membership", "concept", config.concept_systems),
-            _membership_params(anchor, config.concept_systems),
+            _membership_sql(
+                "core.concept_membership",
+                "concept",
+                config.concept_systems,
+                config.concept_codes,
+            ),
+            _membership_params(anchor, config.concept_systems, config.concept_codes),
         )
         industry_rows = fetch_all(
             conn,
@@ -155,11 +160,12 @@ def load_rolling_inputs(
         )
         concept_rows = fetch_all(
             conn,
-            _sector_bar_sql("concept", config.concept_systems),
+            _sector_bar_sql("concept", config.concept_systems, config.concept_codes),
             _sector_bar_params(
                 history_start_text,
                 cutoff_text,
                 config.concept_systems,
+                config.concept_codes,
             ),
         )
 
@@ -230,8 +236,18 @@ def load_rolling_inputs(
     )
 
 
-def _membership_sql(table: str, prefix: str, systems: tuple[str, ...] | None) -> str:
+def _membership_sql(
+    table: str,
+    prefix: str,
+    systems: tuple[str, ...] | None,
+    concept_codes: tuple[str, ...] | None = None,
+) -> str:
     system_clause = f"\n      AND m.{prefix}_system = ANY(%s)" if systems is not None else ""
+    code_clause = (
+        "\n      AND m.concept_code = ANY(%s)"
+        if prefix == "concept" and concept_codes is not None
+        else ""
+    )
     columns = (
         f"m.asset_id, m.{prefix}_system, m.{prefix}_code, m.{prefix}_name, "
         "m.start_date, m.end_date"
@@ -247,33 +263,58 @@ def _membership_sql(table: str, prefix: str, systems: tuple[str, ...] | None) ->
       AND (m.end_date IS NULL OR m.end_date > %s)
       AND (a.list_date IS NULL OR a.list_date <= %s)
       AND (a.delist_date IS NULL OR a.delist_date > %s)
-      AND COALESCE(a.exchange, '') <> 'BJ'{system_clause}
+    AND COALESCE(a.exchange, '') <> 'BJ'{system_clause}{code_clause}
     ORDER BY m.asset_id, m.{prefix}_system, m.{prefix}_code, m.start_date
     """
 
 
-def _membership_params(cutoff: str, systems: tuple[str, ...] | None) -> list[Any]:
-    return [cutoff, cutoff, cutoff, cutoff, *([list(systems)] if systems is not None else [])]
+def _membership_params(
+    cutoff: str,
+    systems: tuple[str, ...] | None,
+    concept_codes: tuple[str, ...] | None = None,
+) -> list[Any]:
+    return [
+        cutoff,
+        cutoff,
+        cutoff,
+        cutoff,
+        *([list(systems)] if systems is not None else []),
+        *([list(concept_codes)] if concept_codes is not None else []),
+    ]
 
 
 def _sector_bar_sql(
     prefix: str,
     systems: tuple[str, ...] | None,
+    concept_codes: tuple[str, ...] | None = None,
 ) -> str:
     system_clause = f"\n      AND {prefix}_system = ANY(%s)" if systems is not None else ""
+    code_clause = (
+        "\n      AND concept_code = ANY(%s)"
+        if prefix == "concept" and concept_codes is not None
+        else ""
+    )
     return f"""
     SELECT {prefix}_system, {prefix}_code, {prefix}_name,
            trade_date, close, preclose, volume, amount
     FROM market.{prefix}_daily_bar
-    WHERE trade_date BETWEEN %s AND %s{system_clause}
+    WHERE trade_date BETWEEN %s AND %s{system_clause}{code_clause}
     ORDER BY {prefix}_system, {prefix}_code, trade_date
     """
 
 
 def _sector_bar_params(
-    history_start: str, cutoff: str, systems: tuple[str, ...] | None
+    history_start: str,
+    cutoff: str,
+    systems: tuple[str, ...] | None,
+    concept_codes: tuple[str, ...] | None = None,
 ) -> list[Any]:
-    return [history_start, cutoff, *([list(systems)] if systems is not None else [])]
+    return [
+        history_start,
+        cutoff,
+        *([list(systems)] if systems is not None else []),
+        *([list(concept_codes)] if concept_codes is not None else []),
+    ]
 
 
 def _dates_from_rows(rows: list[dict[str, Any]]) -> list[date]:

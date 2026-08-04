@@ -8,6 +8,7 @@ from datetime import date
 from enum import Enum
 from math import isfinite
 from numbers import Real
+import re
 
 
 class GateStatus(str, Enum):
@@ -47,6 +48,7 @@ DEFAULT_INDEX_IDS = (
     "STAR_50",
 )
 VALID_ADJUST_TYPES = ("raw", "qfq", "hfq")
+TARGET_CONCEPT_CODE_PATTERN = re.compile(r"^[0-9]{6}$")
 
 SECTOR_FEATURE_COLUMNS = (
     "sector_low_date_20d",
@@ -121,6 +123,9 @@ class RollingOversoldConfig:
     # path.  Appending the field keeps positional construction of the old
     # config compatible.
     sector_output_top_n: int = 10
+    # An explicit target scope is reserved for THS concept runs.  Appending
+    # this field preserves all legacy positional construction semantics.
+    concept_codes: Sequence[str] | None = None
 
     def __post_init__(self) -> None:
         _validate_date("anchor_start_date", self.anchor_start_date)
@@ -144,6 +149,13 @@ class RollingOversoldConfig:
             "concept_systems",
             _normalize_optional_strings("concept_systems", self.concept_systems),
         )
+        object.__setattr__(
+            self,
+            "concept_codes",
+            _normalize_optional_concept_codes(self.concept_codes),
+        )
+        if self.concept_codes is not None and self.concept_systems != ("ths",):
+            raise ValueError("concept_codes requires concept_systems=('ths',)")
         object.__setattr__(
             self,
             "index_ids",
@@ -197,6 +209,30 @@ def _normalize_optional_strings(
     field_name: str, values: Sequence[str] | None
 ) -> tuple[str, ...] | None:
     return None if values is None else _normalize_strings(field_name, values)
+
+
+def _normalize_optional_concept_codes(
+    values: Sequence[str] | None,
+) -> tuple[str, ...] | None:
+    if values is None:
+        return None
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        raise ValueError("concept_codes must be a sequence of six-digit strings")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        value = raw.strip() if isinstance(raw, str) else str(raw).strip()
+        if not value:
+            raise ValueError("concept_codes must not contain empty values")
+        if not TARGET_CONCEPT_CODE_PATTERN.fullmatch(value):
+            raise ValueError(f"concept_codes must contain six-digit THS codes: {value!r}")
+        if value in seen:
+            raise ValueError(f"concept_codes must not contain duplicates: {value}")
+        seen.add(value)
+        normalized.append(value)
+    if not normalized:
+        raise ValueError("concept_codes must not be empty")
+    return tuple(normalized)
 
 
 def _normalize_strings(field_name: str, values: Sequence[str]) -> tuple[str, ...]:
