@@ -18,19 +18,19 @@
 - Read: `/tmp/rolling_sector_target_membership_20260731_preview/`
 - Create: `/tmp/historical_membership_inventory_20260731.json`
 
-- [ ] **Step 1: Query all target membership intervals and source timestamps.**
+- [x] **Step 1: Query all target membership intervals and source timestamps.**
 
 Run a read-only query for the 302 target codes, grouping by concept, start/end date, source, and `updated_at`; record whether any rows are known to be captured on or before 2026-07-31.
 
-- [ ] **Step 2: Search existing reports and artifacts for serialized membership rows.**
+- [x] **Step 2: Search existing reports and artifacts for serialized membership rows.**
 
 Search only existing files; do not modify user-owned artifacts. Accept a candidate only when the file contains concept code, asset code, and an explicit capture/effective date no later than 2026-07-31.
 
-- [ ] **Step 3: Write an inventory JSON with evidence classification.**
+- [x] **Step 3: Write an inventory JSON with evidence classification.**
 
 Classify each candidate as `pit_verified`, `current_unknown_asof`, or `not_membership`. No database writes are allowed in this task.
 
-- [ ] **Step 4: Verify the inventory is reproducible.**
+- [x] **Step 4: Verify the inventory is reproducible.**
 
 Re-run the query/search commands and confirm identical counts and hashes.
 
@@ -40,7 +40,7 @@ Re-run the query/search commands and confirm identical counts and hashes.
 - Modify: `src/stock_research/rolling_oversold/target_membership_backfill.py`
 - Test: `tests/test_rolling_oversold_target_membership_backfill.py`
 
-- [ ] **Step 1: Add a failing test for date-aware source metadata.**
+- [x] **Step 1: Add a failing test for date-aware source metadata.**
 
 ```python
 def test_current_ths_source_is_not_accepted_as_historical_snapshot():
@@ -51,7 +51,7 @@ def test_current_ths_source_is_not_accepted_as_historical_snapshot():
     assert result == (False, "source_asof_unknown")
 ```
 
-- [ ] **Step 2: Run the focused test and confirm it fails for the missing helper.**
+- [x] **Step 2: Run the focused test and confirm it fails for the missing helper.**
 
 Run:
 
@@ -61,15 +61,15 @@ rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_rolling_oversold_
 
 Expected: failure because the date-aware validation helper does not yet exist.
 
-- [ ] **Step 3: Probe THS/AkShare response metadata and URL parameters.**
+- [x] **Step 3: Probe THS/AkShare response metadata and URL parameters.**
 
 Verify whether the response carries an effective date or accepts a historical date parameter. A live response that only exposes current fields such as `涨跌幅(%)` must be classified `current_unknown_asof`.
 
-- [ ] **Step 4: Implement the minimal date validation helper and fail-closed source contract.**
+- [x] **Step 4: Implement the minimal date validation helper and fail-closed source contract.**
 
 The helper must accept only an explicit `source_asof <= requested_date`; unknown or later source dates return `False` and a stable reason. The default current THS adapter must report `source_asof=None` rather than pretending it is the requested historical date.
 
-- [ ] **Step 5: Run the focused test and source adapter regression tests.**
+- [x] **Step 5: Run the focused test and source adapter regression tests.**
 
 Run:
 
@@ -87,7 +87,7 @@ Expected: all existing tests plus the date-aware fail-closed tests pass.
 - Modify: `docs/daily-close-pipeline-runbook.md`
 - Test: `tests/test_rolling_oversold_target_membership_backfill.py`
 
-- [ ] **Step 1: Add a failing test that unknown source-as-of blocks all writes.**
+- [x] **Step 1: Add a failing test that unknown source-as-of blocks all writes.**
 
 ```python
 def test_unknown_membership_source_asof_blocks_execute_writes(monkeypatch, tmp_path):
@@ -103,15 +103,15 @@ def test_unknown_membership_source_asof_blocks_execute_writes(monkeypatch, tmp_p
     assert result["database_writes"] == 0
 ```
 
-- [ ] **Step 2: Run the test and confirm it fails.**
+- [x] **Step 2: Run the test and confirm it fails.**
 
 Run the single test; it must fail because execution currently has no source-as-of gate.
 
-- [ ] **Step 3: Implement the source-as-of gate and CLI/report fields.**
+- [x] **Step 3: Implement the source-as-of gate and CLI/report fields.**
 
 Expose `source_asof`, `source_effective_date`, and `source_pit_status` in JSON/CSV summaries. An unknown or later source date must set global `write_blocked=True` and skip board, membership, and close SQL. A verified source date may proceed only after the existing 302-code, BSE, 900xxx, master, and pagination checks pass.
 
-- [ ] **Step 4: Run focused and full rolling tests.**
+- [x] **Step 4: Run focused and full rolling tests.**
 
 Run:
 
@@ -165,7 +165,7 @@ Only after the database invariants pass, replay 2026-07-31 and verify all 302 ta
 
 ### Task 5: Close the task with an explicit status
 
-- [ ] **Step 1: If no PIT source exists, publish a blocked report.**
+- [x] **Step 1: If no PIT source exists, publish a blocked report.**
 
 State that operational current membership is not a substitute for the 2026-07-31 historical snapshot; leave the database unchanged.
 
@@ -173,6 +173,6 @@ State that operational current membership is not a substitute for the 2026-07-31
 
 Include source endpoint, source-as-of date, payload hash, target count, valid member count, exclusions, database writes, and replay evidence.
 
-- [ ] **Step 3: Run final verification.**
+- [x] **Step 3: Run final verification.**
 
 Run compileall, focused tests, full rolling tests, and `git diff --check`; do not modify or commit user-owned artifacts.

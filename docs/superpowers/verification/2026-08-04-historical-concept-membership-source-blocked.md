@@ -8,6 +8,12 @@ No database write was performed in this check. The existing source-as-of gate
 must remain closed until a complete, explicitly dated 2026-07-31 membership
 snapshot is available.
 
+The reproducible inventory for this check is
+`/tmp/historical_membership_inventory_20260731.json` (SHA-256
+`a273daae80728b87ff518ebd140886393c6b4a74e6a1a5b03d1c43653617073a`). It
+records the database grouping, local-file search, provider probe counts, and
+the zero-write decision.
+
 ## Target universe
 
 - Target file: `/Users/xiwei/stock_research/outputs/research/concept_drawdown_over24_2026-08-01.csv`
@@ -56,6 +62,10 @@ only. Adding `date`, `trade_date`, `start_date`, or equivalent parameters does
 not change the returned member set. EastMoney's available constituent API is
 also current-only in this environment. Neither source declares an effective
 date for a historical membership response.
+
+The exact-name provider probe is therefore not silently widened with aliases:
+`折叠屏`, `上海国企`, and `深圳国企` return broader/different result sets and
+are retained only as rejected evidence, not substituted for the target codes.
 
 ### Other sources
 
