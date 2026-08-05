@@ -7,6 +7,13 @@ from pathlib import Path
 import pytest
 
 
+def test_platform_ready_cron_pins_runtime_data_roots() -> None:
+    script = (Path(__file__).resolve().parents[1] / "scripts/run_platform_ready_check_cron.sh").read_text()
+
+    assert 'STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"' in script
+    assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
+
+
 def _prepare_fake_guard(fake_root: Path) -> None:
     scripts_dir = fake_root / "scripts"
     scripts_dir.mkdir(parents=True, exist_ok=True)
@@ -204,7 +211,9 @@ exit 3
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-18" in call
     assert "--output-dir" in call
     assert "eod_auto_repair/2026-06-18" in call
-    assert "--mode repair" in call
+    assert "--mode loop" in call
+    assert "--include-pending-dates" in call
+    assert "--pending-date-limit" in call
     assert "-m stock_research.platform_ready" not in call
     assert "EOD自动修复失败" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout

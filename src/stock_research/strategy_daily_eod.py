@@ -115,6 +115,7 @@ def run_strategy_daily_eod(
             dependency_check_status=str(dependency_check.get("status") or "failed"),
             lhb_shortline_status=strategy_status["lhb_shortline"],
             mid_trend_status=strategy_status["mid_trend"],
+            midtrend_artifacts_status=strategy_status["midtrend_artifacts"],
             tech_bottleneck_status=strategy_status["tech_bottleneck"],
             review_rows=review_rows,
             output_dir=str(output_dir),
@@ -379,6 +380,7 @@ def _finalize_failure(
         "strategy_status": {
             "lhb_shortline": lhb_status,
             "mid_trend": mid_status,
+            "midtrend_artifacts": "skipped",
             "tech_bottleneck": tech_status,
         },
         "review_rows": 0,
@@ -395,6 +397,7 @@ def _finalize_failure(
             dependency_check_status=str(dependency_check.get("status") or "failed"),
             lhb_shortline_status=lhb_status,
             mid_trend_status=mid_status,
+            midtrend_artifacts_status="skipped",
             tech_bottleneck_status=tech_status,
             review_rows=0,
             output_dir=str(output_dir),

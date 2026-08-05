@@ -404,3 +404,73 @@ def test_publish_strategy_eod_upserts_failure_manifest_when_base_not_publishable
 
     assert [entry["module"] for entry in upserts] == ["score_topn", "review_queue_strategy_manifest"]
     assert upserts[-1]["status"] == "failed"
+
+
+def _install_publish_contract_fakes(monkeypatch, tmp_path, *, strategy_assets):
+    monkeypatch.setattr(strategy_eod_publish, "_ensure_strategy_dependencies", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_build_base_manifest_entries",
+        lambda **kwargs: [{"module": "daily_bars", "status": "success"}],
+    )
+
+    def fake_write_strategy_artifacts(*, strategy_id, **kwargs):
+        frame = strategy_eod_publish.pd.DataFrame(
+            {
+                "trade_date": [kwargs["trade_date"]] * len(strategy_assets[strategy_id]),
+                "strategy_id": [strategy_id] * len(strategy_assets[strategy_id]),
+                "asset_id": strategy_assets[strategy_id],
+            }
+        )
+        return {"module": strategy_eod_publish.STRATEGY_EOD_MODULES[strategy_id], "status": "success"}, frame
+
+    monkeypatch.setattr(strategy_eod_publish, "_write_strategy_artifacts", fake_write_strategy_artifacts)
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_prepare_tech_bottleneck_base_candidate_source",
+        lambda **kwargs: tmp_path / "tech-base.csv",
+    )
+
+    def fake_tech_publish(*, end_date, output_dir, manifest_upsert, **kwargs):
+        review_path = output_dir / "strategy_tech_bottleneck_review.csv"
+        strategy_eod_publish.pd.DataFrame(
+            {
+                "trade_date": [end_date] * len(strategy_assets["tech_bottleneck"]),
+                "strategy_id": ["tech_bottleneck"] * len(strategy_assets["tech_bottleneck"]),
+                "asset_id": strategy_assets["tech_bottleneck"],
+            }
+        ).to_csv(review_path, index=False)
+        manifest_upsert({"module": "strategy_tech_bottleneck", "status": "success"})
+        return {"review_path": str(review_path)}
+
+    monkeypatch.setattr(strategy_eod_publish, "run_tech_bottleneck_eod", fake_tech_publish)
+    monkeypatch.setattr(strategy_eod_publish, "_write_strategy_score_audit_artifacts", lambda **kwargs: {"status": "success"})
+    monkeypatch.setattr(strategy_eod_publish, "_write_eod_news_artifacts", lambda **kwargs: [])
+    monkeypatch.setattr(strategy_eod_publish, "_write_report_content_manifest_entries", lambda **kwargs: [])
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_write_review_evidence_snapshot_entry",
+        lambda **kwargs: {"module": "review_evidence_snapshots", "status": "success"},
+    )
+
+
+def test_publish_strategy_eod_accepts_four_safe_lhb_rows_as_degraded(monkeypatch, tmp_path):
+    strategy_assets = {
+        "lhb_shortline": ["CN:SH:000001", "CN:SH:000002", "CN:SH:000003", "CN:SH:000004"],
+        "mid_trend": [f"CN:SH:{index:06d}" for index in range(101, 106)],
+        "tech_bottleneck": [f"CN:SH:{index:06d}" for index in range(201, 206)],
+    }
+    _install_publish_contract_fakes(monkeypatch, tmp_path, strategy_assets=strategy_assets)
+
+    summary = strategy_eod_publish.publish_strategy_eod(
+        trade_date="2026-07-30",
+        output_root=tmp_path,
+        runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+        manifest_upsert=lambda entry: None,
+    )
+
+    assert summary["publishable"] is True
+    assert summary["review_rows"] == 14
+    assert summary["strategy_counts"]["lhb_shortline"] == 4
+    assert summary["degraded_strategies"] == ["lhb_shortline"]
+    assert any("lhb_shortline" in warning for warning in summary["warnings"])

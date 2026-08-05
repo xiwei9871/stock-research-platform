@@ -38,6 +38,11 @@ STRATEGY_EOD_NAMES = {
     "mid_trend": "Mid Trend Combo",
     "tech_bottleneck": "Tech Bottleneck Combo",
 }
+STRATEGY_REVIEW_CONTRACTS = {
+    "lhb_shortline": {"min_rows": 1, "max_rows": 5},
+    "mid_trend": {"min_rows": 5, "max_rows": 5},
+    "tech_bottleneck": {"min_rows": 5, "max_rows": 5},
+}
 BASE_CHECKS = {
     "daily_bars": {
         "source": "market_daily_bar",
@@ -265,6 +270,27 @@ def publish_strategy_eod(
     strategy_results["tech_bottleneck"] = _strategy_score_audit_result(tech_result, tech_review_path=tech_review_path)
 
     review_path, review_rows = _write_review_queue(review_frames, output_dir)
+    strategy_counts, strategy_row_counts = _strategy_review_counts(review_rows)
+    degraded_strategies, contract_errors = _validate_strategy_review_contract(
+        review_rows,
+        strategy_counts=strategy_counts,
+        strategy_row_counts=strategy_row_counts,
+    )
+    if contract_errors:
+        error = "; ".join(contract_errors)
+        entries.append(
+            _failure_entry(
+                run_id=run_id,
+                trade_date=selected_trade_date,
+                module="review_queue_strategy_manifest",
+                source="strategy_daily_eod",
+                started_at=started_at,
+                error=error,
+            )
+        )
+        for entry in entries:
+            manifest_upsert(entry)
+        raise RuntimeError(error)
     entries.append(
         build_manifest_entry(
             run_id=run_id,
@@ -284,6 +310,9 @@ def publish_strategy_eod(
             metadata={
                 "strategy_modules": list(STRATEGY_EOD_MODULES.values()),
                 "review_path": str(review_path),
+                "strategy_counts": strategy_counts,
+                "strategy_row_counts": strategy_row_counts,
+                "degraded_strategies": degraded_strategies,
             },
         )
     )
@@ -343,7 +372,16 @@ def publish_strategy_eod(
         "trade_date": selected_trade_date,
         "output_dir": str(output_dir),
         "manifest_modules": [entry["module"] for entry in entries],
+        "status": "degraded" if degraded_strategies else "success",
+        "publishable": True,
+        "strategy_counts": strategy_counts,
+        "strategy_row_counts": strategy_row_counts,
         "review_rows": len(review_rows),
+        "degraded_strategies": degraded_strategies,
+        "warnings": [
+            f"{strategy_id} published {strategy_row_counts[strategy_id]} safe review rows"
+            for strategy_id in degraded_strategies
+        ],
         "score_audit": score_audit,
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1387,6 +1425,59 @@ def _write_review_queue(
     path = output_dir / "review_queue_strategy_manifest.csv"
     frame.to_csv(path, index=False)
     return path, frame.to_dict("records")
+
+
+def _strategy_review_counts(
+    review_rows: list[dict[str, Any]],
+) -> tuple[dict[str, int], dict[str, int]]:
+    unique_counts = {strategy_id: 0 for strategy_id in STRATEGY_REVIEW_CONTRACTS}
+    row_counts = {strategy_id: 0 for strategy_id in STRATEGY_REVIEW_CONTRACTS}
+    assets_by_strategy = {strategy_id: set() for strategy_id in STRATEGY_REVIEW_CONTRACTS}
+    for row in review_rows:
+        strategy_id = str(row.get("strategy_id") or "").strip()
+        if strategy_id not in STRATEGY_REVIEW_CONTRACTS:
+            continue
+        raw_asset_id = row.get("asset_id") or row.get("ts_code")
+        asset_id = _asset_id_from_review_code(raw_asset_id)
+        if not asset_id:
+            asset_id = str(raw_asset_id or "").strip()
+        if not asset_id:
+            continue
+        row_counts[strategy_id] += 1
+        assets_by_strategy[strategy_id].add(asset_id)
+    for strategy_id, assets in assets_by_strategy.items():
+        unique_counts[strategy_id] = len(assets)
+    return unique_counts, row_counts
+
+
+def _validate_strategy_review_contract(
+    review_rows: list[dict[str, Any]],
+    *,
+    strategy_counts: dict[str, int],
+    strategy_row_counts: dict[str, int],
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    degraded: list[str] = []
+    for strategy_id, contract in STRATEGY_REVIEW_CONTRACTS.items():
+        unique_count = int(strategy_counts.get(strategy_id) or 0)
+        row_count = int(strategy_row_counts.get(strategy_id) or 0)
+        min_rows = int(contract["min_rows"])
+        max_rows = int(contract["max_rows"])
+        if row_count < min_rows or row_count > max_rows:
+            errors.append(
+                f"{strategy_id} requires {min_rows}..{max_rows} rows, got {row_count}"
+            )
+        elif unique_count != row_count:
+            errors.append(
+                f"{strategy_id} has duplicate or invalid assets: unique_assets={unique_count}, rows={row_count}"
+            )
+        if strategy_id == "lhb_shortline" and 1 <= row_count < max_rows and unique_count == row_count:
+            degraded.append(strategy_id)
+    if len(review_rows) != sum(strategy_row_counts.values()):
+        errors.append(
+            f"strategy review contract contains unknown or malformed rows: total_rows={len(review_rows)}"
+        )
+    return degraded, errors
 
 
 def _write_eod_news_artifacts(

@@ -11,10 +11,11 @@ CREATE SCHEMA IF NOT EXISTS ops;
 
 CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     trade_date date PRIMARY KEY,
-    status text NOT NULL CHECK (status IN ('success', 'failed', 'running', 'skipped')),
+    status text NOT NULL CHECK (status IN ('success', 'partial', 'failed', 'blocked', 'running', 'skipped')),
     dependency_check_status text NOT NULL,
     lhb_shortline_status text NOT NULL,
     mid_trend_status text NOT NULL,
+    midtrend_artifacts_status text NOT NULL DEFAULT 'unknown',
     tech_bottleneck_status text NOT NULL,
     review_rows integer NOT NULL DEFAULT 0,
     output_dir text,
@@ -22,6 +23,55 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     error_summary text,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+DO $strategy_daily_eod_midtrend_artifacts_migration$
+DECLARE
+    column_exists boolean := false;
+    column_not_null boolean := false;
+BEGIN
+    SELECT true, attnotnull
+    INTO column_exists, column_not_null
+    FROM pg_attribute
+    WHERE attrelid = 'ops.strategy_daily_eod_status'::regclass
+      AND attname = 'midtrend_artifacts_status'
+      AND NOT attisdropped;
+
+    IF NOT column_exists THEN
+        EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ADD COLUMN midtrend_artifacts_status text DEFAULT ''unknown''';
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'unknown' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET NOT NULL$sql$;
+    ELSIF NOT column_not_null THEN
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'unknown' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET DEFAULT 'unknown'$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET NOT NULL$sql$;
+    ELSE
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'unknown' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE $sql$ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET DEFAULT 'unknown'$sql$;
+    END IF;
+END
+$strategy_daily_eod_midtrend_artifacts_migration$;
+
+DO $strategy_daily_eod_status_migration$
+DECLARE
+    constraint_definition text;
+BEGIN
+    SELECT pg_get_constraintdef(oid)
+    INTO constraint_definition
+    FROM pg_constraint
+    WHERE conrelid = 'ops.strategy_daily_eod_status'::regclass
+      AND conname = 'strategy_daily_eod_status_status_check';
+
+    IF constraint_definition IS NULL
+       OR position('partial' IN constraint_definition) = 0
+       OR position('blocked' IN constraint_definition) = 0 THEN
+        ALTER TABLE ops.strategy_daily_eod_status
+            DROP CONSTRAINT IF EXISTS strategy_daily_eod_status_status_check;
+        ALTER TABLE ops.strategy_daily_eod_status
+            ADD CONSTRAINT strategy_daily_eod_status_status_check
+            CHECK (status IN ('success', 'partial', 'failed', 'blocked', 'running', 'skipped'));
+    END IF;
+END
+$strategy_daily_eod_status_migration$;
 """
 
 
@@ -44,6 +94,7 @@ def build_status_payload(
     output_dir: str | None,
     summary_path: str | None,
     error_summary: str | None,
+    midtrend_artifacts_status: str | None = None,
 ) -> dict[str, Any]:
     return {
         "trade_date": trade_date,
@@ -51,6 +102,7 @@ def build_status_payload(
         "dependency_check_status": dependency_check_status,
         "lhb_shortline_status": lhb_shortline_status,
         "mid_trend_status": mid_trend_status,
+        "midtrend_artifacts_status": str(midtrend_artifacts_status or "unknown"),
         "tech_bottleneck_status": tech_bottleneck_status,
         "review_rows": int(review_rows),
         "output_dir": output_dir,
@@ -64,6 +116,9 @@ def upsert_strategy_daily_eod_status(
     *,
     service: str = SETTINGS.research_service,
 ) -> None:
+    payload = dict(payload)
+    if not payload.get("midtrend_artifacts_status"):
+        payload["midtrend_artifacts_status"] = str(payload.get("mid_trend_status") or "unknown")
     sql = """
     INSERT INTO ops.strategy_daily_eod_status (
         trade_date,
@@ -71,6 +126,7 @@ def upsert_strategy_daily_eod_status(
         dependency_check_status,
         lhb_shortline_status,
         mid_trend_status,
+        midtrend_artifacts_status,
         tech_bottleneck_status,
         review_rows,
         output_dir,
@@ -83,6 +139,7 @@ def upsert_strategy_daily_eod_status(
         %(dependency_check_status)s,
         %(lhb_shortline_status)s,
         %(mid_trend_status)s,
+        %(midtrend_artifacts_status)s,
         %(tech_bottleneck_status)s,
         %(review_rows)s,
         %(output_dir)s,
@@ -95,6 +152,7 @@ def upsert_strategy_daily_eod_status(
         dependency_check_status = EXCLUDED.dependency_check_status,
         lhb_shortline_status = EXCLUDED.lhb_shortline_status,
         mid_trend_status = EXCLUDED.mid_trend_status,
+        midtrend_artifacts_status = EXCLUDED.midtrend_artifacts_status,
         tech_bottleneck_status = EXCLUDED.tech_bottleneck_status,
         review_rows = EXCLUDED.review_rows,
         output_dir = EXCLUDED.output_dir,
@@ -118,6 +176,7 @@ def load_strategy_daily_eod_status(
         dependency_check_status,
         lhb_shortline_status,
         mid_trend_status,
+        midtrend_artifacts_status,
         tech_bottleneck_status,
         review_rows,
         output_dir,

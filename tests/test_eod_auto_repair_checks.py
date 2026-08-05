@@ -79,6 +79,53 @@ def test_check_lhb_features_reads_factor_table_with_fetcher():
     assert captured["params"] == ["2026-06-29"]
 
 
+def test_evaluate_review_queue_groups_marks_four_lhb_rows_degraded():
+    payload = {
+        "trade_date": "2026-07-30",
+        "groups": [
+            {
+                "bucket": "strategy:lhb_shortline",
+                "count": 4,
+                "items": [{"asset_id": "A"}, {"asset_id": "B"}, {"asset_id": "C"}, {"asset_id": "D"}],
+            },
+            {
+                "bucket": "strategy:mid_trend",
+                "count": 5,
+                "items": [{"asset_id": "E"}, {"asset_id": "F"}, {"asset_id": "G"}, {"asset_id": "H"}, {"asset_id": "I"}],
+            },
+            {
+                "bucket": "strategy:tech_bottleneck",
+                "count": 5,
+                "items": [{"asset_id": "J"}, {"asset_id": "K"}, {"asset_id": "L"}, {"asset_id": "M"}, {"asset_id": "N"}],
+            },
+        ],
+    }
+
+    result = evaluate_review_queue_groups(payload, trade_date="2026-07-30")
+
+    assert result.status == RepairStatus.DEGRADED
+    assert result.blocker is False
+    assert result.metrics["degraded_buckets"] == ["strategy:lhb_shortline"]
+
+
+def test_evaluate_review_queue_groups_keeps_invalid_strategy_counts_blocking():
+    payload = {
+        "trade_date": "2026-07-30",
+        "groups": [
+            {"bucket": "strategy:lhb_shortline", "count": 0, "items": []},
+            {"bucket": "strategy:mid_trend", "count": 4, "items": [{"asset_id": "A"}]},
+            {"bucket": "strategy:tech_bottleneck", "count": 5, "items": [{"asset_id": "B"}]},
+        ],
+    }
+
+    result = evaluate_review_queue_groups(payload, trade_date="2026-07-30")
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
+    assert "lhb_shortline" in result.message
+    assert "mid_trend" in result.message
+
+
 def test_check_factor_daily_requires_rows_for_trade_date():
     rows = [
         {

@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from stock_research.eod_auto_repair_checks import build_check_plan
+from stock_research.eod_auto_repair_queue import (
+    pending_dates_path,
+    record_repair_result,
+    select_pending_trade_dates,
+)
 from stock_research.eod_auto_repair_models import (
     RepairActionResult,
     RepairCheckResult,
@@ -791,6 +796,111 @@ def run_eod_auto_repair(
     return summary
 
 
+def run_eod_auto_repair_batch(
+    *,
+    current_trade_date: str,
+    output_root: str | Path,
+    mode: str = "loop",
+    check_plan_builder=build_check_plan,
+    action_registry: dict[str, ActionRunner] | None = None,
+    write_reports: bool = True,
+    max_cycles: int = 3,
+    dry_run: bool = False,
+    strict: bool = False,
+    action_timeout_seconds: int | None = None,
+    pending_date_limit: int = 3,
+    include_pending_dates: bool = True,
+) -> dict[str, Any]:
+    root = Path(output_root)
+    dates = (
+        select_pending_trade_dates(
+            root,
+            current_trade_date=current_trade_date,
+            pending_date_limit=pending_date_limit,
+        )
+        if include_pending_dates
+        else [current_trade_date]
+    )
+    registry = action_registry if action_registry is not None else build_default_action_registry(output_root=root)
+    results: list[dict[str, Any]] = []
+    for trade_date in dates:
+        output_dir = root / "research" / "eod_auto_repair" / trade_date
+        try:
+            summary = run_eod_auto_repair(
+                trade_date=trade_date,
+                output_dir=output_dir,
+                mode=mode,
+                check_plan_builder=check_plan_builder,
+                action_registry=registry,
+                write_reports=write_reports,
+                max_cycles=max_cycles,
+                dry_run=dry_run,
+                strict=strict,
+                action_timeout_seconds=action_timeout_seconds,
+            )
+            payload = summary.to_dict()
+        except Exception as exc:  # noqa: BLE001
+            payload = {
+                "trade_date": trade_date,
+                "mode": mode,
+                "final_status": RepairStatus.FAILED.value,
+                "remaining_blockers": ["batch_runner"],
+                "error_summary": f"{type(exc).__name__}: {exc}",
+            }
+        record_repair_result(root, payload)
+        results.append(payload)
+
+    current_text = str(current_trade_date)
+    current_result = next(
+        (result for result in results if str(result.get("trade_date") or "") == current_text),
+        None,
+    )
+    current_status = str((current_result or {}).get("final_status") or "failed")
+    current_has_blockers = bool((current_result or {}).get("remaining_blockers"))
+    backlog_results = [
+        result
+        for result in results
+        if str(result.get("trade_date") or "") != current_text
+    ]
+    backlog_failed_trade_dates = [
+        str(result.get("trade_date") or "")
+        for result in backlog_results
+        if str(result.get("final_status") or "failed") == RepairStatus.FAILED.value
+        or result.get("remaining_blockers")
+    ]
+    backlog_degraded_trade_dates = [
+        str(result.get("trade_date") or "")
+        for result in backlog_results
+        if str(result.get("final_status") or "") == RepairStatus.DEGRADED.value
+        and str(result.get("trade_date") or "") not in backlog_failed_trade_dates
+    ]
+    if current_result is None or current_status == RepairStatus.FAILED.value or current_has_blockers:
+        final_status = RepairStatus.FAILED
+    elif (
+        current_status == RepairStatus.DEGRADED.value
+        or backlog_failed_trade_dates
+        or backlog_degraded_trade_dates
+    ):
+        final_status = RepairStatus.DEGRADED
+    else:
+        final_status = RepairStatus.SUCCESS
+    payload = {
+        "trade_dates": dates,
+        "results": results,
+        "final_status": final_status.value,
+        "current_trade_date": current_text,
+        "current_result_status": current_status,
+        "backlog_failed_trade_dates": backlog_failed_trade_dates,
+        "backlog_degraded_trade_dates": backlog_degraded_trade_dates,
+        "pending_queue_path": str(pending_dates_path(root)),
+    }
+    batch_path = root / "research" / "eod_auto_repair" / "batch_summary.json"
+    batch_path.parent.mkdir(parents=True, exist_ok=True)
+    batch_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    payload["summary_path"] = str(batch_path)
+    return payload
+
+
 def build_default_action_registry(*, output_root: str | Path = "outputs") -> dict[str, ActionRunner]:
     from stock_research.eod_auto_repair_actions import (
         repair_factor_daily,
@@ -1045,8 +1155,46 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report-md")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--action-timeout-seconds", type=int, default=43200)
+    parser.add_argument("--include-pending-dates", action="store_true")
+    parser.add_argument("--pending-date-limit", type=int, default=3)
     args = parser.parse_args(argv)
     output_dir = args.output_dir or str(Path(args.output_root) / "research" / "eod_auto_repair" / args.trade_date)
+    if args.include_pending_dates:
+        batch = run_eod_auto_repair_batch(
+            current_trade_date=args.trade_date,
+            output_root=args.output_root,
+            mode=args.mode,
+            action_registry=build_default_action_registry(output_root=args.output_root),
+            write_reports=True,
+            max_cycles=args.max_cycles,
+            dry_run=args.dry_run,
+            strict=args.strict,
+            action_timeout_seconds=args.action_timeout_seconds,
+            pending_date_limit=args.pending_date_limit,
+        )
+        if args.report_json:
+            Path(args.report_json).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.report_json).write_text(
+                json.dumps(batch, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+        if args.report_md:
+            Path(args.report_md).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.report_md).write_text(
+                "\n".join(
+                    [
+                        "# EOD Auto Repair Batch",
+                        "",
+                        f"- final_status: `{batch['final_status']}`",
+                        f"- trade_dates: `{', '.join(batch['trade_dates'])}`",
+                        f"- pending_queue: `{batch['pending_queue_path']}`",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        print(json.dumps(batch, ensure_ascii=False, indent=2, default=str))
+        return 0 if batch["final_status"] in {RepairStatus.SUCCESS.value, RepairStatus.DEGRADED.value} else 2
     summary = run_eod_auto_repair(
         trade_date=args.trade_date,
         output_dir=output_dir,
