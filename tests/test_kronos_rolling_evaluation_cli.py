@@ -583,6 +583,37 @@ def test_predict_rejects_symlinked_snapshot_file_before_assert_model(
     _assert_predict_tree_symlink_is_rejected(cli, output_dir, monkeypatch, capsys)
 
 
+def test_predict_rejects_internal_symlink_before_assert_model_without_mocking_runner(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    (output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    snapshot_dir = output_dir / "input_snapshots"
+    snapshot_dir.mkdir()
+    snapshot_source = tmp_path / "snapshot-source.json"
+    snapshot_source.write_text("{}", encoding="utf-8")
+    (snapshot_dir / "snapshot.json").symlink_to(snapshot_source)
+
+    FakePredictClient.instances.clear()
+    monkeypatch.setattr(cli, "KronosClient", FakePredictClient)
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(_predict_args(output_dir))
+
+    assert result != 0
+    assert FakePredictClient.instances == []
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == "error"
+    assert "symlink" in summary["error"]
+
+
 def test_predict_rejects_symlinked_top_level_artifact_before_assert_model(
     tmp_path,
     monkeypatch,

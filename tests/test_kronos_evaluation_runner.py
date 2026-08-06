@@ -1431,6 +1431,35 @@ def test_transaction_symlink_is_rejected(prepared_experiment):
         runner._recover_pending_transaction(output_dir)
 
 
+def test_runner_allows_benign_symlink_parent_for_real_prepare_and_run(tmp_path):
+    config = make_config()
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    parent_alias = tmp_path / "parent-alias"
+    parent_alias.symlink_to(real_parent, target_is_directory=True)
+    output_dir = parent_alias / "prepared"
+
+    preparation = prepare_experiment(
+        config,
+        output_dir=output_dir,
+        snapshot_loader=make_loader(snapshots),
+    )
+    result = run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=FakeClient(),
+    )
+
+    assert preparation.snapshot_count == len(snapshots)
+    assert result.status_counts == {"success": len(snapshots)}
+    assert output_dir.is_dir()
+
+
 def test_preparation_metadata_failure_leaves_destination_retryable(tmp_path, monkeypatch):
     config = make_config()
     snapshots = [

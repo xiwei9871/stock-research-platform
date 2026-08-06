@@ -386,10 +386,9 @@ def _writer_lock(output_dir: Path, *, wait: bool = False):
     normalized = Path(output_dir)
     _reject_symlink(normalized, "experiment output directory")
     parent = normalized.parent
-    _reject_symlink(parent, "experiment output parent")
     if not parent.exists():
         parent.mkdir(parents=True, exist_ok=True)
-    _require_regular_directory(parent, "experiment output parent")
+    _require_output_parent_directory(parent)
     lock_path = _writer_lock_path(normalized)
     _reject_symlink(lock_path, "experiment writer lock")
     key = str(normalized.resolve(strict=False))
@@ -1372,6 +1371,15 @@ def _reject_symlink(path: Path, label: str) -> None:
         raise ValueError(f"{label} must not be a symlink: {path}")
 
 
+def _require_output_parent_directory(path: Path) -> None:
+    """Require a usable output parent while permitting benign parent links."""
+
+    if not path.exists():
+        raise FileNotFoundError(f"missing experiment output parent: {path}")
+    if not path.is_dir():
+        raise ValueError(f"experiment output parent must be a directory: {path}")
+
+
 def _require_regular_file(path: Path, label: str) -> None:
     _reject_symlink(path, label)
     if not path.exists():
@@ -1402,10 +1410,9 @@ def _cleanup_orphan_preparation_stages(output_dir: Path) -> None:
     if _active_writer_owner(output_dir) is None:
         raise RuntimeError("preparation-stage cleanup requires the writer lock")
     parent = output_dir.parent
-    _reject_symlink(parent, "experiment output parent")
     if not parent.exists():
         return
-    _require_regular_directory(parent, "experiment output parent")
+    _require_output_parent_directory(parent)
     journal_path = _preparation_journal_path(output_dir)
     journal_temp = _preparation_journal_temp_path(output_dir)
     _reject_symlink(journal_path, "preparation journal")
@@ -1465,6 +1472,7 @@ def _persist_preparation_journal(
         path,
         journal,
         temporary_path=_preparation_journal_temp_path(output_dir),
+        allow_symlink_parent=True,
     )
     _fsync_directory(path.parent)
 
@@ -4946,12 +4954,21 @@ def _atomic_write_json(
     value: Any,
     *,
     temporary_path: Path | None = None,
+    allow_symlink_parent: bool = False,
 ) -> None:
-    _atomic_write_text(
-        path,
-        _canonical_json(value) + "\n",
-        temporary_path=temporary_path,
-    )
+    if allow_symlink_parent:
+        _atomic_write_text(
+            path,
+            _canonical_json(value) + "\n",
+            temporary_path=temporary_path,
+            allow_symlink_parent=True,
+        )
+    else:
+        _atomic_write_text(
+            path,
+            _canonical_json(value) + "\n",
+            temporary_path=temporary_path,
+        )
 
 
 def _atomic_write_text(
@@ -4959,12 +4976,21 @@ def _atomic_write_text(
     value: str,
     *,
     temporary_path: Path | None = None,
+    allow_symlink_parent: bool = False,
 ) -> None:
-    _atomic_write_bytes(
-        path,
-        value.encode("utf-8"),
-        temporary_path=temporary_path,
-    )
+    if allow_symlink_parent:
+        _atomic_write_bytes(
+            path,
+            value.encode("utf-8"),
+            temporary_path=temporary_path,
+            allow_symlink_parent=True,
+        )
+    else:
+        _atomic_write_bytes(
+            path,
+            value.encode("utf-8"),
+            temporary_path=temporary_path,
+        )
 
 
 def _atomic_write_csv(
@@ -5102,10 +5128,14 @@ def _atomic_write_bytes(
     value: bytes,
     *,
     temporary_path: Path | None = None,
+    allow_symlink_parent: bool = False,
 ) -> None:
     _reject_symlink(path, "artifact path")
     path.parent.mkdir(parents=True, exist_ok=True)
-    _require_regular_directory(path.parent, "artifact parent directory")
+    if allow_symlink_parent:
+        _require_output_parent_directory(path.parent)
+    else:
+        _require_regular_directory(path.parent, "artifact parent directory")
     temporary = (
         Path(temporary_path)
         if temporary_path is not None
