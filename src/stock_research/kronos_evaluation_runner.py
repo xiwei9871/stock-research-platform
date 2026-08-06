@@ -65,11 +65,14 @@ METRICS_BY_MODEL_FILENAME = "metrics_by_model_horizon.csv"
 MODEL_COMPARISON_FILENAME = "model_comparison.csv"
 REPORT_FILENAME = "report.md"
 TRANSACTION_FILENAME = ".kronos_transaction.json"
+REPORT_TRANSACTION_FILENAME = ".kronos_report_transaction.json"
 WRITER_LOCK_PREFIX = "."
 WRITER_LOCK_SUFFIX = ".kronos-writer.lock"
 _PREPARATION_OWNER_FILENAME = ".kronos_prepare_owner.json"
+_PREPARATION_JOURNAL_SCHEMA_VERSION = 1
 _EXPERIMENT_SCHEMA_VERSION = 3
-_TRANSACTION_SCHEMA_VERSION = 3
+_TRANSACTION_SCHEMA_VERSION = 4
+_REPORT_TRANSACTION_SCHEMA_VERSION = 1
 
 _SUCCESS_RESPONSE_STATUSES = frozenset(
     {"ok", "partial", "complete", "completed", "success", "succeeded"}
@@ -95,9 +98,16 @@ _TERMINAL_MANIFEST_STATUSES = frozenset(
     }
 )
 _CLIENT_RAW_RESPONSE_SLOT_MARKER = "__kronos_client_raw_response_slot__"
+_DERIVED_REPORT_FILENAMES = (
+    METRICS_BY_STOCK_FILENAME,
+    METRICS_BY_MODEL_FILENAME,
+    MODEL_COMPARISON_FILENAME,
+    REPORT_FILENAME,
+)
 
 _WRITER_LOCK_STATE: dict[str, dict[str, Any]] = {}
 _WRITER_LOCK_STATE_GUARD = threading.RLock()
+_WRITER_LOCK_CONDITION = threading.Condition(_WRITER_LOCK_STATE_GUARD)
 
 MANIFEST_COLUMNS = (
     "run_key",
@@ -244,6 +254,7 @@ _METRIC_OUTPUT_COLUMNS = (
     "coverage_rate",
     "status_counts_json",
     "metric_denominators_json",
+    "generation",
 )
 
 _COMPARISON_OUTPUT_COLUMNS = (
@@ -262,6 +273,7 @@ _COMPARISON_OUTPUT_COLUMNS = (
     "ci_method",
     "seed",
     "bootstrap_samples",
+    "generation",
 )
 
 SnapshotLoader = Callable[
@@ -326,6 +338,10 @@ class _RunnerFailure(RuntimeError):
         self.raw_body_excerpt = raw_body_excerpt
 
 
+class WriterLockError(RuntimeError):
+    """The requested experiment output is already owned by another writer."""
+
+
 def _writer_lock_path(output_dir: Path) -> Path:
     normalized = Path(output_dir)
     name = normalized.name or "output"
@@ -342,7 +358,7 @@ def _active_writer_owner(output_dir: Path) -> Mapping[str, Any] | None:
 
 
 @contextmanager
-def _writer_lock(output_dir: Path):
+def _writer_lock(output_dir: Path, *, wait: bool = False):
     """Hold an exclusive per-output lock across preparation or publication."""
 
     normalized = Path(output_dir)
@@ -357,13 +373,23 @@ def _writer_lock(output_dir: Path):
     key = str(normalized.resolve(strict=False))
     thread_id = threading.get_ident()
 
-    with _WRITER_LOCK_STATE_GUARD:
-        active = _WRITER_LOCK_STATE.get(key)
-        if active is not None:
-            if active["thread_id"] != thread_id:
-                raise RuntimeError(f"writer lock is held for output directory {normalized}")
-            active["depth"] += 1
-        else:
+    reentrant = False
+    with _WRITER_LOCK_CONDITION:
+        while True:
+            active = _WRITER_LOCK_STATE.get(key)
+            if active is None:
+                break
+            if active["thread_id"] == thread_id:
+                active["depth"] += 1
+                reentrant = True
+                break
+            if not wait:
+                raise WriterLockError(
+                    f"writer lock is held for output directory {normalized}"
+                )
+            _WRITER_LOCK_CONDITION.wait()
+
+        if not reentrant:
             try:
                 import fcntl
             except ModuleNotFoundError:  # pragma: no cover - supported CI is POSIX.
@@ -376,10 +402,10 @@ def _writer_lock(output_dir: Path):
             try:
                 if fcntl is not None:
                     try:
-                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        flags = fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB
+                        fcntl.flock(handle.fileno(), flags)
                     except (BlockingIOError, OSError) as exc:
-                        handle.close()
-                        raise RuntimeError(
+                        raise WriterLockError(
                             f"writer lock is held for output directory {normalized}"
                         ) from exc
                 owner = {
@@ -427,6 +453,7 @@ def _writer_lock(output_dir: Path):
                             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
                     finally:
                         handle.close()
+                    _WRITER_LOCK_CONDITION.notify_all()
 
 
 def prepare_experiment(
@@ -437,7 +464,7 @@ def prepare_experiment(
 ) -> PreparationResult:
     normalized_output_dir = Path(output_dir)
     _reject_symlink(normalized_output_dir, "experiment output directory")
-    with _writer_lock(normalized_output_dir):
+    with _writer_lock(normalized_output_dir, wait=True):
         return _prepare_experiment_locked(
             config,
             output_dir=normalized_output_dir,
@@ -465,7 +492,8 @@ def _prepare_experiment_locked(
     experiment_path = normalized_output_dir / EXPERIMENT_FILENAME
 
     _cleanup_orphan_preparation_stages(normalized_output_dir)
-    _recover_pending_transaction(normalized_output_dir)
+    _recover_pending_transaction_locked(normalized_output_dir)
+    _recover_report_transaction_locked(normalized_output_dir)
     if experiment_path.exists():
         _validate_top_level_entries(normalized_output_dir)
         metadata = _read_json(experiment_path)
@@ -508,15 +536,26 @@ def _prepare_experiment_locked(
     # remains absent (or empty) if any write, including experiment metadata,
     # fails, so a retry never encounters a contaminated fresh experiment.
     normalized_output_dir.parent.mkdir(parents=True, exist_ok=True)
-    stage_dir = Path(
-        tempfile.mkdtemp(
-            prefix=f".{normalized_output_dir.name}.prepare-",
-            dir=normalized_output_dir.parent,
-        )
+    stage_id = uuid.uuid4().hex
+    stage_dir = normalized_output_dir.parent / (
+        f".{normalized_output_dir.name}.prepare-{stage_id}"
     )
+    preparation_journal = {
+        "schema_version": _PREPARATION_JOURNAL_SCHEMA_VERSION,
+        "state": "staging",
+        "owner_id": (_active_writer_owner(normalized_output_dir) or {}).get(
+            "owner_id", ""
+        ),
+        "pid": os.getpid(),
+        "output_dir": str(normalized_output_dir.resolve(strict=False)),
+        "lock_path": str(_writer_lock_path(normalized_output_dir).resolve(strict=False)),
+        "stage_dir": stage_dir.name,
+    }
     published = False
     snapshot_paths: list[Path] = []
     try:
+        _persist_preparation_journal(normalized_output_dir, preparation_journal)
+        stage_dir.mkdir(exist_ok=False)
         owner = _active_writer_owner(normalized_output_dir) or {}
         _atomic_write_json(
             stage_dir / _PREPARATION_OWNER_FILENAME,
@@ -544,7 +583,7 @@ def _prepare_experiment_locked(
             ],
             ("asset_id", "position"),
         )
-        _write_run_artifacts(
+        _write_run_artifacts_locked(
             stage_dir,
             {row["run_key"]: row for row in manifest_rows},
             [],
@@ -554,6 +593,8 @@ def _prepare_experiment_locked(
         _reject_symlink(stage_dir / _PREPARATION_OWNER_FILENAME, "preparation owner marker")
         (stage_dir / _PREPARATION_OWNER_FILENAME).unlink(missing_ok=True)
 
+        preparation_journal["state"] = "publishing"
+        _persist_preparation_journal(normalized_output_dir, preparation_journal)
         if normalized_output_dir.exists():
             # The non-empty case was rejected above.  Remove only the known
             # empty placeholder immediately before the atomic publication.
@@ -567,6 +608,7 @@ def _prepare_experiment_locked(
     finally:
         if not published:
             shutil.rmtree(stage_dir, ignore_errors=True)
+        _remove_preparation_journal(normalized_output_dir)
 
     return _preparation_result_from_paths(
         normalized_output_dir,
@@ -577,6 +619,23 @@ def _prepare_experiment_locked(
 
 
 def run_model(
+    config: KronosEvaluationConfig,
+    *,
+    model: str,
+    output_dir: Path,
+    client: KronosClient,
+) -> ModelRunResult:
+    normalized_output_dir = Path(output_dir)
+    with _writer_lock(normalized_output_dir, wait=True):
+        return _run_model_locked(
+            config,
+            model=model,
+            output_dir=normalized_output_dir,
+            client=client,
+        )
+
+
+def _run_model_locked(
     config: KronosEvaluationConfig,
     *,
     model: str,
@@ -595,7 +654,8 @@ def run_model(
     if normalized_model not in config.models:
         raise ValueError(f"model {normalized_model!r} is not enabled in config.models")
     normalized_output_dir = Path(output_dir)
-    _recover_pending_transaction(normalized_output_dir)
+    _recover_pending_transaction_locked(normalized_output_dir)
+    _recover_report_transaction_locked(normalized_output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
     snapshots, manifest = _validate_experiment_integrity(
         normalized_output_dir,
@@ -674,7 +734,12 @@ def run_model(
                     health_failure,
                 )
             )
-            _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
+            _write_run_artifacts_locked(
+                normalized_output_dir,
+                manifest,
+                forecast_rows,
+                realized_rows,
+            )
             continue
 
         forecast_rows = [item for item in forecast_rows if item.get("run_key") != run_key]
@@ -690,7 +755,12 @@ def run_model(
                 started_at=started_at,
             )
         )
-        _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
+        _write_run_artifacts_locked(
+            normalized_output_dir,
+            manifest,
+            forecast_rows,
+            realized_rows,
+        )
 
         failure: _RunnerFailure | None = health_failure
         response: Mapping[str, Any] | None = None
@@ -819,7 +889,12 @@ def run_model(
                     "cache_hit": False,
                 }
             )
-        _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
+        _write_run_artifacts_locked(
+            normalized_output_dir,
+            manifest,
+            forecast_rows,
+            realized_rows,
+        )
 
     status_counts = Counter(
         row.get("status", "")
@@ -840,10 +915,17 @@ def run_model(
 
 
 def build_report(*, output_dir: Path) -> dict[str, Any]:
+    normalized_output_dir = Path(output_dir)
+    with _writer_lock(normalized_output_dir, wait=True):
+        return _build_report_locked(output_dir=normalized_output_dir)
+
+
+def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
     """Build all report artifacts using only the prepared experiment files."""
 
     normalized_output_dir = Path(output_dir)
-    _recover_pending_transaction(normalized_output_dir)
+    _recover_pending_transaction_locked(normalized_output_dir)
+    _recover_report_transaction_locked(normalized_output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
     config_payload = metadata.get("config")
     if not isinstance(config_payload, Mapping):
@@ -871,6 +953,7 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         forecast_schema,
         realized_schema,
     )
+    artifact_generation = next(iter({str(row["generation"]) for row in manifest.values()}))
     _validate_report_artifacts(
         snapshots,
         manifest,
@@ -878,6 +961,7 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         forecast_rows,
         realized_rows,
     )
+    _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
 
     horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
     raw_seed = config_payload.get("seed")
@@ -899,25 +983,19 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         metric_rows,
         group_by=("model", "horizon"),
     )
-    stock_output = [_metric_summary_row(row) for row in stock_summaries]
-    model_output = [_metric_summary_row(row) for row in model_summaries]
-    _atomic_write_csv(
-        normalized_output_dir / METRICS_BY_STOCK_FILENAME,
-        stock_output,
-        _METRIC_OUTPUT_COLUMNS,
-    )
-    _atomic_write_csv(
-        normalized_output_dir / METRICS_BY_MODEL_FILENAME,
-        model_output,
-        _METRIC_OUTPUT_COLUMNS,
-    )
-
+    stock_output = [
+        _metric_summary_row(row, generation=artifact_generation)
+        for row in stock_summaries
+    ]
+    model_output = [
+        _metric_summary_row(row, generation=artifact_generation)
+        for row in model_summaries
+    ]
     comparisons = _build_comparisons(metric_rows, seed=seed)
-    _atomic_write_csv(
-        normalized_output_dir / MODEL_COMPARISON_FILENAME,
-        comparisons,
-        _COMPARISON_OUTPUT_COLUMNS,
-    )
+    comparisons = [
+        {**row, "generation": artifact_generation}
+        for row in comparisons
+    ]
 
     status_counts = Counter(row.get("status", "") for row in manifest.values())
     model_status_counts: dict[str, dict[str, int]] = defaultdict(lambda: Counter())
@@ -948,8 +1026,16 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         comparisons=comparisons,
         latency=latency,
         model_metadata=model_metadata,
+        artifact_generation=artifact_generation,
     )
-    _atomic_write_text(normalized_output_dir / REPORT_FILENAME, report_text)
+    _publish_report_artifacts_locked(
+        normalized_output_dir,
+        artifact_generation=artifact_generation,
+        stock_output=stock_output,
+        model_output=model_output,
+        comparisons=comparisons,
+        report_text=report_text,
+    )
 
     counts = {
         "snapshots": len(snapshots),
@@ -978,6 +1064,7 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         "paths": paths,
         "counts": counts,
         "conclusion": conclusion,
+        "generation": artifact_generation,
         "status_counts": dict(sorted(status_counts.items())),
         "model_status_counts": model_status_counts,
         "coverage_by_model_horizon": coverage,
@@ -1181,7 +1268,14 @@ def _require_regular_directory(path: Path, label: str) -> None:
 
 
 def _cleanup_orphan_preparation_stages(output_dir: Path) -> None:
-    """Remove stages only after this process owns the output writer lock."""
+    """Remove only owner-marked stages after acquiring the output lock.
+
+    A directory with the preparation naming pattern is not, by itself,
+    evidence that it is abandoned: another process may have created it just
+    before acquiring the parent lock.  Stages created by this runner carry an
+    owner marker before any payload I/O, so only those markers are eligible
+    for recovery here.
+    """
 
     _reject_symlink(output_dir, "experiment output directory")
     if _active_writer_owner(output_dir) is None:
@@ -1191,6 +1285,25 @@ def _cleanup_orphan_preparation_stages(output_dir: Path) -> None:
     if not parent.exists():
         return
     _require_regular_directory(parent, "experiment output parent")
+    journal_path = _preparation_journal_path(output_dir)
+    journal_temp = _preparation_journal_temp_path(output_dir)
+    _reject_symlink(journal_path, "preparation journal")
+    _reject_symlink(journal_temp, "preparation journal temporary path")
+    if journal_temp.exists():
+        _require_regular_file(journal_temp, "preparation journal temporary path")
+        journal_temp.unlink()
+    if journal_path.exists():
+        _require_regular_file(journal_path, "preparation journal")
+        journal = _read_json(journal_path)
+        stage_dir = _validate_preparation_journal(output_dir, journal)
+        active_owner = _active_writer_owner(output_dir) or {}
+        if journal.get("owner_id") == active_owner.get("owner_id"):
+            raise WriterLockError("preparation stage is owned by the active writer")
+        if stage_dir.exists():
+            _reject_symlink(stage_dir, "preparation stage")
+            _require_regular_directory(stage_dir, "preparation stage")
+            shutil.rmtree(stage_dir)
+        _remove_preparation_journal(output_dir)
     prefix = f".{output_dir.name}.prepare-"
     for candidate in sorted(parent.iterdir(), key=lambda item: item.name):
         if not candidate.name.startswith(prefix):
@@ -1198,7 +1311,126 @@ def _cleanup_orphan_preparation_stages(output_dir: Path) -> None:
         _reject_symlink(candidate, "orphan preparation stage")
         if not candidate.is_dir():
             raise ValueError(f"orphan preparation stage is not a directory: {candidate}")
+        owner_path = candidate / _PREPARATION_OWNER_FILENAME
+        if not owner_path.exists():
+            continue
+        _require_regular_file(owner_path, "preparation owner marker")
+        owner = _read_json(owner_path)
+        if not isinstance(owner, Mapping):
+            raise ValueError(f"preparation owner marker is invalid: {owner_path}")
+        expected_output = str(output_dir.resolve(strict=False))
+        if owner.get("output_dir") != expected_output:
+            raise ValueError(f"preparation owner marker targets another output: {owner_path}")
         shutil.rmtree(candidate)
+
+
+def _preparation_journal_path(output_dir: Path) -> Path:
+    normalized = Path(output_dir)
+    return normalized.parent / f".{normalized.name}.kronos-prepare.json"
+
+
+def _preparation_journal_temp_path(output_dir: Path) -> Path:
+    journal_path = _preparation_journal_path(output_dir)
+    return journal_path.parent / f".{journal_path.name}.tmp"
+
+
+def _persist_preparation_journal(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> None:
+    path = _preparation_journal_path(output_dir)
+    _reject_symlink(path, "preparation journal")
+    _atomic_write_json(
+        path,
+        journal,
+        temporary_path=_preparation_journal_temp_path(output_dir),
+    )
+    _fsync_directory(path.parent)
+
+
+def _remove_preparation_journal(output_dir: Path) -> None:
+    path = _preparation_journal_path(output_dir)
+    temporary = _preparation_journal_temp_path(output_dir)
+    for candidate in (path, temporary):
+        _reject_symlink(candidate, "preparation journal path")
+        if not candidate.exists():
+            continue
+        _require_regular_file(candidate, "preparation journal path")
+        candidate.unlink()
+    _fsync_directory(path.parent)
+
+
+def _validate_preparation_journal(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> Path:
+    required = {
+        "schema_version",
+        "state",
+        "owner_id",
+        "pid",
+        "output_dir",
+        "lock_path",
+        "stage_dir",
+    }
+    if set(journal) != required:
+        raise ValueError("preparation journal fields are invalid")
+    if journal.get("schema_version") != _PREPARATION_JOURNAL_SCHEMA_VERSION:
+        raise ValueError("unsupported preparation journal schema")
+    if journal.get("state") not in {"staging", "publishing"}:
+        raise ValueError("preparation journal state is invalid")
+    if not isinstance(journal.get("owner_id"), str) or not journal.get("owner_id"):
+        raise ValueError("preparation journal owner is invalid")
+    if isinstance(journal.get("pid"), bool) or not isinstance(journal.get("pid"), int):
+        raise ValueError("preparation journal pid is invalid")
+    expected_output = str(Path(output_dir).resolve(strict=False))
+    expected_lock = str(_writer_lock_path(output_dir).resolve(strict=False))
+    if journal.get("output_dir") != expected_output:
+        raise ValueError("preparation journal output is invalid")
+    if journal.get("lock_path") != expected_lock:
+        raise ValueError("preparation journal lock is invalid")
+    stage_name = journal.get("stage_dir")
+    if (
+        not isinstance(stage_name, str)
+        or Path(stage_name).name != stage_name
+        or not stage_name.startswith(f".{Path(output_dir).name}.prepare-")
+    ):
+        raise ValueError("preparation journal stage path is invalid")
+    stage_dir = Path(output_dir).parent / stage_name
+    _reject_symlink(stage_dir, "preparation stage")
+    return stage_dir
+
+
+def _cleanup_known_atomic_temps(output_dir: Path) -> None:
+    """Remove only deterministic temps owned by documented output writers."""
+
+    _reject_symlink(output_dir, "experiment output directory")
+    if not output_dir.exists():
+        return
+    _require_regular_directory(output_dir, "experiment output directory")
+    base_names = {
+        EXPERIMENT_FILENAME,
+        UNIVERSE_FILENAME,
+        MANIFEST_FILENAME,
+        FORECAST_FILENAME,
+        REALIZED_FILENAME,
+        *(_DERIVED_REPORT_FILENAMES),
+        TRANSACTION_FILENAME,
+        REPORT_TRANSACTION_FILENAME,
+    }
+    for path in sorted(output_dir.iterdir(), key=lambda item: item.name):
+        if not path.name.startswith(".") or not path.name.endswith(".tmp"):
+            continue
+        if not any(
+            path.name.startswith(f".{base_name}.")
+            or path.name == f".{base_name}.tmp"
+            for base_name in base_names
+        ):
+            continue
+        _reject_symlink(path, "atomic temporary path")
+        if not path.is_file():
+            raise ValueError(f"atomic temporary path is not a regular file: {path}")
+        path.unlink()
 
 
 def _transaction_child(output_dir: Path, name: Any) -> Path:
@@ -1247,7 +1479,18 @@ def _unlink_transaction_path(path: Path) -> None:
 def _persist_transaction_journal(output_dir: Path, journal: Mapping[str, Any]) -> None:
     transaction_path = output_dir / TRANSACTION_FILENAME
     _reject_symlink(transaction_path, "transaction journal")
-    _atomic_write_json(transaction_path, journal)
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("transaction journal has no transaction id")
+    expected_temp_name = f".{TRANSACTION_FILENAME}.{transaction_id}.tmp"
+    journal_temp = journal.get("journal_temp")
+    if journal_temp != expected_temp_name:
+        raise ValueError("transaction journal temporary path is invalid")
+    _atomic_write_json(
+        transaction_path,
+        journal,
+        temporary_path=output_dir / expected_temp_name,
+    )
     _fsync_directory(output_dir)
 
 
@@ -1271,11 +1514,13 @@ def _transaction_entries(
     required_fields = {
         "final",
         "stage",
+        "temporary",
         "backup",
         "had_original",
         "final_state",
         "restore_state",
         "stage_state",
+        "temporary_state",
         "backup_state",
     }
     for raw_entry in raw_files:
@@ -1307,6 +1552,11 @@ def _transaction_entries(
         expected_stage_name = f".{final_name}.{transaction_id}.stage"
         if stage.name != expected_stage_name:
             raise ValueError("transaction journal contains an unexpected staging path")
+        temporary = _transaction_child(output_dir, raw_entry.get("temporary"))
+        if temporary.name != f"{stage.name}.tmp":
+            raise ValueError("transaction journal contains an unexpected temporary path")
+        if temporary.name in _DOCUMENTED_TOP_LEVEL_ENTRIES:
+            raise ValueError("transaction journal contains an unsafe temporary path")
         if had_original and backup is not None:
             expected_backup_name = f".{final_name}.{transaction_id}.backup"
             if backup.name != expected_backup_name:
@@ -1322,6 +1572,12 @@ def _transaction_entries(
             "deleted",
         }:
             raise ValueError("Kronos artifact transaction stage state is invalid")
+        if raw_entry.get("temporary_state") not in {
+            "planned",
+            "deleted",
+            "deleting",
+        }:
+            raise ValueError("Kronos artifact transaction temporary state is invalid")
         valid_backup_states = {
             "none",
             "planned",
@@ -1340,6 +1596,7 @@ def _transaction_entries(
                 "raw": raw_entry,
                 "final": _transaction_child(output_dir, final_name),
                 "stage": stage,
+                "temporary": temporary,
                 "backup": backup,
                 "had_original": had_original,
             }
@@ -1441,6 +1698,15 @@ def _cleanup_transaction(
     state = journal.get("state")
     for entry in entries:
         raw = entry["raw"]
+        temporary = entry["temporary"]
+        if raw["temporary_state"] != "deleted":
+            if temporary.exists():
+                raw["temporary_state"] = "deleting"
+                _persist_transaction_journal(output_dir, journal)
+                _unlink_transaction_path(temporary)
+            raw["temporary_state"] = "deleted"
+            _persist_transaction_journal(output_dir, journal)
+
         stage = entry["stage"]
         if raw["stage_state"] != "deleted":
             if stage.exists():
@@ -1527,6 +1793,7 @@ def _recover_pending_transaction_locked(output_dir: Path) -> None:
     """Recover the previous three-file publication before any reads/writes."""
 
     _reject_symlink(output_dir, "experiment output directory")
+    _cleanup_known_atomic_temps(output_dir)
     transaction_path = output_dir / TRANSACTION_FILENAME
     _reject_symlink(transaction_path, "transaction journal")
     if not transaction_path.exists():
@@ -1550,6 +1817,9 @@ def _recover_pending_transaction_locked(output_dir: Path) -> None:
         raise ValueError("Kronos artifact transaction owner lock is invalid")
     if isinstance(owner.get("pid"), bool) or not isinstance(owner.get("pid"), int):
         raise ValueError("Kronos artifact transaction owner pid is invalid")
+    expected_journal_temp = f".{TRANSACTION_FILENAME}.{transaction_id}.tmp"
+    if journal.get("journal_temp") != expected_journal_temp:
+        raise ValueError("Kronos artifact transaction journal temp is invalid")
     state = journal.get("state")
     if state not in {"prepared", "committing", "rolled_back", "committed"}:
         raise ValueError("Kronos artifact transaction journal has an invalid state")
@@ -1559,6 +1829,180 @@ def _recover_pending_transaction_locked(output_dir: Path) -> None:
     elif state == "committed":
         _repair_committed_finals(output_dir, journal, entries)
     _cleanup_transaction(output_dir, transaction_path, journal, entries)
+
+
+def _persist_report_transaction(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> None:
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("report transaction id is invalid")
+    expected_temp = f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.tmp"
+    if journal.get("journal_temp") != expected_temp:
+        raise ValueError("report transaction temp is invalid")
+    path = output_dir / REPORT_TRANSACTION_FILENAME
+    _reject_symlink(path, "report transaction journal")
+    _atomic_write_json(
+        path,
+        journal,
+        temporary_path=output_dir / expected_temp,
+    )
+
+
+def _report_transaction_file_paths(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> tuple[Path, dict[str, Path]]:
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("report transaction id is invalid")
+    expected_stage_dir = f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.stage"
+    stage_dir_name = journal.get("stage_dir")
+    if stage_dir_name != expected_stage_dir:
+        raise ValueError("report transaction stage directory is invalid")
+    stage_dir = output_dir / stage_dir_name
+    _reject_symlink(stage_dir, "report transaction stage directory")
+    raw_files = journal.get("files")
+    if not isinstance(raw_files, list) or len(raw_files) != len(_DERIVED_REPORT_FILENAMES):
+        raise ValueError("report transaction file set is invalid")
+    paths: dict[str, Path] = {}
+    for item in raw_files:
+        if not isinstance(item, Mapping) or set(item) != {"final", "stage"}:
+            raise ValueError("report transaction entry is invalid")
+        final_name = item.get("final")
+        stage_name = item.get("stage")
+        if final_name not in _DERIVED_REPORT_FILENAMES or final_name in paths:
+            raise ValueError("report transaction final set is invalid")
+        if stage_name != final_name:
+            raise ValueError("report transaction staged filename is invalid")
+        paths[final_name] = stage_dir / stage_name
+        _reject_symlink(paths[final_name], "report staged artifact")
+    if set(paths) != set(_DERIVED_REPORT_FILENAMES):
+        raise ValueError("report transaction final set is incomplete")
+    return stage_dir, paths
+
+
+def _clear_report_transaction_outputs(output_dir: Path) -> None:
+    for filename in _DERIVED_REPORT_FILENAMES:
+        path = output_dir / filename
+        _reject_symlink(path, "derived report artifact")
+        if path.exists():
+            if not path.is_file():
+                raise ValueError(f"derived report artifact is not a regular file: {path}")
+            path.unlink()
+
+
+def _recover_report_transaction_locked(output_dir: Path) -> None:
+    path = output_dir / REPORT_TRANSACTION_FILENAME
+    _reject_symlink(path, "report transaction journal")
+    if not path.exists():
+        return
+    journal = _read_json(path)
+    if journal.get("schema_version") != _REPORT_TRANSACTION_SCHEMA_VERSION:
+        raise ValueError("unsupported report transaction schema")
+    transaction_id = journal.get("transaction_id")
+    owner = journal.get("owner")
+    expected_output = str(output_dir.resolve(strict=False))
+    expected_lock = str(_writer_lock_path(output_dir).resolve(strict=False))
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("report transaction id is invalid")
+    if not isinstance(owner, Mapping):
+        raise ValueError("report transaction owner marker is missing")
+    if owner.get("owner_id") != transaction_id:
+        raise ValueError("report transaction owner marker is invalid")
+    if owner.get("output_dir") != expected_output or owner.get("lock_path") != expected_lock:
+        raise ValueError("report transaction owner path is invalid")
+    if journal.get("journal_temp") != f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.tmp":
+        raise ValueError("report transaction journal temp is invalid")
+    state = journal.get("state")
+    if state not in {"prepared", "publishing", "committed", "cleaning"}:
+        raise ValueError("report transaction state is invalid")
+    stage_dir, staged_paths = _report_transaction_file_paths(output_dir, journal)
+
+    committed_complete = state == "committed" and all(
+        (output_dir / filename).exists() for filename in _DERIVED_REPORT_FILENAMES
+    )
+    if committed_complete:
+        # A committed report set is already complete; only its journal/stage
+        # cleanup remains.  Persist cleaning before destructive cleanup.
+        journal["state"] = "cleaning"
+        _persist_report_transaction(output_dir, journal)
+    else:
+        if state != "cleaning":
+            journal["state"] = "cleaning"
+            _persist_report_transaction(output_dir, journal)
+        _clear_report_transaction_outputs(output_dir)
+
+    if stage_dir.exists():
+        _reject_symlink(stage_dir, "report transaction stage directory")
+        if not stage_dir.is_dir():
+            raise ValueError("report transaction stage directory is not a directory")
+        shutil.rmtree(stage_dir)
+    for staged_path in staged_paths.values():
+        _reject_symlink(staged_path, "report staged artifact")
+    _unlink_transaction_path(path)
+    _fsync_directory(output_dir)
+
+
+def _publish_report_artifacts_locked(
+    output_dir: Path,
+    *,
+    artifact_generation: str,
+    stock_output: Sequence[Mapping[str, Any]],
+    model_output: Sequence[Mapping[str, Any]],
+    comparisons: Sequence[Mapping[str, Any]],
+    report_text: str,
+) -> None:
+    _recover_report_transaction_locked(output_dir)
+    transaction_id = uuid.uuid4().hex
+    stage_dir = output_dir / f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.stage"
+    journal: dict[str, Any] = {
+        "schema_version": _REPORT_TRANSACTION_SCHEMA_VERSION,
+        "transaction_id": transaction_id,
+        "journal_temp": f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.tmp",
+        "state": "prepared",
+        "owner": {
+            "owner_id": transaction_id,
+            "writer_owner_id": (_active_writer_owner(output_dir) or {}).get("owner_id", ""),
+            "pid": os.getpid(),
+            "output_dir": str(output_dir.resolve(strict=False)),
+            "lock_path": str(_writer_lock_path(output_dir).resolve(strict=False)),
+        },
+        "stage_dir": stage_dir.name,
+        "files": [
+            {"final": filename, "stage": filename}
+            for filename in _DERIVED_REPORT_FILENAMES
+        ],
+    }
+    _persist_report_transaction(output_dir, journal)
+    stage_dir.mkdir(parents=True, exist_ok=False)
+    staged = {filename: stage_dir / filename for filename in _DERIVED_REPORT_FILENAMES}
+    _atomic_write_csv(
+        staged[METRICS_BY_STOCK_FILENAME],
+        stock_output,
+        _METRIC_OUTPUT_COLUMNS,
+    )
+    _atomic_write_csv(
+        staged[METRICS_BY_MODEL_FILENAME],
+        model_output,
+        _METRIC_OUTPUT_COLUMNS,
+    )
+    _atomic_write_csv(
+        staged[MODEL_COMPARISON_FILENAME],
+        comparisons,
+        _COMPARISON_OUTPUT_COLUMNS,
+    )
+    _atomic_write_text(staged[REPORT_FILENAME], report_text)
+    journal["state"] = "publishing"
+    _persist_report_transaction(output_dir, journal)
+    for filename in _DERIVED_REPORT_FILENAMES:
+        final_path = output_dir / filename
+        _reject_symlink(final_path, "derived report artifact")
+        os.replace(staged[filename], final_path)
+    journal["state"] = "committed"
+    _persist_report_transaction(output_dir, journal)
+    _recover_report_transaction_locked(output_dir)
 
 
 def _validate_experiment_integrity(
@@ -2375,6 +2819,56 @@ def _validate_report_artifacts(
                 raise ValueError(f"artifact validation failed for successful run {run_key}")
         elif forecast_by_key.get(run_key) or realized_by_key.get(run_key):
             raise ValueError(f"failed run {run_key} has stale artifact rows")
+
+
+def _validate_existing_report_artifacts(
+    output_dir: Path,
+    artifact_generation: str,
+) -> None:
+    paths = [output_dir / filename for filename in _DERIVED_REPORT_FILENAMES]
+    existing = [path for path in paths if path.exists()]
+    if not existing:
+        return
+    if len(existing) != len(paths):
+        raise ValueError("derived report artifacts are incomplete")
+
+    for filename in (
+        METRICS_BY_STOCK_FILENAME,
+        METRICS_BY_MODEL_FILENAME,
+        MODEL_COMPARISON_FILENAME,
+    ):
+        path = output_dir / filename
+        _require_regular_file(path, "derived report artifact")
+        with path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            expected_columns = (
+                _METRIC_OUTPUT_COLUMNS
+                if filename != MODEL_COMPARISON_FILENAME
+                else _COMPARISON_OUTPUT_COLUMNS
+            )
+            if reader.fieldnames != list(expected_columns):
+                raise ValueError(f"derived report artifact {filename} columns are invalid")
+            rows = list(reader)
+        if any(row.get("generation") != artifact_generation for row in rows):
+            raise ValueError(f"derived report artifact {filename} generation is stale")
+
+    report_path = output_dir / REPORT_FILENAME
+    _require_regular_file(report_path, "report.md")
+    report = report_path.read_text(encoding="utf-8")
+    marker = f"Artifact generation: `{artifact_generation}`"
+    if marker not in report:
+        raise ValueError("report.md generation is stale or missing")
+
+
+def _invalidate_derived_report_artifacts_locked(output_dir: Path) -> None:
+    for filename in _DERIVED_REPORT_FILENAMES:
+        path = output_dir / filename
+        _reject_symlink(path, "derived report artifact")
+        if not path.exists():
+            continue
+        if not path.is_file():
+            raise ValueError(f"derived report artifact is not a regular file: {path}")
+        path.unlink()
 
 
 def _validate_report_success_identity(
@@ -3436,7 +3930,11 @@ def _model_metadata_summary(manifest: Mapping[str, Mapping[str, Any]]) -> dict[s
     }
 
 
-def _metric_summary_row(summary: Mapping[str, Any]) -> dict[str, Any]:
+def _metric_summary_row(
+    summary: Mapping[str, Any],
+    *,
+    generation: str,
+) -> dict[str, Any]:
     row: dict[str, Any] = {
         "asset_id": summary.get("asset_id", ""),
         "model": summary.get("model", ""),
@@ -3449,6 +3947,7 @@ def _metric_summary_row(summary: Mapping[str, Any]) -> dict[str, Any]:
             row[field] = _canonical_json(summary.get("metric_denominators", {}))
         else:
             row[field] = summary.get(field)
+    row["generation"] = generation
     return row
 
 
@@ -3463,6 +3962,7 @@ def _render_report(
     comparisons: Sequence[Mapping[str, Any]],
     latency: Mapping[str, Any],
     model_metadata: Mapping[str, Any],
+    artifact_generation: str,
 ) -> str:
     lines = [
         "# Kronos rolling evaluation report",
@@ -3470,6 +3970,8 @@ def _render_report(
         f"Conclusion: `{conclusion}`",
         "",
         f"Experiment fingerprint: `{metadata.get('experiment_fingerprint', '')}`",
+        "",
+        f"Artifact generation: `{artifact_generation}`",
         "",
         "## Run counts",
         "",
@@ -3567,7 +4069,7 @@ def _write_run_artifacts_locked(
     forecast_rows: Sequence[Mapping[str, Any]],
     realized_rows: Sequence[Mapping[str, Any]],
 ) -> None:
-    _recover_pending_transaction(output_dir)
+    _recover_pending_transaction_locked(output_dir)
     normalized_manifest = [manifest[key] for key in sorted(manifest)]
     normalized_forecast = _sort_artifact_rows(forecast_rows)
     normalized_realized = _sort_artifact_rows(realized_rows)
@@ -3623,11 +4125,13 @@ def _write_run_artifacts_locked(
                 {
                     "final": final_path.name,
                     "stage": staged_paths[len(journal_files)].name,
+                    "temporary": f".{final_path.name}.{transaction_id}.stage.tmp",
                     "backup": backup_path.name if backup_path is not None else "",
                     "had_original": had_original,
                     "final_state": "old",
                     "restore_state": "pending",
                     "stage_state": "planned",
+                    "temporary_state": "planned",
                     "backup_state": "planned" if had_original else "none",
                 }
             )
@@ -3635,6 +4139,7 @@ def _write_run_artifacts_locked(
         journal: dict[str, Any] = {
             "schema_version": _TRANSACTION_SCHEMA_VERSION,
             "transaction_id": transaction_id,
+            "journal_temp": f".{TRANSACTION_FILENAME}.{transaction_id}.tmp",
             "state": "prepared",
             "owner": {
                 "owner_id": transaction_id,
@@ -3653,24 +4158,34 @@ def _write_run_artifacts_locked(
             raise
         journal_published = True
 
-        _atomic_write_csv(staged_paths[0], manifest_with_generation, MANIFEST_COLUMNS)
+        _atomic_write_csv(
+            staged_paths[0],
+            manifest_with_generation,
+            MANIFEST_COLUMNS,
+            temporary_path=output_dir / journal_files[0]["temporary"],
+        )
         journal_files[0]["stage_state"] = "present"
+        journal_files[0]["temporary_state"] = "deleted"
         _persist_transaction_journal(output_dir, journal)
         _atomic_write_table(
             staged_paths[1],
             normalized_forecast,
             FORECAST_COLUMNS,
             generation=generation,
+            temporary_path=output_dir / journal_files[1]["temporary"],
         )
         journal_files[1]["stage_state"] = "present"
+        journal_files[1]["temporary_state"] = "deleted"
         _persist_transaction_journal(output_dir, journal)
         _atomic_write_table(
             staged_paths[2],
             normalized_realized,
             REALIZED_COLUMNS,
             generation=generation,
+            temporary_path=output_dir / journal_files[2]["temporary"],
         )
         journal_files[2]["stage_state"] = "present"
+        journal_files[2]["temporary_state"] = "deleted"
         _persist_transaction_journal(output_dir, journal)
 
         for index, final_path in enumerate(final_paths):
@@ -3692,7 +4207,9 @@ def _write_run_artifacts_locked(
             raw_entry["stage_state"] = "present"
         journal["state"] = "committed"
         _persist_transaction_journal(output_dir, journal)
-        _recover_pending_transaction(output_dir)
+        _recover_pending_transaction_locked(output_dir)
+        if (output_dir / EXPERIMENT_FILENAME).exists():
+            _invalidate_derived_report_artifacts_locked(output_dir)
     finally:
         if not journal_published and not journal_planned:
             for path in (*staged_paths, *backup_paths):
@@ -3884,18 +4401,38 @@ def _read_table_with_generation(
         raise RuntimeError(f"failed to read Parquet artifact {path}: {exc}") from exc
 
 
-def _atomic_write_json(path: Path, value: Any) -> None:
-    _atomic_write_text(path, _canonical_json(value) + "\n")
+def _atomic_write_json(
+    path: Path,
+    value: Any,
+    *,
+    temporary_path: Path | None = None,
+) -> None:
+    _atomic_write_text(
+        path,
+        _canonical_json(value) + "\n",
+        temporary_path=temporary_path,
+    )
 
 
-def _atomic_write_text(path: Path, value: str) -> None:
-    _atomic_write_bytes(path, value.encode("utf-8"))
+def _atomic_write_text(
+    path: Path,
+    value: str,
+    *,
+    temporary_path: Path | None = None,
+) -> None:
+    _atomic_write_bytes(
+        path,
+        value.encode("utf-8"),
+        temporary_path=temporary_path,
+    )
 
 
 def _atomic_write_csv(
     path: Path,
     rows: Sequence[Mapping[str, Any]],
     columns: Sequence[str],
+    *,
+    temporary_path: Path | None = None,
 ) -> None:
     from io import StringIO
 
@@ -3909,7 +4446,7 @@ def _atomic_write_csv(
     writer.writeheader()
     for source in rows:
         writer.writerow({column: _csv_value(source.get(column)) for column in columns})
-    _atomic_write_text(path, buffer.getvalue())
+    _atomic_write_text(path, buffer.getvalue(), temporary_path=temporary_path)
 
 
 def _artifact_schema(pa: Any, columns: Sequence[str]) -> Any:
@@ -3956,6 +4493,7 @@ def _atomic_write_table(
     columns: Sequence[str],
     *,
     generation: str | None = None,
+    temporary_path: Path | None = None,
 ) -> None:
     pa, parquet = _load_pyarrow()
     schema = _artifact_schema(pa, columns)
@@ -3969,32 +4507,30 @@ def _atomic_write_table(
     path.parent.mkdir(parents=True, exist_ok=True)
     _require_regular_directory(path.parent, "artifact parent directory")
     _reject_symlink(path, "Parquet artifact")
-    temporary_path: Path | None = None
+    temporary = (
+        Path(temporary_path)
+        if temporary_path is not None
+        else path.parent / f".{path.name}.tmp"
+    )
+    if temporary.parent != path.parent:
+        raise ValueError("Parquet temporary path must share the artifact parent")
+    _reject_symlink(temporary, "Parquet temporary path")
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temporary_path = Path(handle.name)
         parquet.write_table(
             table,
-            temporary_path,
+            temporary,
             compression=None,
             use_dictionary=False,
             write_statistics=False,
         )
-        with temporary_path.open("rb") as handle:
+        with temporary.open("rb") as handle:
             os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
+        os.replace(temporary, path)
         _fsync_directory(path.parent)
-        temporary_path = None
     finally:
-        if temporary_path is not None:
+        if temporary.exists():
             try:
-                temporary_path.unlink()
+                temporary.unlink()
             except FileNotFoundError:
                 pass
 
@@ -4010,30 +4546,34 @@ def _load_pyarrow() -> tuple[Any, Any]:
     return pa, parquet
 
 
-def _atomic_write_bytes(path: Path, value: bytes) -> None:
+def _atomic_write_bytes(
+    path: Path,
+    value: bytes,
+    *,
+    temporary_path: Path | None = None,
+) -> None:
     _reject_symlink(path, "artifact path")
     path.parent.mkdir(parents=True, exist_ok=True)
     _require_regular_directory(path.parent, "artifact parent directory")
-    temporary_path: Path | None = None
+    temporary = (
+        Path(temporary_path)
+        if temporary_path is not None
+        else path.parent / f".{path.name}.tmp"
+    )
+    if temporary.parent != path.parent:
+        raise ValueError("atomic temporary path must share the artifact parent")
+    _reject_symlink(temporary, "atomic temporary path")
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temporary_path = Path(handle.name)
+        with temporary.open("wb") as handle:
             handle.write(value)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
+        os.replace(temporary, path)
         _fsync_directory(path.parent)
-        temporary_path = None
     finally:
-        if temporary_path is not None:
+        if temporary.exists():
             try:
-                temporary_path.unlink()
+                temporary.unlink()
             except FileNotFoundError:
                 pass
 

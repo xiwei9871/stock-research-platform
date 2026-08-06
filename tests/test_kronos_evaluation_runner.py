@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import types
 from collections.abc import Mapping
 from pathlib import Path
@@ -863,12 +864,177 @@ def test_overlapping_prepare_does_not_delete_active_stage(tmp_path):
     with runner._writer_lock(output_dir):
         thread = threading.Thread(target=overlap)
         thread.start()
-        thread.join()
+        thread.join(timeout=0.2)
+        assert thread.is_alive()
+
+    thread.join(timeout=10)
 
     assert active_stage.exists()
-    assert len(errors) == 1
-    assert isinstance(errors[0], RuntimeError)
-    assert "writer lock" in str(errors[0])
+    assert not errors
+    assert (output_dir / runner.EXPERIMENT_FILENAME).exists()
+
+
+def test_run_model_holds_output_lock_across_health_and_prediction(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    entered_health = threading.Event()
+    release_health = threading.Event()
+    first_result: list[Any] = []
+    first_error: list[BaseException] = []
+
+    class BlockingClient(FakeClient):
+        def health(self):
+            entered_health.set()
+            assert release_health.wait(5)
+            return super().health()
+
+    def run_small():
+        try:
+            first_result.append(
+                run_model(
+                    config,
+                    model="small",
+                    output_dir=output_dir,
+                    client=BlockingClient(),
+                )
+            )
+        except BaseException as exc:  # noqa: BLE001 - asserted below.
+            first_error.append(exc)
+
+    small_thread = threading.Thread(target=run_small)
+    small_thread.start()
+    assert entered_health.wait(5)
+
+    second_done = threading.Event()
+    second_result: list[Any] = []
+
+    def run_base():
+        second_result.append(
+            run_model(
+                config,
+                model="base",
+                output_dir=output_dir,
+                client=FakeClient(model="base", model_identity="base-v1"),
+            )
+        )
+        second_done.set()
+
+    base_thread = threading.Thread(target=run_base)
+    base_thread.start()
+    time.sleep(0.2)
+    assert not second_done.is_set()
+
+    release_health.set()
+    small_thread.join(timeout=10)
+    base_thread.join(timeout=10)
+    assert not first_error
+    assert len(first_result) == 1
+    assert len(second_result) == 1
+    rows = read_csv_rows(output_dir / runner.MANIFEST_FILENAME)
+    assert {row["model"] for row in rows if row["status"] == "success"} == {"small", "base"}
+
+
+def test_writer_lock_contention_raises_writer_lock_error(tmp_path):
+    output_dir = tmp_path / "contended"
+    ready = tmp_path / "lock-ready"
+    script = "\n".join(
+        [
+            "from pathlib import Path",
+            "import sys",
+            "from stock_research import kronos_evaluation_runner as runner",
+            "with runner._writer_lock(Path(sys.argv[1])):",
+            "    Path(sys.argv[2]).write_text('ready')",
+            "    sys.stdin.read()",
+        ]
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(output_dir), str(ready)],
+        cwd=Path.cwd(),
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(Path(__file__).resolve().parents[1] / "src"), os.environ.get("PYTHONPATH", "")]
+            ),
+        },
+        stdin=subprocess.PIPE,
+    )
+    try:
+        for _ in range(100):
+            if ready.exists():
+                break
+            time.sleep(0.02)
+        assert ready.exists()
+        with pytest.raises(runner.WriterLockError):
+            with runner._writer_lock(output_dir):
+                pass
+    finally:
+        if process.stdin is not None:
+            try:
+                process.stdin.write(b"stop")
+                process.stdin.close()
+            except BrokenPipeError:
+                pass
+        process.wait(timeout=10)
+
+
+def test_preparation_stage_does_not_leak_per_stage_writer_lock(tmp_path):
+    output_dir = tmp_path / "prepared"
+    prepare_experiment(
+        make_config(),
+        output_dir=output_dir,
+        snapshot_loader=make_loader(
+            [
+                make_snapshot("CN:SH:600418"),
+                make_snapshot("CN:SZ:000001", close_offset=10.0),
+            ]
+        ),
+    )
+
+    assert not list(tmp_path.glob(".*.prepare-*.kronos-writer.lock"))
+
+
+def test_hard_kill_after_first_replace_recovers_and_cleans_root_temp(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    pid = os.fork()
+    if pid == 0:
+        original_commit = runner._commit_staged_artifacts
+
+        def kill_after_first_replace(staged_paths, final_paths):
+            (output_dir / ".forecast_bars.parquet.crash.tmp").write_text(
+                "partial",
+                encoding="utf-8",
+            )
+            os.replace(staged_paths[0], final_paths[0])
+            os._exit(77)
+
+        runner._commit_staged_artifacts = kill_after_first_replace
+        try:
+            run_model(
+                config,
+                model="small",
+                output_dir=output_dir,
+                client=FakeClient(model_identity="small-v2"),
+            )
+        finally:
+            original_commit  # keep the child branch explicit for coverage tools.
+            os._exit(78)
+    _, status = os.waitpid(pid, 0)
+    assert os.WEXITSTATUS(status) == 77
+
+    retry = run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=FakeClient(model_identity="small-v2"),
+    )
+    assert retry.attempted_count == 2
+    assert not (output_dir / ".forecast_bars.parquet.crash.tmp").exists()
+    assert not list(output_dir.glob(".*.tmp"))
 
 
 def test_transaction_recovery_is_idempotent_after_one_backup_delete_and_retry(
@@ -940,6 +1106,16 @@ def test_orphan_preparation_stage_is_cleaned_before_retry(tmp_path):
     orphan = tmp_path / ".retryable.prepare-dead"
     orphan.mkdir()
     (orphan / "partial.json").write_text("{}", encoding="utf-8")
+    (orphan / runner._PREPARATION_OWNER_FILENAME).write_text(
+        json.dumps(
+            {
+                "owner_id": "dead-owner",
+                "pid": 999999,
+                "output_dir": str(output_dir.resolve()),
+            }
+        ),
+        encoding="utf-8",
+    )
 
     prepare_experiment(
         config,
@@ -949,6 +1125,37 @@ def test_orphan_preparation_stage_is_cleaned_before_retry(tmp_path):
 
     assert not orphan.exists()
     assert not list(tmp_path.glob(".retryable.prepare-*"))
+    assert (output_dir / runner.EXPERIMENT_FILENAME).exists()
+
+
+def test_preparation_journal_recovers_stage_before_owner_marker(tmp_path):
+    config = make_config()
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    output_dir = tmp_path / "retryable"
+    stage = tmp_path / ".retryable.prepare-hard-death"
+    stage.mkdir()
+    journal = {
+        "schema_version": runner._PREPARATION_JOURNAL_SCHEMA_VERSION,
+        "state": "staging",
+        "owner_id": "dead-owner",
+        "pid": 999999,
+        "output_dir": str(output_dir.resolve()),
+        "lock_path": str(runner._writer_lock_path(output_dir).resolve()),
+        "stage_dir": stage.name,
+    }
+    runner._atomic_write_json(runner._preparation_journal_path(output_dir), journal)
+
+    prepare_experiment(
+        config,
+        output_dir=output_dir,
+        snapshot_loader=make_loader(snapshots),
+    )
+
+    assert not stage.exists()
+    assert not runner._preparation_journal_path(output_dir).exists()
     assert (output_dir / runner.EXPERIMENT_FILENAME).exists()
 
 
@@ -1189,10 +1396,10 @@ def test_preparation_metadata_failure_leaves_destination_retryable(tmp_path, mon
     output_dir = tmp_path / "retryable"
     original_write_json = runner._atomic_write_json
 
-    def fail_metadata(path, value):
+    def fail_metadata(path, value, **kwargs):
         if path.name == runner.EXPERIMENT_FILENAME:
             raise OSError("injected metadata failure")
-        return original_write_json(path, value)
+        return original_write_json(path, value, **kwargs)
 
     monkeypatch.setattr(runner, "_atomic_write_json", fail_metadata)
     with pytest.raises(OSError, match="metadata"):
@@ -1432,6 +1639,170 @@ def test_report_combines_models_metrics_baselines_coverage_latency_and_fixed_con
     assert "coverage" in report.lower()
     assert "latency" in report.lower()
     assert "not_proven" in report
+
+
+def test_report_outputs_record_authenticated_artifact_generation(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+
+    summary = build_report(output_dir=output_dir)
+    generation = summary["generation"]
+    assert generation
+    for filename in (
+        runner.METRICS_BY_STOCK_FILENAME,
+        runner.METRICS_BY_MODEL_FILENAME,
+        runner.MODEL_COMPARISON_FILENAME,
+    ):
+        rows = read_csv_rows(output_dir / filename)
+        assert all(row["generation"] == generation for row in rows)
+    assert f"Artifact generation: `{generation}`" in (
+        output_dir / runner.REPORT_FILENAME
+    ).read_text(encoding="utf-8")
+
+
+def test_report_rejects_tampered_derived_generation_marker(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+
+    metrics_path = output_dir / runner.METRICS_BY_MODEL_FILENAME
+    rows = read_csv_rows(metrics_path)
+    rows[0]["generation"] = "forged-generation"
+    with metrics_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    with pytest.raises(ValueError, match="generation|derived|report"):
+        build_report(output_dir=output_dir)
+
+
+def test_new_model_run_invalidates_derived_report_outputs(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+    assert (output_dir / runner.REPORT_FILENAME).exists()
+
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v2"),
+    )
+
+    assert not any(
+        (output_dir / filename).exists()
+        for filename in (
+            runner.METRICS_BY_STOCK_FILENAME,
+            runner.METRICS_BY_MODEL_FILENAME,
+            runner.MODEL_COMPARISON_FILENAME,
+            runner.REPORT_FILENAME,
+        )
+    )
+
+
+def test_build_report_holds_output_lock_across_derivation(
+    prepared_experiment,
+    monkeypatch,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    entered = threading.Event()
+    release = threading.Event()
+    original_builder = runner._build_metric_rows
+
+    def blocking_builder(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original_builder(*args, **kwargs)
+
+    monkeypatch.setattr(runner, "_build_metric_rows", blocking_builder)
+    errors: list[BaseException] = []
+
+    def report_thread():
+        try:
+            build_report(output_dir=output_dir)
+        except BaseException as exc:  # noqa: BLE001 - assertion below.
+            errors.append(exc)
+
+    thread = threading.Thread(target=report_thread)
+    thread.start()
+    assert entered.wait(5)
+    run_done = threading.Event()
+
+    def model_thread():
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+        run_done.set()
+
+    contender = threading.Thread(target=model_thread)
+    contender.start()
+    time.sleep(0.2)
+    assert not run_done.is_set()
+    release.set()
+    thread.join(timeout=10)
+    contender.join(timeout=10)
+    assert not errors
+
+
+def test_report_publish_failure_recovers_on_retry(
+    prepared_experiment,
+    monkeypatch,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    original_write_text = runner._atomic_write_text
+
+    def fail_report_stage(path, value, *, temporary_path=None):
+        if path.name == runner.REPORT_FILENAME:
+            raise OSError("injected report stage write failure")
+        return original_write_text(path, value, temporary_path=temporary_path)
+
+    monkeypatch.setattr(runner, "_atomic_write_text", fail_report_stage)
+    with pytest.raises(OSError, match="report stage"):
+        build_report(output_dir=output_dir)
+    assert (output_dir / runner.REPORT_TRANSACTION_FILENAME).exists()
+
+    monkeypatch.undo()
+    summary = build_report(output_dir=output_dir)
+    assert summary["generation"]
+    assert not (output_dir / runner.REPORT_TRANSACTION_FILENAME).exists()
+    assert not list(output_dir.glob(".*.stage"))
 
 
 def test_frozen_snapshot_json_is_not_mutated_by_prediction(prepared_experiment):
