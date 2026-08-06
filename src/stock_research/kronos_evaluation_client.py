@@ -500,7 +500,13 @@ def _normalize_model_name(
             code=KronosErrorCode.INVALID_ARGUMENT,
             redaction_token=redaction_token,
         )
-    normalized = _MODEL_ALIASES.get(value.strip().lower())
+    raw_value = value.strip().lower().replace("_", "-").replace(" ", "-")
+    normalized = _MODEL_ALIASES.get(raw_value)
+    if normalized is None:
+        if re.fullmatch(r"(?:kronos-)?small(?:-v\d+)?", raw_value):
+            normalized = "small"
+        elif re.fullmatch(r"(?:kronos-)?base(?:-v\d+)?", raw_value):
+            normalized = "base"
     if normalized is None:
         raise KronosClientError(
             "Kronos model argument is invalid",

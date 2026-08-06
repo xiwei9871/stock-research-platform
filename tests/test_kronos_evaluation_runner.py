@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from stock_research import kronos_evaluation_runner as runner
 from stock_research.kronos_evaluation_types import (
     KronosEvaluationConfig,
     RollingSnapshot,
     canonical_json_fingerprint,
+    snapshot_to_json_payload,
 )
 from stock_research.kronos_evaluation_runner import (
     build_report,
@@ -123,15 +126,27 @@ class FakeClient:
         model_identity: str = "small-v1",
         fail: bool = False,
         malformed_asset: str | None = None,
+        health_failure: bool = False,
+        response_model: str | None = None,
+        response_model_identity: str | None = None,
+        response_weights_identity: str | None = None,
+        include_representative_path: bool = True,
     ) -> None:
         self.model = model
         self.model_identity = model_identity
         self.weights_identity = f"weights-{model_identity}"
         self.fail = fail
         self.malformed_asset = malformed_asset
+        self.health_failure = health_failure
+        self.response_model = response_model
+        self.response_model_identity = response_model_identity
+        self.response_weights_identity = response_weights_identity
+        self.include_representative_path = include_representative_path
         self.calls: list[tuple[str, str, int, int | None]] = []
 
     def health(self) -> dict[str, Any]:
+        if self.health_failure:
+            raise RuntimeError("health unavailable")
         return {
             "status": "ok",
             "model": self.model,
@@ -163,25 +178,33 @@ class FakeClient:
                 "sample_count": sample_count,
                 "daily": {"p50": [103.0, 104.0]},
             }
+        representative_path = [dict(row) for row in snapshot.realized]
+        daily = {
+            "p10": [102.0, 103.0],
+            "p50": [103.0, 104.0],
+            "p90": [104.0, 105.0],
+        }
+        if self.include_representative_path:
+            daily["representative_path"] = representative_path
+        response_model = self.response_model or self.model
+        response_model_identity = self.response_model_identity or self.model_identity
+        response_weights_identity = (
+            self.response_weights_identity or self.weights_identity
+        )
         return {
             "status": "succeeded",
             "sample_count": sample_count,
-            "daily": {
-                "p10": [102.0, 103.0],
-                "p50": [103.0, 104.0],
-                "p90": [104.0, 105.0],
-            },
+            "model": response_model,
+            "model_identity": response_model_identity,
+            "weights_identity": response_weights_identity,
+            "daily": daily,
             "raw_response": {
                 "status": "succeeded",
-                "model": self.model,
-                "model_identity": self.model_identity,
-                "weights_identity": self.weights_identity,
+                "model": response_model,
+                "model_identity": response_model_identity,
+                "weights_identity": response_weights_identity,
                 "sample_count": sample_count,
-                "daily": {
-                    "p10": [102.0, 103.0],
-                    "p50": [103.0, 104.0],
-                    "p90": [104.0, 105.0],
-                },
+                "daily": daily,
             },
         }
 
@@ -290,6 +313,7 @@ def test_resume_skips_completed_keys_with_matching_fingerprint_identity_and_para
     output_dir, config, _, _ = prepared_experiment
     first_client = FakeClient()
     run_model(config, model="small", output_dir=output_dir, client=first_client)
+    before_manifest = (output_dir / "run_manifest.csv").read_bytes()
 
     resume_client = FakeClient()
     result = run_model(config, model="small", output_dir=output_dir, client=resume_client)
@@ -297,7 +321,33 @@ def test_resume_skips_completed_keys_with_matching_fingerprint_identity_and_para
     assert result.cache_hit_count == 2
     assert result.attempted_count == 0
     assert resume_client.calls == []
-    assert all(row["cache_hit"] == "true" for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small")
+    assert (output_dir / "run_manifest.csv").read_bytes() == before_manifest
+
+
+def test_health_failure_preserves_completed_rows_and_artifacts_on_resume(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    first_client = FakeClient()
+    run_model(config, model="small", output_dir=output_dir, client=first_client)
+    before_manifest = (output_dir / "run_manifest.csv").read_bytes()
+    before_forecast = (output_dir / "forecast_bars.parquet").read_bytes()
+    before_realized = (output_dir / "realized_bars.parquet").read_bytes()
+
+    unavailable_client = FakeClient(health_failure=True)
+    result = run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=unavailable_client,
+    )
+
+    assert result.cache_hit_count == 2
+    assert result.attempted_count == 0
+    assert unavailable_client.calls == []
+    assert (output_dir / "run_manifest.csv").read_bytes() == before_manifest
+    assert (output_dir / "forecast_bars.parquet").read_bytes() == before_forecast
+    assert (output_dir / "realized_bars.parquet").read_bytes() == before_realized
 
 
 def test_changed_model_identity_forces_rerun(prepared_experiment):
@@ -314,7 +364,26 @@ def test_changed_model_identity_forces_rerun(prepared_experiment):
     assert {row["model_identity"] for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"} == {"small-v2"}
 
 
-def test_changed_frozen_input_fingerprint_forces_rerun(prepared_experiment):
+def test_response_model_identity_mismatch_is_recorded_without_forecast_rows(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(
+        response_model="base",
+        response_model_identity="base-v1",
+        response_weights_identity="base-v1",
+    )
+
+    result = run_model(config, model="small", output_dir=output_dir, client=client)
+
+    assert result.attempted_count == 2
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"model_error"}
+    assert {row["error_category"] for row in rows} == {"model"}
+    assert len(read_table_rows(output_dir / "forecast_bars.parquet")) == 0
+
+
+def test_changed_frozen_input_fingerprint_is_rejected_as_tampering(prepared_experiment):
     output_dir, config, snapshots, _ = prepared_experiment
     first_client = FakeClient()
     run_model(config, model="small", output_dir=output_dir, client=first_client)
@@ -332,12 +401,110 @@ def test_changed_frozen_input_fingerprint_forces_rerun(prepared_experiment):
     snapshot_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
     changed_client = FakeClient()
+    with pytest.raises(ValueError, match="experiment|snapshot|fingerprint"):
+        run_model(config, model="small", output_dir=output_dir, client=changed_client)
+
+    assert changed_client.calls == []
+    assert snapshots[0].input_fingerprint != payload["input_fingerprint"]
+
+
+def test_run_model_rejects_tampered_experiment_self_fingerprint(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    path = output_dir / "experiment.json"
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    metadata["source"]["row_count"] += 1
+    path.write_text(json.dumps(metadata, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment fingerprint"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_run_model_rejects_extra_snapshot_file_and_manifest_key(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    extra = make_snapshot("CN:SH:600419")
+    extra_path = output_dir / "input_snapshots" / "CN:SH:600419__2025-01-03.json"
+    extra_path.write_text(
+        json.dumps(snapshot_to_json_payload(extra), sort_keys=True),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="snapshot"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    extra_path.unlink()
+    manifest_path = output_dir / "run_manifest.csv"
+    rows = read_csv_rows(manifest_path)
+    rows.append(dict(rows[0], run_key="unexpected|small"))
+    with manifest_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    with pytest.raises(ValueError, match="manifest"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_modified_same_count_forecast_artifact_forces_rerun(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    first_client = FakeClient()
+    run_model(config, model="small", output_dir=output_dir, client=first_client)
+
+    import pyarrow as pa
+    import pyarrow.parquet as parquet
+
+    forecast_path = output_dir / "forecast_bars.parquet"
+    rows = parquet.read_table(forecast_path).to_pylist()
+    rows[0]["p50"] += 0.5
+    parquet.write_table(pa.Table.from_pylist(rows), forecast_path)
+
+    changed_client = FakeClient()
     result = run_model(config, model="small", output_dir=output_dir, client=changed_client)
 
+    assert result.cache_hit_count == 1
     assert result.attempted_count == 1
     assert len(changed_client.calls) == 1
-    assert changed_client.calls[0][0] == snapshots[0].key
-    assert snapshots[0].input_fingerprint != payload["input_fingerprint"]
+
+
+def test_forecast_artifact_contains_representative_ohlcv_and_path(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    row = read_table_rows(output_dir / "forecast_bars.parquet")[0]
+    assert {
+        "representative_open",
+        "representative_high",
+        "representative_low",
+        "representative_close",
+        "representative_volume",
+        "representative_amount",
+        "representative_path_json",
+    }.issubset(row)
+    assert json.loads(row["representative_path_json"])[0]["timestamp"] == "2025-01-04"
+
+
+def test_missing_representative_path_is_protocol_failure(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=FakeClient(include_representative_path=False),
+    )
+
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"protocol_error"}
+    assert len(read_table_rows(output_dir / "forecast_bars.parquet")) == 0
+
+
+def test_parquet_dependency_failure_is_explicit(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "pyarrow", None)
+    monkeypatch.setitem(sys.modules, "pyarrow.parquet", None)
+
+    with pytest.raises(RuntimeError, match="pyarrow"):
+        runner._atomic_write_table(
+            tmp_path / "forecast_bars.parquet",
+            [],
+            runner.FORECAST_COLUMNS,
+        )
+    assert not (tmp_path / "forecast_bars.parquet").exists()
 
 
 def test_small_model_error_remains_visible_and_does_not_fallback_to_base(prepared_experiment):

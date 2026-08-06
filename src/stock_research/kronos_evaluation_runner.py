@@ -12,6 +12,7 @@ import inspect
 import json
 import math
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -88,6 +89,8 @@ MANIFEST_COLUMNS = (
     "realized_artifact",
     "forecast_row_count",
     "realized_row_count",
+    "forecast_fingerprint",
+    "realized_fingerprint",
     "cache_hit",
 )
 
@@ -99,6 +102,13 @@ FORECAST_COLUMNS = (
     "input_fingerprint",
     "timestamp",
     "horizon",
+    "representative_open",
+    "representative_high",
+    "representative_low",
+    "representative_close",
+    "representative_volume",
+    "representative_amount",
+    "representative_path_json",
     "p10",
     "p50",
     "p90",
@@ -264,7 +274,7 @@ def prepare_experiment(
     if experiment_path.exists():
         metadata = _read_json(experiment_path)
         _validate_existing_experiment_config(metadata, config)
-        return _existing_preparation_result(normalized_output_dir, metadata)
+        return _existing_preparation_result(normalized_output_dir, metadata, config)
 
     normalized_output_dir.mkdir(parents=True, exist_ok=True)
     loaded = (
@@ -345,13 +355,14 @@ def run_model(
         raise ValueError(f"model {normalized_model!r} is not enabled in config.models")
     normalized_output_dir = Path(output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
-    _validate_existing_experiment_config(metadata, config)
-    snapshots = _read_frozen_snapshots(normalized_output_dir)
+    snapshots, manifest = _validate_experiment_integrity(
+        normalized_output_dir,
+        metadata,
+        config,
+    )
     if not snapshots:
         raise ValueError("prepared experiment has no input snapshots")
 
-    manifest = _load_manifest(normalized_output_dir / MANIFEST_FILENAME)
-    manifest = _ensure_manifest_rows(manifest, snapshots, config)
     forecast_rows = _read_table(normalized_output_dir / FORECAST_FILENAME)
     realized_rows = _read_table(normalized_output_dir / REALIZED_FILENAME)
     parameters_by_key = {
@@ -379,39 +390,36 @@ def run_model(
 
         if snapshot.status != "ready":
             skipped_count += 1
-            row.update(
-                {
-                    "status": snapshot.status,
-                    "reason": snapshot.reason or "snapshot is not ready",
-                    "input_fingerprint": snapshot.input_fingerprint,
-                    "model": normalized_model,
-                    "cache_hit": False,
-                }
-            )
-            _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
             continue
 
-        if health_failure is None and _manifest_cache_matches(
+        if _manifest_cache_matches(
             row,
             snapshot,
             normalized_model,
             parameters,
-            health,
+            None if health_failure is not None else health,
             forecast_rows,
             realized_rows,
         ):
             cache_hit_count += 1
+            continue
+
+        attempted_count += 1
+
+        if health_failure is not None:
+            forecast_rows = [item for item in forecast_rows if item.get("run_key") != run_key]
+            realized_rows = [item for item in realized_rows if item.get("run_key") != run_key]
             row.update(
-                {
-                    "cache_hit": True,
-                    "reason": "cache_hit",
-                    "finished_at": _now_iso(),
-                }
+                _unavailable_row_update(
+                    snapshot,
+                    normalized_model,
+                    parameters,
+                    health_failure,
+                )
             )
             _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
             continue
 
-        attempted_count += 1
         forecast_rows = [item for item in forecast_rows if item.get("run_key") != run_key]
         realized_rows = [item for item in realized_rows if item.get("run_key") != run_key]
         started_at = _now_iso()
@@ -493,6 +501,14 @@ def run_model(
                     "realized_artifact": REALIZED_FILENAME,
                     "forecast_row_count": len(new_forecast_rows),
                     "realized_row_count": len(new_realized_rows),
+                    "forecast_fingerprint": _artifact_fingerprint(
+                        new_forecast_rows,
+                        FORECAST_COLUMNS,
+                    ),
+                    "realized_fingerprint": _artifact_fingerprint(
+                        new_realized_rows,
+                        REALIZED_COLUMNS,
+                    ),
                     "cache_hit": False,
                 }
             )
@@ -521,12 +537,13 @@ def run_model(
                     "realized_artifact": "",
                     "forecast_row_count": 0,
                     "realized_row_count": 0,
+                    "forecast_fingerprint": "",
+                    "realized_fingerprint": "",
                     "cache_hit": False,
                 }
             )
         _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
 
-    _write_run_artifacts(normalized_output_dir, manifest, forecast_rows, realized_rows)
     status_counts = Counter(
         row.get("status", "")
         for row in manifest.values()
@@ -550,18 +567,18 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
 
     normalized_output_dir = Path(output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
-    snapshots = _read_frozen_snapshots(normalized_output_dir)
-    manifest = {
-        str(row.get("run_key", "")): row
-        for row in _load_manifest(normalized_output_dir / MANIFEST_FILENAME)
-        if row.get("run_key")
-    }
-    forecast_rows = _read_table(normalized_output_dir / FORECAST_FILENAME)
-    realized_rows = _read_table(normalized_output_dir / REALIZED_FILENAME)
-
     config_payload = metadata.get("config")
     if not isinstance(config_payload, Mapping):
         raise ValueError("experiment.json is missing config metadata")
+    report_config = _config_from_payload(config_payload)
+    snapshots, manifest = _validate_experiment_integrity(
+        normalized_output_dir,
+        metadata,
+        report_config,
+    )
+    forecast_rows = _read_table(normalized_output_dir / FORECAST_FILENAME)
+    realized_rows = _read_table(normalized_output_dir / REALIZED_FILENAME)
+
     horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
     raw_seed = config_payload.get("seed")
     seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
@@ -825,9 +842,180 @@ def _validate_existing_experiment_config(
         raise FileExistsError("prepared experiment universe is incompatible")
 
 
+def _validate_experiment_integrity(
+    output_dir: Path,
+    metadata: Mapping[str, Any],
+    config: KronosEvaluationConfig,
+) -> tuple[tuple[RollingSnapshot, ...], dict[str, dict[str, Any]]]:
+    """Validate the immutable experiment boundary before reading run state."""
+
+    if not isinstance(metadata, Mapping):  # pragma: no cover - _read_json guards this.
+        raise ValueError("experiment.json must contain an object")
+    stored_fingerprint = metadata.get("experiment_fingerprint")
+    if not isinstance(stored_fingerprint, str) or not stored_fingerprint:
+        raise ValueError("experiment fingerprint is missing")
+    immutable_metadata = {
+        str(key): value
+        for key, value in metadata.items()
+        if key not in {"created_at", "experiment_fingerprint"}
+    }
+    computed_fingerprint = canonical_json_fingerprint(immutable_metadata)
+    if computed_fingerprint != stored_fingerprint:
+        raise ValueError("experiment fingerprint does not match immutable metadata")
+
+    _validate_existing_experiment_config(metadata, config)
+    source = metadata.get("source")
+    source_metadata = metadata.get("source_metadata")
+    if not isinstance(source, Mapping) or not isinstance(source_metadata, Mapping):
+        raise ValueError("experiment source/source_metadata metadata is invalid")
+    if _jsonable(source) != _jsonable(source_metadata):
+        raise ValueError("experiment source/source_metadata metadata diverges")
+    if not isinstance(metadata.get("code_revision"), str):
+        raise ValueError("experiment code_revision metadata is invalid")
+    if not isinstance(metadata.get("created_at"), str):
+        raise ValueError("experiment creation time metadata is invalid")
+
+    raw_snapshot_metadata = metadata.get("snapshot_fingerprints")
+    if not isinstance(raw_snapshot_metadata, list):
+        raise ValueError("experiment snapshot_fingerprints metadata is invalid")
+    expected_snapshot_count = metadata.get("snapshot_count")
+    if _as_int(expected_snapshot_count) != len(raw_snapshot_metadata):
+        raise ValueError("experiment snapshot_count does not match snapshot metadata")
+
+    expected_snapshot_entries: list[dict[str, Any]] = []
+    expected_snapshot_keys: list[str] = []
+    for item in raw_snapshot_metadata:
+        if not isinstance(item, Mapping):
+            raise ValueError("experiment snapshot metadata entry is invalid")
+        required_fields = {"key", "asset_id", "origin_date", "status", "input_fingerprint"}
+        if set(item) != required_fields:
+            raise ValueError("experiment snapshot metadata fields are invalid")
+        entry = {field: _jsonable(item[field]) for field in required_fields}
+        key = entry["key"]
+        if not isinstance(key, str) or key in expected_snapshot_keys:
+            raise ValueError("experiment snapshot metadata keys are invalid")
+        expected_snapshot_keys.append(key)
+        expected_snapshot_entries.append(entry)
+
+    snapshot_dir = output_dir / SNAPSHOT_DIRECTORY
+    if not snapshot_dir.is_dir():
+        raise FileNotFoundError(f"missing frozen snapshot directory: {snapshot_dir}")
+    expected_filenames = sorted(
+        f"{entry['asset_id']}__{entry['origin_date']}.json"
+        for entry in expected_snapshot_entries
+    )
+    actual_directory_entries = sorted(path.name for path in snapshot_dir.iterdir())
+    if actual_directory_entries != expected_filenames:
+        raise ValueError("frozen snapshot file set does not match experiment metadata")
+    if any(
+        not path.is_file() or path.is_symlink()
+        for path in snapshot_dir.iterdir()
+    ):
+        raise ValueError("frozen snapshot directory contains a non-regular file")
+
+    snapshots = _read_frozen_snapshots(output_dir)
+    if [snapshot.key for snapshot in snapshots] != sorted(expected_snapshot_keys):
+        raise ValueError("frozen snapshot key set does not match experiment metadata")
+    expected_by_key = {
+        str(entry["key"]): entry for entry in expected_snapshot_entries
+    }
+    for entry in expected_snapshot_entries:
+        path = snapshot_dir / f"{entry['asset_id']}__{entry['origin_date']}.json"
+        payload = _read_json(path)
+        payload_key = f"{payload.get('asset_id')}|{payload.get('origin_date')}"
+        if payload_key != entry["key"]:
+            raise ValueError(f"frozen snapshot filename {path.name} is inconsistent")
+    for snapshot in snapshots:
+        expected = expected_by_key.get(snapshot.key)
+        if expected is None:
+            raise ValueError(f"frozen snapshot {snapshot.key} is not in experiment metadata")
+        actual = {
+            "key": snapshot.key,
+            "asset_id": snapshot.asset_id,
+            "origin_date": snapshot.origin_date,
+            "status": snapshot.status,
+            "input_fingerprint": snapshot.input_fingerprint,
+        }
+        if actual != expected:
+            raise ValueError(f"frozen snapshot {snapshot.key} does not match experiment metadata")
+
+    _validate_universe_file(output_dir / UNIVERSE_FILENAME, config)
+    manifest = _load_and_validate_manifest(
+        output_dir / MANIFEST_FILENAME,
+        snapshots,
+        config,
+    )
+    return snapshots, manifest
+
+
+def _validate_universe_file(path: Path, config: KronosEvaluationConfig) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"missing universe file: {path}")
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["asset_id", "position"]:
+            raise ValueError("universe.csv columns are invalid")
+        rows = list(reader)
+    expected_rows = [
+        {"asset_id": asset_id, "position": str(position)}
+        for position, asset_id in enumerate(config.asset_ids, start=1)
+    ]
+    if rows != expected_rows:
+        raise ValueError("universe.csv set or order does not match experiment metadata")
+
+
+def _load_and_validate_manifest(
+    path: Path,
+    snapshots: Sequence[RollingSnapshot],
+    config: KronosEvaluationConfig,
+) -> dict[str, dict[str, Any]]:
+    if not path.exists():
+        raise FileNotFoundError(f"missing run manifest: {path}")
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != list(MANIFEST_COLUMNS):
+            raise ValueError("run_manifest.csv columns are invalid")
+        rows = [dict(row) for row in reader]
+    expected_by_key = {
+        f"{snapshot.key}|{model}": (snapshot, model)
+        for snapshot in snapshots
+        for model in config.models
+    }
+    actual_keys = [str(row.get("run_key", "")) for row in rows]
+    if len(actual_keys) != len(set(actual_keys)):
+        raise ValueError("run_manifest.csv contains duplicate run keys")
+    if set(actual_keys) != set(expected_by_key):
+        raise ValueError("run_manifest.csv run-key set does not match experiment metadata")
+
+    manifest: dict[str, dict[str, Any]] = {}
+    for source in rows:
+        if set(source) != set(MANIFEST_COLUMNS):
+            raise ValueError("run_manifest.csv row fields are invalid")
+        run_key = str(source.get("run_key", ""))
+        snapshot, model = expected_by_key[run_key]
+        expected_parameters = _prediction_parameters(config, snapshot)
+        if (
+            source.get("snapshot_key") != snapshot.key
+            or source.get("asset_id") != snapshot.asset_id
+            or source.get("origin_date") != snapshot.origin_date
+            or source.get("model") != model
+            or source.get("input_fingerprint") != snapshot.input_fingerprint
+            or _parse_json_cell(source.get("parameters_json"))
+            != _jsonable(expected_parameters)
+            or _as_int(source.get("sample_count")) != config.sample_count
+            or _optional_int(source.get("seed")) != config.seed
+        ):
+            raise ValueError(f"run_manifest.csv row {run_key} is inconsistent with experiment")
+        if snapshot.status != "ready" and source.get("status") != snapshot.status:
+            raise ValueError(f"run_manifest.csv row {run_key} has an invalid snapshot status")
+        manifest[run_key] = source
+    return manifest
+
+
 def _existing_preparation_result(
     output_dir: Path,
     metadata: Mapping[str, Any],
+    config: KronosEvaluationConfig,
 ) -> PreparationResult:
     required = (
         output_dir / UNIVERSE_FILENAME,
@@ -841,22 +1029,11 @@ def _existing_preparation_result(
         missing.append(str(snapshot_dir))
     if missing:
         raise FileNotFoundError("prepared experiment is incomplete: " + ", ".join(missing))
-    snapshot_paths = tuple(sorted(snapshot_dir.glob("*.json"), key=lambda path: path.name))
-    frozen_snapshots = _read_frozen_snapshots(output_dir)
-    metadata_fingerprints = {
-        str(item.get("key")): (
-            item.get("input_fingerprint"),
-            item.get("status"),
-        )
-        for item in metadata.get("snapshot_fingerprints", [])
-        if isinstance(item, Mapping)
-    }
-    actual_fingerprints = {
-        snapshot.key: (snapshot.input_fingerprint, snapshot.status)
+    frozen_snapshots, _ = _validate_experiment_integrity(output_dir, metadata, config)
+    snapshot_paths = tuple(
+        output_dir / SNAPSHOT_DIRECTORY / _snapshot_filename(snapshot)
         for snapshot in frozen_snapshots
-    }
-    if metadata_fingerprints != actual_fingerprints:
-        raise FileExistsError("prepared experiment snapshot metadata is incompatible")
+    )
     fingerprints = tuple(
         item.get("input_fingerprint", "")
         for item in metadata.get("snapshot_fingerprints", [])
@@ -973,6 +1150,8 @@ def _initial_manifest_row(
         "realized_artifact": "",
         "forecast_row_count": 0,
         "realized_row_count": 0,
+        "forecast_fingerprint": "",
+        "realized_fingerprint": "",
         "cache_hit": False,
     }
 
@@ -1007,15 +1186,16 @@ def _load_health_metadata(client: Any, model: str) -> Mapping[str, Any]:
             code="invalid_health_response",
         )
     health = _jsonable(dict(value))
-    reported_model = health.get("model")
-    if reported_model is not None and _normalize_model_alias(reported_model) != model:
+    try:
+        _validate_health_model_identity(health, model)
+    except _RunnerFailure as exc:
         raise _RunnerFailure(
-            "Kronos health model does not match the requested model",
+            str(exc),
             status="unavailable",
-            category="model",
-            code="model_mismatch",
+            category=exc.category,
+            code=exc.code,
             raw_response=health,
-        )
+        ) from exc
     status = health.get("status")
     if status is not None and str(status).lower() not in {"ok", "ready", "succeeded"}:
         raise _RunnerFailure(
@@ -1062,6 +1242,47 @@ def _attempt_row_update(
         "realized_artifact": "",
         "forecast_row_count": 0,
         "realized_row_count": 0,
+        "forecast_fingerprint": "",
+        "realized_fingerprint": "",
+        "cache_hit": False,
+    }
+
+
+def _unavailable_row_update(
+    snapshot: RollingSnapshot,
+    model: str,
+    parameters: Mapping[str, Any],
+    failure: _RunnerFailure,
+) -> dict[str, Any]:
+    finished_at = _now_iso()
+    return {
+        "run_key": f"{snapshot.key}|{model}",
+        "snapshot_key": snapshot.key,
+        "asset_id": snapshot.asset_id,
+        "origin_date": snapshot.origin_date,
+        "model": model,
+        "status": "unavailable",
+        "reason": str(failure),
+        "error_category": failure.category,
+        "error_code": failure.code,
+        "input_fingerprint": snapshot.input_fingerprint,
+        "model_identity": "",
+        "weights_identity": "",
+        "parameters_json": _canonical_json(parameters),
+        "sample_count": parameters.get("sample_count", ""),
+        "seed": parameters.get("seed"),
+        "started_at": finished_at,
+        "finished_at": finished_at,
+        "latency_ms": "",
+        "health_metadata_json": "",
+        "raw_response_json": _canonical_json(failure.raw_response or {}),
+        "raw_body_excerpt": failure.raw_body_excerpt or "",
+        "forecast_artifact": "",
+        "realized_artifact": "",
+        "forecast_row_count": 0,
+        "realized_row_count": 0,
+        "forecast_fingerprint": "",
+        "realized_fingerprint": "",
         "cache_hit": False,
     }
 
@@ -1071,7 +1292,7 @@ def _manifest_cache_matches(
     snapshot: RollingSnapshot,
     model: str,
     parameters: Mapping[str, Any],
-    health: Mapping[str, Any],
+    health: Mapping[str, Any] | None,
     forecast_rows: Sequence[Mapping[str, Any]],
     realized_rows: Sequence[Mapping[str, Any]],
 ) -> bool:
@@ -1087,20 +1308,177 @@ def _manifest_cache_matches(
         return False
     if _optional_int(row.get("seed")) != parameters.get("seed"):
         return False
-    current_identity = _first_identity({}, health, model)
-    current_weights = _first_weight_identity({}, health)
-    if row.get("model_identity") or current_identity:
-        if row.get("model_identity") != (current_identity or ""):
-            return False
-    if row.get("weights_identity") or current_weights:
-        if row.get("weights_identity") != (current_weights or ""):
-            return False
+    if health is not None:
+        current_identity = _explicit_identity(health)
+        current_weights = _explicit_weight_identity(health)
+        if row.get("model_identity") or current_identity:
+            if row.get("model_identity") != (current_identity or ""):
+                return False
+        if row.get("weights_identity") or current_weights:
+            if row.get("weights_identity") != (current_weights or ""):
+                return False
     run_key = f"{snapshot.key}|{model}"
-    forecast_count = sum(1 for item in forecast_rows if item.get("run_key") == run_key)
-    realized_count = sum(1 for item in realized_rows if item.get("run_key") == run_key)
-    return forecast_count == len(snapshot.future_timestamps) and realized_count == len(
-        snapshot.realized
+    forecast_for_run = [item for item in forecast_rows if item.get("run_key") == run_key]
+    realized_for_run = [item for item in realized_rows if item.get("run_key") == run_key]
+    if _as_int(row.get("forecast_row_count")) != len(forecast_for_run):
+        return False
+    if _as_int(row.get("realized_row_count")) != len(realized_for_run):
+        return False
+    if len(forecast_for_run) != len(snapshot.future_timestamps):
+        return False
+    if len(realized_for_run) != len(snapshot.realized):
+        return False
+    if any(set(item) != set(FORECAST_COLUMNS) for item in forecast_for_run):
+        return False
+    if any(set(item) != set(REALIZED_COLUMNS) for item in realized_for_run):
+        return False
+    if not row.get("forecast_fingerprint") or not row.get("realized_fingerprint"):
+        return False
+    if _artifact_fingerprint(forecast_for_run, FORECAST_COLUMNS) != row.get(
+        "forecast_fingerprint"
+    ):
+        return False
+    if _artifact_fingerprint(realized_for_run, REALIZED_COLUMNS) != row.get(
+        "realized_fingerprint"
+    ):
+        return False
+    return _validate_cached_artifact_rows(
+        snapshot,
+        model,
+        row,
+        forecast_for_run,
+        realized_for_run,
     )
+
+
+def _validate_cached_artifact_rows(
+    snapshot: RollingSnapshot,
+    model: str,
+    manifest_row: Mapping[str, Any],
+    forecast_rows: Sequence[Mapping[str, Any]],
+    realized_rows: Sequence[Mapping[str, Any]],
+) -> bool:
+    expected_identity = str(manifest_row.get("model_identity") or "")
+    expected_weights = str(manifest_row.get("weights_identity") or "")
+    expected_timestamps = tuple(snapshot.future_timestamps)
+    forecast_by_horizon: dict[int, Mapping[str, Any]] = {}
+    canonical_path_json: str | None = None
+    for item in forecast_rows:
+        horizon = _as_int(item.get("horizon"))
+        if horizon is None or horizon in forecast_by_horizon:
+            return False
+        if not 1 <= horizon <= len(expected_timestamps):
+            return False
+        forecast_by_horizon[horizon] = item
+        if (
+            item.get("asset_id") != snapshot.asset_id
+            or item.get("origin_date") != snapshot.origin_date
+            or item.get("model") != model
+            or item.get("run_key") != f"{snapshot.key}|{model}"
+            or item.get("input_fingerprint") != snapshot.input_fingerprint
+            or item.get("timestamp") != expected_timestamps[horizon - 1]
+            or item.get("status") != _SUCCESS_MANIFEST_STATUS
+            or str(item.get("model_identity") or "") != expected_identity
+            or str(item.get("weights_identity") or "") != expected_weights
+            or _as_int(item.get("sample_count"))
+            != _as_int(manifest_row.get("sample_count"))
+            or _optional_int(item.get("seed")) != _optional_int(manifest_row.get("seed"))
+        ):
+            return False
+        quantiles = [
+            _finite_number(item.get(field_name))
+            for field_name in ("p10", "p50", "p90")
+        ]
+        if any(value is None for value in quantiles):
+            return False
+        p10, p50, p90 = quantiles
+        if not p10 <= p50 <= p90:  # type: ignore[operator]
+            return False
+        path = _parse_representative_path_json(item.get("representative_path_json"))
+        if path is None or not _validate_representative_path(path, expected_timestamps):
+            return False
+        serialized_path = _canonical_json(path)
+        if item.get("representative_path_json") != serialized_path:
+            return False
+        if canonical_path_json is None:
+            canonical_path_json = serialized_path
+        elif canonical_path_json != serialized_path:
+            return False
+        representative = path[horizon - 1]
+        for field_name in (
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "amount",
+        ):
+            if _finite_number(item.get(f"representative_{field_name}")) != _finite_number(
+                representative[field_name]
+            ):
+                return False
+        if not _validate_forecast_ohlc(
+            representative["open"],
+            representative["high"],
+            representative["low"],
+            representative["close"],
+        ):
+            return False
+        if item.get("cuda") not in (None, True, False):
+            return False
+
+    if set(forecast_by_horizon) != set(range(1, len(expected_timestamps) + 1)):
+        return False
+
+    realized_by_horizon: dict[int, Mapping[str, Any]] = {}
+    for item in realized_rows:
+        horizon = _as_int(item.get("horizon"))
+        if horizon is None or horizon in realized_by_horizon:
+            return False
+        if not 1 <= horizon <= len(snapshot.realized):
+            return False
+        realized_by_horizon[horizon] = item
+        source = thaw_json_value(snapshot.realized[horizon - 1])
+        if (
+            item.get("asset_id") != snapshot.asset_id
+            or item.get("origin_date") != snapshot.origin_date
+            or item.get("model") != model
+            or item.get("run_key") != f"{snapshot.key}|{model}"
+            or item.get("input_fingerprint") != snapshot.input_fingerprint
+            or item.get("timestamp") != source.get("timestamp")
+            or item.get("status") != _SUCCESS_MANIFEST_STATUS
+            or str(item.get("model_identity") or "") != expected_identity
+            or str(item.get("weights_identity") or "") != expected_weights
+            or _as_int(item.get("sample_count"))
+            != _as_int(manifest_row.get("sample_count"))
+            or _optional_int(item.get("seed")) != _optional_int(manifest_row.get("seed"))
+        ):
+            return False
+        for field_name in ("open", "high", "low", "close", "volume", "amount"):
+            actual = _finite_number(item.get(field_name))
+            expected = _finite_number(source.get(field_name))
+            if actual is None or expected is None or actual != expected:
+                return False
+        if not _validate_forecast_ohlc(
+            item.get("open"),
+            item.get("high"),
+            item.get("low"),
+            item.get("close"),
+        ):
+            return False
+
+    return set(realized_by_horizon) == set(range(1, len(snapshot.realized) + 1))
+
+
+def _artifact_fingerprint(
+    rows: Sequence[Mapping[str, Any]],
+    columns: Sequence[str],
+) -> str:
+    canonical_rows = [
+        {column: _jsonable(row.get(column)) for column in columns}
+        for row in _sort_artifact_rows(rows)
+    ]
+    return canonical_json_fingerprint(canonical_rows)
 
 
 def _build_artifact_rows(
@@ -1139,8 +1517,20 @@ def _build_artifact_rows(
             raw_response=raw_response,
         )
 
+    _validate_response_model_identity(response_model_metadata, model, raw_response)
+    _validate_response_parameters(
+        response,
+        expected_horizon=len(snapshot.future_timestamps),
+        sample_count=config.sample_count,
+        raw_response=raw_response,
+    )
     quantiles = _extract_quantiles(response)
     expected_length = len(snapshot.future_timestamps)
+    representative_path = _extract_representative_path(
+        response,
+        snapshot.future_timestamps,
+        raw_response,
+    )
     values: dict[str, list[float]] = {}
     for name in ("p10", "p50", "p90"):
         candidate = quantiles.get(name)
@@ -1191,6 +1581,13 @@ def _build_artifact_rows(
             "input_fingerprint": snapshot.input_fingerprint,
             "timestamp": timestamp,
             "horizon": horizon,
+            "representative_open": representative_path[horizon - 1]["open"],
+            "representative_high": representative_path[horizon - 1]["high"],
+            "representative_low": representative_path[horizon - 1]["low"],
+            "representative_close": representative_path[horizon - 1]["close"],
+            "representative_volume": representative_path[horizon - 1]["volume"],
+            "representative_amount": representative_path[horizon - 1]["amount"],
+            "representative_path_json": _canonical_json(representative_path),
             "p10": values["p10"][horizon - 1],
             "p50": values["p50"][horizon - 1],
             "p90": values["p90"][horizon - 1],
@@ -1235,10 +1632,7 @@ def _build_artifact_rows(
 
 
 def _extract_quantiles(response: Mapping[str, Any]) -> Mapping[str, Any]:
-    daily: Any = response.get("daily")
-    result = response.get("result")
-    if daily is None and isinstance(result, Mapping):
-        daily = result.get("daily")
+    daily = _extract_daily(response)
     if not isinstance(daily, Mapping):
         raise _RunnerFailure(
             "Kronos prediction response has no daily forecast",
@@ -1269,6 +1663,184 @@ def _extract_quantiles(response: Mapping[str, Any]) -> Mapping[str, Any]:
     )
 
 
+def _validate_response_parameters(
+    response: Mapping[str, Any],
+    *,
+    expected_horizon: int,
+    sample_count: int,
+    raw_response: Mapping[str, Any],
+) -> None:
+    daily = _extract_daily(response)
+    result = response.get("result")
+    mappings = (
+        ("response", response),
+        ("result", result if isinstance(result, Mapping) else {}),
+        ("daily", daily if isinstance(daily, Mapping) else {}),
+    )
+    for location, source in mappings:
+        if "sample_count" in source:
+            value = source.get("sample_count")
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise _RunnerFailure(
+                    f"Kronos prediction sample_count at {location} is invalid",
+                    status="protocol_error",
+                    category="protocol",
+                    code="invalid_response",
+                    raw_response=raw_response,
+                )
+            if value != sample_count:
+                raise _RunnerFailure(
+                    f"Kronos prediction sample_count at {location} mismatches request",
+                    status="model_error",
+                    category="model",
+                    code="sample_count_mismatch",
+                    raw_response=raw_response,
+                )
+        for field_name in ("horizon", "forecast_horizon"):
+            if field_name not in source:
+                continue
+            value = source.get(field_name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise _RunnerFailure(
+                    f"Kronos prediction {field_name} at {location} is invalid",
+                    status="protocol_error",
+                    category="protocol",
+                    code="invalid_response",
+                    raw_response=raw_response,
+                )
+            if value != expected_horizon:
+                raise _RunnerFailure(
+                    f"Kronos prediction {field_name} at {location} mismatches forecast",
+                    status="model_error",
+                    category="model",
+                    code="horizon_mismatch",
+                    raw_response=raw_response,
+                )
+
+
+def _extract_daily(response: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    daily: Any = response.get("daily")
+    result = response.get("result")
+    if daily is None and isinstance(result, Mapping):
+        daily = result.get("daily")
+    return daily if isinstance(daily, Mapping) else None
+
+
+def _extract_representative_path(
+    response: Mapping[str, Any],
+    expected_timestamps: Sequence[str],
+    raw_response: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    daily = _extract_daily(response)
+    candidate = daily.get("representative_path") if daily is not None else None
+    if candidate is None:
+        result = response.get("result")
+        if isinstance(result, Mapping):
+            result_daily = result.get("daily")
+            if isinstance(result_daily, Mapping):
+                candidate = result_daily.get("representative_path")
+    if not isinstance(candidate, (list, tuple)):
+        raise _RunnerFailure(
+            "Kronos prediction response has no representative daily path",
+            status="protocol_error",
+            category="protocol",
+            code="invalid_representative_path",
+            raw_response=raw_response,
+        )
+    normalized: list[dict[str, Any]] = []
+    for index, source in enumerate(candidate):
+        if not isinstance(source, Mapping):
+            raise _RunnerFailure(
+                "Kronos representative path contains a non-object row",
+                status="protocol_error",
+                category="protocol",
+                code="invalid_representative_path",
+                raw_response=raw_response,
+            )
+        timestamp = source.get("timestamp")
+        if timestamp is None:
+            timestamp = expected_timestamps[index] if index < len(expected_timestamps) else None
+        row = {"timestamp": timestamp}
+        for field_name in ("open", "high", "low", "close", "volume", "amount"):
+            numeric = _finite_number(source.get(field_name))
+            if numeric is None:
+                raise _RunnerFailure(
+                    f"Kronos representative path row {index + 1} has invalid {field_name}",
+                    status="protocol_error",
+                    category="protocol",
+                    code="invalid_representative_path",
+                    raw_response=raw_response,
+                )
+            row[field_name] = numeric
+        normalized.append(row)
+    if len(normalized) != len(expected_timestamps) or not _validate_representative_path(
+        normalized,
+        expected_timestamps,
+    ):
+        raise _RunnerFailure(
+            "Kronos representative path has an invalid horizon or OHLCV shape",
+            status="protocol_error",
+            category="protocol",
+            code="invalid_representative_path",
+            raw_response=raw_response,
+        )
+    return normalized
+
+
+def _parse_representative_path_json(value: Any) -> list[dict[str, Any]] | None:
+    parsed = _parse_json_cell(value)
+    if not isinstance(parsed, list):
+        return None
+    normalized: list[dict[str, Any]] = []
+    for item in parsed:
+        if not isinstance(item, Mapping):
+            return None
+        normalized.append(dict(item))
+    return normalized
+
+
+def _validate_representative_path(
+    path: Sequence[Mapping[str, Any]],
+    expected_timestamps: Sequence[str],
+) -> bool:
+    required_fields = {"timestamp", "open", "high", "low", "close", "volume", "amount"}
+    if len(path) != len(expected_timestamps):
+        return False
+    for index, row in enumerate(path):
+        if set(row) != required_fields or row.get("timestamp") != expected_timestamps[index]:
+            return False
+        for field_name in ("open", "high", "low", "close", "volume", "amount"):
+            if _finite_number(row.get(field_name)) is None:
+                return False
+        if not _validate_forecast_ohlc(
+            row.get("open"),
+            row.get("high"),
+            row.get("low"),
+            row.get("close"),
+        ):
+            return False
+    return True
+
+
+def _validate_forecast_ohlc(
+    open_value: Any,
+    high_value: Any,
+    low_value: Any,
+    close_value: Any,
+) -> bool:
+    open_numeric = _finite_number(open_value)
+    high_numeric = _finite_number(high_value)
+    low_numeric = _finite_number(low_value)
+    close_numeric = _finite_number(close_value)
+    if any(value is None for value in (open_numeric, high_numeric, low_numeric, close_numeric)):
+        return False
+    return (
+        high_numeric >= max(open_numeric, close_numeric)
+        and low_numeric <= min(open_numeric, close_numeric)
+        and high_numeric >= low_numeric
+    )
+
+
 def _response_model_metadata(response: Mapping[str, Any]) -> dict[str, Any]:
     raw = response.get("raw_response")
     metadata: dict[str, Any] = {}
@@ -1287,6 +1859,122 @@ def _response_model_metadata(response: Mapping[str, Any]) -> dict[str, Any]:
             if key in source and key not in metadata:
                 metadata[key] = source[key]
     return metadata
+
+
+def _validate_health_model_identity(
+    health: Mapping[str, Any],
+    requested_model: str,
+) -> None:
+    for field_name in ("model", "model_identity", "model_name"):
+        if field_name not in health or health.get(field_name) in (None, ""):
+            continue
+        normalized = _normalize_model_identity(health.get(field_name))
+        if normalized is None:
+            raise _RunnerFailure(
+                f"Kronos health has unknown {field_name}",
+                status="protocol_error",
+                category="protocol",
+                code="unknown_model_identity",
+                raw_response=health,
+            )
+        if normalized != requested_model:
+            raise _RunnerFailure(
+                "Kronos health model does not match the requested model",
+                status="unavailable",
+                category="model",
+                code="model_mismatch",
+                raw_response=health,
+            )
+    _validate_weights_identity(health, requested_model, health)
+
+
+def _validate_response_model_identity(
+    response_metadata: Mapping[str, Any],
+    requested_model: str,
+    raw_response: Mapping[str, Any],
+) -> None:
+    for field_name in ("model", "model_identity", "model_name"):
+        if field_name not in response_metadata or response_metadata.get(field_name) in (None, ""):
+            continue
+        normalized = _normalize_model_identity(response_metadata.get(field_name))
+        if normalized is None:
+            raise _RunnerFailure(
+                f"Kronos prediction has unknown {field_name}",
+                status="protocol_error",
+                category="protocol",
+                code="unknown_model_identity",
+                raw_response=raw_response,
+            )
+        if normalized != requested_model:
+            raise _RunnerFailure(
+                "Kronos prediction model identity does not match the requested model",
+                status="model_error",
+                category="model",
+                code="model_identity_mismatch",
+                raw_response=raw_response,
+            )
+    _validate_weights_identity(response_metadata, requested_model, raw_response)
+
+
+def _validate_weights_identity(
+    metadata: Mapping[str, Any],
+    requested_model: str,
+    raw_response: Mapping[str, Any],
+) -> None:
+    for field_name in ("weights", "weights_identity", "weights_fingerprint"):
+        value = metadata.get(field_name)
+        if value in (None, ""):
+            continue
+        family = _model_family_from_identity(value)
+        if family is not None and family != requested_model:
+            raise _RunnerFailure(
+                "Kronos weights identity does not match the requested model",
+                status="model_error",
+                category="model",
+                code="weights_identity_mismatch",
+                raw_response=raw_response,
+            )
+        if family is None and not _is_opaque_weights_identity(value):
+            raise _RunnerFailure(
+                f"Kronos has unknown {field_name}",
+                status="protocol_error",
+                category="protocol",
+                code="unknown_weights_identity",
+                raw_response=raw_response,
+            )
+
+
+def _is_opaque_weights_identity(value: Any) -> bool:
+    if isinstance(value, (Mapping, list, tuple)):
+        return True
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().lower()
+    return bool(
+        re.fullmatch(r"(?:sha(?:256|1|512):)?[0-9a-f]{16,}", normalized)
+        or normalized.startswith(("sha256:", "sha1:", "sha512:", "blake2"))
+    )
+
+
+def _normalize_model_identity(value: Any) -> str | None:
+    return _model_family_from_identity(value)
+
+
+def _model_family_from_identity(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower().replace("_", "-").replace(" ", "-")
+    normalized = re.sub(r"-+", "-", normalized)
+    if re.fullmatch(r"(?:kronos-)?small(?:-v\d+)?", normalized):
+        return "small"
+    if re.fullmatch(r"(?:kronos-)?base(?:-v\d+)?", normalized):
+        return "base"
+    for family in ("small", "base"):
+        if re.search(rf"(?:^|-)kronos?-?{family}(?:-|$)", normalized):
+            return family
+        if re.search(rf"(?:^|-)weights?-?{family}(?:-|$)", normalized):
+            return family
+    return None
 
 
 def _failure_from_exception(error: Exception, *, health_check: bool = False) -> _RunnerFailure:
@@ -1859,17 +2547,11 @@ def _load_manifest(path: Path) -> list[dict[str, Any]]:
 def _read_table(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
+    _, parquet = _load_pyarrow()
     try:
-        import pyarrow.parquet as parquet
-
-        try:
-            return [dict(row) for row in parquet.read_table(path).to_pylist()]
-        except Exception:
-            pass
-    except ModuleNotFoundError:
-        pass
-    with path.open(newline="", encoding="utf-8") as handle:
-        return [dict(row) for row in csv.DictReader(handle)]
+        return [dict(row) for row in parquet.read_table(path).to_pylist()]
+    except Exception as exc:  # noqa: BLE001 - preserve a clear artifact failure.
+        raise RuntimeError(f"failed to read Parquet artifact {path}: {exc}") from exc
 
 
 def _atomic_write_json(path: Path, value: Any) -> None:
@@ -1905,12 +2587,7 @@ def _atomic_write_table(
     rows: Sequence[Mapping[str, Any]],
     columns: Sequence[str],
 ) -> None:
-    try:
-        import pyarrow as pa
-        import pyarrow.parquet as parquet
-    except ModuleNotFoundError:
-        _atomic_write_csv(path, rows, columns)
-        return
+    pa, parquet = _load_pyarrow()
 
     arrow_types = {
         "asset_id": pa.string(),
@@ -1920,6 +2597,13 @@ def _atomic_write_table(
         "input_fingerprint": pa.string(),
         "timestamp": pa.string(),
         "horizon": pa.int64(),
+        "representative_open": pa.float64(),
+        "representative_high": pa.float64(),
+        "representative_low": pa.float64(),
+        "representative_close": pa.float64(),
+        "representative_volume": pa.float64(),
+        "representative_amount": pa.float64(),
+        "representative_path_json": pa.string(),
         "p10": pa.float64(),
         "p50": pa.float64(),
         "p90": pa.float64(),
@@ -1973,6 +2657,17 @@ def _atomic_write_table(
                 pass
 
 
+def _load_pyarrow() -> tuple[Any, Any]:
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as parquet
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise RuntimeError(
+            "pyarrow is required to read/write Kronos Parquet artifacts"
+        ) from exc
+    return pa, parquet
+
+
 def _atomic_write_bytes(path: Path, value: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
@@ -2017,6 +2712,14 @@ def _config_payload(config: KronosEvaluationConfig) -> dict[str, Any]:
     }
 
 
+def _config_from_payload(payload: Mapping[str, Any]) -> KronosEvaluationConfig:
+    try:
+        values = {field.name: payload[field.name] for field in fields(KronosEvaluationConfig)}
+        return KronosEvaluationConfig(**values)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("experiment config metadata is invalid") from exc
+
+
 def _require_config(config: KronosEvaluationConfig) -> None:
     if not isinstance(config, KronosEvaluationConfig):
         raise TypeError("config must be a KronosEvaluationConfig")
@@ -2030,15 +2733,7 @@ def _normalize_model(model: Any) -> str:
 
 
 def _normalize_model_alias(model: Any) -> str:
-    if not isinstance(model, str):
-        return ""
-    value = model.strip().lower()
-    return {
-        "small": "small",
-        "kronos-small": "small",
-        "base": "base",
-        "kronos-base": "base",
-    }.get(value, value)
+    return _model_family_from_identity(model) or ""
 
 
 def _code_revision() -> str:
@@ -2144,6 +2839,11 @@ def _first_identity(
     return str(value)
 
 
+def _explicit_identity(source: Mapping[str, Any]) -> str | None:
+    value = _first_value(source, "model_identity", "model_name", "model")
+    return None if value is None else str(value)
+
+
 def _first_weight_identity(
     response_metadata: Mapping[str, Any],
     health: Mapping[str, Any],
@@ -2158,6 +2858,18 @@ def _first_weight_identity(
     if value is None:
         return None
     return _canonical_json(value) if isinstance(value, (Mapping, list, tuple)) else str(value)
+
+
+def _explicit_weight_identity(source: Mapping[str, Any]) -> str | None:
+    value = _first_value(
+        source,
+        "weights_identity",
+        "weights_fingerprint",
+        "weights",
+    )
+    return None if value is None else (
+        _canonical_json(value) if isinstance(value, (Mapping, list, tuple)) else str(value)
+    )
 
 
 def _raw_response_for_manifest(response: Mapping[str, Any] | None) -> Mapping[str, Any]:
