@@ -139,17 +139,17 @@ def test_score_forecast_rejects_quantile_order_and_handles_pinball_direction_and
     assert scored["h3"]["pinball_loss_p90"] == pytest.approx(0.2)
 
 
-def test_score_forecast_uses_zero_as_a_distinct_direction():
+def test_score_forecast_groups_zero_with_non_negative_direction():
     scored = score_forecast(
         100.0,
         [100.0, 101.0, 100.0],
         [99.0, 99.0, 99.0],
-        [101.0, 101.0, 99.0],
+        [101.0, 100.0, 99.0],
         [102.0, 102.0, 101.0],
         horizons=(1, 2, 3),
     )
 
-    assert scored["h1"]["direction_hit"] is False
+    assert scored["h1"]["direction_hit"] is True
     assert scored["h2"]["direction_hit"] is True
     assert scored["h3"]["direction_hit"] is False
 
@@ -282,6 +282,40 @@ def test_aggregate_metrics_rejects_invalid_group_by_or_rows():
         aggregate_metrics(["not a row"])
 
 
+def test_aggregate_metrics_returns_an_explicit_empty_overall_summary():
+    overall = aggregate_metrics([], group_by=())
+
+    assert len(overall) == 1
+    assert overall[0]["group_by"] == []
+    assert overall[0]["row_count"] == 0
+    assert overall[0]["total_count"] == 0
+    assert overall[0]["success_count"] == 0
+    assert overall[0]["failed_count"] == 0
+    assert overall[0]["missing_count"] == 0
+    assert overall[0]["excluded_count"] == 0
+    assert overall[0]["metric_count"] == 0
+    assert overall[0]["status_counts"] == {}
+    assert all(
+        denominator == 0
+        for denominator in overall[0]["metric_denominators"].values()
+    )
+    assert all(mean is None for mean in overall[0]["means"].values())
+    assert overall[0]["direction_hit_count"] == 0
+    assert overall[0]["direction_hit_rate"] is None
+    assert overall[0]["coverage_count"] == 0
+    assert overall[0]["coverage_denominator"] == 0
+    assert overall[0]["coverage_rate"] is None
+    json.dumps(overall, sort_keys=True)
+
+
+@pytest.mark.parametrize("bad_key", [["A"], ("A",)])
+def test_aggregate_metrics_rejects_non_scalar_group_keys(bad_key):
+    row = _metric_row(bad_key, "2025-01-02", 1)
+
+    with pytest.raises(ValueError, match="scalar"):
+        aggregate_metrics([row], group_by=("asset_id",))
+
+
 def test_compare_models_bootstraps_complete_asset_origin_blocks_not_individual_rows():
     rows = [
         {"asset_id": "A", "origin_date": "2025-01-02", "horizon": 1, "small": 0.10, "base": 0.08},
@@ -300,7 +334,9 @@ def test_compare_models_bootstraps_complete_asset_origin_blocks_not_individual_r
     assert first["paired_count"] == 4
     assert first["paired_row_count"] == 6
     assert first["excluded_count"] == 1
-    assert first["base_minus_small"] == pytest.approx((-0.035 + 0.01 - 0.02 - 0.01) / 4)
+    assert first["base_minus_small"] == pytest.approx(
+        (-0.02 - 0.05 + 0.01 - 0.02 - 0.02 - 0.01) / 6
+    )
     assert first["delta_mean"] == first["base_minus_small"]
     assert first["ci_low"] <= first["ci_high"]
     assert first["status"] == "ok"
@@ -326,6 +362,58 @@ def test_compare_models_empty_and_single_block_are_explicit():
     assert single["paired_count"] == 1
     assert single["delta_mean"] == pytest.approx((-0.02 - 0.05) / 2)
     assert single["ci_low"] == single["ci_high"] == single["delta_mean"]
+
+
+def test_compare_models_weights_all_valid_rows_within_a_block():
+    rows = [
+        {
+            "asset_id": "A",
+            "origin_date": "2025-01-02",
+            "horizon": 1,
+            "small": 0.0,
+            "base": 0.0,
+        }
+        for _ in range(100)
+    ]
+    rows.append(
+        {
+            "asset_id": "A",
+            "origin_date": "2025-01-02",
+            "horizon": 3,
+            "small": 0.0,
+            "base": 100.0,
+        }
+    )
+
+    comparison = compare_models(rows, seed=7)
+
+    assert comparison["paired_count"] == 1
+    assert comparison["paired_row_count"] == 101
+    assert comparison["paired_count_unit"] == "complete_asset_id|origin_date_blocks"
+    assert comparison["delta_orientation"] == "base_minus_small"
+    assert comparison["base_minus_small"] == pytest.approx(100.0 / 101.0)
+    assert comparison["ci_low"] == comparison["ci_high"] == comparison["delta_mean"]
+
+
+@pytest.mark.parametrize("bad_seed", [None, True, 1.5])
+def test_compare_models_requires_an_integer_seed(bad_seed):
+    with pytest.raises(ValueError, match="seed"):
+        compare_models([], seed=bad_seed)
+
+
+@pytest.mark.parametrize("bad_key", [["A"], ("A",)])
+def test_compare_models_rejects_non_scalar_block_keys(bad_key):
+    rows = [
+        {
+            "asset_id": bad_key,
+            "origin_date": "2025-01-02",
+            "small": 0.1,
+            "base": 0.08,
+        }
+    ]
+
+    with pytest.raises(ValueError, match="scalar"):
+        compare_models(rows, seed=7)
 
 
 def test_compare_models_accepts_long_model_rows():

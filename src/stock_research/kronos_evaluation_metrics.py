@@ -17,11 +17,13 @@ return from the last close for each future step.
 ``metrics`` mapping.  It returns a deterministically ordered list of group
 summaries.  ``group_by=()`` produces one overall summary; callers can request
 per-asset, per-horizon, or combined summaries by passing the corresponding
-field names.
+field names.  Even with no rows, ``group_by=()`` returns one explicit
+zero-count overall summary.
 
 ``compare_models`` treats ``asset_id|origin_date`` as the independent unit.
-Rows within the same block are averaged before block bootstrap resampling, so
-overlapping daily windows are not treated as independent observations.
+Complete blocks are resampled, while each replicate averages all valid paired
+rows from the sampled blocks, so overlapping daily windows are not treated as
+independent observations and uneven row counts retain their weight.
 """
 
 from __future__ import annotations
@@ -90,9 +92,9 @@ def score_forecast(
 ) -> dict[str, dict[str, Any]]:
     """Score point and interval forecasts at each requested horizon.
 
-    A direction is ``-1``, ``0``, or ``1`` according to the sign of the
-    return.  Thus a zero return only matches another zero return; it does not
-    match a positive or negative return.
+    Direction uses the approved non-negative grouping rule exactly:
+    ``(predicted_return >= 0) == (actual_return >= 0)``.  A zero return is
+    therefore grouped with positive/non-negative returns.
     """
 
     normalized_last_close = _finite_float(last_close, "last_close")
@@ -179,7 +181,8 @@ def score_forecast(
             "predicted_return": predicted_return,
             "absolute_return_error": absolute_return_error,
             "normalized_price_error": normalized_price_error,
-            "direction_hit": _sign(predicted_return) == _sign(actual_return),
+            "direction_hit": (predicted_return >= 0.0)
+            == (actual_return >= 0.0),
             "interval_coverage": predicted_p10
             <= actual_close
             <= predicted_p90,
@@ -285,6 +288,8 @@ def aggregate_metrics(
     for row in normalized_rows:
         key = tuple(_group_value(row.get(field)) for field in normalized_group_by)
         buckets[key].append(row)
+    if not buckets and not normalized_group_by:
+        buckets[()] = []
 
     summaries: list[dict[str, Any]] = []
     for key in sorted(buckets, key=_stable_sort_key):
@@ -379,7 +384,7 @@ def compare_models(
     rows: Iterable[Mapping[str, Any]],
     left: str = "small",
     right: str = "base",
-    seed: int | None = 7,
+    seed: int = 7,
     *,
     bootstrap_samples: int = 10_000,
 ) -> dict[str, Any]:
@@ -388,9 +393,13 @@ def compare_models(
     Wide rows should contain ``left`` and ``right`` numeric values.  Long rows
     may instead contain ``model`` and one of ``value``, ``metric_value``,
     ``score``, or ``metric``.  Within each ``asset_id|origin_date`` block,
-    valid paired row deltas are averaged first.  The confidence interval is a
-    deterministic empirical 95% block bootstrap using ``random.Random(seed)``
-    and linearly interpolated 2.5%/97.5% quantiles.
+    ``paired_count`` is the number of complete ``asset_id|origin_date``
+    blocks, while ``paired_row_count`` is the number of valid paired rows in
+    those blocks.  ``delta_mean`` and every bootstrap replicate are weighted
+    over the valid paired rows, including all requested horizons; horizon
+    subgroup means are never averaged with equal weight.  The confidence
+    interval is a deterministic empirical 95% block bootstrap using
+    ``random.Random(seed)`` and linearly interpolated 2.5%/97.5% quantiles.
     """
 
     left_name = _model_name(left, "left")
@@ -408,6 +417,8 @@ def compare_models(
         "seed": normalized_seed,
         "bootstrap_samples": normalized_bootstrap_samples,
         "confidence_level": 0.95,
+        "paired_count_unit": "complete_asset_id|origin_date_blocks",
+        "delta_orientation": f"{right_name}_minus_{left_name}",
         "status_counts": {},
         "paired_count": 0,
         "complete_block_count": 0,
@@ -428,7 +439,10 @@ def compare_models(
 
     status_counts: Counter[str] = Counter()
     block_deltas: dict[tuple[Any, Any], list[float]] = defaultdict(list)
-    block_subgroups: dict[tuple[tuple[Any, Any], Any], list[Any]] = defaultdict(list)
+    long_subgroups: dict[
+        tuple[tuple[Any, Any], Any],
+        dict[str, list[float]],
+    ] = defaultdict(lambda: defaultdict(list))
     excluded_count = 0
     paired_row_count = 0
 
@@ -454,7 +468,7 @@ def compare_models(
             if value is None:
                 excluded_count += 1
                 continue
-            block_subgroups[(block, subkey)].append((model, value))
+            long_subgroups[(block, subkey)][model].append(value)
             continue
 
         left_value = _optional_comparison_value(row, left_name)
@@ -466,58 +480,51 @@ def compare_models(
         ):
             excluded_count += 1
             continue
-        block_subgroups[(block, subkey)].append(
-            (left_name, left_value, right_name, right_value)
+        block_deltas[block].append(
+            _finite_result(right_value - left_value, "model_delta")
         )
         paired_row_count += 1
 
-    for (block, _subkey), values in block_subgroups.items():
-        if not values:
+    for (block, _subkey), values_by_model in long_subgroups.items():
+        left_values = values_by_model.get(left_name, [])
+        right_values = values_by_model.get(right_name, [])
+        pair_count = min(len(left_values), len(right_values))
+        if pair_count == 0:
+            excluded_count += len(left_values) + len(right_values)
             continue
-        if _is_long_values(values):
-            left_values = [
-                value for model, value in values if model == left_name
-            ]
-            right_values = [
-                value for model, value in values if model == right_name
-            ]
-            if not left_values or not right_values:
-                excluded_count += len(values)
-                continue
-            paired_row_count += min(len(left_values), len(right_values))
-            sub_delta = _finite_result(
-                _mean(right_values) - _mean(left_values),
-                "model_delta",
+        for pair_index in range(pair_count):
+            block_deltas[block].append(
+                _finite_result(
+                    right_values[pair_index] - left_values[pair_index],
+                    "model_delta",
+                )
             )
-        else:
-            sub_delta = _mean(
-                _finite_result(right_value - left_value, "model_delta")
-                for left_model, left_value, right_model, right_value in values
-                if left_model == left_name and right_model == right_name
-            )
-        if sub_delta is not None:
-            block_deltas[block].append(sub_delta)
+        paired_row_count += pair_count
+        excluded_count += len(left_values) + len(right_values) - 2 * pair_count
 
-    complete_block_deltas: list[float] = []
-    for _block, deltas in sorted(block_deltas.items(), key=_stable_sort_key):
-        block_delta = _mean(deltas)
-        if block_delta is not None:
-            complete_block_deltas.append(block_delta)
+    complete_block_rows = [
+        deltas
+        for _block, deltas in sorted(block_deltas.items(), key=_stable_sort_key)
+        if deltas
+    ]
     output_base["status_counts"] = {
         status: status_counts[status] for status in sorted(status_counts)
     }
     output_base["excluded_count"] = excluded_count
     output_base["paired_row_count"] = paired_row_count
-    output_base["paired_count"] = len(complete_block_deltas)
-    output_base["complete_block_count"] = len(complete_block_deltas)
-    if not complete_block_deltas:
+    output_base["paired_count"] = len(complete_block_rows)
+    output_base["complete_block_count"] = len(complete_block_rows)
+    if not complete_block_rows:
         output_base["status"] = "no_complete_blocks"
         return output_base
 
-    delta_mean = _mean(complete_block_deltas)
+    all_paired_deltas = [
+        delta for block_rows in complete_block_rows for delta in block_rows
+    ]
+    delta_mean = _mean(all_paired_deltas)
     output_base["delta_mean"] = delta_mean
     output_base[delta_key] = delta_mean
-    if len(complete_block_deltas) == 1:
+    if len(complete_block_rows) == 1:
         output_base["status"] = "single_block"
         output_base["ci_low"] = delta_mean
         output_base["ci_high"] = delta_mean
@@ -526,13 +533,19 @@ def compare_models(
 
     rng = random.Random(normalized_seed)
     bootstrap_means: list[float] = []
-    block_count = len(complete_block_deltas)
+    block_count = len(complete_block_rows)
     for _ in range(normalized_bootstrap_samples):
         sample_sum = 0.0
+        sample_row_count = 0
         for _ in range(block_count):
-            sample_sum += complete_block_deltas[rng.randrange(block_count)]
+            sampled_rows = complete_block_rows[rng.randrange(block_count)]
+            sample_sum += sum(sampled_rows)
+            sample_row_count += len(sampled_rows)
         bootstrap_means.append(
-            _finite_result(sample_sum / block_count, "bootstrap_delta_mean")
+            _finite_result(
+                sample_sum / sample_row_count,
+                "bootstrap_delta_mean",
+            )
         )
     bootstrap_means.sort()
     output_base["status"] = "ok"
@@ -608,14 +621,6 @@ def _positive_int(value: Any, field_name: str) -> int:
 def _pinball_loss(actual: float, forecast: float, quantile: float) -> float:
     error = actual - forecast
     return quantile * error if error >= 0 else (quantile - 1.0) * error
-
-
-def _sign(value: float) -> int:
-    if value > 0:
-        return 1
-    if value < 0:
-        return -1
-    return 0
 
 
 def _normalize_group_by(
@@ -807,12 +812,11 @@ def _group_value(value: Any) -> Any:
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
-            raise ValueError("group values must be finite")
+            raise ValueError("group and block keys must be finite scalars")
         return value
-    if isinstance(value, (list, tuple)):
-        return [_group_value(item) for item in value]
     raise ValueError(
-        f"group values must be JSON-compatible scalars, got {type(value).__name__}"
+        "group and block keys must be JSON-compatible scalar values; "
+        f"got {type(value).__name__}"
     )
 
 
@@ -830,11 +834,9 @@ def _model_name(value: Any, field_name: str) -> str:
     return value.strip()
 
 
-def _validate_seed(seed: Any) -> int | None:
-    if seed is None:
-        return None
+def _validate_seed(seed: Any) -> int:
     if isinstance(seed, bool) or not isinstance(seed, Integral):
-        raise ValueError("seed must be an integer or None")
+        raise ValueError("seed must be an integer")
     return int(seed)
 
 
@@ -897,10 +899,6 @@ def _optional_comparison_value(row: Mapping[str, Any], model: str) -> float | No
     if model not in row or row[model] is None:
         return None
     return _finite_float(row[model], model)
-
-
-def _is_long_values(values: list[Any]) -> bool:
-    return bool(values) and len(values[0]) == 2
 
 
 def _empirical_quantile(sorted_values: list[float], quantile: float) -> float:
