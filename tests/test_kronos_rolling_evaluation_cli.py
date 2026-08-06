@@ -4,6 +4,8 @@ import csv
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -113,6 +115,39 @@ def test_parser_accepts_exact_stages_and_all_stage_options():
     assert predict.stage == "predict"
     assert predict.model == "base"
     assert report.stage == "report"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["predict", "--model", "small", "--predict-url", "http://kronos.test"],
+        [
+            "predict",
+            "--model",
+            "unsupported",
+            "--output-dir",
+            "out",
+            "--predict-url",
+            "http://kronos.test",
+        ],
+    ],
+)
+def test_subprocess_parse_errors_emit_one_json_line_without_argparse_noise(args):
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert completed.stderr == ""
+    lines = completed.stdout.splitlines()
+    assert len(lines) == 1
+    summary = json.loads(lines[0])
+    assert summary["stage"] == "predict"
+    assert summary["status"] == "error"
+    assert summary["error"]
 
 
 def test_prepare_rejects_non_twenty_universe_without_allow_smoke(tmp_path, monkeypatch, capsys):
@@ -344,6 +379,148 @@ def test_predict_base_uses_only_base_and_frozen_experiment_metadata(
     assert summary["stage"] == "predict"
     assert summary["model"] == "base"
     assert summary["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("status_counts", "expected_status", "expected_result"),
+    [
+        ({"unavailable": 2}, "error", 1),
+        ({"success": 1, "unavailable": 1}, "partial", 0),
+    ],
+)
+def test_predict_derives_summary_status_from_model_status_counts(
+    tmp_path,
+    monkeypatch,
+    capsys,
+    status_counts,
+    expected_status,
+    expected_result,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    (output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    (output_dir / "input_snapshots").mkdir()
+
+    monkeypatch.setattr(cli, "KronosClient", FakePredictClient)
+    monkeypatch.setattr(
+        cli,
+        "run_model",
+        lambda *args, **kwargs: SimpleNamespace(
+            attempted_count=2,
+            cache_hit_count=0,
+            skipped_count=0,
+            status_counts=status_counts,
+        ),
+    )
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(
+        [
+            "predict",
+            "--model",
+            "small",
+            "--output-dir",
+            str(output_dir),
+            "--predict-url",
+            "http://kronos.test",
+        ]
+    )
+
+    assert result == expected_result
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == expected_status
+    assert summary["status_counts"] == status_counts
+
+
+def test_predict_rejects_symlink_output_dir_before_constructing_client(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    real_output_dir = tmp_path / "real"
+    real_output_dir.mkdir()
+    (real_output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    (real_output_dir / "input_snapshots").mkdir()
+    symlink_output_dir = tmp_path / "prepared"
+    symlink_output_dir.symlink_to(real_output_dir, target_is_directory=True)
+    constructed = False
+
+    class MustNotConstruct:
+        def __init__(self, *args, **kwargs):
+            nonlocal constructed
+            constructed = True
+            raise AssertionError("client must not be constructed")
+
+    monkeypatch.setattr(cli, "KronosClient", MustNotConstruct)
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(
+        [
+            "predict",
+            "--model",
+            "small",
+            "--output-dir",
+            str(symlink_output_dir),
+            "--predict-url",
+            "http://kronos.test",
+        ]
+    )
+
+    assert result != 0
+    assert constructed is False
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == "error"
+    assert "symlink" in summary["error"]
+
+
+def test_predict_rejects_symlink_metadata_before_constructing_client(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    metadata_source = tmp_path / "experiment.json"
+    metadata_source.write_text(json.dumps(config_metadata()), encoding="utf-8")
+    (output_dir / "experiment.json").symlink_to(metadata_source)
+    (output_dir / "input_snapshots").mkdir()
+    constructed = False
+
+    class MustNotConstruct:
+        def __init__(self, *args, **kwargs):
+            nonlocal constructed
+            constructed = True
+            raise AssertionError("client must not be constructed")
+
+    monkeypatch.setattr(cli, "KronosClient", MustNotConstruct)
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(
+        [
+            "predict",
+            "--model",
+            "small",
+            "--output-dir",
+            str(output_dir),
+            "--predict-url",
+            "http://kronos.test",
+        ]
+    )
+
+    assert result != 0
+    assert constructed is False
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == "error"
+    assert "symlink" in summary["error"]
 
 
 def test_predict_refuses_missing_preparation_metadata(tmp_path, monkeypatch, capsys):

@@ -18,7 +18,7 @@ import re
 import sys
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, NoReturn, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +28,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from stock_research.kronos_evaluation_runner import (
     EXPERIMENT_FILENAME,
+    SNAPSHOT_DIRECTORY,
     build_report,
     prepare_experiment,
     run_model,
@@ -51,8 +52,15 @@ _BARE_ASSET_RE = re.compile(r"^\d{6}$")
 _STAGES = ("prepare", "predict", "report")
 
 
+class _CliArgumentParser(argparse.ArgumentParser):
+    """Let ``main`` render parser failures in the normal JSON envelope."""
+
+    def error(self, message: str) -> NoReturn:
+        raise ValueError(message)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _CliArgumentParser(
         description="Run the Kronos small/base rolling evaluation experiment."
     )
     subparsers = parser.add_subparsers(dest="stage", required=True)
@@ -122,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     _print_summary(summary)
-    return 0
+    return 1 if summary.get("status") == "error" else 0
 
 
 def _run_prepare(args: argparse.Namespace) -> dict[str, Any]:
@@ -159,11 +167,7 @@ def _run_prepare(args: argparse.Namespace) -> dict[str, Any]:
 
 def _run_predict(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = Path(args.output_dir)
-    metadata_path = output_dir / EXPERIMENT_FILENAME
-    if not metadata_path.is_file():
-        raise FileNotFoundError(
-            f"prepared experiment metadata is missing: {metadata_path}"
-        )
+    metadata_path = _validate_predict_output_dir(output_dir)
     metadata = _read_json_object(metadata_path)
     config = _config_from_metadata(metadata)
 
@@ -203,16 +207,67 @@ def _run_predict(args: argparse.Namespace) -> dict[str, Any]:
         if callable(close):
             close()
 
-    return {
+    status_counts = dict(result.status_counts)
+    status = _predict_summary_status(status_counts)
+    summary = {
         "stage": "predict",
-        "status": "ok",
+        "status": status,
         "model": args.model,
         "output_dir": str(output_dir),
         "attempted_count": int(result.attempted_count),
         "cache_hit_count": int(result.cache_hit_count),
         "skipped_count": int(result.skipped_count),
-        "status_counts": dict(result.status_counts),
+        "status_counts": status_counts,
     }
+    if status == "error":
+        summary["error"] = "all prediction units failed"
+    return summary
+
+
+def _validate_predict_output_dir(output_dir: Path) -> Path:
+    _reject_cli_symlink(output_dir, "experiment output directory")
+    if not output_dir.exists():
+        raise FileNotFoundError(f"missing experiment output directory: {output_dir}")
+    if not output_dir.is_dir():
+        raise ValueError(
+            f"experiment output directory must be a directory: {output_dir}"
+        )
+
+    metadata_path = output_dir / EXPERIMENT_FILENAME
+    _reject_cli_symlink(metadata_path, "experiment metadata")
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"prepared experiment metadata is missing: {metadata_path}"
+        )
+    if not metadata_path.is_file():
+        raise ValueError(
+            f"experiment metadata must be a regular file: {metadata_path}"
+        )
+
+    snapshot_dir = output_dir / SNAPSHOT_DIRECTORY
+    _reject_cli_symlink(snapshot_dir, "frozen snapshot directory")
+    if not snapshot_dir.exists():
+        raise FileNotFoundError(f"missing frozen snapshot directory: {snapshot_dir}")
+    if not snapshot_dir.is_dir():
+        raise ValueError(
+            f"frozen snapshot directory must be a directory: {snapshot_dir}"
+        )
+    return metadata_path
+
+
+def _reject_cli_symlink(path: Path, label: str) -> None:
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink: {path}")
+
+
+def _predict_summary_status(status_counts: Mapping[str, int]) -> str:
+    total_count = sum(int(value) for value in status_counts.values())
+    success_count = int(status_counts.get("success", 0))
+    if total_count <= 0 or success_count <= 0:
+        return "error"
+    if success_count < total_count:
+        return "partial"
+    return "ok"
 
 
 def _run_report(args: argparse.Namespace) -> dict[str, Any]:
@@ -304,9 +359,10 @@ def _read_json_object(path: Path) -> dict[str, Any]:
 
 
 def _stage_from_argv(argv: list[str] | None) -> str | None:
-    if not argv:
+    arguments = sys.argv[1:] if argv is None else argv
+    if not arguments:
         return None
-    candidate = str(argv[0])
+    candidate = str(arguments[0])
     return candidate if candidate in _STAGES else None
 
 
