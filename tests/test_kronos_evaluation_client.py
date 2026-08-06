@@ -605,6 +605,57 @@ def test_plaintext_excerpt_redacts_all_sensitive_key_value_forms():
         assert value not in exc_info.value.raw_body_excerpt
 
 
+def test_plaintext_scanner_redacts_spaced_fields_and_unquoted_phrases():
+    secret_values = (
+        "private-key-spaced-secret",
+        "secret-key-spaced-secret",
+        "access-key-spaced-secret",
+        "api-key-spaced-secret",
+        "correct horse battery staple",
+    )
+    body = (
+        "private key : private-key-spaced-secret, "
+        "secret key = secret-key-spaced-secret; "
+        "access key: access-key-spaced-secret\n"
+        "api key = api-key-spaced-secret} "
+        "passphrase=correct horse battery staple"
+    )
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    for secret in secret_values:
+        assert secret not in exc_info.value.raw_body_excerpt
+
+
+def test_plaintext_scanner_honors_escaped_quotes():
+    secret = "escaped-private-key-secret"
+    body = 'private_key="prefix \\"quoted\\" ' + secret + '", diagnostic=keep'
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert secret not in exc_info.value.raw_body_excerpt
+
+
 @pytest.mark.parametrize(
     ("field_name", "secret_prefix", "quote"),
     [
@@ -675,6 +726,40 @@ def test_nested_plaintext_values_are_redacted_in_structured_errors():
         "accesskey-value",
     ):
         assert value not in serialized_response
+
+
+def test_nested_scanner_redacts_spaced_and_multiword_diagnostic_text():
+    nested_text = (
+        "private key: nested-private-key-secret, "
+        "passphrase=correct horse battery staple; "
+        "api key = nested-api-key-secret"
+    )
+    structured_error = {
+        "error": "invalid request",
+        "details": {"message": nested_text, "diagnostic": "keep this"},
+    }
+    response = FakeResponse(structured_error, status_code=422)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    raw_response = exc_info.value.raw_response
+    assert raw_response["details"]["diagnostic"] == "keep this"
+    serialized_response = json.dumps(raw_response)
+    for secret in (
+        "nested-private-key-secret",
+        "correct horse battery staple",
+        "nested-api-key-secret",
+    ):
+        assert secret not in serialized_response
 
 
 def test_nested_text_redacts_long_unterminated_quoted_assignments():

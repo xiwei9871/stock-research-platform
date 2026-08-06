@@ -24,6 +24,8 @@ _MODEL_ALIASES = {
 _MAX_RAW_BODY_EXCERPT = 512
 _REDACTED = "[REDACTED]"
 _MAX_RAW_BODY_SCAN = _MAX_RAW_BODY_EXCERPT * 4
+_MAX_ASSIGNMENT_FIELD_LENGTH = 128
+_SAFE_UNQUOTED_VALUE_DELIMITERS = frozenset(",;\r\n]}")
 _SENSITIVE_FIELD_TERMS = frozenset(
     {
         "authorization",
@@ -39,17 +41,6 @@ _SENSITIVE_FIELD_TERMS = frozenset(
         "privatekey",
         "passphrase",
     }
-)
-_SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"(?ix)"
-    r"(?P<key>[a-z_][a-z0-9_.-]*)"
-    r"(?P<separator>\s*[\"']?\s*[:=]\s*(?:bearer\s+)?)"
-    r"(?:"
-    r'(?P<double_quote>")(?P<double_value>[^"]*)(?P<double_close>"|$)'
-    r"|"
-    r"(?P<single_quote>')(?P<single_value>[^']*)(?P<single_close>'|$)"
-    r"|(?P<unquoted_value>[^\s<>'\";,}]+)"
-    r")"
 )
 _PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
 _PREDICTION_FAILURE_STATUSES = frozenset({"failed", "error"})
@@ -800,7 +791,12 @@ def _is_sensitive_field_name(key: str) -> bool:
 
 
 def _redact_sensitive_text(value: str, *, token: str | None) -> str:
-    redacted = value
+    redacted = _redact_sensitive_assignments(value)
+    redacted = re.sub(
+        r"(?i)(\bbearer\s+)[^\s<>'\";,]+",
+        rf"\1{_REDACTED}",
+        redacted,
+    )
     if token:
         redacted = re.sub(
             re.escape(token),
@@ -808,35 +804,112 @@ def _redact_sensitive_text(value: str, *, token: str | None) -> str:
             redacted,
             flags=re.IGNORECASE,
         )
-    redacted = re.sub(
-        r"(?i)(\bbearer\s+)[^\s<>'\";,]+",
-        rf"\1{_REDACTED}",
-        redacted,
-    )
+    return redacted
 
-    def replace_sensitive_assignment(match: re.Match[str]) -> str:
-        key = match.group("key")
-        if _is_sensitive_field_name(key):
-            if match.group("double_quote") is not None:
-                closing_quote = (
-                    '"' if match.group("double_close") == '"' else ""
-                )
-                return (
-                    f"{key}{match.group('separator')}"
-                    f'"{_REDACTED}{closing_quote}'
-                )
-            if match.group("single_quote") is not None:
-                closing_quote = (
-                    "'" if match.group("single_close") == "'" else ""
-                )
-                return (
-                    f"{key}{match.group('separator')}"
-                    f"'{_REDACTED}{closing_quote}"
-                )
-            return f"{key}{match.group('separator')}{_REDACTED}"
-        return match.group(0)
 
-    return _SENSITIVE_ASSIGNMENT_RE.sub(replace_sensitive_assignment, redacted)
+def _redact_sensitive_assignments(value: str) -> str:
+    output: list[str] = []
+    copy_start = 0
+    index = 0
+    while index < len(value):
+        if not _is_potential_field_start(value, index):
+            index += 1
+            continue
+
+        assignment = _scan_sensitive_assignment(value, index)
+        if assignment is None:
+            index += 1
+            continue
+
+        value_start, value_end = assignment
+        output.append(value[copy_start:value_start])
+        output.append(_REDACTED)
+        copy_start = value_end
+        index = value_end
+
+    if not output:
+        return value
+    output.append(value[copy_start:])
+    return "".join(output)
+
+
+def _is_potential_field_start(value: str, index: int) -> bool:
+    character = value[index]
+    if not (character.isalpha() or character == "_"):
+        return False
+    if index == 0:
+        return True
+    previous = value[index - 1]
+    return not (previous.isalnum() or previous in "_.-")
+
+
+def _scan_sensitive_assignment(
+    value: str,
+    start: int,
+) -> tuple[int, int] | None:
+    field_end = start
+    while (
+        field_end < len(value)
+        and field_end - start < _MAX_ASSIGNMENT_FIELD_LENGTH
+        and (
+            value[field_end].isalnum()
+            or value[field_end] in "_.- \t"
+        )
+    ):
+        field_end += 1
+
+    if field_end == start:
+        return None
+    if (
+        field_end - start == _MAX_ASSIGNMENT_FIELD_LENGTH
+        and field_end < len(value)
+        and value[field_end].isalnum()
+    ):
+        return None
+
+    field_name = value[start:field_end].strip(" \t")
+    if not field_name or not _is_sensitive_field_name(field_name):
+        return None
+
+    separator_end = field_end
+    while separator_end < len(value) and value[separator_end] in " \t\"'":
+        separator_end += 1
+    if separator_end >= len(value) or value[separator_end] not in ":=":
+        return None
+
+    value_start = separator_end + 1
+    while value_start < len(value) and value[value_start] in " \t":
+        value_start += 1
+    if value_start >= len(value) or value[value_start] in _SAFE_UNQUOTED_VALUE_DELIMITERS:
+        return None
+
+    if value[value_start] in "\"'":
+        value_end = _scan_quoted_value_end(value, value_start)
+    else:
+        value_end = _scan_unquoted_value_end(value, value_start)
+    if value_end <= value_start:
+        return None
+    return value_start, value_end
+
+
+def _scan_quoted_value_end(value: str, start: int) -> int:
+    quote = value[start]
+    index = start + 1
+    while index < len(value):
+        if value[index] == "\\":
+            index += 2
+            continue
+        if value[index] == quote:
+            return index + 1
+        index += 1
+    return len(value)
+
+
+def _scan_unquoted_value_end(value: str, start: int) -> int:
+    index = start
+    while index < len(value) and value[index] not in _SAFE_UNQUOTED_VALUE_DELIMITERS:
+        index += 1
+    return index
 
 
 def _complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
