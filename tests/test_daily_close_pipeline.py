@@ -2575,3 +2575,23 @@ def test_daily_pipeline_parser_accepts_market_monitor_stage():
 
     assert args.stage == "market_monitor"
     assert args.force is True
+def test_load_minute5_expected_ts_codes_excludes_suspended_daily_bars(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(dcp, "connect", _fake_connect)
+
+    def fake_fetch_all(conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [{"symbol": "000001", "exchange": "SZ"}]
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+
+    result = dcp.load_minute5_expected_ts_codes(
+        "stock_research", date(2026, 7, 8)
+    )
+
+    assert result == ["000001.SZ"]
+    assert captured["params"] == [date(2026, 7, 8)]
+    assert "COALESCE(b.volume, 0) > 0" in captured["sql"]
+    assert "COALESCE(b.amount, 0) > 0" in captured["sql"]

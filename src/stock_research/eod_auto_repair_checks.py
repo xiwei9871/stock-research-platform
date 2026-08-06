@@ -600,7 +600,11 @@ def check_dashboard_surface_freshness(
         metrics = strategy.get("latest_metrics") if isinstance(strategy.get("latest_metrics"), dict) else {}
         signal_date = str(metrics.get("signal_as_of_date") or metrics.get("as_of_date") or "")
         if signal_date and signal_date != trade_date:
-            issues.append(f"backtests:{strategy_id}:signal_as_of_date={signal_date}")
+            issue = f"backtests:{strategy_id}:signal_as_of_date={signal_date}"
+            if _date_text_after(signal_date, trade_date):
+                degraded_issues.append(issue)
+            else:
+                issues.append(issue)
         if str(metrics.get("performance_status") or "") == "stale":
             issues.append(f"backtests:{strategy_id}:performance_stale:{metrics.get('performance_as_of_date') or metrics.get('as_of_date')}")
 

@@ -547,6 +547,7 @@ def load_minute5_expected_ts_codes(service: str, trade_date: date) -> list[str]:
      AND b.adjust_type = 'raw'
     WHERE a.status = 'listed'
       AND a.exchange IN ('SH', 'SZ')
+      AND (COALESCE(b.volume, 0) > 0 OR COALESCE(b.amount, 0) > 0)
     ORDER BY a.exchange, a.symbol
     """
     with connect(service) as conn:
