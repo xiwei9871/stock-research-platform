@@ -15,10 +15,12 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, fields
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -63,8 +65,11 @@ METRICS_BY_MODEL_FILENAME = "metrics_by_model_horizon.csv"
 MODEL_COMPARISON_FILENAME = "model_comparison.csv"
 REPORT_FILENAME = "report.md"
 TRANSACTION_FILENAME = ".kronos_transaction.json"
+WRITER_LOCK_PREFIX = "."
+WRITER_LOCK_SUFFIX = ".kronos-writer.lock"
+_PREPARATION_OWNER_FILENAME = ".kronos_prepare_owner.json"
 _EXPERIMENT_SCHEMA_VERSION = 3
-_TRANSACTION_SCHEMA_VERSION = 2
+_TRANSACTION_SCHEMA_VERSION = 3
 
 _SUCCESS_RESPONSE_STATUSES = frozenset(
     {"ok", "partial", "complete", "completed", "success", "succeeded"}
@@ -90,6 +95,9 @@ _TERMINAL_MANIFEST_STATUSES = frozenset(
     }
 )
 _CLIENT_RAW_RESPONSE_SLOT_MARKER = "__kronos_client_raw_response_slot__"
+
+_WRITER_LOCK_STATE: dict[str, dict[str, Any]] = {}
+_WRITER_LOCK_STATE_GUARD = threading.RLock()
 
 MANIFEST_COLUMNS = (
     "run_key",
@@ -318,7 +326,126 @@ class _RunnerFailure(RuntimeError):
         self.raw_body_excerpt = raw_body_excerpt
 
 
+def _writer_lock_path(output_dir: Path) -> Path:
+    normalized = Path(output_dir)
+    name = normalized.name or "output"
+    return normalized.parent / f"{WRITER_LOCK_PREFIX}{name}{WRITER_LOCK_SUFFIX}"
+
+
+def _active_writer_owner(output_dir: Path) -> Mapping[str, Any] | None:
+    key = str(Path(output_dir).resolve(strict=False))
+    with _WRITER_LOCK_STATE_GUARD:
+        state = _WRITER_LOCK_STATE.get(key)
+        if state is None:
+            return None
+        return dict(state["owner"])
+
+
+@contextmanager
+def _writer_lock(output_dir: Path):
+    """Hold an exclusive per-output lock across preparation or publication."""
+
+    normalized = Path(output_dir)
+    _reject_symlink(normalized, "experiment output directory")
+    parent = normalized.parent
+    _reject_symlink(parent, "experiment output parent")
+    if not parent.exists():
+        parent.mkdir(parents=True, exist_ok=True)
+    _require_regular_directory(parent, "experiment output parent")
+    lock_path = _writer_lock_path(normalized)
+    _reject_symlink(lock_path, "experiment writer lock")
+    key = str(normalized.resolve(strict=False))
+    thread_id = threading.get_ident()
+
+    with _WRITER_LOCK_STATE_GUARD:
+        active = _WRITER_LOCK_STATE.get(key)
+        if active is not None:
+            if active["thread_id"] != thread_id:
+                raise RuntimeError(f"writer lock is held for output directory {normalized}")
+            active["depth"] += 1
+        else:
+            try:
+                import fcntl
+            except ModuleNotFoundError:  # pragma: no cover - supported CI is POSIX.
+                fcntl = None
+
+            try:
+                handle = lock_path.open("a+", encoding="utf-8")
+            except OSError as exc:
+                raise RuntimeError(f"cannot open experiment writer lock {lock_path}") from exc
+            try:
+                if fcntl is not None:
+                    try:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except (BlockingIOError, OSError) as exc:
+                        handle.close()
+                        raise RuntimeError(
+                            f"writer lock is held for output directory {normalized}"
+                        ) from exc
+                owner = {
+                    "owner_id": uuid.uuid4().hex,
+                    "pid": os.getpid(),
+                    "thread_id": thread_id,
+                    "output_dir": str(normalized.resolve(strict=False)),
+                    "lock_path": str(lock_path.resolve(strict=False)),
+                    "started_at": _now_iso(),
+                }
+                handle.seek(0)
+                handle.truncate()
+                handle.write(_canonical_json(owner) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+                _WRITER_LOCK_STATE[key] = {
+                    "thread_id": thread_id,
+                    "depth": 1,
+                    "handle": handle,
+                    "fcntl": fcntl,
+                    "owner": owner,
+                }
+            except BaseException:
+                try:
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
+                handle.close()
+                raise
+
+    try:
+        yield
+    finally:
+        with _WRITER_LOCK_STATE_GUARD:
+            state = _WRITER_LOCK_STATE.get(key)
+            if state is not None and state["thread_id"] == thread_id:
+                state["depth"] -= 1
+                if state["depth"] == 0:
+                    _WRITER_LOCK_STATE.pop(key, None)
+                    handle = state["handle"]
+                    fcntl = state["fcntl"]
+                    try:
+                        if fcntl is not None:
+                            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    finally:
+                        handle.close()
+
+
 def prepare_experiment(
+    config: KronosEvaluationConfig,
+    *,
+    output_dir: Path,
+    snapshot_loader: SnapshotLoader | None = None,
+) -> PreparationResult:
+    normalized_output_dir = Path(output_dir)
+    _reject_symlink(normalized_output_dir, "experiment output directory")
+    with _writer_lock(normalized_output_dir):
+        return _prepare_experiment_locked(
+            config,
+            output_dir=normalized_output_dir,
+            snapshot_loader=snapshot_loader,
+        )
+
+
+def _prepare_experiment_locked(
     config: KronosEvaluationConfig,
     *,
     output_dir: Path,
@@ -390,6 +517,18 @@ def prepare_experiment(
     published = False
     snapshot_paths: list[Path] = []
     try:
+        owner = _active_writer_owner(normalized_output_dir) or {}
+        _atomic_write_json(
+            stage_dir / _PREPARATION_OWNER_FILENAME,
+            {
+                "owner_id": owner.get("owner_id", uuid.uuid4().hex),
+                "pid": os.getpid(),
+                "output_dir": str(normalized_output_dir.resolve(strict=False)),
+                "lock_path": str(
+                    _writer_lock_path(normalized_output_dir).resolve(strict=False)
+                ),
+            },
+        )
         snapshot_dir = stage_dir / SNAPSHOT_DIRECTORY
         snapshot_dir.mkdir(parents=True, exist_ok=True)
         for snapshot in snapshots:
@@ -412,6 +551,8 @@ def prepare_experiment(
             [],
         )
         _atomic_write_json(stage_dir / EXPERIMENT_FILENAME, metadata)
+        _reject_symlink(stage_dir / _PREPARATION_OWNER_FILENAME, "preparation owner marker")
+        (stage_dir / _PREPARATION_OWNER_FILENAME).unlink(missing_ok=True)
 
         if normalized_output_dir.exists():
             # The non-empty case was rejected above.  Remove only the known
@@ -1040,9 +1181,11 @@ def _require_regular_directory(path: Path, label: str) -> None:
 
 
 def _cleanup_orphan_preparation_stages(output_dir: Path) -> None:
-    """Remove abandoned sibling preparation stages tied to this output path."""
+    """Remove stages only after this process owns the output writer lock."""
 
     _reject_symlink(output_dir, "experiment output directory")
+    if _active_writer_owner(output_dir) is None:
+        raise RuntimeError("preparation-stage cleanup requires the writer lock")
     parent = output_dir.parent
     _reject_symlink(parent, "experiment output parent")
     if not parent.exists():
@@ -1112,6 +1255,9 @@ def _transaction_entries(
     output_dir: Path,
     journal: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("Kronos artifact transaction id is invalid")
     raw_files = journal.get("files")
     if not isinstance(raw_files, list) or len(raw_files) != 3:
         raise ValueError("Kronos artifact transaction journal has invalid files")
@@ -1158,13 +1304,31 @@ def _transaction_entries(
             raise ValueError("Kronos artifact transaction is missing a backup")
         if not had_original and backup is not None:
             raise ValueError("Kronos artifact transaction has an unexpected backup")
+        expected_stage_name = f".{final_name}.{transaction_id}.stage"
+        if stage.name != expected_stage_name:
+            raise ValueError("transaction journal contains an unexpected staging path")
+        if had_original and backup is not None:
+            expected_backup_name = f".{final_name}.{transaction_id}.backup"
+            if backup.name != expected_backup_name:
+                raise ValueError("transaction journal contains an unexpected backup path")
         if raw_entry.get("final_state") not in {"old", "new"}:
             raise ValueError("Kronos artifact transaction final state is invalid")
         if raw_entry.get("restore_state") not in {"pending", "restored"}:
             raise ValueError("Kronos artifact transaction restore state is invalid")
-        if raw_entry.get("stage_state") not in {"present", "deleting", "deleted"}:
+        if raw_entry.get("stage_state") not in {
+            "planned",
+            "present",
+            "deleting",
+            "deleted",
+        }:
             raise ValueError("Kronos artifact transaction stage state is invalid")
-        valid_backup_states = {"none", "present", "delete_pending", "deleted"}
+        valid_backup_states = {
+            "none",
+            "planned",
+            "present",
+            "delete_pending",
+            "deleted",
+        }
         if raw_entry.get("backup_state") not in valid_backup_states:
             raise ValueError("Kronos artifact transaction backup state is invalid")
         if had_original and raw_entry.get("backup_state") == "none":
@@ -1198,6 +1362,17 @@ def _restore_transaction(
         if entry["had_original"]:
             _reject_symlink(final_path, "transaction final artifact")
             if raw["restore_state"] != "restored":
+                if (
+                    journal.get("state") == "prepared"
+                    and raw["final_state"] == "old"
+                    and final_path.exists()
+                ):
+                    # No final has been replaced while a prepared journal is
+                    # active.  The old final is already authoritative even
+                    # when backup creation was interrupted before completion.
+                    raw["restore_state"] = "restored"
+                    _persist_transaction_journal(output_dir, journal)
+                    continue
                 if not isinstance(backup, Path):
                     raise ValueError("transaction rollback is missing a backup")
                 _require_regular_file(backup, "transaction backup")
@@ -1281,7 +1456,11 @@ def _cleanup_transaction(
         if raw["backup_state"] == "deleted":
             continue
         if not backup.exists():
-            if state == "committed" or raw["backup_state"] == "delete_pending" or raw["restore_state"] == "restored":
+            if (
+                state in {"prepared", "committed"}
+                or raw["backup_state"] in {"planned", "delete_pending"}
+                or raw["restore_state"] == "restored"
+            ):
                 raw["backup_state"] = "deleted"
                 _persist_transaction_journal(output_dir, journal)
                 continue
@@ -1339,6 +1518,12 @@ def _repair_committed_finals(
 
 
 def _recover_pending_transaction(output_dir: Path) -> None:
+    normalized_output_dir = Path(output_dir)
+    with _writer_lock(normalized_output_dir):
+        _recover_pending_transaction_locked(normalized_output_dir)
+
+
+def _recover_pending_transaction_locked(output_dir: Path) -> None:
     """Recover the previous three-file publication before any reads/writes."""
 
     _reject_symlink(output_dir, "experiment output directory")
@@ -1349,6 +1534,22 @@ def _recover_pending_transaction(output_dir: Path) -> None:
     journal = _read_json(transaction_path)
     if journal.get("schema_version") != _TRANSACTION_SCHEMA_VERSION:
         raise ValueError("unsupported Kronos artifact transaction schema")
+    transaction_id = journal.get("transaction_id")
+    owner = journal.get("owner")
+    expected_output_dir = str(output_dir.resolve(strict=False))
+    expected_lock_path = str(_writer_lock_path(output_dir).resolve(strict=False))
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("Kronos artifact transaction journal has no transaction id")
+    if not isinstance(owner, Mapping):
+        raise ValueError("Kronos artifact transaction journal has no owner marker")
+    if owner.get("owner_id") != transaction_id:
+        raise ValueError("Kronos artifact transaction owner marker is invalid")
+    if owner.get("output_dir") != expected_output_dir:
+        raise ValueError("Kronos artifact transaction owner output is invalid")
+    if owner.get("lock_path") != expected_lock_path:
+        raise ValueError("Kronos artifact transaction owner lock is invalid")
+    if isinstance(owner.get("pid"), bool) or not isinstance(owner.get("pid"), int):
+        raise ValueError("Kronos artifact transaction owner pid is invalid")
     state = journal.get("state")
     if state not in {"prepared", "committing", "rolled_back", "committed"}:
         raise ValueError("Kronos artifact transaction journal has an invalid state")
@@ -1902,6 +2103,10 @@ def _manifest_cache_matches(
 ) -> bool:
     if row.get("status") != _SUCCESS_MANIFEST_STATUS:
         return False
+    try:
+        _validate_report_success_identity(row, model)
+    except ValueError:
+        return False
     if (
         not _valid_iso_timestamp(row.get("started_at"))
         or not _valid_iso_timestamp(row.get("finished_at"))
@@ -1930,9 +2135,18 @@ def _manifest_cache_matches(
         return False
     if health is not None:
         current_identity, current_weights, _, _ = _health_identity_values(health, model)
+        if not current_weights:
+            # A model family alone is not a stable loaded-weights identity.
+            # Preserve the successful artifacts, but require a healthy
+            # rerun when the service cannot attest to its weights/build.
+            return False
         stored_identity = str(row.get("model_identity") or "")
         stored_weights = str(row.get("weights_identity") or "")
-        if stored_identity != current_identity or stored_weights != current_weights:
+        if (
+            not stored_weights
+            or stored_identity != current_identity
+            or stored_weights != current_weights
+        ):
             return False
     run_key = f"{snapshot.key}|{model}"
     forecast_for_run = [item for item in forecast_rows if item.get("run_key") == run_key]
@@ -2148,6 +2362,7 @@ def _validate_report_artifacts(
                 f"run manifest row {run_key} has non-terminal or unknown status {status!r}"
             )
         if status == _SUCCESS_MANIFEST_STATUS:
+            _validate_report_success_identity(manifest_row, model)
             if not _manifest_cache_matches(
                 manifest_row,
                 snapshot,
@@ -2160,6 +2375,71 @@ def _validate_report_artifacts(
                 raise ValueError(f"artifact validation failed for successful run {run_key}")
         elif forecast_by_key.get(run_key) or realized_by_key.get(run_key):
             raise ValueError(f"failed run {run_key} has stale artifact rows")
+
+
+def _validate_report_success_identity(
+    manifest_row: Mapping[str, Any],
+    requested_model: str,
+) -> None:
+    """Validate persisted success identity without relying on live health."""
+
+    stored_identity = str(manifest_row.get("model_identity") or "")
+    health_identity = str(manifest_row.get("health_model_identity") or "")
+    stored_parts = _model_identity_parts(stored_identity)
+    health_parts = _model_identity_parts(health_identity)
+    requested_family = _model_family_from_identity(requested_model)
+    if stored_parts is None or health_parts is None:
+        raise ValueError(
+            "successful run is missing a recognized stored model identity"
+        )
+    if stored_parts[0] != requested_family or health_parts[0] != requested_family:
+        raise ValueError("successful run model identity does not match requested model")
+    if not _identity_values_compatible(stored_identity, health_identity):
+        raise ValueError("successful run stored and health model identities disagree")
+
+    manifest_payloads: list[tuple[str, Any]] = [
+        (
+            "manifest",
+            {
+                "model_identity": stored_identity,
+                "weights_identity": manifest_row.get("weights_identity", ""),
+            },
+        ),
+        (
+            "manifest_health",
+            {
+                "model_identity": health_identity,
+                "weights_identity": manifest_row.get("health_weights_identity", ""),
+            },
+        ),
+    ]
+    response_identity = manifest_row.get("response_model_identity")
+    response_weights = manifest_row.get("response_weights_identity")
+    if response_identity not in (None, "") or response_weights not in (None, ""):
+        manifest_payloads.append(
+            (
+                "manifest_response",
+                {
+                    "model_identity": response_identity,
+                    "weights_identity": response_weights,
+                },
+            )
+        )
+    for source_name, field_name in (
+        ("health_metadata", "health_metadata_json"),
+        ("raw_response", "raw_response_json"),
+    ):
+        payload = _parse_json_cell(manifest_row.get(field_name))
+        if payload not in (None, ""):
+            if not isinstance(payload, Mapping):
+                raise ValueError(f"successful run {field_name} is not a JSON object")
+            manifest_payloads.append((source_name, payload))
+    try:
+        validation = validate_identity_payloads(manifest_payloads, requested_model)
+    except IdentityValidationError as exc:
+        raise ValueError(f"successful run model identity is invalid: {exc}") from exc
+    if not validation.model_records:
+        raise ValueError("successful run has no recognized model identity")
 
 
 def _artifact_fingerprint(
@@ -3271,6 +3551,22 @@ def _write_run_artifacts(
     forecast_rows: Sequence[Mapping[str, Any]],
     realized_rows: Sequence[Mapping[str, Any]],
 ) -> None:
+    normalized_output_dir = Path(output_dir)
+    with _writer_lock(normalized_output_dir):
+        _write_run_artifacts_locked(
+            normalized_output_dir,
+            manifest,
+            forecast_rows,
+            realized_rows,
+        )
+
+
+def _write_run_artifacts_locked(
+    output_dir: Path,
+    manifest: Mapping[str, Mapping[str, Any]],
+    forecast_rows: Sequence[Mapping[str, Any]],
+    realized_rows: Sequence[Mapping[str, Any]],
+) -> None:
     _recover_pending_transaction(output_dir)
     normalized_manifest = [manifest[key] for key in sorted(manifest)]
     normalized_forecast = _sort_artifact_rows(forecast_rows)
@@ -3285,8 +3581,11 @@ def _write_run_artifacts(
     ]
     staged_paths: list[Path] = []
     backup_paths: list[Path] = []
+    backup_paths_by_index: list[Path | None] = []
     journal_published = False
+    journal_planned = False
     transaction_path = output_dir / TRANSACTION_FILENAME
+    transaction_id = uuid.uuid4().hex
     try:
         pa, _ = _load_pyarrow()
         forecast_schema = _schema_signature(_artifact_schema(pa, FORECAST_COLUMNS))
@@ -3304,36 +3603,22 @@ def _write_run_artifacts(
             row["generation"] = generation
             manifest_with_generation.append(row)
         for final_path in final_paths:
-            staged_path = _staged_path(final_path)
+            staged_path = output_dir / f".{final_path.name}.{transaction_id}.stage"
             staged_paths.append(staged_path)
-        _atomic_write_csv(staged_paths[0], manifest_with_generation, MANIFEST_COLUMNS)
-        _atomic_write_table(
-            staged_paths[1],
-            normalized_forecast,
-            FORECAST_COLUMNS,
-            generation=generation,
-        )
-        _atomic_write_table(
-            staged_paths[2],
-            normalized_realized,
-            REALIZED_COLUMNS,
-            generation=generation,
-        )
-
-        transaction_id = uuid.uuid4().hex
         journal_files: list[dict[str, Any]] = []
         for final_path in final_paths:
             _reject_symlink(final_path, "artifact final path")
             had_original = final_path.exists()
             if had_original:
                 _require_regular_file(final_path, "artifact final")
-            backup_path: Path | None = None
-            if had_original:
-                backup_path = output_dir / (
-                    f".{final_path.name}.{transaction_id}.backup"
-                )
-                _copy_file_durable(final_path, backup_path)
+            backup_path = (
+                output_dir / f".{final_path.name}.{transaction_id}.backup"
+                if had_original
+                else None
+            )
+            if backup_path is not None:
                 backup_paths.append(backup_path)
+            backup_paths_by_index.append(backup_path)
             journal_files.append(
                 {
                     "final": final_path.name,
@@ -3342,18 +3627,63 @@ def _write_run_artifacts(
                     "had_original": had_original,
                     "final_state": "old",
                     "restore_state": "pending",
-                    "stage_state": "present",
-                    "backup_state": "present" if had_original else "none",
+                    "stage_state": "planned",
+                    "backup_state": "planned" if had_original else "none",
                 }
             )
+        writer_owner = _active_writer_owner(output_dir) or {}
         journal: dict[str, Any] = {
             "schema_version": _TRANSACTION_SCHEMA_VERSION,
             "transaction_id": transaction_id,
             "state": "prepared",
+            "owner": {
+                "owner_id": transaction_id,
+                "writer_owner_id": writer_owner.get("owner_id", ""),
+                "pid": os.getpid(),
+                "output_dir": str(output_dir.resolve(strict=False)),
+                "lock_path": str(_writer_lock_path(output_dir).resolve(strict=False)),
+            },
             "files": journal_files,
         }
-        _persist_transaction_journal(output_dir, journal)
+        journal_planned = True
+        try:
+            _persist_transaction_journal(output_dir, journal)
+        except BaseException:
+            journal_published = transaction_path.exists()
+            raise
         journal_published = True
+
+        _atomic_write_csv(staged_paths[0], manifest_with_generation, MANIFEST_COLUMNS)
+        journal_files[0]["stage_state"] = "present"
+        _persist_transaction_journal(output_dir, journal)
+        _atomic_write_table(
+            staged_paths[1],
+            normalized_forecast,
+            FORECAST_COLUMNS,
+            generation=generation,
+        )
+        journal_files[1]["stage_state"] = "present"
+        _persist_transaction_journal(output_dir, journal)
+        _atomic_write_table(
+            staged_paths[2],
+            normalized_realized,
+            REALIZED_COLUMNS,
+            generation=generation,
+        )
+        journal_files[2]["stage_state"] = "present"
+        _persist_transaction_journal(output_dir, journal)
+
+        for index, final_path in enumerate(final_paths):
+            backup_path = backup_paths_by_index[index]
+            if backup_path is None:
+                continue
+            _reject_symlink(backup_path, "transaction backup path")
+            if backup_path.exists():
+                raise FileExistsError(f"transaction backup path already exists: {backup_path}")
+            _copy_file_durable(final_path, backup_path)
+            journal_files[index]["backup_state"] = "present"
+            _persist_transaction_journal(output_dir, journal)
+
         journal["state"] = "committing"
         _persist_transaction_journal(output_dir, journal)
         _commit_staged_artifacts(staged_paths, final_paths)
@@ -3364,10 +3694,17 @@ def _write_run_artifacts(
         _persist_transaction_journal(output_dir, journal)
         _recover_pending_transaction(output_dir)
     finally:
-        if not journal_published:
+        if not journal_published and not journal_planned:
             for path in (*staged_paths, *backup_paths):
                 _unlink_transaction_path(path)
             _unlink_transaction_path(transaction_path)
+        elif not journal_published:
+            # The journal write may have failed before replacing its target.
+            # Clean only paths that were planned by this transaction; if the
+            # journal exists, leave it for the normal recovery path.
+            if not transaction_path.exists():
+                for path in (*staged_paths, *backup_paths):
+                    _unlink_transaction_path(path)
 
 
 def _artifact_generation(

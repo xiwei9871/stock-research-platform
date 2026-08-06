@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import subprocess
 import sys
+import threading
 import types
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -136,6 +140,7 @@ class FakeClient:
         model: str = "small",
         model_identity: str = "small-v1",
         health_weights_identity: str | None = None,
+        omit_health_weights_identity: bool = False,
         fail: bool = False,
         malformed_asset: str | None = None,
         health_failure: bool = False,
@@ -153,6 +158,7 @@ class FakeClient:
         self.model = model
         self.model_identity = model_identity
         self.weights_identity = health_weights_identity or f"weights-{model_identity}"
+        self.omit_health_weights_identity = omit_health_weights_identity
         self.fail = fail
         self.malformed_asset = malformed_asset
         self.health_failure = health_failure
@@ -181,9 +187,10 @@ class FakeClient:
                 {
                     "model": self.model,
                     "model_identity": self.model_identity,
-                    "weights_identity": self.weights_identity,
                 }
             )
+            if not self.omit_health_weights_identity:
+                health["weights_identity"] = self.weights_identity
         return health
 
     def predict_daily(
@@ -747,6 +754,123 @@ def test_partial_commit_recovers_on_next_run_and_retry_publishes_one_generation(
     assert not (output_dir / runner.TRANSACTION_FILENAME).exists()
 
 
+def test_prejournal_backup_failure_publishes_recoverable_plan_and_retry(
+    prepared_experiment,
+    monkeypatch,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    original_copy = runner._copy_file_durable
+
+    def fail_backup_copy(source, destination):
+        if destination.name.endswith(".backup"):
+            raise OSError("injected backup copy failure")
+        return original_copy(source, destination)
+
+    monkeypatch.setattr(runner, "_copy_file_durable", fail_backup_copy)
+    with pytest.raises(OSError, match="backup copy"):
+        run_model(
+            config,
+            model="small",
+            output_dir=output_dir,
+            client=FakeClient(model_identity="small-v2"),
+        )
+
+    transaction_path = output_dir / runner.TRANSACTION_FILENAME
+    assert transaction_path.exists()
+    journal = json.loads(transaction_path.read_text(encoding="utf-8"))
+    assert journal["state"] == "prepared"
+    assert journal["owner"]["owner_id"] == journal["transaction_id"]
+    assert all(entry["stage"] and entry["backup"] for entry in journal["files"])
+
+    monkeypatch.undo()
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from pathlib import Path; "
+                "from stock_research import kronos_evaluation_runner as runner; "
+                "runner._recover_pending_transaction(Path(__import__('sys').argv[1]))"
+            ),
+            str(output_dir),
+        ],
+        cwd=Path.cwd(),
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(Path(__file__).resolve().parents[1] / "src"), os.environ.get("PYTHONPATH", "")]
+            ),
+        },
+        check=True,
+    )
+    assert not transaction_path.exists()
+
+    retry_client = FakeClient(model_identity="small-v2")
+    result = run_model(config, model="small", output_dir=output_dir, client=retry_client)
+    assert result.attempted_count == 2
+    assert len(retry_client.calls) == 2
+
+
+def test_prejournal_fsync_failure_leaves_journal_for_restart_recovery(
+    prepared_experiment,
+    monkeypatch,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    def fail_fsync(path):
+        raise OSError("injected journal fsync failure")
+
+    monkeypatch.setattr(runner, "_fsync_directory", fail_fsync)
+    with pytest.raises(OSError, match="journal fsync"):
+        run_model(
+            config,
+            model="small",
+            output_dir=output_dir,
+            client=FakeClient(model_identity="small-v2"),
+        )
+
+    assert (output_dir / runner.TRANSACTION_FILENAME).exists()
+    monkeypatch.undo()
+    runner._recover_pending_transaction(output_dir)
+    assert not (output_dir / runner.TRANSACTION_FILENAME).exists()
+
+
+def test_overlapping_prepare_does_not_delete_active_stage(tmp_path):
+    config = make_config()
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    output_dir = tmp_path / "locked"
+    active_stage = tmp_path / ".locked.prepare-active"
+    active_stage.mkdir()
+
+    errors = []
+
+    def overlap():
+        try:
+            prepare_experiment(
+                config,
+                output_dir=output_dir,
+                snapshot_loader=make_loader(snapshots),
+            )
+        except Exception as exc:  # noqa: BLE001 - assertion below checks category.
+            errors.append(exc)
+
+    with runner._writer_lock(output_dir):
+        thread = threading.Thread(target=overlap)
+        thread.start()
+        thread.join()
+
+    assert active_stage.exists()
+    assert len(errors) == 1
+    assert isinstance(errors[0], RuntimeError)
+    assert "writer lock" in str(errors[0])
+
+
 def test_transaction_recovery_is_idempotent_after_one_backup_delete_and_retry(
     prepared_experiment,
     monkeypatch,
@@ -872,6 +996,138 @@ def test_equivalent_versioned_health_identities_are_one_cache_identity(
     assert result.attempted_count == 0
     assert resume_client.calls == []
 
+
+def test_missing_health_weights_disables_cache_but_preserves_successful_artifacts(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    first_client = FakeClient(omit_health_weights_identity=True)
+    first = run_model(config, model="small", output_dir=output_dir, client=first_client)
+    manifest_before = [
+        row for row in read_csv_rows(output_dir / runner.MANIFEST_FILENAME)
+        if row["model"] == "small"
+    ]
+    forecast_before = read_table_rows(output_dir / runner.FORECAST_FILENAME)
+    realized_before = read_table_rows(output_dir / runner.REALIZED_FILENAME)
+
+    second_client = FakeClient(omit_health_weights_identity=True)
+    second = run_model(config, model="small", output_dir=output_dir, client=second_client)
+
+    assert first.attempted_count == second.attempted_count == 2
+    assert second.cache_hit_count == 0
+    assert len(second_client.calls) == 2
+    assert all(row["status"] == "success" for row in manifest_before)
+    assert len(forecast_before) == len(read_table_rows(output_dir / runner.FORECAST_FILENAME))
+    assert len(realized_before) == len(read_table_rows(output_dir / runner.REALIZED_FILENAME))
+
+
+def test_changed_health_weights_build_cannot_cache_hit(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=FakeClient(health_weights_identity="weights-small-build-a"),
+    )
+    changed = FakeClient(health_weights_identity="weights-small-build-b")
+
+    result = run_model(config, model="small", output_dir=output_dir, client=changed)
+
+    assert result.cache_hit_count == 0
+    assert result.attempted_count == 2
+    assert len(changed.calls) == 2
+
+
+def test_report_rejects_forged_success_identity_without_live_health(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+
+    import pyarrow as pa
+    import pyarrow.parquet as parquet
+
+    manifest_rows = read_csv_rows(output_dir / runner.MANIFEST_FILENAME)
+    forecast_rows = read_table_rows(output_dir / runner.FORECAST_FILENAME)
+    realized_rows = read_table_rows(output_dir / runner.REALIZED_FILENAME)
+    forged_key = next(row["run_key"] for row in manifest_rows if row["model"] == "small")
+
+    def forge(value):
+        if isinstance(value, Mapping):
+            return {key: forge(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [forge(item) for item in value]
+        if isinstance(value, str):
+            return (
+                value.replace("weights-small-v1", "weights-base-v1")
+                .replace("small-v1", "base-v1")
+                .replace("small", "base")
+            )
+        return value
+
+    for row in manifest_rows:
+        if row["run_key"] != forged_key:
+            continue
+        for field in (
+            "model_identity",
+            "weights_identity",
+            "health_model_identity",
+            "health_weights_identity",
+            "health_model_raw_identity",
+            "health_weights_raw_identity",
+            "response_model_identity",
+            "response_weights_identity",
+        ):
+            row[field] = forge(row[field])
+        row["health_metadata_json"] = json.dumps(forge(json.loads(row["health_metadata_json"])), sort_keys=True, separators=(",", ":"))
+        row["raw_response_json"] = json.dumps(forge(json.loads(row["raw_response_json"])), sort_keys=True, separators=(",", ":"))
+    for rows in (forecast_rows, realized_rows):
+        for row in rows:
+            if row["run_key"] == forged_key:
+                row["model_identity"] = "base-v1"
+                row["weights_identity"] = "weights-base-v1"
+
+    forecast_path = output_dir / runner.FORECAST_FILENAME
+    realized_path = output_dir / runner.REALIZED_FILENAME
+    for path, rows in ((forecast_path, forecast_rows), (realized_path, realized_rows)):
+        table = parquet.read_table(path)
+        metadata = dict(table.schema.metadata or {})
+        rewritten = pa.Table.from_pylist(rows, schema=table.schema)
+        rewritten = rewritten.replace_schema_metadata(metadata)
+        parquet.write_table(rewritten, path)
+
+    forecast_schema = runner._schema_signature(
+        runner._artifact_schema(pa, runner.FORECAST_COLUMNS)
+    )
+    realized_schema = runner._schema_signature(
+        runner._artifact_schema(pa, runner.REALIZED_COLUMNS)
+    )
+    generation = runner._artifact_generation(
+        manifest_rows,
+        forecast_rows,
+        realized_rows,
+        forecast_schema=forecast_schema,
+        realized_schema=realized_schema,
+    )
+    for row in manifest_rows:
+        row["generation"] = generation
+    runner._atomic_write_csv(
+        output_dir / runner.MANIFEST_FILENAME,
+        manifest_rows,
+        runner.MANIFEST_COLUMNS,
+    )
+    for path in (forecast_path, realized_path):
+        table = parquet.read_table(path)
+        metadata = dict(table.schema.metadata or {})
+        metadata[b"kronos_generation"] = generation.encode("utf-8")
+        parquet.write_table(table.replace_schema_metadata(metadata), path)
+
+    with pytest.raises(ValueError, match="identity|model"):
+        build_report(output_dir=output_dir)
 
 @pytest.mark.parametrize("relative", ["universe.csv", "forecast_bars.parquet", "report.md"])
 def test_known_output_symlinks_are_rejected(prepared_experiment, relative):
