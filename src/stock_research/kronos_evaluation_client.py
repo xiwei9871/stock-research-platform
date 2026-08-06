@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -20,6 +21,9 @@ _MODEL_ALIASES = {
     "base": "base",
     "kronos-base": "base",
 }
+_MAX_RAW_BODY_EXCERPT = 512
+_PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
+_DAILY_FAILURE_STATUSES = frozenset({"error", "unavailable", "failed"})
 
 
 class KronosErrorCategory:
@@ -59,12 +63,14 @@ class KronosClientError(RuntimeError):
         code: str,
         status_code: int | None = None,
         raw_response: dict[str, Any] | None = None,
+        raw_body_excerpt: str | None = None,
     ) -> None:
         super().__init__(message)
         self.category = category
         self.code = code
         self.status_code = status_code
         self.raw_response = raw_response
+        self.raw_body_excerpt = raw_body_excerpt
 
 
 class KronosClient:
@@ -331,12 +337,21 @@ class KronosClient:
                 code=KronosErrorCode.INVALID_RESPONSE,
             )
         if status_code != 200:
+            structured_response = _try_clone_structured_response(response)
             raise KronosClientError(
                 f"Kronos {path} returned HTTP {status_code}",
                 category=KronosErrorCategory.HTTP,
                 code=KronosErrorCode.HTTP_ERROR,
                 status_code=status_code,
-                raw_response=_try_clone_structured_response(response),
+                raw_response=structured_response,
+                raw_body_excerpt=(
+                    None
+                    if structured_response is not None
+                    else _bounded_raw_body_excerpt(
+                        getattr(response, "text", None),
+                        token=self._headers.get("X-Kronos-Token"),
+                    )
+                ),
             )
 
         try:
@@ -389,7 +404,7 @@ def _validate_prediction_response(
     requested_sample_count: int,
 ) -> None:
     status = response.get("status")
-    if status != "succeeded":
+    if not isinstance(status, str) or status not in _PREDICTION_SUCCESS_STATUSES:
         if status is not None:
             raise KronosClientError(
                 "Kronos prediction response did not succeed",
@@ -404,20 +419,23 @@ def _validate_prediction_response(
             raw_response=response,
         )
 
-    result = response.get("result")
-    if not isinstance(result, Mapping):
-        raise KronosClientError(
-            "Kronos prediction response has no result mapping",
-            category=KronosErrorCategory.PROTOCOL,
-            code=KronosErrorCode.INVALID_RESPONSE,
-            raw_response=response,
-        )
-    daily = result.get("daily")
+    daily, result = _extract_daily_forecast(response)
     if not isinstance(daily, Mapping) or not daily:
         raise KronosClientError(
             "Kronos prediction response has no daily forecast data",
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+        )
+    daily_status = daily.get("status")
+    if (
+        isinstance(daily_status, str)
+        and daily_status.strip().lower() in _DAILY_FAILURE_STATUSES
+    ) or daily.get("unavailable") is True or daily.get("error") is not None:
+        raise KronosClientError(
+            "Kronos prediction response daily forecast is unavailable",
+            category=KronosErrorCategory.MODEL,
+            code=KronosErrorCode.MODEL_ERROR,
             raw_response=response,
         )
 
@@ -430,6 +448,7 @@ def _validate_prediction_response(
             raw_response=response,
         )
 
+    quantile_values: dict[str, list[Any]] = {}
     for quantile_name in ("p10", "p50", "p90"):
         values = quantiles.get(quantile_name)
         if not isinstance(values, (list, tuple)):
@@ -449,6 +468,20 @@ def _validate_prediction_response(
         if any(not _is_finite_number(value) for value in values):
             raise KronosClientError(
                 f"Kronos prediction response {quantile_name} has invalid values",
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+            )
+        quantile_values[quantile_name] = list(values)
+
+    for p10, p50, p90 in zip(
+        quantile_values["p10"],
+        quantile_values["p50"],
+        quantile_values["p90"],
+    ):
+        if p10 > p50 or p50 > p90:
+            raise KronosClientError(
+                "Kronos prediction response quantiles are not ordered",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
@@ -506,6 +539,20 @@ def _validate_prediction_response(
                 )
 
 
+def _extract_daily_forecast(
+    response: Mapping[str, Any],
+) -> tuple[Any, Mapping[str, Any]]:
+    top_level_daily = response.get("daily")
+    if top_level_daily is not None:
+        result = response.get("result")
+        return top_level_daily, result if isinstance(result, Mapping) else {}
+
+    result = response.get("result")
+    if isinstance(result, Mapping):
+        return result.get("daily"), result
+    return None, {}
+
+
 def _find_daily_quantiles(daily: Mapping[str, Any]) -> Mapping[str, Any] | None:
     required = ("p10", "p50", "p90")
     if all(field_name in daily for field_name in required):
@@ -549,11 +596,45 @@ def _is_finite_number(value: Any) -> bool:
         return False
 
 
+class _KronosResponse(dict[str, Any]):
+    """Internal dict carrying the client-created raw-response slot metadata."""
+
+    _raw_response_slot: str | None = None
+
+
 def _clone_json_object(value: Mapping[str, Any]) -> dict[str, Any]:
     cloned = _clone_json_value(value)
     if not isinstance(cloned, dict):  # pragma: no cover - type guard for callers.
         raise TypeError("expected a JSON object")
     return cloned
+
+
+def _bounded_raw_body_excerpt(body: Any, *, token: str | None) -> str | None:
+    if not isinstance(body, str):
+        return None
+    excerpt = body.strip()
+    if not excerpt:
+        return None
+    if token:
+        excerpt = re.sub(
+            re.escape(token),
+            "[REDACTED]",
+            excerpt,
+            flags=re.IGNORECASE,
+        )
+    excerpt = re.sub(
+        r"(?i)(authorization\s*:\s*(?:bearer\s+)?)[^\s<>'\";,]+",
+        r"\1[REDACTED]",
+        excerpt,
+    )
+    excerpt = re.sub(
+        r"(?i)((?:x-kronos-token|token|api[-_]?key|secret)\s*[:=]\s*)[^\s<>'\";,]+",
+        r"\1[REDACTED]",
+        excerpt,
+    )
+    if len(excerpt) > _MAX_RAW_BODY_EXCERPT:
+        return excerpt[: _MAX_RAW_BODY_EXCERPT - 1] + "…"
+    return excerpt
 
 
 def _try_clone_structured_response(response: Any) -> dict[str, Any] | None:
@@ -571,6 +652,12 @@ def _try_clone_structured_response(response: Any) -> dict[str, Any] | None:
 
 
 def _complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    client_slot = getattr(payload, "_raw_response_slot", None)
+    if isinstance(client_slot, str):
+        complete_response = payload.get(client_slot)
+        if isinstance(complete_response, Mapping):
+            return _clone_json_object(complete_response)
+
     collision_slots: list[tuple[int, Any]] = []
     for key, value in payload.items():
         if not isinstance(key, str) or key.lstrip("_") != "kronos_raw_response":
@@ -613,16 +700,18 @@ def _attach_raw_response(
     *,
     raw_response: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    normalized = _clone_json_object(payload)
+    normalized = _KronosResponse(_clone_json_object(payload))
     complete_response = payload if raw_response is None else raw_response
     if "raw_response" not in normalized:
         normalized["raw_response"] = _clone_json_value(complete_response)
+        normalized._raw_response_slot = "raw_response"
         return normalized
 
     fallback_key = "_kronos_raw_response"
     while fallback_key in normalized:
         fallback_key = f"_{fallback_key}"
     normalized[fallback_key] = _clone_json_value(complete_response)
+    normalized._raw_response_slot = fallback_key
     return normalized
 
 

@@ -163,11 +163,13 @@ def make_snapshot():
 def make_prediction_response(
     *,
     sample_count=20,
-    sample_count_location="daily",
+    sample_count_location="service",
     include_sample_count=True,
     horizon=2,
     include_horizon=True,
     layout="direct",
+    envelope="service",
+    status=None,
     quantiles=None,
 ):
     quantiles = quantiles or {
@@ -183,24 +185,38 @@ def make_prediction_response(
     else:
         raise ValueError(f"unsupported test layout: {layout}")
 
-    result = {"daily": daily}
-    if include_sample_count:
-        if sample_count_location == "response":
-            response_sample_count = sample_count
-        elif sample_count_location == "result":
-            result["sample_count"] = sample_count
-            response_sample_count = None
-        elif sample_count_location == "daily":
-            daily["sample_count"] = sample_count
-            response_sample_count = None
-        else:
-            raise ValueError(f"unsupported sample count location: {sample_count_location}")
-    else:
-        response_sample_count = None
     if include_horizon:
         daily["horizon"] = horizon
 
-    response = {"status": "succeeded", "result": result}
+    response_sample_count = None
+    if envelope == "service":
+        response = {
+            "status": status or "partial",
+            "daily": daily,
+            "intraday": None,
+            "aggregated": {},
+            "diagnostics": [],
+        }
+        if include_sample_count:
+            if sample_count_location in {"service", "response"}:
+                response_sample_count = sample_count
+            if sample_count_location in {"service", "daily"}:
+                daily["sample_count"] = sample_count
+            if sample_count_location == "result":
+                raise ValueError("result sample_count requires result envelope")
+    elif envelope == "result":
+        result = {"daily": daily}
+        response = {"status": status or "succeeded", "result": result}
+        if include_sample_count:
+            if sample_count_location in {"service", "response"}:
+                response_sample_count = sample_count
+            if sample_count_location in {"service", "daily"}:
+                daily["sample_count"] = sample_count
+            if sample_count_location == "result":
+                result["sample_count"] = sample_count
+    else:
+        raise ValueError(f"unsupported test envelope: {envelope}")
+
     if response_sample_count is not None:
         response["sample_count"] = response_sample_count
     return response
@@ -222,7 +238,7 @@ def test_predict_daily_posts_exact_frozen_snapshot_payload_and_token_header():
 
     result = client.predict_daily(snapshot, model="small", sample_count=20, seed=7)
 
-    assert result["status"] == "succeeded"
+    assert result["status"] == "partial"
     assert result["raw_response"] == prediction
     assert session.requests[0] == {
         "method": "GET",
@@ -406,6 +422,34 @@ def test_non_200_preserves_structured_json_without_leaking_upstream_text():
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.raw_response == structured_error
+    assert exc_info.value.raw_body_excerpt is None
+    assert "secret-token" not in str(exc_info.value)
+    assert "upstream detail" not in str(exc_info.value)
+
+
+def test_non_200_preserves_bounded_redacted_excerpt_for_non_json_body():
+    body = "<html>gateway failure token=secret-token " + ("upstream detail " * 100)
+    response = FakeResponse(
+        None,
+        status_code=502,
+        text=body,
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError, match="HTTP 502") as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.raw_response is None
+    assert exc_info.value.raw_body_excerpt
+    assert len(exc_info.value.raw_body_excerpt) <= 512
+    assert "secret-token" not in exc_info.value.raw_body_excerpt
     assert "secret-token" not in str(exc_info.value)
     assert "upstream detail" not in str(exc_info.value)
 
@@ -514,7 +558,7 @@ def test_predict_daily_posts_explicit_base_model():
 
     result = client.predict_daily(make_snapshot(), model="base", seed=7)
 
-    assert result["status"] == "succeeded"
+    assert result["status"] == "partial"
     assert session.requests[-1]["method"] == "POST"
     assert session.requests[-1]["json"]["model"] == "base"
     assert session.requests[-1]["json"]["seed"] == 7
@@ -616,6 +660,87 @@ def test_prediction_requires_semantically_successful_daily_result(
     assert exc_info.value.raw_response == prediction
 
 
+@pytest.mark.parametrize("status", ["partial", "complete"])
+def test_prediction_accepts_service_daily_envelope_statuses(status):
+    prediction = make_prediction_response(status=status)
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert result["status"] == status
+    assert result["raw_response"] == prediction
+
+
+@pytest.mark.parametrize("status", ["failed", "error"])
+def test_prediction_rejects_failed_service_envelope_statuses(status):
+    prediction = make_prediction_response(status=status)
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+    assert exc_info.value.raw_response == prediction
+
+
+def test_prediction_rejects_missing_top_level_daily_envelope():
+    prediction = {
+        "status": "partial",
+        "sample_count": 20,
+        "daily": None,
+        "intraday": None,
+    }
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.PROTOCOL
+    assert exc_info.value.code == KronosErrorCode.INVALID_RESPONSE
+    assert exc_info.value.raw_response == prediction
+
+
+@pytest.mark.parametrize("daily_status", ["error", "unavailable"])
+def test_prediction_rejects_error_or_unavailable_daily_envelope(daily_status):
+    prediction = {
+        "status": "partial",
+        "sample_count": 20,
+        "daily": {"status": daily_status, "message": "daily failed"},
+        "intraday": None,
+    }
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category in {
+        KronosErrorCategory.MODEL,
+        KronosErrorCategory.PROTOCOL,
+    }
+    assert exc_info.value.code in {
+        KronosErrorCode.MODEL_ERROR,
+        KronosErrorCode.INVALID_RESPONSE,
+    }
+    assert exc_info.value.raw_response == prediction
+
+
 def test_prediction_accepts_summary_close_quantile_layout():
     prediction = make_prediction_response(layout="summary_close")
     session = FakeSession(
@@ -626,13 +751,16 @@ def test_prediction_accepts_summary_close_quantile_layout():
 
     result = client.predict_daily(make_snapshot(), model="small", seed=7)
 
-    assert result["status"] == "succeeded"
+    assert result["status"] == "partial"
     assert result["raw_response"] == prediction
 
 
 @pytest.mark.parametrize("sample_count_location", ["response", "result", "daily"])
 def test_prediction_accepts_sample_count_at_supported_locations(sample_count_location):
-    prediction = make_prediction_response(sample_count_location=sample_count_location)
+    prediction = make_prediction_response(
+        sample_count_location=sample_count_location,
+        envelope="result" if sample_count_location == "result" else "service",
+    )
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
         prediction=prediction,
@@ -640,6 +768,23 @@ def test_prediction_accepts_sample_count_at_supported_locations(sample_count_loc
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
     client.predict_daily(make_snapshot(), model="small", sample_count=20, seed=7)
+
+
+def test_prediction_accepts_legacy_result_daily_compatibility_envelope():
+    prediction = make_prediction_response(
+        envelope="result",
+        sample_count_location="result",
+    )
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert result["status"] == "succeeded"
+    assert result["raw_response"] == prediction
 
 
 @pytest.mark.parametrize(
@@ -703,6 +848,34 @@ def test_prediction_rejects_semantically_invalid_success_response(prediction):
     }
 
 
+def test_prediction_rejects_elementwise_quantile_ordering_violations():
+    prediction = make_prediction_response(
+        quantiles={
+            "p10": [1.6, 1.1],
+            "p50": [1.5, 1.6],
+            "p90": [2.0, 2.1],
+        }
+    )
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category in {
+        KronosErrorCategory.MODEL,
+        KronosErrorCategory.PROTOCOL,
+    }
+    assert exc_info.value.code in {
+        KronosErrorCode.MODEL_ERROR,
+        KronosErrorCode.INVALID_RESPONSE,
+    }
+    assert exc_info.value.raw_response == prediction
+
+
 def test_prediction_accepts_missing_optional_horizon_field():
     prediction = make_prediction_response(include_horizon=False)
     session = FakeSession(
@@ -719,6 +892,25 @@ def test_model_mismatch_preserves_complete_health_response_on_raw_key_collision(
         "status": "ok",
         "model": "Kronos-small",
         "raw_response": {"upstream": "nested value"},
+    }
+    session = FakeSession(
+        health=health,
+        prediction=make_prediction_response(),
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="base", seed=7)
+
+    assert exc_info.value.code == KronosErrorCode.MODEL_MISMATCH
+    assert exc_info.value.raw_response == health
+
+
+def test_model_mismatch_prefers_client_raw_response_when_upstream_uses_reserved_key():
+    health = {
+        "status": "ok",
+        "model": "Kronos-small",
+        "_kronos_raw_response": {"upstream": "reserved-looking field"},
     }
     session = FakeSession(
         health=health,
