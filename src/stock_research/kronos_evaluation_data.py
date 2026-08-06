@@ -96,8 +96,8 @@ def load_daily_bars(
 
 
 def load_global_trade_dates(
-    max_date: str,
     adjust_type: str,
+    max_date: str,
     service: str,
 ) -> list[str]:
     """Load the ordered global calendar used to select future timestamps."""
@@ -116,6 +116,29 @@ def load_global_trade_dates(
     dates = [_normalize_date_value(row["trade_date"], "trade_date") for row in rows]
     _require_strictly_increasing("global trade dates", dates)
     return dates
+
+
+def prepare_rolling_snapshots(
+    asset_ids: Sequence[str],
+    max_date: str,
+    adjust_type: str,
+    service: str,
+    input_window: int,
+    forecast_horizon: int,
+    *,
+    origin_dates: Iterable[str] | None = None,
+) -> list[RollingSnapshot]:
+    """Load bars and the full-market calendar before building snapshots."""
+
+    frame = load_daily_bars(asset_ids, max_date, adjust_type, service)
+    trade_dates = load_global_trade_dates(adjust_type, max_date, service)
+    return build_rolling_snapshots(
+        frame,
+        trade_dates,
+        input_window,
+        forecast_horizon,
+        origin_dates=origin_dates,
+    )
 
 
 def build_source_metadata(
@@ -157,23 +180,36 @@ def build_rolling_snapshots(
     trade_dates: Iterable[str],
     input_window: int,
     forecast_horizon: int,
+    *,
+    origin_dates: Iterable[str] | None = None,
 ) -> list[RollingSnapshot]:
     """Build immutable, point-in-time rolling snapshots without future leakage.
 
-    ``trade_dates`` contains the requested rolling origins.  The global
-    calendar is the sorted set of dates present anywhere in ``frame`` so a
-    date traded by one asset can still be required as truth for another.
+    ``trade_dates`` is the authoritative, strictly ordered full-market
+    calendar.  It is never inferred from the asset-filtered frame.  By
+    default every calendar date is an origin; ``origin_dates`` can restrict
+    the origins while still requiring all future timestamps to come from the
+    explicit full-market calendar.
     """
 
     _require_positive_int("input_window", input_window)
     _require_positive_int("forecast_horizon", forecast_horizon)
-    origins = _normalize_date_sequence("trade_dates", trade_dates)
+    calendar = _normalize_date_sequence("trade_dates", trade_dates)
+    if origin_dates is None:
+        origins = calendar
+    else:
+        origins = _normalize_date_sequence("origin_dates", origin_dates)
+        missing_origins = sorted(set(origins) - set(calendar))
+        if missing_origins:
+            raise ValueError(
+                "origin_dates must be contained in trade_dates: "
+                + ", ".join(missing_origins)
+            )
     _require_frame_columns(frame, REQUIRED_FRAME_COLUMNS)
     if frame.empty:
         return []
 
-    bars_by_asset, asset_ids, frame_dates = _normalize_bars(frame)
-    global_dates = sorted(frame_dates)
+    bars_by_asset, asset_ids = _normalize_bars(frame)
     snapshots: list[RollingSnapshot] = []
 
     for asset_id in sorted(asset_ids):
@@ -184,9 +220,9 @@ def build_rolling_snapshots(
 
         for origin in origins:
             future_timestamps = tuple(
-                global_dates[
-                    bisect_right(global_dates, origin) : bisect_right(
-                        global_dates, origin
+                calendar[
+                    bisect_right(calendar, origin) : bisect_right(
+                        calendar, origin
                     )
                     + forecast_horizon
                 ]
@@ -322,10 +358,9 @@ def _make_snapshot(
 
 def _normalize_bars(
     frame: pd.DataFrame,
-) -> tuple[dict[str, tuple[object, ...]], set[str], set[str]]:
+) -> tuple[dict[str, tuple[object, ...]], set[str]]:
     bars: dict[str, list[object]] = {}
     asset_ids: set[str] = set()
-    frame_dates: set[str] = set()
     seen_dates: dict[str, set[str]] = {}
     previous_dates: dict[str, str] = {}
     invalid_reasons: dict[str, str] = {}
@@ -347,8 +382,6 @@ def _normalize_bars(
         except ValueError as exc:
             invalid_reasons.setdefault(asset_id, str(exc))
             continue
-        frame_dates.add(timestamp)
-
         if timestamp in seen_dates[asset_id]:
             invalid_reasons.setdefault(
                 asset_id,
@@ -378,7 +411,6 @@ def _normalize_bars(
     return (
         {asset_id: tuple(asset_bars) for asset_id, asset_bars in bars.items()},
         asset_ids,
-        frame_dates,
     )
 
 
