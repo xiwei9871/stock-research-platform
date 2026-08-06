@@ -1,6 +1,9 @@
+import os
 import json
+import subprocess
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -42,6 +45,7 @@ from stock_research.kronos_evaluation_client import (  # noqa: E402
     KronosErrorCategory,
     KronosErrorCode,
 )
+from stock_research import kronos_evaluation_client as client_module  # noqa: E402
 from stock_research.kronos_evaluation_types import (  # noqa: E402
     DEFAULT_KRONOS_SEED,
     RollingSnapshot,
@@ -85,6 +89,10 @@ class FakeSession:
         self.get_exception = get_exception
         self.post_exception = post_exception
         self.requests = []
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
     def get(self, url, *, headers, timeout):
         self.requests.append(
@@ -152,12 +160,55 @@ def make_snapshot():
     )
 
 
+def make_prediction_response(
+    *,
+    sample_count=20,
+    sample_count_location="daily",
+    include_sample_count=True,
+    horizon=2,
+    include_horizon=True,
+    layout="direct",
+    quantiles=None,
+):
+    quantiles = quantiles or {
+        "p10": [1.0, 1.1],
+        "p50": [1.5, 1.6],
+        "p90": [2.0, 2.1],
+    }
+    quantiles = {key: list(values) for key, values in quantiles.items()}
+    if layout == "direct":
+        daily = quantiles
+    elif layout == "summary_close":
+        daily = {"summary": {"close": quantiles}}
+    else:
+        raise ValueError(f"unsupported test layout: {layout}")
+
+    result = {"daily": daily}
+    if include_sample_count:
+        if sample_count_location == "response":
+            response_sample_count = sample_count
+        elif sample_count_location == "result":
+            result["sample_count"] = sample_count
+            response_sample_count = None
+        elif sample_count_location == "daily":
+            daily["sample_count"] = sample_count
+            response_sample_count = None
+        else:
+            raise ValueError(f"unsupported sample count location: {sample_count_location}")
+    else:
+        response_sample_count = None
+    if include_horizon:
+        daily["horizon"] = horizon
+
+    response = {"status": "succeeded", "result": result}
+    if response_sample_count is not None:
+        response["sample_count"] = response_sample_count
+    return response
+
+
 def test_predict_daily_posts_exact_frozen_snapshot_payload_and_token_header():
     snapshot = make_snapshot()
-    prediction = {
-        "status": "succeeded",
-        "result": {"daily": {"p50": [1.0]}},
-    }
+    prediction = make_prediction_response()
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
         prediction=prediction,
@@ -331,6 +382,34 @@ def test_prediction_reports_non_200_and_malformed_json(
     assert exc_info.value.code == expected_code
 
 
+def test_non_200_preserves_structured_json_without_leaking_upstream_text():
+    structured_error = {
+        "error": "invalid request",
+        "request_id": "req-422",
+    }
+    response = FakeResponse(
+        structured_error,
+        status_code=422,
+        text="Authorization: Bearer secret-token " + ("upstream detail " * 50),
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError, match="HTTP 422") as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.raw_response == structured_error
+    assert "secret-token" not in str(exc_info.value)
+    assert "upstream detail" not in str(exc_info.value)
+
+
 @pytest.mark.parametrize(
     ("method", "exception", "expected_message", "expected_category", "expected_code"),
     [
@@ -417,7 +496,7 @@ def test_unknown_or_missing_health_model_fails_closed():
 def test_predict_daily_uses_the_canonical_seed_when_omitted():
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
-        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+        prediction=make_prediction_response(),
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
@@ -429,7 +508,7 @@ def test_predict_daily_uses_the_canonical_seed_when_omitted():
 def test_predict_daily_posts_explicit_base_model():
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-base"},
-        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+        prediction=make_prediction_response(),
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
@@ -445,7 +524,7 @@ def test_predict_daily_posts_explicit_base_model():
 def test_predict_daily_rejects_sample_count_outside_integer_range(sample_count):
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
-        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+        prediction=make_prediction_response(),
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
@@ -466,7 +545,7 @@ def test_predict_daily_rejects_sample_count_outside_integer_range(sample_count):
 def test_predict_daily_accepts_sample_count_boundaries(sample_count):
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
-        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+        prediction=make_prediction_response(sample_count=sample_count),
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
@@ -483,7 +562,7 @@ def test_predict_daily_accepts_sample_count_boundaries(sample_count):
 def test_health_requires_exact_ok_status_and_blocks_prediction_when_unavailable():
     session = FakeSession(
         health={"status": "error", "model": "Kronos-small"},
-        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+        prediction=make_prediction_response(),
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
@@ -537,12 +616,181 @@ def test_prediction_requires_semantically_successful_daily_result(
     assert exc_info.value.raw_response == prediction
 
 
-def test_prediction_preserves_upstream_raw_response_collision_safely():
-    prediction = {
-        "status": "succeeded",
-        "result": {"daily": {"p50": [1.0]}},
-        "raw_response": {"upstream": "must remain"},
+def test_prediction_accepts_summary_close_quantile_layout():
+    prediction = make_prediction_response(layout="summary_close")
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert result["status"] == "succeeded"
+    assert result["raw_response"] == prediction
+
+
+@pytest.mark.parametrize("sample_count_location", ["response", "result", "daily"])
+def test_prediction_accepts_sample_count_at_supported_locations(sample_count_location):
+    prediction = make_prediction_response(sample_count_location=sample_count_location)
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    client.predict_daily(make_snapshot(), model="small", sample_count=20, seed=7)
+
+
+@pytest.mark.parametrize(
+    "prediction",
+    [
+        {
+            "status": "succeeded",
+            "result": {
+                "daily": {"message": "not a forecast"}
+            },
+        },
+        make_prediction_response(
+            quantiles={
+                "p10": [1.0, 1.1],
+                "p50": [],
+                "p90": [2.0, 2.1],
+            }
+        ),
+        make_prediction_response(
+            quantiles={
+                "p10": [1.0, 1.1],
+                "p50": [1.5, 1.6],
+            }
+        ),
+        make_prediction_response(
+            quantiles={
+                "p10": [1.0],
+                "p50": [1.5, 1.6],
+                "p90": [2.0, 2.1],
+            }
+        ),
+        make_prediction_response(
+            quantiles={
+                "p10": [1.0, 1.1],
+                "p50": [1.5, float("nan")],
+                "p90": [2.0, 2.1],
+            }
+        ),
+        make_prediction_response(sample_count=19),
+        make_prediction_response(horizon=3),
+        make_prediction_response(include_sample_count=False),
+    ],
+)
+def test_prediction_rejects_semantically_invalid_success_response(prediction):
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category in {
+        KronosErrorCategory.MODEL,
+        KronosErrorCategory.PROTOCOL,
     }
+    assert exc_info.value.code in {
+        KronosErrorCode.MODEL_ERROR,
+        KronosErrorCode.INVALID_RESPONSE,
+    }
+
+
+def test_prediction_accepts_missing_optional_horizon_field():
+    prediction = make_prediction_response(include_horizon=False)
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    client.predict_daily(make_snapshot(), model="small", seed=7)
+
+
+def test_model_mismatch_preserves_complete_health_response_on_raw_key_collision():
+    health = {
+        "status": "ok",
+        "model": "Kronos-small",
+        "raw_response": {"upstream": "nested value"},
+    }
+    session = FakeSession(
+        health=health,
+        prediction=make_prediction_response(),
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="base", seed=7)
+
+    assert exc_info.value.code == KronosErrorCode.MODEL_MISMATCH
+    assert exc_info.value.raw_response == health
+
+
+def test_client_context_closes_only_an_internally_created_session(monkeypatch):
+    created_session = FakeSession()
+    monkeypatch.setattr(client_module.requests, "Session", lambda: created_session)
+
+    with KronosClient("http://kronos.test", token="secret") as client:
+        assert client.session is created_session
+
+    assert created_session.closed is True
+
+
+def test_client_does_not_close_an_injected_session():
+    injected_session = FakeSession()
+
+    with KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=injected_session,
+    ) as client:
+        assert client.session is injected_session
+
+    client.close()
+    assert injected_session.closed is False
+
+
+def test_client_import_chain_does_not_require_db_dependencies():
+    source = """
+import sys
+import types
+
+requests_stub = types.ModuleType('requests')
+class RequestException(Exception):
+    pass
+class Timeout(RequestException):
+    pass
+requests_stub.RequestException = RequestException
+requests_stub.Timeout = Timeout
+requests_stub.Session = object
+sys.modules['requests'] = requests_stub
+
+import stock_research.kronos_evaluation_client
+
+assert 'stock_research.db' not in sys.modules
+"""
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    completed = subprocess.run(
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_prediction_preserves_upstream_raw_response_collision_safely():
+    prediction = make_prediction_response()
+    prediction["raw_response"] = {"upstream": "must remain"}
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
         prediction=prediction,

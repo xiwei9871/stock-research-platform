@@ -123,7 +123,26 @@ class KronosClient:
         self.base_url = normalized_base_url
         self.timeout = normalized_timeout
         self._headers = {"X-Kronos-Token": token.strip()}
+        self._owns_session = session is None
+        self._closed = False
         self.session = session if session is not None else requests.Session()
+
+    def close(self) -> None:
+        """Close the internally-created HTTP session, if any."""
+
+        if self._closed or not self._owns_session:
+            return
+        self._closed = True
+        close = getattr(self.session, "close", None)
+        if callable(close):
+            close()
+
+    def __enter__(self) -> "KronosClient":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+        self.close()
+        return False
 
     def health(self) -> dict[str, Any]:
         """Return ready health data with the active model normalized."""
@@ -131,8 +150,7 @@ class KronosClient:
         response = self._request_json("GET", "/health")
         if response.get("status") != "ok":
             raise KronosClientError(
-                "Kronos service is not ready: expected health status 'ok', "
-                f"got {response.get('status')!r}",
+                "Kronos service is not ready: expected health status 'ok'",
                 category=KronosErrorCategory.TRANSPORT,
                 code=KronosErrorCode.SERVICE_UNAVAILABLE,
                 raw_response=response,
@@ -150,7 +168,7 @@ class KronosClient:
             normalized_model = _normalize_model_name(raw_model)
         except KronosClientError as exc:
             raise KronosClientError(
-                f"Kronos health response has unsupported model {raw_model!r}",
+                "Kronos health response has unsupported model",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
@@ -172,7 +190,7 @@ class KronosClient:
                 f"requested {requested_model}, active {active_model}",
                 category=KronosErrorCategory.MODEL,
                 code=KronosErrorCode.MODEL_MISMATCH,
-                raw_response=health.get("raw_response"),
+                raw_response=_complete_raw_response(health),
             )
         return health
 
@@ -250,7 +268,11 @@ class KronosClient:
             )
 
         result = self._request_json("POST", "/v1/predict", payload=payload)
-        _validate_prediction_response(result)
+        _validate_prediction_response(
+            result,
+            expected_horizon=len(snapshot.future_timestamps),
+            requested_sample_count=sample_count,
+        )
         return _attach_raw_response(result)
 
     def _request_json(
@@ -284,19 +306,19 @@ class KronosClient:
                 )
         except requests.Timeout as exc:
             raise KronosClientError(
-                f"Kronos {path} request timed out: {exc}",
+                f"Kronos {path} request timed out",
                 category=KronosErrorCategory.TIMEOUT,
                 code=KronosErrorCode.TIMEOUT,
             ) from exc
         except TimeoutError as exc:
             raise KronosClientError(
-                f"Kronos {path} request timed out: {exc}",
+                f"Kronos {path} request timed out",
                 category=KronosErrorCategory.TIMEOUT,
                 code=KronosErrorCode.TIMEOUT,
             ) from exc
         except requests.RequestException as exc:
             raise KronosClientError(
-                f"Kronos {path} request failed: {exc}",
+                f"Kronos {path} request failed",
                 category=KronosErrorCategory.TRANSPORT,
                 code=KronosErrorCode.TRANSPORT_ERROR,
             ) from exc
@@ -309,13 +331,12 @@ class KronosClient:
                 code=KronosErrorCode.INVALID_RESPONSE,
             )
         if status_code != 200:
-            body = str(getattr(response, "text", "") or "").strip()
-            detail = f": {body}" if body else ""
             raise KronosClientError(
-                f"Kronos {path} returned HTTP {status_code}{detail}",
+                f"Kronos {path} returned HTTP {status_code}",
                 category=KronosErrorCategory.HTTP,
                 code=KronosErrorCode.HTTP_ERROR,
                 status_code=status_code,
+                raw_response=_try_clone_structured_response(response),
             )
 
         try:
@@ -361,13 +382,17 @@ def _normalize_model_name(value: Any, *, label: str = "model") -> str:
     return normalized
 
 
-def _validate_prediction_response(response: dict[str, Any]) -> None:
+def _validate_prediction_response(
+    response: dict[str, Any],
+    *,
+    expected_horizon: int,
+    requested_sample_count: int,
+) -> None:
     status = response.get("status")
     if status != "succeeded":
         if status is not None:
             raise KronosClientError(
-                "Kronos prediction response did not succeed: "
-                f"status={status!r}",
+                "Kronos prediction response did not succeed",
                 category=KronosErrorCategory.MODEL,
                 code=KronosErrorCode.MODEL_ERROR,
                 raw_response=response,
@@ -396,12 +421,172 @@ def _validate_prediction_response(response: dict[str, Any]) -> None:
             raw_response=response,
         )
 
+    quantiles = _find_daily_quantiles(daily)
+    if quantiles is None:
+        raise KronosClientError(
+            "Kronos prediction response has no supported daily quantiles",
+            category=KronosErrorCategory.PROTOCOL,
+            code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+        )
+
+    for quantile_name in ("p10", "p50", "p90"):
+        values = quantiles.get(quantile_name)
+        if not isinstance(values, (list, tuple)):
+            raise KronosClientError(
+                f"Kronos prediction response {quantile_name} must be a sequence",
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+            )
+        if not values or len(values) != expected_horizon:
+            raise KronosClientError(
+                f"Kronos prediction response {quantile_name} has invalid horizon",
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+            )
+        if any(not _is_finite_number(value) for value in values):
+            raise KronosClientError(
+                f"Kronos prediction response {quantile_name} has invalid values",
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+            )
+
+    sample_count_fields = _response_fields(
+        response,
+        result,
+        daily,
+        field_name="sample_count",
+    )
+    if not sample_count_fields:
+        raise KronosClientError(
+            "Kronos prediction response is missing sample_count",
+            category=KronosErrorCategory.PROTOCOL,
+            code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+        )
+    for location, value in sample_count_fields:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise KronosClientError(
+                f"Kronos prediction response sample_count at {location} is invalid",
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+            )
+        if value != requested_sample_count:
+            raise KronosClientError(
+                f"Kronos prediction response sample_count at {location} mismatches request",
+                category=KronosErrorCategory.MODEL,
+                code=KronosErrorCode.MODEL_ERROR,
+                raw_response=response,
+            )
+
+    for field_name in ("horizon", "forecast_horizon"):
+        for location, value in _response_fields(
+            response,
+            result,
+            daily,
+            field_name=field_name,
+        ):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise KronosClientError(
+                    f"Kronos prediction response {field_name} at {location} is invalid",
+                    category=KronosErrorCategory.PROTOCOL,
+                    code=KronosErrorCode.INVALID_RESPONSE,
+                    raw_response=response,
+                )
+            if value != expected_horizon:
+                raise KronosClientError(
+                    f"Kronos prediction response {field_name} at {location} mismatches forecast",
+                    category=KronosErrorCategory.MODEL,
+                    code=KronosErrorCode.MODEL_ERROR,
+                    raw_response=response,
+                )
+
+
+def _find_daily_quantiles(daily: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    required = ("p10", "p50", "p90")
+    if all(field_name in daily for field_name in required):
+        return daily
+
+    summary = daily.get("summary")
+    if not isinstance(summary, Mapping):
+        return None
+    close = summary.get("close")
+    if isinstance(close, Mapping) and all(
+        field_name in close for field_name in required
+    ):
+        return close
+    return None
+
+
+def _response_fields(
+    response: Mapping[str, Any],
+    result: Mapping[str, Any],
+    daily: Mapping[str, Any],
+    *,
+    field_name: str,
+) -> list[tuple[str, Any]]:
+    fields: list[tuple[str, Any]] = []
+    for location, mapping in (
+        ("response", response),
+        ("result", result),
+        ("daily", daily),
+    ):
+        if field_name in mapping:
+            fields.append((location, mapping[field_name]))
+    return fields
+
+
+def _is_finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, TypeError, ValueError):
+        return False
+
 
 def _clone_json_object(value: Mapping[str, Any]) -> dict[str, Any]:
     cloned = _clone_json_value(value)
     if not isinstance(cloned, dict):  # pragma: no cover - type guard for callers.
         raise TypeError("expected a JSON object")
     return cloned
+
+
+def _try_clone_structured_response(response: Any) -> dict[str, Any] | None:
+    try:
+        raw_response = response.json()
+    except (AttributeError, TypeError, ValueError):
+        return None
+    try:
+        cloned_response = _clone_json_value(raw_response)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(cloned_response, dict):
+        return None
+    return cloned_response
+
+
+def _complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    collision_slots: list[tuple[int, Any]] = []
+    for key, value in payload.items():
+        if not isinstance(key, str) or key.lstrip("_") != "kronos_raw_response":
+            continue
+        leading_underscores = len(key) - len(key.lstrip("_"))
+        if leading_underscores:
+            collision_slots.append((leading_underscores, value))
+    if collision_slots:
+        _, complete_response = max(collision_slots, key=lambda item: item[0])
+        if isinstance(complete_response, Mapping):
+            return _clone_json_object(complete_response)
+
+    raw_response = payload.get("raw_response")
+    if isinstance(raw_response, Mapping):
+        return _clone_json_object(raw_response)
+    return None
 
 
 def _clone_json_value(value: Any) -> Any:

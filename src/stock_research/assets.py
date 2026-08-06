@@ -1,7 +1,6 @@
 import re
 
 from stock_research.config import SETTINGS
-from stock_research.db import connect, execute_many, fetch_all
 
 
 TABLE_RE = re.compile(
@@ -33,6 +32,8 @@ def baostock_code_from_table(table_name: str) -> str:
 
 
 def discover_source_tables(service: str) -> list[str]:
+    from stock_research.db import connect, fetch_all
+
     sql = """
     SELECT table_name
     FROM information_schema.tables
@@ -73,6 +74,8 @@ def sync_asset_master(
     source_service: str = SETTINGS.hfq_service,
     research_service: str = SETTINGS.research_service,
 ) -> int:
+    from stock_research.db import connect, execute_many
+
     tables = discover_source_tables(source_service)
     rows = infer_asset_rows(tables)
     sql = """
