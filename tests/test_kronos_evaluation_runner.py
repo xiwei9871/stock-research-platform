@@ -1037,6 +1037,50 @@ def test_hard_kill_after_first_replace_recovers_and_cleans_root_temp(
     assert not list(output_dir.glob(".*.tmp"))
 
 
+def test_artifact_commit_crash_recovers_report_invalidation_intent(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+
+    child_pid = os.fork()
+    if child_pid == 0:
+        original_commit = runner._commit_staged_artifacts
+
+        def kill_after_artifact_commit(staged_paths, final_paths):
+            original_commit(staged_paths, final_paths)
+            os._exit(79)
+
+        runner._commit_staged_artifacts = kill_after_artifact_commit
+        try:
+            runner._run_model_locked(
+                config,
+                model="base",
+                output_dir=output_dir,
+                client=FakeClient(model="base", model_identity="base-v2"),
+            )
+        finally:
+            os._exit(80)
+
+    _, status = os.waitpid(child_pid, 0)
+    assert os.WIFEXITED(status)
+    assert os.WEXITSTATUS(status) == 79
+    assert (output_dir / runner.REPORT_INVALIDATION_FILENAME).exists()
+
+    summary = build_report(output_dir=output_dir)
+
+    assert summary["generation"]
+    assert not (output_dir / runner.REPORT_INVALIDATION_FILENAME).exists()
+    assert (output_dir / runner.REPORT_DIGEST_FILENAME).exists()
+
+
 def test_transaction_recovery_is_idempotent_after_one_backup_delete_and_retry(
     prepared_experiment,
     monkeypatch,
@@ -1727,6 +1771,128 @@ def test_report_rejects_tampered_derived_numeric_content(
         build_report(output_dir=output_dir)
     with pytest.raises(ValueError, match="digest|content|derived|report"):
         run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_legacy_four_file_report_migrates_to_authenticated_digest(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+    (output_dir / runner.REPORT_DIGEST_FILENAME).unlink()
+
+    summary = build_report(output_dir=output_dir)
+
+    assert summary["generation"]
+    digest = json.loads(
+        (output_dir / runner.REPORT_DIGEST_FILENAME).read_text(encoding="utf-8")
+    )
+    assert digest["schema_version"] == 2
+
+
+def test_legacy_same_generation_report_tampering_is_not_overwritten(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+    (output_dir / runner.REPORT_DIGEST_FILENAME).unlink()
+    metrics_path = output_dir / runner.METRICS_BY_MODEL_FILENAME
+    rows = read_csv_rows(metrics_path)
+    rows[0]["mean_absolute_return_error"] = "999999.0"
+    with metrics_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    with pytest.raises(ValueError, match="legacy|digest|content|report"):
+        build_report(output_dir=output_dir)
+
+
+def test_v1_report_digest_migrates_after_hash_validation(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+
+    digest_path = output_dir / runner.REPORT_DIGEST_FILENAME
+    digest = json.loads(digest_path.read_text(encoding="utf-8"))
+    digest["schema_version"] = 1
+    runner._atomic_write_json(digest_path, digest)
+
+    build_report(output_dir=output_dir)
+
+    migrated = json.loads(digest_path.read_text(encoding="utf-8"))
+    assert migrated["schema_version"] == 2
+
+
+def test_v1_report_journal_and_digest_migrate_to_current_format(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+
+    digest_path = output_dir / runner.REPORT_DIGEST_FILENAME
+    digest = json.loads(digest_path.read_text(encoding="utf-8"))
+    digest["schema_version"] = 1
+    runner._atomic_write_json(digest_path, digest)
+
+    transaction_id = "legacy-v1"
+    stage_dir = output_dir / f".{runner.REPORT_TRANSACTION_FILENAME}.{transaction_id}.stage"
+    stage_dir.mkdir()
+    transaction = {
+        "schema_version": 1,
+        "transaction_id": transaction_id,
+        "journal_temp": f".{runner.REPORT_TRANSACTION_FILENAME}.{transaction_id}.tmp",
+        "state": "prepared",
+        "owner": {
+            "owner_id": transaction_id,
+            "writer_owner_id": "legacy-writer",
+            "pid": os.getpid(),
+            "output_dir": str(output_dir.resolve()),
+            "lock_path": str(runner._writer_lock_path(output_dir).resolve()),
+        },
+        "stage_dir": stage_dir.name,
+        "files": [
+            {"final": filename, "stage": filename}
+            for filename in runner._DERIVED_REPORT_FILENAMES
+        ],
+    }
+    runner._atomic_write_json(output_dir / runner.REPORT_TRANSACTION_FILENAME, transaction)
+
+    summary = build_report(output_dir=output_dir)
+
+    assert summary["generation"]
+    assert not (output_dir / runner.REPORT_TRANSACTION_FILENAME).exists()
+    assert not stage_dir.exists()
+    migrated_digest = json.loads(digest_path.read_text(encoding="utf-8"))
+    assert migrated_digest["schema_version"] == 2
 
 
 def test_new_model_run_invalidates_derived_report_outputs(

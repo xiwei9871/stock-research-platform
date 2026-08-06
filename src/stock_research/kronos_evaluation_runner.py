@@ -77,7 +77,7 @@ _EXPERIMENT_SCHEMA_VERSION = 3
 _TRANSACTION_SCHEMA_VERSION = 4
 _REPORT_TRANSACTION_SCHEMA_VERSION = 2
 _REPORT_INVALIDATION_SCHEMA_VERSION = 1
-_REPORT_DIGEST_SCHEMA_VERSION = 1
+_REPORT_DIGEST_SCHEMA_VERSION = 2
 
 _SUCCESS_RESPONSE_STATUSES = frozenset(
     {"ok", "partial", "complete", "completed", "success", "succeeded"}
@@ -692,6 +692,11 @@ def _run_model_locked(
         realized_schema,
     )
     artifact_generation = next(iter({str(row["generation"]) for row in manifest.values()}))
+    _prepare_report_artifacts_for_generation_locked(
+        normalized_output_dir,
+        artifact_generation,
+        for_build=False,
+    )
     _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
     parameters_by_key = {
         snapshot.key: _prediction_parameters(config, snapshot)
@@ -966,6 +971,11 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
         realized_schema,
     )
     artifact_generation = next(iter({str(row["generation"]) for row in manifest.values()}))
+    legacy_report = _prepare_report_artifacts_for_generation_locked(
+        normalized_output_dir,
+        artifact_generation,
+        for_build=True,
+    )
     _validate_report_artifacts(
         snapshots,
         manifest,
@@ -973,7 +983,8 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
         forecast_rows,
         realized_rows,
     )
-    _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
+    if not legacy_report:
+        _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
 
     horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
     raw_seed = config_payload.get("seed")
@@ -1040,6 +1051,14 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
         model_metadata=model_metadata,
         artifact_generation=artifact_generation,
     )
+    if legacy_report:
+        _validate_legacy_report_content(
+            normalized_output_dir,
+            stock_output=stock_output,
+            model_output=model_output,
+            comparisons=comparisons,
+            report_text=report_text,
+        )
     _publish_report_artifacts_locked(
         normalized_output_dir,
         artifact_generation=artifact_generation,
@@ -1908,6 +1927,9 @@ def _recover_report_transaction_locked(output_dir: Path) -> None:
     if not path.exists():
         return
     journal = _read_json(path)
+    if journal.get("schema_version") == 1:
+        _recover_legacy_report_transaction_locked(output_dir, path, journal)
+        return
     if journal.get("schema_version") != _REPORT_TRANSACTION_SCHEMA_VERSION:
         raise ValueError("unsupported report transaction schema")
     transaction_id = journal.get("transaction_id")
@@ -1951,6 +1973,84 @@ def _recover_report_transaction_locked(output_dir: Path) -> None:
     for staged_path in staged_paths.values():
         _reject_symlink(staged_path, "report staged artifact")
     _unlink_transaction_path(path)
+    _fsync_directory(output_dir)
+
+
+def _legacy_report_transaction_paths(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> tuple[Path, dict[str, Path]]:
+    required = {
+        "schema_version",
+        "transaction_id",
+        "journal_temp",
+        "state",
+        "owner",
+        "stage_dir",
+        "files",
+    }
+    if set(journal) != required:
+        raise ValueError("legacy report transaction fields are invalid")
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("legacy report transaction id is invalid")
+    if journal.get("journal_temp") != f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.tmp":
+        raise ValueError("legacy report transaction temp is invalid")
+    if journal.get("state") not in {"prepared", "publishing", "committed", "cleaning"}:
+        raise ValueError("legacy report transaction state is invalid")
+    owner = journal.get("owner")
+    expected_output = str(output_dir.resolve(strict=False))
+    expected_lock = str(_writer_lock_path(output_dir).resolve(strict=False))
+    if not isinstance(owner, Mapping):
+        raise ValueError("legacy report transaction owner is missing")
+    if owner.get("owner_id") != transaction_id:
+        raise ValueError("legacy report transaction owner is invalid")
+    if owner.get("output_dir") != expected_output or owner.get("lock_path") != expected_lock:
+        raise ValueError("legacy report transaction owner path is invalid")
+    if isinstance(owner.get("pid"), bool) or not isinstance(owner.get("pid"), int):
+        raise ValueError("legacy report transaction owner pid is invalid")
+    stage_name = journal.get("stage_dir")
+    expected_stage = f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.stage"
+    if not isinstance(stage_name, str) or stage_name != expected_stage:
+        raise ValueError("legacy report transaction stage path is invalid")
+    stage_dir = output_dir / stage_name
+    _reject_symlink(stage_dir, "legacy report transaction stage directory")
+    raw_files = journal.get("files")
+    if not isinstance(raw_files, list) or len(raw_files) != len(_DERIVED_REPORT_FILENAMES):
+        raise ValueError("legacy report transaction file set is invalid")
+    paths: dict[str, Path] = {}
+    for raw in raw_files:
+        if not isinstance(raw, Mapping) or set(raw) != {"final", "stage"}:
+            raise ValueError("legacy report transaction entry is invalid")
+        final_name = raw.get("final")
+        stage_file = raw.get("stage")
+        if final_name not in _DERIVED_REPORT_FILENAMES or final_name in paths:
+            raise ValueError("legacy report transaction final set is invalid")
+        if stage_file != final_name:
+            raise ValueError("legacy report transaction staged filename is invalid")
+        stage_path = stage_dir / stage_file
+        _reject_symlink(stage_path, "legacy report staged artifact")
+        paths[final_name] = stage_path
+    if set(paths) != set(_DERIVED_REPORT_FILENAMES):
+        raise ValueError("legacy report transaction final set is incomplete")
+    return stage_dir, paths
+
+
+def _recover_legacy_report_transaction_locked(
+    output_dir: Path,
+    transaction_path: Path,
+    journal: Mapping[str, Any],
+) -> None:
+    stage_dir, staged_paths = _legacy_report_transaction_paths(output_dir, journal)
+    _invalidate_derived_report_artifacts_locked(output_dir)
+    for staged_path in staged_paths.values():
+        _reject_symlink(staged_path, "legacy report staged artifact")
+    if stage_dir.exists():
+        _reject_symlink(stage_dir, "legacy report transaction stage directory")
+        if not stage_dir.is_dir():
+            raise ValueError("legacy report transaction stage directory is not a directory")
+        shutil.rmtree(stage_dir)
+    _unlink_transaction_path(transaction_path)
     _fsync_directory(output_dir)
 
 
@@ -3014,12 +3114,29 @@ def _validate_existing_report_artifacts(
     if marker not in report:
         raise ValueError("report.md generation is stale or missing")
 
+    _validate_report_digest_manifest(
+        output_dir,
+        expected_generation=artifact_generation,
+        allowed_schemas={_REPORT_DIGEST_SCHEMA_VERSION},
+    )
+
+
+def _validate_report_digest_manifest(
+    output_dir: Path,
+    *,
+    expected_generation: str | None,
+    allowed_schemas: set[int],
+) -> tuple[str, dict[str, Any]]:
     digest_payload = _read_json(output_dir / REPORT_DIGEST_FILENAME)
     if set(digest_payload) != {"schema_version", "generation", "files"}:
         raise ValueError("report digest manifest fields are invalid")
-    if digest_payload.get("schema_version") != _REPORT_DIGEST_SCHEMA_VERSION:
+    schema_version = digest_payload.get("schema_version")
+    if schema_version not in allowed_schemas:
         raise ValueError("unsupported report digest manifest schema")
-    if digest_payload.get("generation") != artifact_generation:
+    generation = digest_payload.get("generation")
+    if not isinstance(generation, str) or not generation:
+        raise ValueError("report digest manifest generation is invalid")
+    if expected_generation is not None and generation != expected_generation:
         raise ValueError("report digest manifest generation is stale")
     stored_digests = digest_payload.get("files")
     if not isinstance(stored_digests, Mapping) or set(stored_digests) != set(
@@ -3037,9 +3154,128 @@ def _validate_existing_report_artifacts(
         actual_digest = _report_file_digest(output_dir / filename)
         if actual_digest != stored_digest:
             raise ValueError(f"derived report artifact {filename} content digest mismatch")
+    return generation, digest_payload
 
 
-def _invalidate_derived_report_artifacts_locked(output_dir: Path) -> None:
+def _legacy_report_generation(output_dir: Path) -> str:
+    generations: set[str] = set()
+    for filename in (
+        METRICS_BY_STOCK_FILENAME,
+        METRICS_BY_MODEL_FILENAME,
+        MODEL_COMPARISON_FILENAME,
+    ):
+        path = output_dir / filename
+        _require_regular_file(path, "legacy derived report artifact")
+        with path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            expected_columns = (
+                _METRIC_OUTPUT_COLUMNS
+                if filename != MODEL_COMPARISON_FILENAME
+                else _COMPARISON_OUTPUT_COLUMNS
+            )
+            if reader.fieldnames != list(expected_columns):
+                raise ValueError(f"legacy derived report artifact {filename} columns are invalid")
+            rows = list(reader)
+        row_generations = {row.get("generation") for row in rows}
+        if rows and (None in row_generations or "" in row_generations):
+            raise ValueError(f"legacy derived report artifact {filename} has no generation")
+        generations.update(
+            str(value) for value in row_generations if value not in (None, "")
+        )
+
+    report_path = output_dir / REPORT_FILENAME
+    _require_regular_file(report_path, "legacy report artifact")
+    marker_prefix = "Artifact generation: `"
+    marker_suffix = "`"
+    markers = [
+        line[len(marker_prefix) : -len(marker_suffix)]
+        for line in report_path.read_text(encoding="utf-8").splitlines()
+        if line.startswith(marker_prefix) and line.endswith(marker_suffix)
+    ]
+    if len(markers) != 1 or not markers[0]:
+        raise ValueError("legacy report artifact has no unique generation marker")
+    generations.add(markers[0])
+    if len(generations) != 1:
+        raise ValueError("legacy report artifacts have mixed generations")
+    return next(iter(generations))
+
+
+def _prepare_report_artifacts_for_generation_locked(
+    output_dir: Path,
+    artifact_generation: str,
+    *,
+    for_build: bool,
+) -> bool:
+    """Migrate or remove legacy report files before strict validation.
+
+    Returns ``True`` only for a complete, same-generation four-file report
+    set that still needs semantic comparison against newly derived content.
+    Such a set is never silently overwritten.
+    """
+
+    paths = [output_dir / filename for filename in _REPORT_PUBLISHED_FILENAMES]
+    for path in paths:
+        _reject_symlink(path, "derived report artifact")
+    existing = [path for path in paths if path.exists()]
+    if not existing:
+        return False
+
+    digest_path = output_dir / REPORT_DIGEST_FILENAME
+    if digest_path.exists():
+        generation, payload = _validate_report_digest_manifest(
+            output_dir,
+            expected_generation=None,
+            allowed_schemas={1, _REPORT_DIGEST_SCHEMA_VERSION},
+        )
+        if generation != artifact_generation:
+            _invalidate_derived_report_artifacts_locked(output_dir)
+            return False
+        if payload["schema_version"] == 1:
+            payload["schema_version"] = _REPORT_DIGEST_SCHEMA_VERSION
+            _atomic_write_json(digest_path, payload)
+        return False
+
+    public_paths = [output_dir / filename for filename in _DERIVED_REPORT_FILENAMES]
+    if len([path for path in public_paths if path.exists()]) != len(public_paths):
+        raise ValueError("legacy derived report artifacts are incomplete")
+    generation = _legacy_report_generation(output_dir)
+    if generation != artifact_generation:
+        _invalidate_derived_report_artifacts_locked(output_dir)
+        return False
+    if not for_build:
+        raise ValueError(
+            "same-generation legacy report artifacts require build_report migration"
+        )
+    return True
+
+
+def _validate_legacy_report_content(
+    output_dir: Path,
+    *,
+    stock_output: Sequence[Mapping[str, Any]],
+    model_output: Sequence[Mapping[str, Any]],
+    comparisons: Sequence[Mapping[str, Any]],
+    report_text: str,
+) -> None:
+    expected = {
+        METRICS_BY_STOCK_FILENAME: _csv_text(stock_output, _METRIC_OUTPUT_COLUMNS).encode(
+            "utf-8"
+        ),
+        METRICS_BY_MODEL_FILENAME: _csv_text(model_output, _METRIC_OUTPUT_COLUMNS).encode(
+            "utf-8"
+        ),
+        MODEL_COMPARISON_FILENAME: _csv_text(
+            comparisons, _COMPARISON_OUTPUT_COLUMNS
+        ).encode("utf-8"),
+        REPORT_FILENAME: report_text.encode("utf-8"),
+    }
+    for filename, expected_bytes in expected.items():
+        actual = (output_dir / filename).read_bytes()
+        if actual != expected_bytes:
+            raise ValueError(f"legacy report artifact {filename} content mismatch")
+
+
+def _prepare_report_invalidation_locked(output_dir: Path) -> None:
     _recover_report_invalidation_locked(output_dir)
     paths = [output_dir / filename for filename in _REPORT_PUBLISHED_FILENAMES]
     for path in paths:
@@ -3070,6 +3306,10 @@ def _invalidate_derived_report_artifacts_locked(output_dir: Path) -> None:
         ],
     }
     _persist_report_invalidation_journal(output_dir, journal)
+
+
+def _invalidate_derived_report_artifacts_locked(output_dir: Path) -> None:
+    _prepare_report_invalidation_locked(output_dir)
     _recover_report_invalidation_locked(output_dir)
 
 
@@ -4401,6 +4641,8 @@ def _write_run_artifacts_locked(
             journal_files[index]["backup_state"] = "present"
             _persist_transaction_journal(output_dir, journal)
 
+        if (output_dir / EXPERIMENT_FILENAME).exists():
+            _prepare_report_invalidation_locked(output_dir)
         journal["state"] = "committing"
         _persist_transaction_journal(output_dir, journal)
         _commit_staged_artifacts(staged_paths, final_paths)
@@ -4411,7 +4653,7 @@ def _write_run_artifacts_locked(
         _persist_transaction_journal(output_dir, journal)
         _recover_pending_transaction_locked(output_dir)
         if (output_dir / EXPERIMENT_FILENAME).exists():
-            _invalidate_derived_report_artifacts_locked(output_dir)
+            _recover_report_invalidation_locked(output_dir)
     finally:
         if not journal_published and not journal_planned:
             for path in (*staged_paths, *backup_paths):
@@ -4636,6 +4878,17 @@ def _atomic_write_csv(
     *,
     temporary_path: Path | None = None,
 ) -> None:
+    _atomic_write_text(
+        path,
+        _csv_text(rows, columns),
+        temporary_path=temporary_path,
+    )
+
+
+def _csv_text(
+    rows: Sequence[Mapping[str, Any]],
+    columns: Sequence[str],
+) -> str:
     from io import StringIO
 
     buffer = StringIO(newline="")
@@ -4648,7 +4901,7 @@ def _atomic_write_csv(
     writer.writeheader()
     for source in rows:
         writer.writerow({column: _csv_value(source.get(column)) for column in columns})
-    _atomic_write_text(path, buffer.getvalue(), temporary_path=temporary_path)
+    return buffer.getvalue()
 
 
 def _artifact_schema(pa: Any, columns: Sequence[str]) -> Any:
