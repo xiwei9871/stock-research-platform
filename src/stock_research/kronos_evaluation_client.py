@@ -13,6 +13,10 @@ from stock_research.kronos_evaluation_types import (
     snapshot_to_json_payload,
     thaw_json_value,
 )
+from stock_research.kronos_evaluation_identity import (
+    IdentityValidationError,
+    validate_identity_payloads,
+)
 
 
 _MODEL_ALIASES = {
@@ -236,7 +240,18 @@ class KronosClient:
 
         normalized = _clone_json_object(response)
         normalized["model"] = normalized_model
-        return _attach_raw_response(normalized, raw_response=response)
+        normalized = _attach_raw_response(normalized, raw_response=response)
+        try:
+            validate_identity_payloads((("health", normalized),), normalized_model)
+        except IdentityValidationError as exc:
+            raise KronosClientError(
+                str(exc),
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+                redaction_token=redaction_token,
+            ) from exc
+        return normalized
 
     def assert_model(self, model: str) -> dict[str, Any]:
         """Ensure the ready service is running the requested model."""
@@ -315,7 +330,7 @@ class KronosClient:
             label="requested model",
             redaction_token=redaction_token,
         )
-        self.assert_model(requested_model)
+        health = self.assert_model(requested_model)
 
         serialized_snapshot = snapshot_to_json_payload(snapshot)
         payload = thaw_json_value(
@@ -348,6 +363,8 @@ class KronosClient:
             expected_timestamps=tuple(snapshot.future_timestamps),
             requested_sample_count=sample_count,
             redaction_token=redaction_token,
+            requested_model=requested_model,
+            health=health,
         )
         return _attach_raw_response(result)
 
@@ -525,6 +542,8 @@ def _validate_prediction_response(
     expected_timestamps: tuple[str, ...] | None = None,
     requested_sample_count: int,
     redaction_token: str | None,
+    requested_model: str | None = None,
+    health: Mapping[str, Any] | None = None,
 ) -> None:
     status = response.get("status")
     if not isinstance(status, str):
@@ -551,6 +570,35 @@ def _validate_prediction_response(
             raw_response=response,
             redaction_token=redaction_token,
         )
+
+    if requested_model is not None:
+        try:
+            validate_identity_payloads(
+                (("health", health or {}), ("response", response)),
+                requested_model,
+            )
+        except IdentityValidationError as exc:
+            model_failure = exc.code in {
+                "model_identity_mismatch",
+                "weights_identity_mismatch",
+                "model_identity_version_mismatch",
+                "weights_identity_version_mismatch",
+            }
+            raise KronosClientError(
+                str(exc),
+                category=(
+                    KronosErrorCategory.MODEL
+                    if model_failure
+                    else KronosErrorCategory.PROTOCOL
+                ),
+                code=(
+                    KronosErrorCode.MODEL_ERROR
+                    if model_failure
+                    else KronosErrorCode.INVALID_RESPONSE
+                ),
+                raw_response=response,
+                redaction_token=redaction_token,
+            ) from exc
 
     daily, result = _extract_daily_forecast(response)
     if not isinstance(daily, Mapping) or not daily:
@@ -600,7 +648,7 @@ def _validate_prediction_response(
             redaction_token=redaction_token,
         )
 
-    quantiles = _find_daily_quantiles(daily)
+    quantiles = _find_daily_quantiles(daily, result)
     if quantiles is None:
         raise KronosClientError(
             "Kronos prediction response has no supported daily quantiles",
@@ -738,19 +786,29 @@ def _extract_daily_forecast(
     return None, {}
 
 
-def _find_daily_quantiles(daily: Mapping[str, Any]) -> Mapping[str, Any] | None:
+def _find_daily_quantiles(
+    daily: Mapping[str, Any],
+    result: Mapping[str, Any] | None = None,
+) -> Mapping[str, Any] | None:
     required = ("p10", "p50", "p90")
     if all(field_name in daily for field_name in required):
         return daily
 
     summary = daily.get("summary")
-    if not isinstance(summary, Mapping):
-        return None
-    close = summary.get("close")
-    if isinstance(close, Mapping) and all(
-        field_name in close for field_name in required
-    ):
-        return close
+    if isinstance(summary, Mapping):
+        close = summary.get("close")
+        if isinstance(close, Mapping) and all(
+            field_name in close for field_name in required
+        ):
+            return close
+    if isinstance(result, Mapping):
+        result_summary = result.get("summary")
+        if isinstance(result_summary, Mapping):
+            result_close = result_summary.get("close")
+            if isinstance(result_close, Mapping) and all(
+                field_name in result_close for field_name in required
+            ):
+                return result_close
     return None
 
 

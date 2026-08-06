@@ -1560,6 +1560,71 @@ def test_prediction_accepts_summary_close_quantile_layout():
     assert result["raw_response"] == prediction
 
 
+def test_prediction_rejects_nested_response_model_family_conflict():
+    prediction = make_prediction_response()
+    prediction["model"] = "small"
+    prediction["result"] = {
+        "model_identity": "Kronos-base-v1",
+        "daily": prediction["daily"],
+    }
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+
+
+def test_prediction_rejects_health_response_version_conflict():
+    prediction = make_prediction_response()
+    prediction.update({"model": "small", "model_identity": "small-v2"})
+    session = FakeSession(
+        health={
+            "status": "ok",
+            "model": "Kronos-small",
+            "model_identity": "small-v1",
+        },
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+
+
+def test_prediction_accepts_opaque_weight_build_metadata_with_valid_family():
+    prediction = make_prediction_response()
+    prediction.update(
+        {
+            "model": "small",
+            "model_identity": "small-v1",
+            "weights_identity": "build-2026-08-06-gpu-a",
+        }
+    )
+    session = FakeSession(
+        health={
+            "status": "ok",
+            "model": "Kronos-small",
+            "model_identity": "small-v1",
+            "weights_identity": "weights-small-v1",
+        },
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert result["weights_identity"] == "build-2026-08-06-gpu-a"
+
+
 @pytest.mark.parametrize("sample_count_location", ["response", "result", "daily"])
 def test_prediction_accepts_sample_count_at_supported_locations(sample_count_location):
     prediction = make_prediction_response(

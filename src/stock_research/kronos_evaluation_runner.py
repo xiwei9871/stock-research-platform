@@ -12,10 +12,11 @@ import inspect
 import json
 import math
 import os
-import re
+import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields
@@ -31,6 +32,15 @@ from stock_research.kronos_evaluation_metrics import (
     build_baselines,
     compare_models,
     score_forecast,
+)
+from stock_research.kronos_evaluation_identity import (
+    IdentityValidationError,
+    explicit_model_identity,
+    explicit_weight_identity,
+    iter_identity_fields as _shared_iter_identity_fields,
+    model_family as _shared_model_family,
+    model_identity_parts as _shared_model_identity_parts,
+    validate_identity_payloads,
 )
 from stock_research.kronos_evaluation_types import (
     KronosEvaluationConfig,
@@ -51,6 +61,9 @@ METRICS_BY_STOCK_FILENAME = "metrics_by_stock_horizon.csv"
 METRICS_BY_MODEL_FILENAME = "metrics_by_model_horizon.csv"
 MODEL_COMPARISON_FILENAME = "model_comparison.csv"
 REPORT_FILENAME = "report.md"
+TRANSACTION_FILENAME = ".kronos_transaction.json"
+_EXPERIMENT_SCHEMA_VERSION = 2
+_TRANSACTION_SCHEMA_VERSION = 1
 
 _SUCCESS_RESPONSE_STATUSES = frozenset(
     {"ok", "partial", "complete", "completed", "success", "succeeded"}
@@ -77,6 +90,10 @@ MANIFEST_COLUMNS = (
     "snapshot_fingerprint",
     "model_identity",
     "weights_identity",
+    "health_model_identity",
+    "health_weights_identity",
+    "response_model_identity",
+    "response_weights_identity",
     "parameters_json",
     "sample_count",
     "seed",
@@ -156,6 +173,21 @@ _SNAPSHOT_JSON_KEYS = frozenset(
         "input_fingerprint",
         "status",
         "reason",
+    }
+)
+
+_DOCUMENTED_TOP_LEVEL_ENTRIES = frozenset(
+    {
+        EXPERIMENT_FILENAME,
+        UNIVERSE_FILENAME,
+        SNAPSHOT_DIRECTORY,
+        MANIFEST_FILENAME,
+        FORECAST_FILENAME,
+        REALIZED_FILENAME,
+        METRICS_BY_STOCK_FILENAME,
+        METRICS_BY_MODEL_FILENAME,
+        MODEL_COMPARISON_FILENAME,
+        REPORT_FILENAME,
     }
 )
 
@@ -287,7 +319,9 @@ def prepare_experiment(
     normalized_output_dir = Path(output_dir)
     experiment_path = normalized_output_dir / EXPERIMENT_FILENAME
 
+    _recover_pending_transaction(normalized_output_dir)
     if experiment_path.exists():
+        _validate_top_level_entries(normalized_output_dir)
         metadata = _read_json(experiment_path)
         _validate_existing_experiment_config(metadata, config)
         return _existing_preparation_result(normalized_output_dir, metadata, config)
@@ -308,7 +342,6 @@ def prepare_experiment(
     # the real writer before creating any experiment files so a missing
     # dependency cannot leave a partially prepared directory behind.
     _load_pyarrow()
-    normalized_output_dir.mkdir(parents=True, exist_ok=True)
     loaded = (
         _default_snapshot_loader(config)
         if snapshot_loader is None
@@ -319,36 +352,61 @@ def prepare_experiment(
     source_payload = _jsonable(dict(source_metadata))
 
     metadata = _build_experiment_metadata(config, snapshots, source_payload)
-    snapshot_dir = normalized_output_dir / SNAPSHOT_DIRECTORY
-    snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-    snapshot_paths: list[Path] = []
-    for snapshot in snapshots:
-        path = snapshot_dir / _snapshot_filename(snapshot)
-        _atomic_write_json(path, snapshot_to_json_payload(snapshot))
-        snapshot_paths.append(path)
-
-    _atomic_write_csv(
-        normalized_output_dir / UNIVERSE_FILENAME,
-        [
-            {"asset_id": asset_id, "position": position}
-            for position, asset_id in enumerate(config.asset_ids, start=1)
-        ],
-        ("asset_id", "position"),
-    )
-
     manifest_rows = [
         _initial_manifest_row(snapshot, model, config)
         for snapshot in snapshots
         for model in config.models
     ]
-    _write_run_artifacts(
-        normalized_output_dir,
-        {row["run_key"]: row for row in manifest_rows},
-        [],
-        [],
+
+    # Stage every initial artifact in a sibling directory.  The destination
+    # remains absent (or empty) if any write, including experiment metadata,
+    # fails, so a retry never encounters a contaminated fresh experiment.
+    normalized_output_dir.parent.mkdir(parents=True, exist_ok=True)
+    stage_dir = Path(
+        tempfile.mkdtemp(
+            prefix=f".{normalized_output_dir.name}.prepare-",
+            dir=normalized_output_dir.parent,
+        )
     )
-    _atomic_write_json(experiment_path, metadata)
+    published = False
+    snapshot_paths: list[Path] = []
+    try:
+        snapshot_dir = stage_dir / SNAPSHOT_DIRECTORY
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        for snapshot in snapshots:
+            path = snapshot_dir / _snapshot_filename(snapshot)
+            _atomic_write_json(path, snapshot_to_json_payload(snapshot))
+            snapshot_paths.append(path)
+
+        _atomic_write_csv(
+            stage_dir / UNIVERSE_FILENAME,
+            [
+                {"asset_id": asset_id, "position": position}
+                for position, asset_id in enumerate(config.asset_ids, start=1)
+            ],
+            ("asset_id", "position"),
+        )
+        _write_run_artifacts(
+            stage_dir,
+            {row["run_key"]: row for row in manifest_rows},
+            [],
+            [],
+        )
+        _atomic_write_json(stage_dir / EXPERIMENT_FILENAME, metadata)
+
+        if normalized_output_dir.exists():
+            # The non-empty case was rejected above.  Remove only the known
+            # empty placeholder immediately before the atomic publication.
+            normalized_output_dir.rmdir()
+        os.replace(stage_dir, normalized_output_dir)
+        published = True
+        snapshot_paths = [
+            normalized_output_dir / SNAPSHOT_DIRECTORY / path.name
+            for path in snapshot_paths
+        ]
+    finally:
+        if not published:
+            shutil.rmtree(stage_dir, ignore_errors=True)
 
     return _preparation_result_from_paths(
         normalized_output_dir,
@@ -377,6 +435,7 @@ def run_model(
     if normalized_model not in config.models:
         raise ValueError(f"model {normalized_model!r} is not enabled in config.models")
     normalized_output_dir = Path(output_dir)
+    _recover_pending_transaction(normalized_output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
     snapshots, manifest = _validate_experiment_integrity(
         normalized_output_dir,
@@ -386,15 +445,23 @@ def run_model(
     if not snapshots:
         raise ValueError("prepared experiment has no input snapshots")
 
-    forecast_rows, forecast_generation = _read_table_with_generation(
+    forecast_rows, forecast_generation, forecast_schema = _read_table_with_generation(
         normalized_output_dir / FORECAST_FILENAME,
         FORECAST_COLUMNS,
     )
-    realized_rows, realized_generation = _read_table_with_generation(
+    realized_rows, realized_generation, realized_schema = _read_table_with_generation(
         normalized_output_dir / REALIZED_FILENAME,
         REALIZED_COLUMNS,
     )
-    _validate_artifact_generation(manifest, forecast_generation, realized_generation)
+    _validate_artifact_generation(
+        manifest,
+        forecast_rows,
+        realized_rows,
+        forecast_generation,
+        realized_generation,
+        forecast_schema,
+        realized_schema,
+    )
     parameters_by_key = {
         snapshot.key: _prediction_parameters(config, snapshot)
         for snapshot in snapshots
@@ -502,10 +569,22 @@ def run_model(
             failure = _failure_from_exception(exc)
             if hasattr(exc, "raw_response") and getattr(exc, "raw_response"):
                 response = _jsonable(getattr(exc, "raw_response"))
+                if isinstance(response, Mapping):
+                    response_model_metadata = _response_model_metadata(response)
             row["reason"] = str(exc)
 
         latency_ms = _elapsed_milliseconds(start_clock)
         finished_at = _now_iso()
+        health_identity = _first_identity({}, health, normalized_model) or ""
+        health_weights = _first_weight_identity({}, health) or ""
+        response_identity = _response_identity_value(
+            response_model_metadata,
+            "model",
+        ) or ""
+        response_weights = _response_identity_value(
+            response_model_metadata,
+            "weights",
+        ) or ""
         if failure is None:
             forecast_rows.extend(new_forecast_rows)
             realized_rows.extend(new_realized_rows)
@@ -515,12 +594,12 @@ def run_model(
                     "reason": "",
                     "error_category": "",
                     "error_code": "",
-                    "model_identity": _first_identity(
-                        response_model_metadata, health, normalized_model
-                    ),
-                    "weights_identity": _first_weight_identity(
-                        response_model_metadata, health
-                    ),
+                    "model_identity": health_identity,
+                    "weights_identity": health_weights,
+                    "health_model_identity": health_identity,
+                    "health_weights_identity": health_weights,
+                    "response_model_identity": response_identity,
+                    "response_weights_identity": response_weights,
                     "finished_at": finished_at,
                     "latency_ms": latency_ms,
                     "raw_response_json": _canonical_json(
@@ -549,12 +628,12 @@ def run_model(
                     "reason": str(failure),
                     "error_category": failure.category,
                     "error_code": failure.code,
-                    "model_identity": _first_identity(
-                        response_model_metadata, health, normalized_model
-                    ),
-                    "weights_identity": _first_weight_identity(
-                        response_model_metadata, health
-                    ),
+                    "model_identity": health_identity,
+                    "weights_identity": health_weights,
+                    "health_model_identity": health_identity,
+                    "health_weights_identity": health_weights,
+                    "response_model_identity": response_identity,
+                    "response_weights_identity": response_weights,
                     "finished_at": finished_at,
                     "latency_ms": latency_ms,
                     "raw_response_json": _canonical_json(
@@ -596,6 +675,7 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
     """Build all report artifacts using only the prepared experiment files."""
 
     normalized_output_dir = Path(output_dir)
+    _recover_pending_transaction(normalized_output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
     config_payload = metadata.get("config")
     if not isinstance(config_payload, Mapping):
@@ -606,15 +686,23 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         metadata,
         report_config,
     )
-    forecast_rows, forecast_generation = _read_table_with_generation(
+    forecast_rows, forecast_generation, forecast_schema = _read_table_with_generation(
         normalized_output_dir / FORECAST_FILENAME,
         FORECAST_COLUMNS,
     )
-    realized_rows, realized_generation = _read_table_with_generation(
+    realized_rows, realized_generation, realized_schema = _read_table_with_generation(
         normalized_output_dir / REALIZED_FILENAME,
         REALIZED_COLUMNS,
     )
-    _validate_artifact_generation(manifest, forecast_generation, realized_generation)
+    _validate_artifact_generation(
+        manifest,
+        forecast_rows,
+        realized_rows,
+        forecast_generation,
+        realized_generation,
+        forecast_schema,
+        realized_schema,
+    )
     _validate_report_artifacts(
         snapshots,
         manifest,
@@ -842,7 +930,7 @@ def _build_experiment_metadata(
 ) -> dict[str, Any]:
     source_payload = _jsonable(dict(source_metadata))
     immutable = {
-        "schema_version": 1,
+        "schema_version": _EXPERIMENT_SCHEMA_VERSION,
         "config": _config_payload(config),
         "universe": list(config.asset_ids),
         "source": source_payload,
@@ -881,6 +969,157 @@ def _validate_existing_experiment_config(
         raise FileExistsError("prepared experiment universe is incompatible")
 
 
+def _validate_top_level_entries(output_dir: Path) -> None:
+    if not output_dir.is_dir():
+        raise FileNotFoundError(f"missing experiment output directory: {output_dir}")
+    unknown = sorted(
+        path.name
+        for path in output_dir.iterdir()
+        if path.name not in _DOCUMENTED_TOP_LEVEL_ENTRIES
+    )
+    if unknown:
+        raise ValueError(
+            "output directory contains unknown or stale entries: "
+            + ", ".join(unknown)
+        )
+    snapshot_dir = output_dir / SNAPSHOT_DIRECTORY
+    if snapshot_dir.exists() and not snapshot_dir.is_dir():
+        raise ValueError(f"{SNAPSHOT_DIRECTORY} must be a directory")
+
+
+def _transaction_child(output_dir: Path, name: Any) -> Path:
+    if not isinstance(name, str) or not name or Path(name).name != name:
+        raise ValueError("transaction journal contains an unsafe artifact path")
+    path = output_dir / name
+    if path.parent != output_dir:
+        raise ValueError("transaction journal contains an unsafe artifact path")
+    return path
+
+
+def _copy_file_durable(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    with destination.open("rb") as handle:
+        os.fsync(handle.fileno())
+
+
+def _fsync_directory(path: Path) -> None:
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def _recover_pending_transaction(output_dir: Path) -> None:
+    """Recover the previous three-file publication before any reads/writes."""
+
+    transaction_path = output_dir / TRANSACTION_FILENAME
+    if not transaction_path.exists():
+        return
+    journal = _read_json(transaction_path)
+    if journal.get("schema_version") != _TRANSACTION_SCHEMA_VERSION:
+        raise ValueError("unsupported Kronos artifact transaction schema")
+    state = journal.get("state")
+    if state not in {"prepared", "committed"}:
+        raise ValueError("Kronos artifact transaction journal has an invalid state")
+    raw_files = journal.get("files")
+    if not isinstance(raw_files, list) or len(raw_files) != 3:
+        raise ValueError("Kronos artifact transaction journal has invalid files")
+    expected_finals = {
+        MANIFEST_FILENAME,
+        FORECAST_FILENAME,
+        REALIZED_FILENAME,
+    }
+    entries: list[dict[str, Any]] = []
+    seen_finals: set[str] = set()
+    for raw_entry in raw_files:
+        if not isinstance(raw_entry, Mapping):
+            raise ValueError("Kronos artifact transaction journal entry is invalid")
+        final_name = raw_entry.get("final")
+        if final_name not in expected_finals or final_name in seen_finals:
+            raise ValueError("Kronos artifact transaction final set is invalid")
+        seen_finals.add(final_name)
+        stage = _transaction_child(output_dir, raw_entry.get("stage"))
+        if stage.name in _DOCUMENTED_TOP_LEVEL_ENTRIES or stage.name == TRANSACTION_FILENAME:
+            raise ValueError("transaction journal contains an unsafe staging path")
+        backup_name = raw_entry.get("backup")
+        backup = _transaction_child(output_dir, backup_name) if backup_name else None
+        if backup is not None and (
+            backup.name in _DOCUMENTED_TOP_LEVEL_ENTRIES
+            or backup.name == TRANSACTION_FILENAME
+        ):
+            raise ValueError("transaction journal contains an unsafe backup path")
+        had_original = raw_entry.get("had_original")
+        if not isinstance(had_original, bool):
+            raise ValueError("Kronos artifact transaction original marker is invalid")
+        if had_original and backup is None:
+            raise ValueError("Kronos artifact transaction is missing a backup")
+        entries.append(
+            {
+                "final": _transaction_child(output_dir, final_name),
+                "stage": stage,
+                "backup": backup,
+                "had_original": had_original,
+            }
+        )
+    if seen_finals != expected_finals:
+        raise ValueError("Kronos artifact transaction final set is incomplete")
+
+    if state == "prepared":
+        # Copy backups through fresh temporary siblings before replacing the
+        # final.  Backups remain in place until every final is restored, so a
+        # second interruption can safely retry the recovery.
+        recovery_temps: list[Path] = []
+        try:
+            for entry in entries:
+                final_path = entry["final"]
+                backup = entry["backup"]
+                if entry["had_original"]:
+                    if not isinstance(backup, Path) or not backup.is_file():
+                        raise FileNotFoundError(
+                            f"transaction backup is missing: {backup}"
+                        )
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb",
+                        dir=output_dir,
+                        prefix=f".{final_path.name}.recover-",
+                        suffix=".tmp",
+                        delete=False,
+                    ) as handle:
+                        temporary = Path(handle.name)
+                    recovery_temps.append(temporary)
+                    _copy_file_durable(backup, temporary)
+                    os.replace(temporary, final_path)
+                    recovery_temps.remove(temporary)
+                elif final_path.exists():
+                    final_path.unlink()
+        finally:
+            for temporary in recovery_temps:
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
+
+    for entry in entries:
+        for key in ("stage", "backup"):
+            path = entry[key]
+            if isinstance(path, Path):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
+    try:
+        transaction_path.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def _validate_experiment_integrity(
     output_dir: Path,
     metadata: Mapping[str, Any],
@@ -890,6 +1129,10 @@ def _validate_experiment_integrity(
 
     if not isinstance(metadata, Mapping):  # pragma: no cover - _read_json guards this.
         raise ValueError("experiment.json must contain an object")
+    if metadata.get("schema_version") != _EXPERIMENT_SCHEMA_VERSION:
+        raise ValueError(
+            f"unsupported experiment schema_version {metadata.get('schema_version')!r}"
+        )
     stored_fingerprint = metadata.get("experiment_fingerprint")
     if not isinstance(stored_fingerprint, str) or not stored_fingerprint:
         raise ValueError("experiment fingerprint is missing")
@@ -902,6 +1145,7 @@ def _validate_experiment_integrity(
     if computed_fingerprint != stored_fingerprint:
         raise ValueError("experiment fingerprint does not match immutable metadata")
 
+    _validate_top_level_entries(output_dir)
     _validate_existing_experiment_config(metadata, config)
     source = metadata.get("source")
     source_metadata = metadata.get("source_metadata")
@@ -1229,6 +1473,10 @@ def _initial_manifest_row(
         "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         "model_identity": "",
         "weights_identity": "",
+        "health_model_identity": "",
+        "health_weights_identity": "",
+        "response_model_identity": "",
+        "response_weights_identity": "",
         "parameters_json": _canonical_json(_prediction_parameters(config, snapshot)),
         "sample_count": config.sample_count,
         "seed": config.seed,
@@ -1323,6 +1571,10 @@ def _attempt_row_update(
         "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         "model_identity": _first_identity({}, health, model) or "",
         "weights_identity": _first_weight_identity({}, health) or "",
+        "health_model_identity": _first_identity({}, health, model) or "",
+        "health_weights_identity": _first_weight_identity({}, health) or "",
+        "response_model_identity": "",
+        "response_weights_identity": "",
         "parameters_json": _canonical_json(parameters),
         "sample_count": parameters.get("sample_count", ""),
         "seed": parameters.get("seed"),
@@ -1364,6 +1616,10 @@ def _unavailable_row_update(
         "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         "model_identity": "",
         "weights_identity": "",
+        "health_model_identity": "",
+        "health_weights_identity": "",
+        "response_model_identity": "",
+        "response_weights_identity": "",
         "parameters_json": _canonical_json(parameters),
         "sample_count": parameters.get("sample_count", ""),
         "seed": parameters.get("seed"),
@@ -1422,17 +1678,12 @@ def _manifest_cache_matches(
     if _optional_int(row.get("seed")) != parameters.get("seed"):
         return False
     if health is not None:
-        current_identity = _explicit_identity(health)
-        current_weights = _explicit_weight_identity(health)
-        if row.get("model_identity") or current_identity:
-            if not _identity_values_compatible(
-                row.get("model_identity"),
-                current_identity,
-            ):
-                return False
-        if row.get("weights_identity") or current_weights:
-            if row.get("weights_identity") != (current_weights or ""):
-                return False
+        current_identity = _first_identity({}, health, model) or ""
+        current_weights = _first_weight_identity({}, health) or ""
+        stored_identity = str(row.get("health_model_identity") or row.get("model_identity") or "")
+        stored_weights = str(row.get("health_weights_identity") or row.get("weights_identity") or "")
+        if stored_identity != current_identity or stored_weights != current_weights:
+            return False
     run_key = f"{snapshot.key}|{model}"
     forecast_for_run = [item for item in forecast_rows if item.get("run_key") == run_key]
     realized_for_run = [item for item in realized_rows if item.get("run_key") == run_key]
@@ -1588,8 +1839,12 @@ def _validate_cached_artifact_rows(
 
 def _validate_artifact_generation(
     manifest: Mapping[str, Mapping[str, Any]],
+    forecast_rows: Sequence[Mapping[str, Any]],
+    realized_rows: Sequence[Mapping[str, Any]],
     forecast_generation: str | None,
     realized_generation: str | None,
+    forecast_schema: Sequence[Sequence[Any]],
+    realized_schema: Sequence[Sequence[Any]],
 ) -> None:
     manifest_generations = {
         str(row.get("generation", ""))
@@ -1600,6 +1855,15 @@ def _validate_artifact_generation(
     manifest_generation = next(iter(manifest_generations))
     if forecast_generation != manifest_generation or realized_generation != manifest_generation:
         raise ValueError("artifact generation markers are mixed")
+    expected_generation = _artifact_generation(
+        list(manifest.values()),
+        forecast_rows,
+        realized_rows,
+        forecast_schema=forecast_schema,
+        realized_schema=realized_schema,
+    )
+    if expected_generation != manifest_generation:
+        raise ValueError("authenticated artifact generation digest mismatch")
 
 
 def _validate_report_artifacts(
@@ -1794,8 +2058,10 @@ def _build_artifact_rows(
                 raw_response=raw_response,
             )
 
-    identity = _first_identity(response_model_metadata, health, model)
-    weights = _first_weight_identity(response_model_metadata, health)
+    # Health is the canonical cache/artifact identity.  Response identities
+    # are retained separately in the manifest as audit metadata.
+    identity = _first_identity({}, health, model) or model
+    weights = _first_weight_identity({}, health) or ""
     device = _first_value(response_model_metadata, health, "device", "gpu")
     cuda = _first_value(response_model_metadata, health, "cuda", "cuda_available")
     run_key = f"{snapshot.key}|{model}"
@@ -2086,6 +2352,27 @@ def _response_model_metadata(response: Mapping[str, Any]) -> dict[str, Any]:
     return metadata
 
 
+def _response_identity_value(
+    response_metadata: Mapping[str, Any],
+    kind: str,
+) -> str | None:
+    fields = (
+        ("model_identity", "model_name", "model")
+        if kind == "model"
+        else ("weights_identity", "weights_fingerprint", "weights")
+    )
+    for field_name in fields:
+        value = response_metadata.get(field_name)
+        if value in (None, ""):
+            continue
+        return (
+            _canonical_json(value)
+            if isinstance(value, (Mapping, list, tuple))
+            else str(value)
+        )
+    return None
+
+
 def _validate_health_model_identity(
     health: Mapping[str, Any],
     requested_model: str,
@@ -2115,65 +2402,30 @@ def _validate_model_identity_payloads(
     requested_model: str,
     raw_response: Mapping[str, Any],
 ) -> None:
-    model_records: list[tuple[str, str, str, str | None]] = []
-    weight_records: list[tuple[str, str, str, str | None]] = []
-    for source_name, payload in payloads:
-        for location, field_name, value in _iter_identity_fields(payload):
-            if value in (None, ""):
-                continue
-            if field_name in {"model", "model_identity", "model_name"}:
-                parsed = _model_identity_parts(value)
-                if parsed is None:
-                    raise _RunnerFailure(
-                        f"Kronos {source_name} has unknown {field_name}",
-                        status="protocol_error",
-                        category="protocol",
-                        code="unknown_model_identity",
-                        raw_response=raw_response,
-                    )
-                model_records.append(
-                    (source_name, location, parsed[0], parsed[1])
-                )
-            elif field_name in {
-                "weights",
-                "weights_identity",
-                "weights_fingerprint",
-            }:
-                parsed = _model_identity_parts(value, allow_weight_prefix=True)
-                if parsed is not None:
-                    weight_records.append(
-                        (source_name, location, parsed[0], parsed[1])
-                    )
-
-    for source_name, location, family, _ in model_records:
-        if family != requested_model:
-            raise _RunnerFailure(
-                f"Kronos {source_name} model identity does not match the requested model",
-                status="model_error" if source_name == "response" else "unavailable",
-                category="model",
-                code="model_identity_mismatch" if source_name == "response" else "model_mismatch",
-                raw_response=raw_response,
-            )
-    for source_name, location, family, _ in weight_records:
-        if family != requested_model:
-            raise _RunnerFailure(
-                "Kronos weights identity does not match the requested model",
-                status="model_error" if source_name == "response" else "unavailable",
-                category="model",
-                code="weights_identity_mismatch",
-                raw_response=raw_response,
-            )
-
-    versioned_records = model_records + weight_records
-    versions = {version for _, _, _, version in versioned_records if version is not None}
-    if len(versions) > 1:
+    try:
+        validate_identity_payloads(payloads, requested_model)
+    except IdentityValidationError as exc:
+        is_health = any(source == "health" for source, _ in payloads)
+        is_response = any(source == "response" for source, _ in payloads)
+        is_model_failure = exc.code in {
+            "model_identity_mismatch",
+            "weights_identity_mismatch",
+            "model_identity_version_mismatch",
+            "weights_identity_version_mismatch",
+        }
         raise _RunnerFailure(
-            "Kronos model identities have conflicting versions",
-            status="model_error",
-            category="model",
-            code="model_identity_version_mismatch",
+            str(exc),
+            status=("unavailable" if is_health and not is_response else "model_error")
+            if is_model_failure
+            else "protocol_error",
+            category="model" if is_model_failure else "protocol",
+            code=(
+                "model_mismatch"
+                if is_health and not is_response and exc.code == "model_identity_mismatch"
+                else exc.code
+            ),
             raw_response=raw_response,
-        )
+        ) from exc
 
 
 def _iter_identity_fields(
@@ -2181,36 +2433,7 @@ def _iter_identity_fields(
     path: str = "",
     seen: set[int] | None = None,
 ) -> Iterable[tuple[str, str, Any]]:
-    if seen is None:
-        seen = set()
-    if isinstance(value, Mapping):
-        object_id = id(value)
-        if object_id in seen:
-            return
-        seen.add(object_id)
-        for key, item in value.items():
-            if not isinstance(key, str):
-                continue
-            location = f"{path}.{key}" if path else key
-            if key in {
-                "model",
-                "model_identity",
-                "model_name",
-                "weights",
-                "weights_identity",
-                "weights_fingerprint",
-            }:
-                yield location, key, item
-            if isinstance(item, (Mapping, list, tuple)):
-                yield from _iter_identity_fields(item, location, seen)
-    elif isinstance(value, (list, tuple)):
-        object_id = id(value)
-        if object_id in seen:
-            return
-        seen.add(object_id)
-        for index, item in enumerate(value):
-            if isinstance(item, (Mapping, list, tuple)):
-                yield from _iter_identity_fields(item, f"{path}[{index}]", seen)
+    yield from _shared_iter_identity_fields(value, path, seen)
 
 
 def _iter_metadata_fields(
@@ -2248,8 +2471,7 @@ def _normalize_model_identity(value: Any) -> str | None:
 
 
 def _model_family_from_identity(value: Any) -> str | None:
-    parsed = _model_identity_parts(value, allow_weight_prefix=True)
-    return parsed[0] if parsed is not None else None
+    return _shared_model_family(value)
 
 
 def _model_identity_parts(
@@ -2257,30 +2479,10 @@ def _model_identity_parts(
     *,
     allow_weight_prefix: bool = False,
 ) -> tuple[str, str | None] | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip().lower().replace("_", "-").replace(" ", "-")
-    normalized = re.sub(r"-+", "-", normalized)
-    match = re.fullmatch(
-        r"(?:kronos-)?(small|base)(?:-v(\d+))?",
-        normalized,
+    return _shared_model_identity_parts(
+        value,
+        allow_weight_prefix=allow_weight_prefix,
     )
-    if match:
-        return (
-            match.group(1),
-            f"v{int(match.group(2))}" if match.group(2) else None,
-        )
-    if allow_weight_prefix:
-        match = re.fullmatch(
-            r"(?:kronos-)?weights-(small|base)(?:-v(\d+))?",
-            normalized,
-        )
-        if match:
-            return (
-                match.group(1),
-                f"v{int(match.group(2))}" if match.group(2) else None,
-            )
-    return None
 
 
 def _failure_from_exception(error: Exception, *, health_check: bool = False) -> _RunnerFailure:
@@ -2661,6 +2863,10 @@ def _model_metadata_summary(manifest: Mapping[str, Mapping[str, Any]]) -> dict[s
         lambda: {
             "model_identity": set(),
             "weights_identity": set(),
+            "health_model_identity": set(),
+            "health_weights_identity": set(),
+            "response_model_identity": set(),
+            "response_weights_identity": set(),
             "device": set(),
             "cuda": set(),
         }
@@ -2668,7 +2874,14 @@ def _model_metadata_summary(manifest: Mapping[str, Mapping[str, Any]]) -> dict[s
     for row in manifest.values():
         model = str(row.get("model", ""))
         health = _parse_json_cell(row.get("health_metadata_json"))
-        for field in ("model_identity", "weights_identity"):
+        for field in (
+            "model_identity",
+            "weights_identity",
+            "health_model_identity",
+            "health_weights_identity",
+            "response_model_identity",
+            "response_weights_identity",
+        ):
             value = row.get(field)
             if value not in (None, ""):
                 by_model[model][field].add(value)
@@ -2800,14 +3013,10 @@ def _write_run_artifacts(
     forecast_rows: Sequence[Mapping[str, Any]],
     realized_rows: Sequence[Mapping[str, Any]],
 ) -> None:
+    _recover_pending_transaction(output_dir)
     normalized_manifest = [manifest[key] for key in sorted(manifest)]
     normalized_forecast = _sort_artifact_rows(forecast_rows)
     normalized_realized = _sort_artifact_rows(realized_rows)
-    generation = _artifact_generation(
-        normalized_manifest,
-        normalized_forecast,
-        normalized_realized,
-    )
     output_dir.mkdir(parents=True, exist_ok=True)
     final_paths = [
         output_dir / MANIFEST_FILENAME,
@@ -2815,7 +3024,20 @@ def _write_run_artifacts(
         output_dir / REALIZED_FILENAME,
     ]
     staged_paths: list[Path] = []
+    backup_paths: list[Path] = []
+    journal_published = False
+    transaction_path = output_dir / TRANSACTION_FILENAME
     try:
+        pa, _ = _load_pyarrow()
+        forecast_schema = _schema_signature(_artifact_schema(pa, FORECAST_COLUMNS))
+        realized_schema = _schema_signature(_artifact_schema(pa, REALIZED_COLUMNS))
+        generation = _artifact_generation(
+            normalized_manifest,
+            normalized_forecast,
+            normalized_realized,
+            forecast_schema=forecast_schema,
+            realized_schema=realized_schema,
+        )
         manifest_with_generation = []
         for source in normalized_manifest:
             row = dict(source)
@@ -2837,11 +3059,64 @@ def _write_run_artifacts(
             REALIZED_COLUMNS,
             generation=generation,
         )
+
+        transaction_id = uuid.uuid4().hex
+        journal_files: list[dict[str, Any]] = []
+        for final_path in final_paths:
+            had_original = final_path.exists()
+            backup_path: Path | None = None
+            if had_original:
+                backup_path = output_dir / (
+                    f".{final_path.name}.{transaction_id}.backup"
+                )
+                _copy_file_durable(final_path, backup_path)
+                backup_paths.append(backup_path)
+            journal_files.append(
+                {
+                    "final": final_path.name,
+                    "stage": staged_paths[len(journal_files)].name,
+                    "backup": backup_path.name if backup_path is not None else "",
+                    "had_original": had_original,
+                }
+            )
+        _atomic_write_json(
+            transaction_path,
+            {
+                "schema_version": _TRANSACTION_SCHEMA_VERSION,
+                "transaction_id": transaction_id,
+                "state": "prepared",
+                "files": journal_files,
+            },
+        )
+        _fsync_directory(output_dir)
+        journal_published = True
         _commit_staged_artifacts(staged_paths, final_paths)
-    finally:
-        for staged_path in staged_paths:
+        _atomic_write_json(
+            transaction_path,
+            {
+                "schema_version": _TRANSACTION_SCHEMA_VERSION,
+                "transaction_id": transaction_id,
+                "state": "committed",
+                "files": journal_files,
+            },
+        )
+        _fsync_directory(output_dir)
+        for path in (*staged_paths, *backup_paths):
             try:
-                staged_path.unlink()
+                path.unlink()
+            except FileNotFoundError:
+                pass
+        transaction_path.unlink()
+        _fsync_directory(output_dir)
+    finally:
+        if not journal_published:
+            for path in (*staged_paths, *backup_paths):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
+            try:
+                transaction_path.unlink()
             except FileNotFoundError:
                 pass
 
@@ -2850,34 +3125,92 @@ def _artifact_generation(
     manifest_rows: Sequence[Mapping[str, Any]],
     forecast_rows: Sequence[Mapping[str, Any]],
     realized_rows: Sequence[Mapping[str, Any]],
+    *,
+    forecast_schema: Sequence[Sequence[Any]] | None = None,
+    realized_schema: Sequence[Sequence[Any]] | None = None,
 ) -> str:
     volatile_manifest_fields = {
         "started_at",
         "finished_at",
         "latency_ms",
-        "cache_hit",
         "generation",
     }
     stable_manifest = [
         {
-            column: _jsonable(row.get(column))
+            column: _canonical_manifest_value(row.get(column))
             for column in MANIFEST_COLUMNS
             if column not in volatile_manifest_fields
         }
-        for row in manifest_rows
+        for row in sorted(manifest_rows, key=lambda item: str(item.get("run_key", "")))
     ]
     return canonical_json_fingerprint(
         {
+            "schema": {
+                "forecast": [list(item) for item in (forecast_schema or _declared_schema_signature(FORECAST_COLUMNS))],
+                "realized": [list(item) for item in (realized_schema or _declared_schema_signature(REALIZED_COLUMNS))],
+            },
             "manifest": stable_manifest,
             "forecast": [
-                {column: _jsonable(row.get(column)) for column in FORECAST_COLUMNS}
+                {
+                    column: _canonical_artifact_value(column, row.get(column))
+                    for column in FORECAST_COLUMNS
+                }
                 for row in forecast_rows
             ],
             "realized": [
-                {column: _jsonable(row.get(column)) for column in REALIZED_COLUMNS}
+                {
+                    column: _canonical_artifact_value(column, row.get(column))
+                    for column in REALIZED_COLUMNS
+                }
                 for row in realized_rows
             ],
         }
+    )
+
+
+def _canonical_manifest_value(value: Any) -> str:
+    serialized = _csv_value(value)
+    return "" if serialized is None else str(serialized)
+
+
+def _declared_schema_signature(columns: Sequence[str]) -> tuple[tuple[str, str, bool], ...]:
+    type_names = {
+        "horizon": "int64",
+        "sample_count": "int64",
+        "seed": "int64",
+        "cuda": "bool",
+    }
+    float_columns = {
+        "representative_open",
+        "representative_high",
+        "representative_low",
+        "representative_close",
+        "representative_volume",
+        "representative_amount",
+        "p10",
+        "p50",
+        "p90",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+    }
+    return tuple(
+        (
+            column,
+            "double" if column in float_columns else type_names.get(column, "string"),
+            True,
+        )
+        for column in columns
+    )
+
+
+def _schema_signature(schema: Any) -> tuple[tuple[str, str, bool], ...]:
+    return tuple(
+        (str(field.name), str(field.type), bool(field.nullable))
+        for field in schema
     )
 
 
@@ -2941,14 +3274,14 @@ def _load_manifest(path: Path) -> list[dict[str, Any]]:
 
 
 def _read_table(path: Path, columns: Sequence[str] | None = None) -> list[dict[str, Any]]:
-    rows, _ = _read_table_with_generation(path, columns)
+    rows, _, _ = _read_table_with_generation(path, columns)
     return rows
 
 
 def _read_table_with_generation(
     path: Path,
     columns: Sequence[str] | None = None,
-) -> tuple[list[dict[str, Any]], str | None]:
+) -> tuple[list[dict[str, Any]], str | None, tuple[tuple[str, str, bool], ...]]:
     if not path.exists():
         raise FileNotFoundError(f"missing Parquet artifact: {path}")
     pa, parquet = _load_pyarrow()
@@ -2958,10 +3291,11 @@ def _read_table_with_generation(
             expected_schema = _artifact_schema(pa, columns)
             if not table.schema.equals(expected_schema, check_metadata=False):
                 raise ValueError(f"Parquet artifact {path} has an invalid schema")
+        schema_signature = _schema_signature(table.schema)
         metadata = table.schema.metadata or {}
         raw_generation = metadata.get(b"kronos_generation")
         generation = raw_generation.decode("utf-8") if raw_generation is not None else None
-        return [dict(row) for row in table.to_pylist()], generation
+        return [dict(row) for row in table.to_pylist()], generation, schema_signature
     except Exception as exc:  # noqa: BLE001 - preserve a clear artifact failure.
         raise RuntimeError(f"failed to read Parquet artifact {path}: {exc}") from exc
 
@@ -3255,32 +3589,55 @@ def _first_identity(
     health: Mapping[str, Any],
     fallback_model: str | None = None,
 ) -> str | None:
-    for source in (response_metadata, health):
-        value = _explicit_identity(source)
+    if response_metadata:
+        value = _explicit_identity(response_metadata)
+        if value is not None:
+            return value
+    if health:
+        value = _health_model_identity(health)
         if value is not None:
             return value
     return fallback_model
 
 
-def _explicit_identity(source: Mapping[str, Any]) -> str | None:
+def _health_model_identity(source: Mapping[str, Any]) -> str | None:
     records = list(_iter_identity_fields(source))
-    for field_name in ("model_identity", "model_name", "model"):
+    for field_name in ("model_identity", "model_name"):
         values = [
             value
             for _, key, value in records
             if key == field_name and value not in (None, "")
         ]
-        if not values:
-            continue
-        versioned = [
-            value
-            for value in values
-            if _model_identity_parts(value) is not None
-            and _model_identity_parts(value)[1] is not None
-        ]
-        value = versioned[0] if versioned else values[0]
-        return str(value)
-    return None
+        if values:
+            value = values[0]
+            return (
+                _canonical_json(value)
+                if isinstance(value, (Mapping, list, tuple))
+                else str(value)
+            )
+    values = [
+        value
+        for _, key, value in records
+        if key == "model" and value not in (None, "")
+    ]
+    versioned = [
+        value
+        for value in values
+        if _model_identity_parts(value) is not None
+        and _model_identity_parts(value)[1] is not None
+    ]
+    value = versioned[0] if versioned else (values[0] if values else None)
+    if value is None:
+        return None
+    return (
+        _canonical_json(value)
+        if isinstance(value, (Mapping, list, tuple))
+        else str(value)
+    )
+
+
+def _explicit_identity(source: Mapping[str, Any]) -> str | None:
+    return explicit_model_identity(source)
 
 
 def _identity_values_compatible(left: Any, right: Any) -> bool:
@@ -3313,22 +3670,25 @@ def _first_weight_identity(
 
 
 def _explicit_weight_identity(source: Mapping[str, Any]) -> str | None:
-    records = list(_iter_identity_fields(source))
-    for field_name in ("weights_identity", "weights_fingerprint", "weights"):
-        for _, key, value in records:
-            if key != field_name or value in (None, ""):
-                continue
-            return (
-                _canonical_json(value)
-                if isinstance(value, (Mapping, list, tuple))
-                else str(value)
-            )
-    return None
+    value = explicit_weight_identity(source)
+    if value is None:
+        return None
+    return value
 
 
 def _raw_response_for_manifest(response: Mapping[str, Any] | None) -> Mapping[str, Any]:
     if not isinstance(response, Mapping):
         return {}
+    collision_slots: list[tuple[int, Any]] = []
+    for key, value in response.items():
+        if not isinstance(key, str) or key.lstrip("_") != "kronos_raw_response":
+            continue
+        leading_underscores = len(key) - len(key.lstrip("_"))
+        if leading_underscores and isinstance(value, Mapping):
+            collision_slots.append((leading_underscores, value))
+    if collision_slots:
+        _, complete_response = max(collision_slots, key=lambda item: item[0])
+        return complete_response
     raw = response.get("raw_response")
     if isinstance(raw, Mapping):
         return raw

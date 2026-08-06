@@ -3,10 +3,21 @@ from __future__ import annotations
 import csv
 import json
 import sys
+import types
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+
+try:
+    import requests  # noqa: F401
+except ModuleNotFoundError:
+    requests_stub = types.ModuleType("requests")
+    requests_stub.Session = object
+    requests_stub.RequestException = Exception
+    requests_stub.Timeout = TimeoutError
+    sys.modules["requests"] = requests_stub
 
 from stock_research import kronos_evaluation_runner as runner
 from stock_research.kronos_evaluation_types import (
@@ -135,6 +146,7 @@ class FakeClient:
         response_result: dict[str, Any] | None = None,
         response_daily_overrides: dict[str, Any] | None = None,
         response_raw_overrides: dict[str, Any] | None = None,
+        response_raw_collision: bool = False,
     ) -> None:
         self.model = model
         self.model_identity = model_identity
@@ -150,6 +162,7 @@ class FakeClient:
         self.response_result = response_result
         self.response_daily_overrides = response_daily_overrides
         self.response_raw_overrides = response_raw_overrides
+        self.response_raw_collision = response_raw_collision
         self.calls: list[tuple[str, str, int, int | None]] = []
 
     def health(self) -> dict[str, Any]:
@@ -230,6 +243,10 @@ class FakeClient:
             response["result"] = self.response_result
         if self.response_raw_overrides:
             response["raw_response"].update(self.response_raw_overrides)
+        if self.response_raw_collision:
+            complete_response = json.loads(json.dumps(response))
+            response["raw_response"] = {"upstream": "nested raw response"}
+            response["_kronos_raw_response"] = complete_response
         return response
 
 
@@ -492,7 +509,11 @@ def test_opaque_weights_identity_is_preserved_as_metadata(
 
     rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
     assert {row["status"] for row in rows} == {"success"}
-    assert {row["weights_identity"] for row in rows} == {"build-2026-08-06-gpu-a"}
+    assert {row["weights_identity"] for row in rows} == {"weights-small-v1"}
+    assert {row["health_weights_identity"] for row in rows} == {"weights-small-v1"}
+    assert {row["response_weights_identity"] for row in rows} == {
+        "build-2026-08-06-gpu-a"
+    }
 
 
 def test_response_without_identity_uses_passed_health(
@@ -505,6 +526,35 @@ def test_response_without_identity_uses_passed_health(
 
     rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
     assert {row["status"] for row in rows} == {"success"}
+
+
+def test_opaque_response_weight_build_id_does_not_break_resume(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    first_client = FakeClient(response_weights_identity="build-2026-08-06-gpu-a")
+    run_model(config, model="small", output_dir=output_dir, client=first_client)
+
+    resume_client = FakeClient(response_weights_identity="build-2026-08-06-gpu-b")
+    result = run_model(config, model="small", output_dir=output_dir, client=resume_client)
+
+    assert result.cache_hit_count == 2
+    assert result.attempted_count == 0
+    assert resume_client.calls == []
+
+
+def test_opaque_response_build_identity_is_audit_metadata_when_family_is_valid(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(response_model="small", response_model_identity="build-small-2026")
+
+    run_model(config, model="small", output_dir=output_dir, client=client)
+
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"success"}
+    assert {row["health_model_identity"] for row in rows} == {"small-v1"}
+    assert {row["response_model_identity"] for row in rows} == {"build-small-2026"}
 
 
 def test_family_only_response_identity_resumes_against_versioned_health(
@@ -587,7 +637,9 @@ def test_run_model_rejects_extra_snapshot_file_and_manifest_key(prepared_experim
         run_model(config, model="small", output_dir=output_dir, client=FakeClient())
 
 
-def test_modified_same_count_forecast_artifact_forces_rerun(prepared_experiment):
+def test_modified_same_count_forecast_artifact_fails_authenticated_generation(
+    prepared_experiment,
+):
     output_dir, config, _, _ = prepared_experiment
     first_client = FakeClient()
     run_model(config, model="small", output_dir=output_dir, client=first_client)
@@ -601,12 +653,25 @@ def test_modified_same_count_forecast_artifact_forces_rerun(prepared_experiment)
     rows[0]["p50"] += 0.5
     parquet.write_table(pa.Table.from_pylist(rows, schema=table.schema), forecast_path)
 
-    changed_client = FakeClient()
-    result = run_model(config, model="small", output_dir=output_dir, client=changed_client)
+    with pytest.raises(ValueError, match="generation|digest|authenticated"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
 
-    assert result.cache_hit_count == 1
-    assert result.attempted_count == 1
-    assert len(changed_client.calls) == 1
+
+def test_manifest_tampering_preserving_generation_marker_fails_closed(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    rows = read_csv_rows(output_dir / "run_manifest.csv")
+    rows[0]["health_metadata_json"] = '{"tampered":true}'
+    with (output_dir / "run_manifest.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=runner.MANIFEST_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    with pytest.raises(ValueError, match="generation|digest|authenticated"):
+        build_report(output_dir=output_dir)
 
 
 @pytest.mark.parametrize("mutation", ["forecast", "realized", "delete_forecast", "delete_realized"])
@@ -639,7 +704,7 @@ def test_build_report_fails_closed_on_tampered_or_missing_success_artifacts(
         build_report(output_dir=output_dir)
 
 
-def test_build_report_rejects_mixed_generation_after_partial_commit(
+def test_partial_commit_recovers_on_next_run_and_retry_publishes_one_generation(
     prepared_experiment,
     monkeypatch,
 ):
@@ -662,8 +727,70 @@ def test_build_report_rejects_mixed_generation_after_partial_commit(
         )
 
     monkeypatch.undo()
-    with pytest.raises(ValueError, match="generation"):
-        build_report(output_dir=output_dir)
+    retry_client = FakeClient(model_identity="small-v2")
+    result = run_model(config, model="small", output_dir=output_dir, client=retry_client)
+
+    assert result.attempted_count == 2
+    assert len(retry_client.calls) == 2
+    assert not (output_dir / runner.TRANSACTION_FILENAME).exists()
+    build_report(output_dir=output_dir)
+
+
+def test_unknown_top_level_stale_entries_are_rejected(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    (output_dir / "stale.tmp").write_text("stale", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown|stale|directory"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_preparation_metadata_failure_leaves_destination_retryable(tmp_path, monkeypatch):
+    config = make_config()
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    output_dir = tmp_path / "retryable"
+    original_write_json = runner._atomic_write_json
+
+    def fail_metadata(path, value):
+        if path.name == runner.EXPERIMENT_FILENAME:
+            raise OSError("injected metadata failure")
+        return original_write_json(path, value)
+
+    monkeypatch.setattr(runner, "_atomic_write_json", fail_metadata)
+    with pytest.raises(OSError, match="metadata"):
+        prepare_experiment(
+            config,
+            output_dir=output_dir,
+            snapshot_loader=make_loader(snapshots),
+        )
+
+    assert not output_dir.exists() or not any(output_dir.iterdir())
+    monkeypatch.undo()
+    prepare_experiment(
+        config,
+        output_dir=output_dir,
+        snapshot_loader=make_loader(snapshots),
+    )
+    assert (output_dir / runner.EXPERIMENT_FILENAME).exists()
+
+
+def test_runner_manifest_prefers_reserved_complete_raw_response_slot(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=FakeClient(response_raw_collision=True),
+    )
+
+    row = next(row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small")
+    raw_response = json.loads(row["raw_response_json"])
+    assert raw_response["status"] == "succeeded"
+    assert raw_response["raw_response"]["status"] == "succeeded"
 
 
 def test_forecast_artifact_contains_representative_ohlcv_and_path(prepared_experiment):
@@ -681,6 +808,80 @@ def test_forecast_artifact_contains_representative_ohlcv_and_path(prepared_exper
         "representative_path_json",
     }.issubset(row)
     assert json.loads(row["representative_path_json"])[0]["timestamp"] == "2025-01-04"
+
+
+def test_client_accepted_result_summary_envelope_is_runner_accepted(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    from stock_research.kronos_evaluation_client import KronosClient
+
+    class Response:
+        status_code = 200
+        text = ""
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    class Session:
+        def get(self, url, *, headers, timeout):
+            return Response(
+                {
+                    "status": "ok",
+                    "model": "Kronos-small",
+                    "model_identity": "small-v1",
+                    "weights_identity": "weights-small-v1",
+                    "device": "cpu",
+                    "cuda": False,
+                }
+            )
+
+        def post(self, url, *, headers, json, timeout):
+            timestamps = json["daily"]["future_timestamps"]
+            path = [
+                {
+                    "timestamp": timestamp,
+                    "open": 102.0 + index,
+                    "high": 104.0 + index,
+                    "low": 101.0 + index,
+                    "close": 103.0 + index,
+                    "volume": 1000.0 + index,
+                    "amount": 100000.0 + index,
+                }
+                for index, timestamp in enumerate(timestamps)
+            ]
+            quantiles = {
+                "p10": [101.0 + index for index in range(len(path))],
+                "p50": [103.0 + index for index in range(len(path))],
+                "p90": [105.0 + index for index in range(len(path))],
+            }
+            return Response(
+                {
+                    "status": "succeeded",
+                    "model": "small",
+                    "model_identity": "small-v1",
+                    "weights_identity": "weights-small-v1",
+                    "sample_count": json["sample_count"],
+                    "result": {
+                        "summary": {"close": quantiles},
+                        "daily": {"representative_path": path},
+                    },
+                }
+            )
+
+        def close(self):
+            return None
+
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=Session(),
+    )
+    result = run_model(config, model="small", output_dir=output_dir, client=client)
+
+    assert result.attempted_count == 2
+    assert {row["status"] for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"} == {"success"}
 
 
 def test_missing_representative_path_is_protocol_failure(prepared_experiment):
