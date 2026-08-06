@@ -791,12 +791,10 @@ def _is_sensitive_field_name(key: str) -> bool:
 
 
 def _redact_sensitive_text(value: str, *, token: str | None) -> str:
-    redacted = _redact_sensitive_assignments(value)
-    redacted = re.sub(
-        r"(?i)(\bbearer\s+)[^\s<>'\";,]+",
-        rf"\1{_REDACTED}",
-        redacted,
-    )
+    was_truncated = len(value) > _MAX_RAW_BODY_SCAN
+    bounded_value = value[:_MAX_RAW_BODY_SCAN]
+    redacted = _redact_sensitive_assignments(bounded_value)
+    redacted = _redact_bearer_credentials(redacted)
     if token:
         redacted = re.sub(
             re.escape(token),
@@ -804,6 +802,9 @@ def _redact_sensitive_text(value: str, *, token: str | None) -> str:
             redacted,
             flags=re.IGNORECASE,
         )
+    if was_truncated or len(redacted) > _MAX_RAW_BODY_SCAN:
+        redacted = redacted[: _MAX_RAW_BODY_SCAN - len(_REDACTED)]
+        redacted += _REDACTED
     return redacted
 
 
@@ -816,12 +817,60 @@ def _redact_sensitive_assignments(value: str) -> str:
             index += 1
             continue
 
-        assignment = _scan_sensitive_assignment(value, index)
-        if assignment is None:
+        candidate = _scan_assignment_field(value, index)
+        if candidate is None:
             index += 1
             continue
 
-        value_start, value_end = assignment
+        field_name, field_end, separator_index = candidate
+        if separator_index is None or not _is_sensitive_field_name(field_name):
+            index = (
+                separator_index + 1
+                if separator_index is not None
+                else max(field_end, index + 1)
+            )
+            continue
+
+        value_start = separator_index + 1
+        while value_start < len(value) and value[value_start] in " \t":
+            value_start += 1
+        if (
+            value_start >= len(value)
+            or value[value_start] in _SAFE_UNQUOTED_VALUE_DELIMITERS
+        ):
+            index = max(value_start, index + 1)
+            continue
+
+        if value[value_start] in "\"'":
+            value_end = len(value)
+        else:
+            value_end = _scan_unquoted_value_end(value, value_start)
+        if value_end <= value_start:
+            index = value_start + 1
+            continue
+
+        output.append(value[copy_start:value_start])
+        output.append(_REDACTED)
+        copy_start = value_end
+        index = value_end
+
+    if not output:
+        return value
+    output.append(value[copy_start:])
+    return "".join(output)
+
+
+def _redact_bearer_credentials(value: str) -> str:
+    output: list[str] = []
+    copy_start = 0
+    index = 0
+    while index < len(value):
+        bearer_value = _scan_bearer_value(value, index)
+        if bearer_value is None:
+            index += 1
+            continue
+
+        value_start, value_end = bearer_value
         output.append(value[copy_start:value_start])
         output.append(_REDACTED)
         copy_start = value_end
@@ -843,10 +892,13 @@ def _is_potential_field_start(value: str, index: int) -> bool:
     return not (previous.isalnum() or previous in "_.-")
 
 
-def _scan_sensitive_assignment(
+def _scan_assignment_field(
     value: str,
     start: int,
-) -> tuple[int, int] | None:
+) -> tuple[str, int, int | None] | None:
+    if not _is_potential_field_start(value, start):
+        return None
+
     field_end = start
     while (
         field_end < len(value)
@@ -860,49 +912,43 @@ def _scan_sensitive_assignment(
 
     if field_end == start:
         return None
-    if (
-        field_end - start == _MAX_ASSIGNMENT_FIELD_LENGTH
-        and field_end < len(value)
-        and value[field_end].isalnum()
-    ):
-        return None
 
     field_name = value[start:field_end].strip(" \t")
-    if not field_name or not _is_sensitive_field_name(field_name):
+    if not field_name:
         return None
 
     separator_end = field_end
     while separator_end < len(value) and value[separator_end] in " \t\"'":
         separator_end += 1
     if separator_end >= len(value) or value[separator_end] not in ":=":
+        return field_name, field_end, None
+    return field_name, field_end, separator_end
+
+
+def _scan_bearer_value(value: str, start: int) -> tuple[int, int] | None:
+    bearer = "bearer"
+    if value[start : start + len(bearer)].lower() != bearer:
+        return None
+    if start > 0 and (
+        value[start - 1].isalnum() or value[start - 1] in "_.-"
+    ):
         return None
 
-    value_start = separator_end + 1
+    separator_end = start + len(bearer)
+    if separator_end >= len(value) or not value[separator_end].isspace():
+        return None
+    value_start = separator_end
     while value_start < len(value) and value[value_start] in " \t":
         value_start += 1
-    if value_start >= len(value) or value[value_start] in _SAFE_UNQUOTED_VALUE_DELIMITERS:
+    if value_start >= len(value):
         return None
 
     if value[value_start] in "\"'":
-        value_end = _scan_quoted_value_end(value, value_start)
-    else:
-        value_end = _scan_unquoted_value_end(value, value_start)
+        return value_start, len(value)
+    value_end = _scan_unquoted_value_end(value, value_start)
     if value_end <= value_start:
         return None
     return value_start, value_end
-
-
-def _scan_quoted_value_end(value: str, start: int) -> int:
-    quote = value[start]
-    index = start + 1
-    while index < len(value):
-        if value[index] == "\\":
-            index += 2
-            continue
-        if value[index] == quote:
-            return index + 1
-        index += 1
-    return len(value)
 
 
 def _scan_unquoted_value_end(value: str, start: int) -> int:

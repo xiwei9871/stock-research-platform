@@ -656,6 +656,26 @@ def test_plaintext_scanner_honors_escaped_quotes():
     assert secret not in exc_info.value.raw_body_excerpt
 
 
+@pytest.mark.parametrize("quote", ['"', "'"])
+def test_plaintext_scanner_redacts_quoted_bearer_credentials(quote):
+    secret = "quoted-bearer-secret"
+    body = f"Bearer {quote}{secret}{quote}, diagnostic=keep"
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert secret not in exc_info.value.raw_body_excerpt
+
+
 @pytest.mark.parametrize(
     ("field_name", "secret_prefix", "quote"),
     [
@@ -760,6 +780,57 @@ def test_nested_scanner_redacts_spaced_and_multiword_diagnostic_text():
         "nested-api-key-secret",
     ):
         assert secret not in serialized_response
+
+
+def test_nested_scanner_masks_decoded_interior_quotes_and_suffix_secret():
+    suffix_secret = "decoded-suffix-secret"
+    nested_text = (
+        'private_key="decoded "interior" value" ' + suffix_secret
+    )
+    structured_error = {
+        "error": "invalid request",
+        "details": {"message": nested_text, "diagnostic": "keep this"},
+    }
+    response = FakeResponse(structured_error, status_code=422)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    serialized_response = json.dumps(exc_info.value.raw_response)
+    assert suffix_secret not in serialized_response
+
+
+def test_nested_scanner_caps_long_diagnostic_strings_before_redaction():
+    late_secret = "late-diagnostic-secret"
+    long_text = ("ordinary diagnostic " * 200) + f" private_key={late_secret}"
+    structured_error = {
+        "error": "invalid request",
+        "details": {"message": long_text, "diagnostic": "keep this"},
+    }
+    response = FakeResponse(structured_error, status_code=422)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    diagnostic = exc_info.value.raw_response["details"]["message"]
+    assert len(diagnostic) <= 2048
+    assert late_secret not in diagnostic
 
 
 def test_nested_text_redacts_long_unterminated_quoted_assignments():
