@@ -598,7 +598,7 @@ def test_predict_rejects_symlinked_top_level_artifact_before_assert_model(
     _assert_predict_tree_symlink_is_rejected(cli, output_dir, monkeypatch, capsys)
 
 
-def test_predict_rejects_symlinked_output_parent_before_assert_model(
+def test_predict_allows_normal_temporary_output_parent_before_assert_model(
     tmp_path,
     monkeypatch,
     capsys,
@@ -606,12 +606,129 @@ def test_predict_rejects_symlinked_output_parent_before_assert_model(
     cli = load_cli_module()
     real_parent = tmp_path / "real-parent"
     real_parent.mkdir()
-    symlink_parent = tmp_path / "symlink-parent"
-    symlink_parent.symlink_to(real_parent, target_is_directory=True)
-    output_dir = symlink_parent / "prepared"
+    parent_alias = tmp_path / "parent-alias"
+    parent_alias.symlink_to(real_parent, target_is_directory=True)
+    output_dir = parent_alias / "prepared"
     output_dir.mkdir()
+    (output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    (output_dir / "input_snapshots").mkdir()
+    calls: list[dict[str, object]] = []
 
-    _assert_predict_tree_symlink_is_rejected(cli, output_dir, monkeypatch, capsys)
+    def fake_run_model(config, *, model, output_dir, client):
+        calls.append(
+            {
+                "config": config,
+                "model": model,
+                "output_dir": output_dir,
+                "client": client,
+            }
+        )
+        return SimpleNamespace(
+            attempted_count=0,
+            cache_hit_count=0,
+            skipped_count=0,
+            status_counts={"success": 1},
+        )
+
+    FakePredictClient.instances.clear()
+    monkeypatch.setattr(cli, "KronosClient", FakePredictClient)
+    monkeypatch.setattr(cli, "run_model", fake_run_model)
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(_predict_args(output_dir))
+
+    assert result == 0
+    assert len(calls) == 1
+    assert FakePredictClient.instances[0].asserted_models == ["small"]
+    assert json.loads(capsys.readouterr().out)["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    "journal_name",
+    [
+        ".kronos_transaction.json",
+        ".kronos_report_transaction.json",
+        ".kronos_report_invalidation.json",
+    ],
+)
+def test_predict_allows_controlled_recovery_marker_to_reach_runner(
+    tmp_path,
+    monkeypatch,
+    capsys,
+    journal_name,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    (output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    (output_dir / "input_snapshots").mkdir()
+    marker = output_dir / journal_name
+    marker.write_text("{}", encoding="utf-8")
+    reached_runner: list[Path] = []
+
+    def fake_run_model(config, *, model, output_dir, client):
+        assert marker.exists()
+        reached_runner.append(output_dir)
+        return SimpleNamespace(
+            attempted_count=0,
+            cache_hit_count=0,
+            skipped_count=0,
+            status_counts={"success": 1},
+        )
+
+    FakePredictClient.instances.clear()
+    monkeypatch.setattr(cli, "KronosClient", FakePredictClient)
+    monkeypatch.setattr(cli, "run_model", fake_run_model)
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(_predict_args(output_dir))
+
+    assert result == 0
+    assert reached_runner == [output_dir]
+    assert FakePredictClient.instances[0].asserted_models == ["small"]
+    assert json.loads(capsys.readouterr().out)["status"] == "ok"
+
+
+def test_predict_rejects_symlinked_recovery_marker_before_constructing_client(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    (output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    (output_dir / "input_snapshots").mkdir()
+    marker_source = tmp_path / "transaction-source.json"
+    marker_source.write_text("{}", encoding="utf-8")
+    (output_dir / ".kronos_transaction.json").symlink_to(marker_source)
+    constructed = False
+
+    class MustNotConstruct:
+        def __init__(self, *args, **kwargs):
+            nonlocal constructed
+            constructed = True
+            raise AssertionError("client must not be constructed")
+
+    monkeypatch.setattr(cli, "KronosClient", MustNotConstruct)
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(_predict_args(output_dir))
+
+    assert result != 0
+    assert constructed is False
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == "error"
+    assert "symlink" in summary["error"]
 
 
 def test_predict_refuses_missing_preparation_metadata(tmp_path, monkeypatch, capsys):

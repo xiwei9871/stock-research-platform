@@ -28,9 +28,20 @@ if str(SRC_ROOT) not in sys.path:
 
 from stock_research.kronos_evaluation_runner import (
     EXPERIMENT_FILENAME,
-    _reject_symlink as _runner_reject_symlink,
+    FORECAST_FILENAME,
+    MANIFEST_FILENAME,
+    METRICS_BY_MODEL_FILENAME,
+    METRICS_BY_STOCK_FILENAME,
+    MODEL_COMPARISON_FILENAME,
+    REALIZED_FILENAME,
+    REPORT_DIGEST_FILENAME,
+    REPORT_FILENAME,
+    REPORT_INVALIDATION_FILENAME,
+    REPORT_TRANSACTION_FILENAME,
     SNAPSHOT_DIRECTORY,
-    _validate_top_level_entries,
+    TRANSACTION_FILENAME,
+    UNIVERSE_FILENAME,
+    _reject_symlink as _runner_reject_symlink,
     build_report,
     prepare_experiment,
     run_model,
@@ -52,6 +63,43 @@ _ASSET_COLUMNS = ("asset_id", "code", "stock_code", "ts_code", "symbol", "ticker
 _EXCHANGE_COLUMNS = ("exchange", "market", "exchange_code")
 _BARE_ASSET_RE = re.compile(r"^\d{6}$")
 _STAGES = ("prepare", "predict", "report")
+_PREDICT_DOCUMENTED_TOP_LEVEL_ENTRIES = frozenset(
+    {
+        EXPERIMENT_FILENAME,
+        UNIVERSE_FILENAME,
+        SNAPSHOT_DIRECTORY,
+        MANIFEST_FILENAME,
+        FORECAST_FILENAME,
+        REALIZED_FILENAME,
+        METRICS_BY_STOCK_FILENAME,
+        METRICS_BY_MODEL_FILENAME,
+        MODEL_COMPARISON_FILENAME,
+        REPORT_FILENAME,
+        REPORT_DIGEST_FILENAME,
+    }
+)
+_RECOVERY_FILE_BASE_NAMES = (
+    EXPERIMENT_FILENAME,
+    UNIVERSE_FILENAME,
+    MANIFEST_FILENAME,
+    FORECAST_FILENAME,
+    REALIZED_FILENAME,
+    METRICS_BY_STOCK_FILENAME,
+    METRICS_BY_MODEL_FILENAME,
+    MODEL_COMPARISON_FILENAME,
+    REPORT_FILENAME,
+    REPORT_DIGEST_FILENAME,
+    TRANSACTION_FILENAME,
+    REPORT_TRANSACTION_FILENAME,
+    REPORT_INVALIDATION_FILENAME,
+)
+_CONTROLLED_RECOVERY_JOURNALS = frozenset(
+    {
+        TRANSACTION_FILENAME,
+        REPORT_TRANSACTION_FILENAME,
+        REPORT_INVALIDATION_FILENAME,
+    }
+)
 
 
 class _CliArgumentParser(argparse.ArgumentParser):
@@ -236,11 +284,10 @@ def _validate_predict_output_dir(output_dir: Path) -> Path:
             f"experiment output directory must be a directory: {output_dir}"
         )
 
-    # Reuse the runner's documented top-level integrity boundary so every
-    # known artifact is checked before any client is constructed. The full
-    # content/fingerprint validation remains in run_model after its recovery
-    # steps; this preflight only moves symlink rejection ahead of the network.
-    _validate_top_level_entries(output_dir)
+    # The runner normally recovers these entries before its documented
+    # top-level integrity boundary. Predict must inspect symlinks before the
+    # network call without preventing that recovery from running.
+    _validate_predict_tree(output_dir)
 
     metadata_path = output_dir / EXPERIMENT_FILENAME
     _reject_cli_symlink(metadata_path, "experiment metadata")
@@ -274,13 +321,92 @@ def _validate_output_path_chain(output_dir: Path) -> None:
     absolute_path = (
         output_dir if output_dir.is_absolute() else Path.cwd() / output_dir
     )
-    for candidate in (absolute_path, *absolute_path.parents):
-        _runner_reject_symlink(candidate, "experiment output path")
+    _reject_cli_symlink(absolute_path, "experiment output directory")
+    parent = absolute_path.parent
+    if parent.exists() and not parent.is_dir():
+        raise ValueError(f"experiment output parent must be a directory: {parent}")
 
 
 def _reject_cli_symlink(path: Path, label: str) -> None:
     if path.is_symlink():
         raise ValueError(f"{label} must not be a symlink: {path}")
+
+
+def _validate_predict_tree(output_dir: Path) -> None:
+    unknown: list[str] = []
+    for path in sorted(output_dir.iterdir(), key=lambda item: item.name):
+        _runner_reject_symlink(path, f"experiment artifact {path.name}")
+        if path.name in _PREDICT_DOCUMENTED_TOP_LEVEL_ENTRIES:
+            if path.name == SNAPSHOT_DIRECTORY:
+                _validate_snapshot_directory(path)
+            elif not path.is_file():
+                raise ValueError(
+                    f"experiment artifact {path.name} must be a regular file"
+                )
+            continue
+
+        recovery_kind = _controlled_recovery_entry_kind(path.name)
+        if recovery_kind is None:
+            unknown.append(path.name)
+            continue
+        if recovery_kind == "directory":
+            if not path.is_dir():
+                raise ValueError(f"recovery directory must be a directory: {path}")
+            _validate_no_symlinks_below(path)
+        elif not path.is_file():
+            raise ValueError(f"recovery artifact must be a regular file: {path}")
+
+    if unknown:
+        raise ValueError(
+            "output directory contains unknown or stale entries: "
+            + ", ".join(unknown)
+        )
+
+
+def _validate_snapshot_directory(snapshot_dir: Path) -> None:
+    if not snapshot_dir.is_dir():
+        raise ValueError(f"{SNAPSHOT_DIRECTORY} must be a directory")
+    for path in sorted(snapshot_dir.iterdir(), key=lambda item: item.name):
+        _runner_reject_symlink(path, f"frozen snapshot artifact {path.name}")
+        if not path.is_file():
+            raise ValueError(
+                f"frozen snapshot artifact must be a regular file: {path}"
+            )
+
+
+def _validate_no_symlinks_below(directory: Path) -> None:
+    for root, directory_names, file_names in os.walk(
+        directory,
+        topdown=True,
+        followlinks=False,
+    ):
+        root_path = Path(root)
+        for name in (*directory_names, *file_names):
+            _runner_reject_symlink(
+                root_path / name,
+                f"recovery artifact {root_path / name}",
+            )
+
+
+def _controlled_recovery_entry_kind(name: str) -> str | None:
+    if name in _CONTROLLED_RECOVERY_JOURNALS:
+        return "file"
+    for base_name in _RECOVERY_FILE_BASE_NAMES:
+        prefix = f".{base_name}."
+        if name == f".{base_name}.tmp":
+            return "file"
+        if not name.startswith(prefix):
+            continue
+        suffix = name[len(prefix) :]
+        if suffix.endswith((".tmp", ".backup")):
+            return "file"
+        if suffix.endswith(".stage"):
+            return (
+                "directory"
+                if base_name == REPORT_TRANSACTION_FILENAME
+                else "file"
+            )
+    return None
 
 
 def _predict_summary_status(status_counts: Mapping[str, int]) -> str:
