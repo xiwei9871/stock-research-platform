@@ -317,6 +317,33 @@ def test_aggregate_metrics_rejects_non_scalar_group_keys(bad_key):
         aggregate_metrics([row], group_by=("asset_id",))
 
 
+def test_aggregate_metrics_keeps_mixed_scalar_group_keys_distinct():
+    rows = [
+        _metric_row(True, "2025-01-02", 1),
+        _metric_row(1, "2025-01-02", 1),
+        _metric_row(1.0, "2025-01-02", 1),
+        _metric_row("1", "2025-01-02", 1),
+    ]
+
+    summaries = aggregate_metrics(rows, group_by=("asset_id",))
+
+    assert len(summaries) == 4
+    assert any(summary["asset_id"] is True for summary in summaries)
+    assert any(
+        summary["asset_id"] == 1 and type(summary["asset_id"]) is int
+        for summary in summaries
+    )
+    assert any(
+        summary["asset_id"] == 1.0 and type(summary["asset_id"]) is float
+        for summary in summaries
+    )
+    assert any(
+        summary["asset_id"] == "1" and type(summary["asset_id"]) is str
+        for summary in summaries
+    )
+    json.dumps(summaries, sort_keys=True)
+
+
 @pytest.mark.parametrize(
     "field",
     [
@@ -415,6 +442,21 @@ def test_compare_models_weights_all_valid_rows_within_a_block():
     assert comparison["ci_low"] == comparison["ci_high"] == comparison["delta_mean"]
 
 
+def test_compare_models_keeps_mixed_scalar_block_keys_distinct():
+    rows = [
+        {"asset_id": True, "origin_date": "2025-01-02", "small": 0.0, "base": 0.0},
+        {"asset_id": 1, "origin_date": "2025-01-02", "small": 0.0, "base": 100.0},
+        {"asset_id": 1.0, "origin_date": "2025-01-02", "small": 0.0, "base": 200.0},
+    ]
+
+    comparison = compare_models(rows, seed=7)
+
+    assert comparison["paired_count"] == 3
+    assert comparison["paired_row_count"] == 3
+    assert comparison["base_minus_small"] == pytest.approx(100.0)
+    json.dumps(comparison, sort_keys=True)
+
+
 @pytest.mark.parametrize("bad_seed", [None, True, 1.5])
 def test_compare_models_requires_an_integer_seed(bad_seed):
     with pytest.raises(ValueError, match="seed"):
@@ -450,6 +492,41 @@ def test_compare_models_long_rows_pair_by_horizon_independent_of_input_order():
 
     assert first == second
     assert first["base_minus_small"] == pytest.approx((-0.02 - 0.05) / 2)
+
+
+def test_compare_models_excludes_incomplete_long_blocks_with_failed_or_missing_counterparts():
+    rows = [
+        {"asset_id": "failed", "origin_date": "2025-01-02", "model": "small", "horizon": 1, "value": 0.10},
+        {"asset_id": "failed", "origin_date": "2025-01-02", "model": "base", "horizon": 1, "status": "model_error"},
+        {"asset_id": "missing", "origin_date": "2025-01-02", "model": "small", "horizon": 1, "value": 0.20},
+        {"asset_id": "complete", "origin_date": "2025-01-02", "model": "small", "horizon": 1, "value": 0.20},
+        {"asset_id": "complete", "origin_date": "2025-01-02", "model": "base", "horizon": 1, "value": 0.15},
+    ]
+
+    comparison = compare_models(rows, seed=7)
+
+    assert comparison["status"] == "single_block"
+    assert comparison["paired_count"] == 1
+    assert comparison["paired_row_count"] == 1
+    assert comparison["excluded_count"] == 3
+    assert comparison["base_minus_small"] == pytest.approx(-0.05)
+
+
+def test_compare_models_reports_no_complete_pairs_for_only_incomplete_long_blocks():
+    comparison = compare_models(
+        [
+            {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "value": 0.10},
+            {"asset_id": "A", "origin_date": "2025-01-02", "model": "base", "status": "insufficient_truth"},
+        ],
+        seed=7,
+    )
+
+    assert comparison["status"] == "no_complete_pairs"
+    assert comparison["paired_count"] == 0
+    assert comparison["paired_row_count"] == 0
+    assert comparison["delta_mean"] is None
+    assert comparison["ci_low"] is None
+    assert comparison["ci_high"] is None
 
 
 def test_compare_models_rejects_ambiguous_or_unequal_long_pair_sequences():

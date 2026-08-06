@@ -317,12 +317,18 @@ def aggregate_metrics(
 
     normalized_group_by = _normalize_group_by(group_by)
     normalized_rows = _flatten_metric_rows(rows)
-    buckets: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
+    buckets: dict[tuple[tuple[str, Any], ...], list[dict[str, Any]]] = defaultdict(list)
+    group_values_by_key: dict[tuple[tuple[str, Any], ...], tuple[Any, ...]] = {}
     for row in normalized_rows:
-        key = tuple(_group_value(row.get(field)) for field in normalized_group_by)
+        group_values = tuple(
+            _group_value(row.get(field)) for field in normalized_group_by
+        )
+        key = tuple(_typed_scalar_key(value) for value in group_values)
         buckets[key].append(row)
+        group_values_by_key.setdefault(key, group_values)
     if not buckets and not normalized_group_by:
         buckets[()] = []
+        group_values_by_key[()] = ()
 
     summaries: list[dict[str, Any]] = []
     for key in sorted(buckets, key=_stable_sort_key):
@@ -378,7 +384,10 @@ def aggregate_metrics(
         direction_denominator = denominators["direction_hit"]
         coverage_denominator = denominators["interval_coverage"]
         summary: dict[str, Any] = {
-            field: value for field, value in zip(normalized_group_by, key)
+            field: value
+            for field, value in zip(
+                normalized_group_by, group_values_by_key[key]
+            )
         }
         summary.update(
             {
@@ -433,6 +442,10 @@ def compare_models(
     subgroup means are never averaged with equal weight.  The confidence
     interval is a deterministic empirical 95% block bootstrap using
     ``random.Random(seed)`` and linearly interpolated 2.5%/97.5% quantiles.
+    Long-form blocks with failed or missing counterpart rows are excluded
+    entirely; cardinality and ambiguity errors apply only to complete valid
+    long-form blocks.  A non-empty input with no complete pairs reports
+    ``status='no_complete_pairs'``.
     """
 
     left_name = _model_name(left, "left")
@@ -471,11 +484,18 @@ def compare_models(
         return output_base
 
     status_counts: Counter[str] = Counter()
-    block_deltas: dict[tuple[Any, Any], list[float]] = defaultdict(list)
+    block_deltas: dict[tuple[tuple[str, Any], tuple[str, Any]], list[float]] = defaultdict(list)
     long_subgroups: dict[
-        tuple[tuple[Any, Any], Any],
+        tuple[tuple[tuple[str, Any], tuple[str, Any]], tuple[str, Any]],
         dict[str, list[float]],
     ] = defaultdict(lambda: defaultdict(list))
+    long_block_models: dict[
+        tuple[tuple[str, Any], tuple[str, Any]], set[str]
+    ] = defaultdict(set)
+    long_block_incomplete: set[tuple[tuple[str, Any], tuple[str, Any]]] = set()
+    long_block_valid_row_counts: dict[
+        tuple[tuple[str, Any], tuple[str, Any]], int
+    ] = defaultdict(int)
     excluded_count = 0
     paired_row_count = 0
 
@@ -484,24 +504,28 @@ def compare_models(
             raise ValueError(
                 f"rows[{index}] must contain asset_id and origin_date"
             )
-        block = (
+        block_values = (
             _group_value(row["asset_id"]),
             _group_value(row["origin_date"]),
         )
+        block = tuple(_typed_scalar_key(value) for value in block_values)
         status = _comparison_row_status(row, left_name, right_name)
         status_counts[status] += 1
-        subkey = _group_value(row.get("horizon"))
+        subkey = _typed_scalar_key(_group_value(row.get("horizon")))
 
         if _is_long_comparison_row(row, left_name, right_name):
             model = _normalized_model_value(row.get("model"), row_index=index)
             value = _optional_numeric_value(row, _LONG_VALUE_FIELDS)
-            if model not in {left_name, right_name} or status not in _SUCCESS_STATUSES:
+            if model not in {left_name, right_name}:
                 excluded_count += 1
                 continue
-            if value is None:
+            long_block_models[block].add(model)
+            if status not in _SUCCESS_STATUSES or value is None:
+                long_block_incomplete.add(block)
                 excluded_count += 1
                 continue
             long_subgroups[(block, subkey)][model].append(value)
+            long_block_valid_row_counts[block] += 1
             continue
 
         left_value = _optional_comparison_value(row, left_name)
@@ -518,25 +542,37 @@ def compare_models(
         )
         paired_row_count += 1
 
-    for (block, _subkey), values_by_model in long_subgroups.items():
-        left_values = values_by_model.get(left_name, [])
-        right_values = values_by_model.get(right_name, [])
-        if len(left_values) != len(right_values):
-            raise ValueError(
-                "long-form model rows must have equal cardinality for each horizon"
-            )
-        if len(left_values) > 1:
-            raise ValueError(
-                "ambiguous long-form pairing; provide one unique horizon per model row"
-            )
-        for pair_index in range(len(left_values)):
-            block_deltas[block].append(
-                _finite_result(
-                    right_values[pair_index] - left_values[pair_index],
-                    "model_delta",
+    for block in sorted(long_block_models, key=_stable_sort_key):
+        if block in long_block_incomplete:
+            excluded_count += long_block_valid_row_counts[block]
+            continue
+        if long_block_models[block] != {left_name, right_name}:
+            excluded_count += long_block_valid_row_counts[block]
+            continue
+        block_subgroups = [
+            (subkey, values_by_model)
+            for (sub_block, subkey), values_by_model in long_subgroups.items()
+            if sub_block == block
+        ]
+        for _subkey, values_by_model in block_subgroups:
+            left_values = values_by_model.get(left_name, [])
+            right_values = values_by_model.get(right_name, [])
+            if len(left_values) != len(right_values):
+                raise ValueError(
+                    "long-form model rows must have equal cardinality for each horizon"
                 )
-            )
-        paired_row_count += len(left_values)
+            if len(left_values) > 1:
+                raise ValueError(
+                    "ambiguous long-form pairing; provide one unique horizon per model row"
+                )
+            for pair_index in range(len(left_values)):
+                block_deltas[block].append(
+                    _finite_result(
+                        right_values[pair_index] - left_values[pair_index],
+                        "model_delta",
+                    )
+                )
+            paired_row_count += len(left_values)
 
     complete_block_rows = [
         deltas
@@ -551,7 +587,7 @@ def compare_models(
     output_base["paired_count"] = len(complete_block_rows)
     output_base["complete_block_count"] = len(complete_block_rows)
     if not complete_block_rows:
-        output_base["status"] = "no_complete_blocks"
+        output_base["status"] = "no_complete_pairs"
         return output_base
 
     all_paired_deltas = [
@@ -857,6 +893,13 @@ def _group_value(value: Any) -> Any:
         "group and block keys must be JSON-compatible scalar values; "
         f"got {type(value).__name__}"
     )
+
+
+def _typed_scalar_key(value: Any) -> tuple[str, Any]:
+    """Return a collision-free internal key while preserving the scalar value."""
+
+    normalized = _group_value(value)
+    return (type(normalized).__name__, normalized)
 
 
 def _stable_sort_key(value: Any) -> tuple[str, ...]:
