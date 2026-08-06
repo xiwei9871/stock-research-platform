@@ -135,6 +135,7 @@ class FakeClient:
         *,
         model: str = "small",
         model_identity: str = "small-v1",
+        health_weights_identity: str | None = None,
         fail: bool = False,
         malformed_asset: str | None = None,
         health_failure: bool = False,
@@ -147,10 +148,11 @@ class FakeClient:
         response_daily_overrides: dict[str, Any] | None = None,
         response_raw_overrides: dict[str, Any] | None = None,
         response_raw_collision: bool = False,
+        omit_health_identity: bool = False,
     ) -> None:
         self.model = model
         self.model_identity = model_identity
-        self.weights_identity = f"weights-{model_identity}"
+        self.weights_identity = health_weights_identity or f"weights-{model_identity}"
         self.fail = fail
         self.malformed_asset = malformed_asset
         self.health_failure = health_failure
@@ -163,19 +165,26 @@ class FakeClient:
         self.response_daily_overrides = response_daily_overrides
         self.response_raw_overrides = response_raw_overrides
         self.response_raw_collision = response_raw_collision
+        self.omit_health_identity = omit_health_identity
         self.calls: list[tuple[str, str, int, int | None]] = []
 
     def health(self) -> dict[str, Any]:
         if self.health_failure:
             raise RuntimeError("health unavailable")
-        return {
+        health = {
             "status": "ok",
-            "model": self.model,
-            "model_identity": self.model_identity,
-            "weights_identity": self.weights_identity,
             "device": "cpu",
             "cuda": False,
         }
+        if not self.omit_health_identity:
+            health.update(
+                {
+                    "model": self.model,
+                    "model_identity": self.model_identity,
+                    "weights_identity": self.weights_identity,
+                }
+            )
+        return health
 
     def predict_daily(
         self,
@@ -246,7 +255,10 @@ class FakeClient:
         if self.response_raw_collision:
             complete_response = json.loads(json.dumps(response))
             response["raw_response"] = {"upstream": "nested raw response"}
-            response["_kronos_raw_response"] = complete_response
+            response["_kronos_raw_response"] = {"upstream": "reserved upstream"}
+            response["__kronos_raw_response"] = {"upstream": "double reserved upstream"}
+            response["__kronos_client_raw_response_slot__"] = "__kronos_complete_response__"
+            response["__kronos_complete_response__"] = complete_response
         return response
 
 
@@ -733,7 +745,57 @@ def test_partial_commit_recovers_on_next_run_and_retry_publishes_one_generation(
     assert result.attempted_count == 2
     assert len(retry_client.calls) == 2
     assert not (output_dir / runner.TRANSACTION_FILENAME).exists()
-    build_report(output_dir=output_dir)
+
+
+def test_transaction_recovery_is_idempotent_after_one_backup_delete_and_retry(
+    prepared_experiment,
+    monkeypatch,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    original_commit = runner._commit_staged_artifacts
+
+    def partial_commit(staged_paths, final_paths):
+        original_commit(staged_paths[:1], final_paths[:1])
+        raise OSError("injected commit interruption")
+
+    monkeypatch.setattr(runner, "_commit_staged_artifacts", partial_commit)
+    with pytest.raises(OSError, match="interruption"):
+        run_model(
+            config,
+            model="small",
+            output_dir=output_dir,
+            client=FakeClient(model_identity="small-v2"),
+        )
+
+    monkeypatch.undo()
+    original_unlink = runner._unlink_transaction_path
+    deleted_backup = False
+
+    def fail_after_backup_delete(path):
+        nonlocal deleted_backup
+        if not deleted_backup and path.name.endswith(".backup"):
+            deleted_backup = True
+            path.unlink(missing_ok=True)
+            raise OSError("injected backup cleanup interruption")
+        return original_unlink(path)
+
+    monkeypatch.setattr(runner, "_unlink_transaction_path", fail_after_backup_delete)
+    with pytest.raises(OSError, match="backup cleanup"):
+        runner._recover_pending_transaction(output_dir)
+    assert deleted_backup
+    assert (output_dir / runner.TRANSACTION_FILENAME).exists()
+
+    monkeypatch.undo()
+    retry_client = FakeClient(model_identity="small-v2")
+    result = run_model(config, model="small", output_dir=output_dir, client=retry_client)
+
+    assert result.attempted_count == 2
+    assert len(retry_client.calls) == 2
+    assert not (output_dir / runner.TRANSACTION_FILENAME).exists()
+    assert not list(output_dir.glob(".*.backup"))
+    assert not list(output_dir.glob(".*.stage"))
 
 
 def test_unknown_top_level_stale_entries_are_rejected(prepared_experiment):
@@ -742,6 +804,124 @@ def test_unknown_top_level_stale_entries_are_rejected(prepared_experiment):
 
     with pytest.raises(ValueError, match="unknown|stale|directory"):
         run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_orphan_preparation_stage_is_cleaned_before_retry(tmp_path):
+    config = make_config()
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    output_dir = tmp_path / "retryable"
+    orphan = tmp_path / ".retryable.prepare-dead"
+    orphan.mkdir()
+    (orphan / "partial.json").write_text("{}", encoding="utf-8")
+
+    prepare_experiment(
+        config,
+        output_dir=output_dir,
+        snapshot_loader=make_loader(snapshots),
+    )
+
+    assert not orphan.exists()
+    assert not list(tmp_path.glob(".retryable.prepare-*"))
+    assert (output_dir / runner.EXPERIMENT_FILENAME).exists()
+
+
+def test_report_rejects_nonterminal_manifest_status(prepared_experiment):
+    output_dir, _, _, _ = prepared_experiment
+
+    with pytest.raises(ValueError, match="terminal|status"):
+        build_report(output_dir=output_dir)
+
+
+def test_missing_health_identity_fails_preflight_without_synthesizing_requested_model(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(omit_health_identity=True)
+
+    result = run_model(config, model="small", output_dir=output_dir, client=client)
+
+    assert result.attempted_count == 2
+    assert client.calls == []
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"unavailable"}
+    assert all(row["model_identity"] == "" for row in rows)
+    assert all(row["health_model_identity"] == "" for row in rows)
+    assert all(row["cache_hit"] == "false" for row in rows)
+
+
+def test_equivalent_versioned_health_identities_are_one_cache_identity(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    first_client = FakeClient(
+        model_identity="Kronos-small-v1",
+        health_weights_identity="weights-small-v1",
+    )
+    run_model(config, model="small", output_dir=output_dir, client=first_client)
+
+    resume_client = FakeClient(
+        model_identity="small-v1",
+        health_weights_identity="weights-small-v1",
+    )
+    result = run_model(config, model="small", output_dir=output_dir, client=resume_client)
+
+    assert result.cache_hit_count == 2
+    assert result.attempted_count == 0
+    assert resume_client.calls == []
+
+
+@pytest.mark.parametrize("relative", ["universe.csv", "forecast_bars.parquet", "report.md"])
+def test_known_output_symlinks_are_rejected(prepared_experiment, relative):
+    output_dir, config, _, _ = prepared_experiment
+    target = output_dir.parent / f"outside-{relative.replace('.', '-') }"
+    target.write_text("external", encoding="utf-8")
+    path = output_dir / relative
+    path.unlink(missing_ok=True)
+    path.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink|regular"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_snapshot_directory_and_file_symlinks_are_rejected(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    snapshot_dir = output_dir / runner.SNAPSHOT_DIRECTORY
+    external_dir = output_dir.parent / "outside-snapshots"
+    external_dir.mkdir()
+    for path in snapshot_dir.iterdir():
+        path.unlink()
+    snapshot_dir.rmdir()
+    snapshot_dir.symlink_to(external_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink|regular"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_snapshot_file_symlink_is_rejected(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    snapshot_path = output_dir / runner.SNAPSHOT_DIRECTORY / "CN:SH:600418__2025-01-03.json"
+    target = output_dir.parent / "outside-snapshot.json"
+    target.write_bytes(snapshot_path.read_bytes())
+    snapshot_path.unlink()
+    snapshot_path.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink|regular"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_transaction_symlink_is_rejected(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    target = output_dir.parent / "outside-transaction.json"
+    target.write_text("{}", encoding="utf-8")
+    transaction = output_dir / runner.TRANSACTION_FILENAME
+    transaction.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symlink|regular"):
+        runner._recover_pending_transaction(output_dir)
 
 
 def test_preparation_metadata_failure_leaves_destination_retryable(tmp_path, monkeypatch):
@@ -903,6 +1083,16 @@ def test_extract_quantiles_supports_result_summary_branch():
     response = {
         "status": "succeeded",
         "daily": {"representative_path": []},
+        "result": {"summary": {"close": quantiles}},
+    }
+
+    assert runner._extract_quantiles(response) == quantiles
+
+
+def test_extract_quantiles_supports_result_summary_without_top_level_daily():
+    quantiles = {"p10": [1.0], "p50": [1.5], "p90": [2.0]}
+    response = {
+        "status": "succeeded",
         "result": {"summary": {"close": quantiles}},
     }
 

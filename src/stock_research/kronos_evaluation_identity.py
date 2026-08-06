@@ -89,7 +89,7 @@ def model_identity_parts(
         )
     if allow_weight_prefix:
         match = re.fullmatch(
-            r"(?:kronos-)?weights-(small|base)(?:-v(\d+))?",
+            r"(?:kronos-)?weights-(?:kronos-)?(small|base)(?:-v(\d+))?",
             normalized,
         )
         if match:
@@ -103,6 +103,21 @@ def model_identity_parts(
 def model_family(value: Any) -> str | None:
     parsed = model_identity_parts(value, allow_weight_prefix=True)
     return parsed[0] if parsed is not None else None
+
+
+def canonical_identity(
+    value: Any,
+    *,
+    allow_weight_prefix: bool = False,
+) -> str | None:
+    """Return the stable family/version form used for cache identity."""
+
+    parsed = model_identity_parts(value, allow_weight_prefix=allow_weight_prefix)
+    if parsed is None:
+        return None
+    family, version = parsed
+    prefix = "weights-" if allow_weight_prefix else ""
+    return f"{prefix}{family}{f'-{version}' if version else ''}"
 
 
 def _records(payloads: Sequence[tuple[str, Any]]) -> tuple[
@@ -245,6 +260,7 @@ def explicit_weight_identity(payload: Any) -> str | None:
 
 
 __all__ = [
+    "canonical_identity",
     "IdentityRecord",
     "IdentityValidation",
     "IdentityValidationError",

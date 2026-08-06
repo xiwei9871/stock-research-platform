@@ -37,6 +37,7 @@ from stock_research.kronos_evaluation_identity import (
     IdentityValidationError,
     explicit_model_identity,
     explicit_weight_identity,
+    canonical_identity,
     iter_identity_fields as _shared_iter_identity_fields,
     model_family as _shared_model_family,
     model_identity_parts as _shared_model_identity_parts,
@@ -62,8 +63,8 @@ METRICS_BY_MODEL_FILENAME = "metrics_by_model_horizon.csv"
 MODEL_COMPARISON_FILENAME = "model_comparison.csv"
 REPORT_FILENAME = "report.md"
 TRANSACTION_FILENAME = ".kronos_transaction.json"
-_EXPERIMENT_SCHEMA_VERSION = 2
-_TRANSACTION_SCHEMA_VERSION = 1
+_EXPERIMENT_SCHEMA_VERSION = 3
+_TRANSACTION_SCHEMA_VERSION = 2
 
 _SUCCESS_RESPONSE_STATUSES = frozenset(
     {"ok", "partial", "complete", "completed", "success", "succeeded"}
@@ -75,6 +76,20 @@ _SUCCESS_MANIFEST_STATUS = "success"
 _CONCLUSIONS = frozenset(
     {"small_preferred", "base_preferred", "no_clear_winner", "not_proven"}
 )
+_TERMINAL_MANIFEST_STATUSES = frozenset(
+    {
+        "success",
+        "model_error",
+        "unavailable",
+        "protocol_error",
+        "timeout",
+        "transport_error",
+        "insufficient_input",
+        "insufficient_truth",
+        "invalid_input",
+    }
+)
+_CLIENT_RAW_RESPONSE_SLOT_MARKER = "__kronos_client_raw_response_slot__"
 
 MANIFEST_COLUMNS = (
     "run_key",
@@ -92,6 +107,8 @@ MANIFEST_COLUMNS = (
     "weights_identity",
     "health_model_identity",
     "health_weights_identity",
+    "health_model_raw_identity",
+    "health_weights_raw_identity",
     "response_model_identity",
     "response_weights_identity",
     "parameters_json",
@@ -317,8 +334,10 @@ def prepare_experiment(
 
     _require_config(config)
     normalized_output_dir = Path(output_dir)
+    _reject_symlink(normalized_output_dir, "experiment output directory")
     experiment_path = normalized_output_dir / EXPERIMENT_FILENAME
 
+    _cleanup_orphan_preparation_stages(normalized_output_dir)
     _recover_pending_transaction(normalized_output_dir)
     if experiment_path.exists():
         _validate_top_level_entries(normalized_output_dir)
@@ -575,8 +594,12 @@ def run_model(
 
         latency_ms = _elapsed_milliseconds(start_clock)
         finished_at = _now_iso()
-        health_identity = _first_identity({}, health, normalized_model) or ""
-        health_weights = _first_weight_identity({}, health) or ""
+        (
+            health_identity,
+            health_weights,
+            health_model_raw,
+            health_weights_raw,
+        ) = _health_identity_values(health, normalized_model)
         response_identity = _response_identity_value(
             response_model_metadata,
             "model",
@@ -598,6 +621,8 @@ def run_model(
                     "weights_identity": health_weights,
                     "health_model_identity": health_identity,
                     "health_weights_identity": health_weights,
+                    "health_model_raw_identity": health_model_raw,
+                    "health_weights_raw_identity": health_weights_raw,
                     "response_model_identity": response_identity,
                     "response_weights_identity": response_weights,
                     "finished_at": finished_at,
@@ -632,6 +657,8 @@ def run_model(
                     "weights_identity": health_weights,
                     "health_model_identity": health_identity,
                     "health_weights_identity": health_weights,
+                    "health_model_raw_identity": health_model_raw,
+                    "health_weights_raw_identity": health_weights_raw,
                     "response_model_identity": response_identity,
                     "response_weights_identity": response_weights,
                     "finished_at": finished_at,
@@ -970,21 +997,65 @@ def _validate_existing_experiment_config(
 
 
 def _validate_top_level_entries(output_dir: Path) -> None:
-    if not output_dir.is_dir():
+    _reject_symlink(output_dir, "experiment output directory")
+    if not output_dir.exists() or not output_dir.is_dir():
         raise FileNotFoundError(f"missing experiment output directory: {output_dir}")
-    unknown = sorted(
-        path.name
-        for path in output_dir.iterdir()
-        if path.name not in _DOCUMENTED_TOP_LEVEL_ENTRIES
-    )
+    unknown = []
+    for path in output_dir.iterdir():
+        if path.name not in _DOCUMENTED_TOP_LEVEL_ENTRIES:
+            unknown.append(path.name)
+            continue
+        _reject_symlink(path, f"experiment artifact {path.name}")
+        if path.name == SNAPSHOT_DIRECTORY:
+            if not path.is_dir():
+                raise ValueError(f"{SNAPSHOT_DIRECTORY} must be a directory")
+        elif not path.is_file():
+            raise ValueError(f"experiment artifact {path.name} must be a regular file")
     if unknown:
         raise ValueError(
             "output directory contains unknown or stale entries: "
             + ", ".join(unknown)
         )
-    snapshot_dir = output_dir / SNAPSHOT_DIRECTORY
-    if snapshot_dir.exists() and not snapshot_dir.is_dir():
-        raise ValueError(f"{SNAPSHOT_DIRECTORY} must be a directory")
+
+
+def _reject_symlink(path: Path, label: str) -> None:
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink: {path}")
+
+
+def _require_regular_file(path: Path, label: str) -> None:
+    _reject_symlink(path, label)
+    if not path.exists():
+        raise FileNotFoundError(f"missing {label}: {path}")
+    if not path.is_file():
+        raise ValueError(f"{label} must be a regular file: {path}")
+
+
+def _require_regular_directory(path: Path, label: str) -> None:
+    _reject_symlink(path, label)
+    if not path.exists():
+        raise FileNotFoundError(f"missing {label}: {path}")
+    if not path.is_dir():
+        raise ValueError(f"{label} must be a regular directory: {path}")
+
+
+def _cleanup_orphan_preparation_stages(output_dir: Path) -> None:
+    """Remove abandoned sibling preparation stages tied to this output path."""
+
+    _reject_symlink(output_dir, "experiment output directory")
+    parent = output_dir.parent
+    _reject_symlink(parent, "experiment output parent")
+    if not parent.exists():
+        return
+    _require_regular_directory(parent, "experiment output parent")
+    prefix = f".{output_dir.name}.prepare-"
+    for candidate in sorted(parent.iterdir(), key=lambda item: item.name):
+        if not candidate.name.startswith(prefix):
+            continue
+        _reject_symlink(candidate, "orphan preparation stage")
+        if not candidate.is_dir():
+            raise ValueError(f"orphan preparation stage is not a directory: {candidate}")
+        shutil.rmtree(candidate)
 
 
 def _transaction_child(output_dir: Path, name: Any) -> Path:
@@ -993,10 +1064,13 @@ def _transaction_child(output_dir: Path, name: Any) -> Path:
     path = output_dir / name
     if path.parent != output_dir:
         raise ValueError("transaction journal contains an unsafe artifact path")
+    _reject_symlink(path, "transaction artifact path")
     return path
 
 
 def _copy_file_durable(source: Path, destination: Path) -> None:
+    _require_regular_file(source, "transaction source")
+    _reject_symlink(destination, "transaction destination")
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
     with destination.open("rb") as handle:
@@ -1016,18 +1090,28 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-def _recover_pending_transaction(output_dir: Path) -> None:
-    """Recover the previous three-file publication before any reads/writes."""
+def _unlink_transaction_path(path: Path) -> None:
+    """Unlink one journal-owned regular file, treating absence as idempotent."""
 
-    transaction_path = output_dir / TRANSACTION_FILENAME
-    if not transaction_path.exists():
+    _reject_symlink(path, "transaction path")
+    if not path.exists():
         return
-    journal = _read_json(transaction_path)
-    if journal.get("schema_version") != _TRANSACTION_SCHEMA_VERSION:
-        raise ValueError("unsupported Kronos artifact transaction schema")
-    state = journal.get("state")
-    if state not in {"prepared", "committed"}:
-        raise ValueError("Kronos artifact transaction journal has an invalid state")
+    if not path.is_file():
+        raise ValueError(f"transaction path is not a regular file: {path}")
+    path.unlink()
+
+
+def _persist_transaction_journal(output_dir: Path, journal: Mapping[str, Any]) -> None:
+    transaction_path = output_dir / TRANSACTION_FILENAME
+    _reject_symlink(transaction_path, "transaction journal")
+    _atomic_write_json(transaction_path, journal)
+    _fsync_directory(output_dir)
+
+
+def _transaction_entries(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> list[dict[str, Any]]:
     raw_files = journal.get("files")
     if not isinstance(raw_files, list) or len(raw_files) != 3:
         raise ValueError("Kronos artifact transaction journal has invalid files")
@@ -1038,8 +1122,18 @@ def _recover_pending_transaction(output_dir: Path) -> None:
     }
     entries: list[dict[str, Any]] = []
     seen_finals: set[str] = set()
+    required_fields = {
+        "final",
+        "stage",
+        "backup",
+        "had_original",
+        "final_state",
+        "restore_state",
+        "stage_state",
+        "backup_state",
+    }
     for raw_entry in raw_files:
-        if not isinstance(raw_entry, Mapping):
+        if not isinstance(raw_entry, dict) or set(raw_entry) != required_fields:
             raise ValueError("Kronos artifact transaction journal entry is invalid")
         final_name = raw_entry.get("final")
         if final_name not in expected_finals or final_name in seen_finals:
@@ -1049,6 +1143,8 @@ def _recover_pending_transaction(output_dir: Path) -> None:
         if stage.name in _DOCUMENTED_TOP_LEVEL_ENTRIES or stage.name == TRANSACTION_FILENAME:
             raise ValueError("transaction journal contains an unsafe staging path")
         backup_name = raw_entry.get("backup")
+        if backup_name not in ("", None) and not isinstance(backup_name, str):
+            raise ValueError("transaction journal backup path is invalid")
         backup = _transaction_child(output_dir, backup_name) if backup_name else None
         if backup is not None and (
             backup.name in _DOCUMENTED_TOP_LEVEL_ENTRIES
@@ -1060,8 +1156,24 @@ def _recover_pending_transaction(output_dir: Path) -> None:
             raise ValueError("Kronos artifact transaction original marker is invalid")
         if had_original and backup is None:
             raise ValueError("Kronos artifact transaction is missing a backup")
+        if not had_original and backup is not None:
+            raise ValueError("Kronos artifact transaction has an unexpected backup")
+        if raw_entry.get("final_state") not in {"old", "new"}:
+            raise ValueError("Kronos artifact transaction final state is invalid")
+        if raw_entry.get("restore_state") not in {"pending", "restored"}:
+            raise ValueError("Kronos artifact transaction restore state is invalid")
+        if raw_entry.get("stage_state") not in {"present", "deleting", "deleted"}:
+            raise ValueError("Kronos artifact transaction stage state is invalid")
+        valid_backup_states = {"none", "present", "delete_pending", "deleted"}
+        if raw_entry.get("backup_state") not in valid_backup_states:
+            raise ValueError("Kronos artifact transaction backup state is invalid")
+        if had_original and raw_entry.get("backup_state") == "none":
+            raise ValueError("Kronos artifact transaction backup state is invalid")
+        if not had_original and raw_entry.get("backup_state") != "none":
+            raise ValueError("Kronos artifact transaction backup state is invalid")
         entries.append(
             {
+                "raw": raw_entry,
                 "final": _transaction_child(output_dir, final_name),
                 "stage": stage,
                 "backup": backup,
@@ -1070,21 +1182,48 @@ def _recover_pending_transaction(output_dir: Path) -> None:
         )
     if seen_finals != expected_finals:
         raise ValueError("Kronos artifact transaction final set is incomplete")
+    return entries
 
-    if state == "prepared":
-        # Copy backups through fresh temporary siblings before replacing the
-        # final.  Backups remain in place until every final is restored, so a
-        # second interruption can safely retry the recovery.
-        recovery_temps: list[Path] = []
-        try:
-            for entry in entries:
-                final_path = entry["final"]
-                backup = entry["backup"]
-                if entry["had_original"]:
-                    if not isinstance(backup, Path) or not backup.is_file():
-                        raise FileNotFoundError(
-                            f"transaction backup is missing: {backup}"
-                        )
+
+def _restore_transaction(
+    output_dir: Path,
+    transaction_path: Path,
+    journal: dict[str, Any],
+    entries: Sequence[Mapping[str, Any]],
+) -> None:
+    for entry in entries:
+        raw = entry["raw"]
+        final_path = entry["final"]
+        backup = entry["backup"]
+        if entry["had_original"]:
+            _reject_symlink(final_path, "transaction final artifact")
+            if raw["restore_state"] != "restored":
+                if not isinstance(backup, Path):
+                    raise ValueError("transaction rollback is missing a backup")
+                _require_regular_file(backup, "transaction backup")
+                with tempfile.NamedTemporaryFile(
+                    mode="wb",
+                    dir=output_dir,
+                    prefix=f".{final_path.name}.recover-",
+                    suffix=".tmp",
+                    delete=False,
+                ) as handle:
+                    temporary = Path(handle.name)
+                try:
+                    _copy_file_durable(backup, temporary)
+                    _reject_symlink(final_path, "transaction final artifact")
+                    os.replace(temporary, final_path)
+                finally:
+                    try:
+                        temporary.unlink()
+                    except FileNotFoundError:
+                        pass
+                raw["final_state"] = "old"
+                raw["restore_state"] = "restored"
+                _persist_transaction_journal(output_dir, journal)
+            elif not final_path.exists():
+                if isinstance(backup, Path) and backup.exists():
+                    _require_regular_file(backup, "transaction backup")
                     with tempfile.NamedTemporaryFile(
                         mode="wb",
                         dir=output_dir,
@@ -1093,31 +1232,132 @@ def _recover_pending_transaction(output_dir: Path) -> None:
                         delete=False,
                     ) as handle:
                         temporary = Path(handle.name)
-                    recovery_temps.append(temporary)
-                    _copy_file_durable(backup, temporary)
-                    os.replace(temporary, final_path)
-                    recovery_temps.remove(temporary)
-                elif final_path.exists():
-                    final_path.unlink()
-        finally:
-            for temporary in recovery_temps:
-                try:
-                    temporary.unlink()
-                except FileNotFoundError:
-                    pass
+                    try:
+                        _copy_file_durable(backup, temporary)
+                        os.replace(temporary, final_path)
+                    finally:
+                        try:
+                            temporary.unlink()
+                        except FileNotFoundError:
+                            pass
+                else:
+                    raise FileNotFoundError(
+                        f"transaction rollback lost final and backup for {final_path.name}"
+                    )
+        else:
+            _reject_symlink(final_path, "transaction final artifact")
+            if final_path.exists():
+                _unlink_transaction_path(final_path)
+            if raw["restore_state"] != "restored":
+                raw["final_state"] = "old"
+                raw["restore_state"] = "restored"
+                _persist_transaction_journal(output_dir, journal)
 
+    journal["state"] = "rolled_back"
+    _persist_transaction_journal(output_dir, journal)
+
+
+def _cleanup_transaction(
+    output_dir: Path,
+    transaction_path: Path,
+    journal: dict[str, Any],
+    entries: Sequence[Mapping[str, Any]],
+) -> None:
+    state = journal.get("state")
     for entry in entries:
-        for key in ("stage", "backup"):
-            path = entry[key]
-            if isinstance(path, Path):
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
-    try:
-        transaction_path.unlink()
-    except FileNotFoundError:
-        pass
+        raw = entry["raw"]
+        stage = entry["stage"]
+        if raw["stage_state"] != "deleted":
+            if stage.exists():
+                raw["stage_state"] = "deleting"
+                _persist_transaction_journal(output_dir, journal)
+                _unlink_transaction_path(stage)
+            raw["stage_state"] = "deleted"
+            _persist_transaction_journal(output_dir, journal)
+
+        backup = entry["backup"]
+        if backup is None:
+            continue
+        if raw["backup_state"] == "deleted":
+            continue
+        if not backup.exists():
+            if state == "committed" or raw["backup_state"] == "delete_pending" or raw["restore_state"] == "restored":
+                raw["backup_state"] = "deleted"
+                _persist_transaction_journal(output_dir, journal)
+                continue
+            raise FileNotFoundError(f"transaction backup is missing: {backup}")
+        _require_regular_file(backup, "transaction backup")
+        raw["backup_state"] = "delete_pending"
+        _persist_transaction_journal(output_dir, journal)
+        _unlink_transaction_path(backup)
+        raw["backup_state"] = "deleted"
+        _persist_transaction_journal(output_dir, journal)
+
+    _unlink_transaction_path(transaction_path)
+    _fsync_directory(output_dir)
+
+
+def _repair_committed_finals(
+    output_dir: Path,
+    journal: dict[str, Any],
+    entries: Sequence[Mapping[str, Any]],
+) -> None:
+    """Repair a committed journal if cleanup was interrupted after a final loss."""
+
+    missing = []
+    for entry in entries:
+        final_path = entry["final"]
+        _reject_symlink(final_path, "transaction final artifact")
+        if final_path.exists():
+            _require_regular_file(final_path, "transaction final artifact")
+        else:
+            missing.append(entry)
+    if not missing:
+        return
+
+    if all(entry["stage"].exists() for entry in missing):
+        for entry in missing:
+            stage = entry["stage"]
+            final_path = entry["final"]
+            _require_regular_file(stage, "transaction staged artifact")
+            os.replace(stage, final_path)
+            entry["raw"]["final_state"] = "new"
+            entry["raw"]["stage_state"] = "deleted"
+            _persist_transaction_journal(output_dir, journal)
+        return
+
+    # The new staged content is gone, so the only safe complete generation is
+    # the backed-up prior one.  Roll back all three files before cleanup.
+    journal["state"] = "committing"
+    _persist_transaction_journal(output_dir, journal)
+    _restore_transaction(
+        output_dir,
+        output_dir / TRANSACTION_FILENAME,
+        journal,
+        entries,
+    )
+
+
+def _recover_pending_transaction(output_dir: Path) -> None:
+    """Recover the previous three-file publication before any reads/writes."""
+
+    _reject_symlink(output_dir, "experiment output directory")
+    transaction_path = output_dir / TRANSACTION_FILENAME
+    _reject_symlink(transaction_path, "transaction journal")
+    if not transaction_path.exists():
+        return
+    journal = _read_json(transaction_path)
+    if journal.get("schema_version") != _TRANSACTION_SCHEMA_VERSION:
+        raise ValueError("unsupported Kronos artifact transaction schema")
+    state = journal.get("state")
+    if state not in {"prepared", "committing", "rolled_back", "committed"}:
+        raise ValueError("Kronos artifact transaction journal has an invalid state")
+    entries = _transaction_entries(output_dir, journal)
+    if state in {"prepared", "committing"}:
+        _restore_transaction(output_dir, transaction_path, journal, entries)
+    elif state == "committed":
+        _repair_committed_finals(output_dir, journal, entries)
+    _cleanup_transaction(output_dir, transaction_path, journal, entries)
 
 
 def _validate_experiment_integrity(
@@ -1188,8 +1428,7 @@ def _validate_experiment_integrity(
         expected_snapshot_entries.append(entry)
 
     snapshot_dir = output_dir / SNAPSHOT_DIRECTORY
-    if not snapshot_dir.is_dir():
-        raise FileNotFoundError(f"missing frozen snapshot directory: {snapshot_dir}")
+    _require_regular_directory(snapshot_dir, "frozen snapshot directory")
     expected_filenames = sorted(
         f"{entry['asset_id']}__{entry['origin_date']}.json"
         for entry in expected_snapshot_entries
@@ -1240,8 +1479,7 @@ def _validate_experiment_integrity(
 
 
 def _validate_universe_file(path: Path, config: KronosEvaluationConfig) -> None:
-    if not path.exists():
-        raise FileNotFoundError(f"missing universe file: {path}")
+    _require_regular_file(path, "universe.csv")
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         if reader.fieldnames != ["asset_id", "position"]:
@@ -1260,8 +1498,7 @@ def _load_and_validate_manifest(
     snapshots: Sequence[RollingSnapshot],
     config: KronosEvaluationConfig,
 ) -> dict[str, dict[str, Any]]:
-    if not path.exists():
-        raise FileNotFoundError(f"missing run manifest: {path}")
+    _require_regular_file(path, "run_manifest.csv")
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         if reader.fieldnames != list(MANIFEST_COLUMNS):
@@ -1386,9 +1623,11 @@ def _preparation_result_from_paths(
 
 def _read_frozen_snapshots(output_dir: Path) -> tuple[RollingSnapshot, ...]:
     snapshot_dir = output_dir / SNAPSHOT_DIRECTORY
+    _require_regular_directory(snapshot_dir, "frozen snapshot directory")
     paths = sorted(snapshot_dir.glob("*.json"), key=lambda path: path.name)
     snapshots: list[RollingSnapshot] = []
     for path in paths:
+        _require_regular_file(path, "frozen snapshot")
         payload = _read_json(path)
         if set(payload) != _SNAPSHOT_JSON_KEYS:
             raise ValueError(f"frozen snapshot {path.name} has unknown or missing keys")
@@ -1475,6 +1714,8 @@ def _initial_manifest_row(
         "weights_identity": "",
         "health_model_identity": "",
         "health_weights_identity": "",
+        "health_model_raw_identity": "",
+        "health_weights_raw_identity": "",
         "response_model_identity": "",
         "response_weights_identity": "",
         "parameters_json": _canonical_json(_prediction_parameters(config, snapshot)),
@@ -1557,6 +1798,12 @@ def _attempt_row_update(
     *,
     started_at: str,
 ) -> dict[str, Any]:
+    (
+        health_identity,
+        health_weights,
+        health_model_raw,
+        health_weights_raw,
+    ) = _health_identity_values(health, model)
     return {
         "run_key": f"{snapshot.key}|{model}",
         "snapshot_key": snapshot.key,
@@ -1569,10 +1816,12 @@ def _attempt_row_update(
         "error_code": "",
         "input_fingerprint": snapshot.input_fingerprint,
         "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
-        "model_identity": _first_identity({}, health, model) or "",
-        "weights_identity": _first_weight_identity({}, health) or "",
-        "health_model_identity": _first_identity({}, health, model) or "",
-        "health_weights_identity": _first_weight_identity({}, health) or "",
+        "model_identity": health_identity,
+        "weights_identity": health_weights,
+        "health_model_identity": health_identity,
+        "health_weights_identity": health_weights,
+        "health_model_raw_identity": health_model_raw,
+        "health_weights_raw_identity": health_weights_raw,
         "response_model_identity": "",
         "response_weights_identity": "",
         "parameters_json": _canonical_json(parameters),
@@ -1618,6 +1867,8 @@ def _unavailable_row_update(
         "weights_identity": "",
         "health_model_identity": "",
         "health_weights_identity": "",
+        "health_model_raw_identity": "",
+        "health_weights_raw_identity": "",
         "response_model_identity": "",
         "response_weights_identity": "",
         "parameters_json": _canonical_json(parameters),
@@ -1678,10 +1929,9 @@ def _manifest_cache_matches(
     if _optional_int(row.get("seed")) != parameters.get("seed"):
         return False
     if health is not None:
-        current_identity = _first_identity({}, health, model) or ""
-        current_weights = _first_weight_identity({}, health) or ""
-        stored_identity = str(row.get("health_model_identity") or row.get("model_identity") or "")
-        stored_weights = str(row.get("health_weights_identity") or row.get("weights_identity") or "")
+        current_identity, current_weights, _, _ = _health_identity_values(health, model)
+        stored_identity = str(row.get("model_identity") or "")
+        stored_weights = str(row.get("weights_identity") or "")
         if stored_identity != current_identity or stored_weights != current_weights:
             return False
     run_key = f"{snapshot.key}|{model}"
@@ -1893,6 +2143,10 @@ def _validate_report_artifacts(
     for run_key, (snapshot, model) in expected_by_key.items():
         manifest_row = manifest[run_key]
         status = manifest_row.get("status")
+        if status not in _TERMINAL_MANIFEST_STATUSES:
+            raise ValueError(
+                f"run manifest row {run_key} has non-terminal or unknown status {status!r}"
+            )
         if status == _SUCCESS_MANIFEST_STATUS:
             if not _manifest_cache_matches(
                 manifest_row,
@@ -2060,8 +2314,7 @@ def _build_artifact_rows(
 
     # Health is the canonical cache/artifact identity.  Response identities
     # are retained separately in the manifest as audit metadata.
-    identity = _first_identity({}, health, model) or model
-    weights = _first_weight_identity({}, health) or ""
+    identity, weights, _, _ = _health_identity_values(health, model)
     device = _first_value(response_model_metadata, health, "device", "gpu")
     cuda = _first_value(response_model_metadata, health, "cuda", "cuda_available")
     run_key = f"{snapshot.key}|{model}"
@@ -2127,21 +2380,14 @@ def _build_artifact_rows(
 def _extract_quantiles(response: Mapping[str, Any]) -> Mapping[str, Any]:
     daily = _extract_daily(response)
     result = response.get("result")
-    if not isinstance(daily, Mapping):
-        raise _RunnerFailure(
-            "Kronos prediction response has no daily forecast",
-            status="protocol_error",
-            category="protocol",
-            code="invalid_response",
-            raw_response=_raw_response_for_manifest(response),
-        )
-    if all(name in daily for name in ("p10", "p50", "p90")):
-        return daily
-    summary = daily.get("summary")
-    if isinstance(summary, Mapping):
-        close = summary.get("close")
-        if isinstance(close, Mapping):
-            return close
+    if isinstance(daily, Mapping):
+        if all(name in daily for name in ("p10", "p50", "p90")):
+            return daily
+        summary = daily.get("summary")
+        if isinstance(summary, Mapping):
+            close = summary.get("close")
+            if isinstance(close, Mapping):
+                return close
     if isinstance(result, Mapping):
         result_summary = result.get("summary")
         if isinstance(result_summary, Mapping):
@@ -2377,11 +2623,19 @@ def _validate_health_model_identity(
     health: Mapping[str, Any],
     requested_model: str,
 ) -> None:
-    _validate_model_identity_payloads(
+    validation = _validate_model_identity_payloads(
         (("health", health),),
         requested_model,
         health,
     )
+    if not validation.model_records:
+        raise _RunnerFailure(
+            "Kronos health metadata is missing an explicit model family",
+            status="unavailable",
+            category="model",
+            code="missing_health_model_identity",
+            raw_response=health,
+        )
 
 
 def _validate_response_model_identity(
@@ -2401,9 +2655,9 @@ def _validate_model_identity_payloads(
     payloads: Sequence[tuple[str, Mapping[str, Any]]],
     requested_model: str,
     raw_response: Mapping[str, Any],
-) -> None:
+) -> Any:
     try:
-        validate_identity_payloads(payloads, requested_model)
+        return validate_identity_payloads(payloads, requested_model)
     except IdentityValidationError as exc:
         is_health = any(source == "health" for source, _ in payloads)
         is_response = any(source == "response" for source, _ in payloads)
@@ -2865,6 +3119,8 @@ def _model_metadata_summary(manifest: Mapping[str, Mapping[str, Any]]) -> dict[s
             "weights_identity": set(),
             "health_model_identity": set(),
             "health_weights_identity": set(),
+            "health_model_raw_identity": set(),
+            "health_weights_raw_identity": set(),
             "response_model_identity": set(),
             "response_weights_identity": set(),
             "device": set(),
@@ -2879,6 +3135,8 @@ def _model_metadata_summary(manifest: Mapping[str, Mapping[str, Any]]) -> dict[s
             "weights_identity",
             "health_model_identity",
             "health_weights_identity",
+            "health_model_raw_identity",
+            "health_weights_raw_identity",
             "response_model_identity",
             "response_weights_identity",
         ):
@@ -3017,7 +3275,9 @@ def _write_run_artifacts(
     normalized_manifest = [manifest[key] for key in sorted(manifest)]
     normalized_forecast = _sort_artifact_rows(forecast_rows)
     normalized_realized = _sort_artifact_rows(realized_rows)
+    _reject_symlink(output_dir, "experiment output directory")
     output_dir.mkdir(parents=True, exist_ok=True)
+    _require_regular_directory(output_dir, "experiment output directory")
     final_paths = [
         output_dir / MANIFEST_FILENAME,
         output_dir / FORECAST_FILENAME,
@@ -3063,7 +3323,10 @@ def _write_run_artifacts(
         transaction_id = uuid.uuid4().hex
         journal_files: list[dict[str, Any]] = []
         for final_path in final_paths:
+            _reject_symlink(final_path, "artifact final path")
             had_original = final_path.exists()
+            if had_original:
+                _require_regular_file(final_path, "artifact final")
             backup_path: Path | None = None
             if had_original:
                 backup_path = output_dir / (
@@ -3077,48 +3340,34 @@ def _write_run_artifacts(
                     "stage": staged_paths[len(journal_files)].name,
                     "backup": backup_path.name if backup_path is not None else "",
                     "had_original": had_original,
+                    "final_state": "old",
+                    "restore_state": "pending",
+                    "stage_state": "present",
+                    "backup_state": "present" if had_original else "none",
                 }
             )
-        _atomic_write_json(
-            transaction_path,
-            {
-                "schema_version": _TRANSACTION_SCHEMA_VERSION,
-                "transaction_id": transaction_id,
-                "state": "prepared",
-                "files": journal_files,
-            },
-        )
-        _fsync_directory(output_dir)
+        journal: dict[str, Any] = {
+            "schema_version": _TRANSACTION_SCHEMA_VERSION,
+            "transaction_id": transaction_id,
+            "state": "prepared",
+            "files": journal_files,
+        }
+        _persist_transaction_journal(output_dir, journal)
         journal_published = True
+        journal["state"] = "committing"
+        _persist_transaction_journal(output_dir, journal)
         _commit_staged_artifacts(staged_paths, final_paths)
-        _atomic_write_json(
-            transaction_path,
-            {
-                "schema_version": _TRANSACTION_SCHEMA_VERSION,
-                "transaction_id": transaction_id,
-                "state": "committed",
-                "files": journal_files,
-            },
-        )
-        _fsync_directory(output_dir)
-        for path in (*staged_paths, *backup_paths):
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
-        transaction_path.unlink()
-        _fsync_directory(output_dir)
+        for raw_entry in journal_files:
+            raw_entry["final_state"] = "new"
+            raw_entry["stage_state"] = "present"
+        journal["state"] = "committed"
+        _persist_transaction_journal(output_dir, journal)
+        _recover_pending_transaction(output_dir)
     finally:
         if not journal_published:
             for path in (*staged_paths, *backup_paths):
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
-            try:
-                transaction_path.unlink()
-            except FileNotFoundError:
-                pass
+                _unlink_transaction_path(path)
+            _unlink_transaction_path(transaction_path)
 
 
 def _artifact_generation(
@@ -3267,8 +3516,7 @@ def _ensure_manifest_rows(
 
 
 def _load_manifest(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        raise FileNotFoundError(f"missing run manifest: {path}")
+    _require_regular_file(path, "run_manifest.csv")
     with path.open(newline="", encoding="utf-8") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
 
@@ -3282,8 +3530,7 @@ def _read_table_with_generation(
     path: Path,
     columns: Sequence[str] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, tuple[tuple[str, str, bool], ...]]:
-    if not path.exists():
-        raise FileNotFoundError(f"missing Parquet artifact: {path}")
+    _require_regular_file(path, "Parquet artifact")
     pa, parquet = _load_pyarrow()
     try:
         table = parquet.read_table(path)
@@ -3383,6 +3630,8 @@ def _atomic_write_table(
     ]
     table = pa.Table.from_pylist(normalized_rows, schema=schema)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _require_regular_directory(path.parent, "artifact parent directory")
+    _reject_symlink(path, "Parquet artifact")
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -3400,7 +3649,10 @@ def _atomic_write_table(
             use_dictionary=False,
             write_statistics=False,
         )
+        with temporary_path.open("rb") as handle:
+            os.fsync(handle.fileno())
         os.replace(temporary_path, path)
+        _fsync_directory(path.parent)
         temporary_path = None
     finally:
         if temporary_path is not None:
@@ -3422,7 +3674,9 @@ def _load_pyarrow() -> tuple[Any, Any]:
 
 
 def _atomic_write_bytes(path: Path, value: bytes) -> None:
+    _reject_symlink(path, "artifact path")
     path.parent.mkdir(parents=True, exist_ok=True)
+    _require_regular_directory(path.parent, "artifact parent directory")
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -3437,6 +3691,7 @@ def _atomic_write_bytes(path: Path, value: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary_path, path)
+        _fsync_directory(path.parent)
         temporary_path = None
     finally:
         if temporary_path is not None:
@@ -3447,6 +3702,7 @@ def _atomic_write_bytes(path: Path, value: bytes) -> None:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
+    _require_regular_file(path, "JSON artifact")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -3597,43 +3853,20 @@ def _first_identity(
         value = _health_model_identity(health)
         if value is not None:
             return value
-    return fallback_model
+    return None
 
 
 def _health_model_identity(source: Mapping[str, Any]) -> str | None:
-    records = list(_iter_identity_fields(source))
-    for field_name in ("model_identity", "model_name"):
-        values = [
-            value
-            for _, key, value in records
-            if key == field_name and value not in (None, "")
-        ]
-        if values:
-            value = values[0]
-            return (
-                _canonical_json(value)
-                if isinstance(value, (Mapping, list, tuple))
-                else str(value)
-            )
-    values = [
-        value
-        for _, key, value in records
-        if key == "model" and value not in (None, "")
-    ]
-    versioned = [
-        value
-        for value in values
-        if _model_identity_parts(value) is not None
-        and _model_identity_parts(value)[1] is not None
-    ]
-    value = versioned[0] if versioned else (values[0] if values else None)
-    if value is None:
+    records = []
+    for _, field, value in _iter_identity_fields(source):
+        if field not in {"model", "model_identity", "model_name"}:
+            continue
+        if _model_identity_parts(value) is not None:
+            records.append(value)
+    if not records:
         return None
-    return (
-        _canonical_json(value)
-        if isinstance(value, (Mapping, list, tuple))
-        else str(value)
-    )
+    versioned = [value for value in records if _model_identity_parts(value)[1] is not None]
+    return canonical_identity(versioned[0] if versioned else records[0])
 
 
 def _explicit_identity(source: Mapping[str, Any]) -> str | None:
@@ -3676,22 +3909,96 @@ def _explicit_weight_identity(source: Mapping[str, Any]) -> str | None:
     return value
 
 
+def _identity_raw_value(records: Sequence[Any]) -> str:
+    values: list[Any] = []
+    for record in records:
+        if record.value in (None, "") or record.value in values:
+            continue
+        values.append(record.value)
+    if not values:
+        return ""
+    if len(values) == 1:
+        value = values[0]
+        return _canonical_json(value) if isinstance(value, (Mapping, list, tuple)) else str(value)
+    return _canonical_json(values)
+
+
+def _cache_identity_from_records(
+    records: Sequence[Any],
+    *,
+    allow_weight_prefix: bool,
+) -> str:
+    recognized = [record for record in records if record.family in {"small", "base"}]
+    versioned = [record for record in recognized if record.version is not None]
+    if recognized:
+        value = canonical_identity(
+            (versioned or recognized)[0].value,
+            allow_weight_prefix=allow_weight_prefix,
+        )
+        if value is not None:
+            return value
+    return _identity_raw_value(records)
+
+
+def _health_identity_values(
+    health: Mapping[str, Any],
+    requested_model: str,
+) -> tuple[str, str, str, str]:
+    validation = _validate_model_identity_payloads(
+        (("health", health),),
+        requested_model,
+        health,
+    )
+    if not validation.model_records:
+        raise _RunnerFailure(
+            "Kronos health metadata is missing an explicit model family",
+            status="unavailable",
+            category="model",
+            code="missing_health_model_identity",
+            raw_response=health,
+        )
+    model_records = (*validation.model_records, *validation.opaque_model_records)
+    weight_records = (*validation.weight_records, *validation.opaque_weight_records)
+    model_identity = _cache_identity_from_records(
+        validation.model_records,
+        allow_weight_prefix=False,
+    )
+    weights_identity = _cache_identity_from_records(
+        weight_records,
+        allow_weight_prefix=True,
+    )
+    if not model_identity:
+        raise _RunnerFailure(
+            "Kronos health metadata has no usable model cache identity",
+            status="unavailable",
+            category="model",
+            code="missing_health_model_identity",
+            raw_response=health,
+        )
+    return (
+        model_identity,
+        weights_identity,
+        _identity_raw_value(model_records),
+        _identity_raw_value(weight_records),
+    )
+
+
 def _raw_response_for_manifest(response: Mapping[str, Any] | None) -> Mapping[str, Any]:
     if not isinstance(response, Mapping):
         return {}
-    collision_slots: list[tuple[int, Any]] = []
-    for key, value in response.items():
-        if not isinstance(key, str) or key.lstrip("_") != "kronos_raw_response":
-            continue
-        leading_underscores = len(key) - len(key.lstrip("_"))
-        if leading_underscores and isinstance(value, Mapping):
-            collision_slots.append((leading_underscores, value))
-    if collision_slots:
-        _, complete_response = max(collision_slots, key=lambda item: item[0])
-        return complete_response
-    raw = response.get("raw_response")
-    if isinstance(raw, Mapping):
-        return raw
+    try:
+        from stock_research.kronos_evaluation_client import complete_raw_response
+    except (ImportError, ModuleNotFoundError):
+        complete_raw_response = None  # type: ignore[assignment]
+    if complete_raw_response is not None:
+        complete = complete_raw_response(response)
+        if isinstance(complete, Mapping):
+            return complete
+    marker_slot = response.get(_CLIENT_RAW_RESPONSE_SLOT_MARKER)
+    if isinstance(marker_slot, str):
+        complete_response = response.get(marker_slot)
+        if isinstance(complete_response, Mapping):
+            return complete_response
     return response
 
 

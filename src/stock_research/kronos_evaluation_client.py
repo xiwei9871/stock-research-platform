@@ -26,6 +26,7 @@ _MODEL_ALIASES = {
     "kronos-base": "base",
 }
 _MAX_RAW_BODY_EXCERPT = 512
+CLIENT_RAW_RESPONSE_SLOT_MARKER = "__kronos_client_raw_response_slot__"
 _REDACTED = "[REDACTED]"
 _MAX_RAW_BODY_SCAN = _MAX_RAW_BODY_EXCERPT * 4
 _MAX_ASSIGNMENT_FIELD_LENGTH = 128
@@ -1120,22 +1121,21 @@ def _complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
         if isinstance(complete_response, Mapping):
             return _clone_json_object(complete_response)
 
-    collision_slots: list[tuple[int, Any]] = []
-    for key, value in payload.items():
-        if not isinstance(key, str) or key.lstrip("_") != "kronos_raw_response":
-            continue
-        leading_underscores = len(key) - len(key.lstrip("_"))
-        if leading_underscores:
-            collision_slots.append((leading_underscores, value))
-    if collision_slots:
-        _, complete_response = max(collision_slots, key=lambda item: item[0])
+    marker_slot = payload.get(CLIENT_RAW_RESPONSE_SLOT_MARKER)
+    if isinstance(marker_slot, str):
+        complete_response = payload.get(marker_slot)
         if isinstance(complete_response, Mapping):
             return _clone_json_object(complete_response)
 
-    raw_response = payload.get("raw_response")
-    if isinstance(raw_response, Mapping):
-        return _clone_json_object(raw_response)
-    return None
+    # An unmarked mapping is itself the complete response.  Never guess that
+    # an upstream ``raw_response`` field is the client-owned envelope.
+    return _clone_json_object(payload)
+
+
+def complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return the complete client-owned response envelope, if available."""
+
+    return _complete_raw_response(payload)
 
 
 def _clone_json_value(value: Any) -> Any:
@@ -1167,6 +1167,7 @@ def _attach_raw_response(
     if "raw_response" not in normalized:
         normalized["raw_response"] = _clone_json_value(complete_response)
         normalized._raw_response_slot = "raw_response"
+        normalized[CLIENT_RAW_RESPONSE_SLOT_MARKER] = "raw_response"
         return normalized
 
     fallback_key = "_kronos_raw_response"
@@ -1174,6 +1175,7 @@ def _attach_raw_response(
         fallback_key = f"_{fallback_key}"
     normalized[fallback_key] = _clone_json_value(complete_response)
     normalized._raw_response_slot = fallback_key
+    normalized[CLIENT_RAW_RESPONSE_SLOT_MARKER] = fallback_key
     return normalized
 
 
@@ -1182,4 +1184,6 @@ __all__ = [
     "KronosClientError",
     "KronosErrorCategory",
     "KronosErrorCode",
+    "CLIENT_RAW_RESPONSE_SLOT_MARKER",
+    "complete_raw_response",
 ]
