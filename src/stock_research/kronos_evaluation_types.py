@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -18,6 +18,8 @@ _CANONICAL_ASSET_RE = re.compile(r"^CN:(SH|SZ|BJ):(\d{6})$", re.IGNORECASE)
 _BAOSTOCK_ASSET_RE = re.compile(r"^(sh|sz|bj)\.(\d{6})$", re.IGNORECASE)
 _EXCHANGE_SUFFIX_ASSET_RE = re.compile(r"^(\d{6})\.(SH|SZ|BJ)$", re.IGNORECASE)
 _BARE_ASSET_RE = re.compile(r"^\d{6}$")
+_FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
+_HISTORY_NUMERIC_FIELDS = ("open", "high", "low", "close", "volume", "amount")
 
 ExchangeResolver = Callable[[str], str | Iterable[str] | None]
 
@@ -26,13 +28,23 @@ def canonical_json_fingerprint(value: Any) -> str:
     """Return a stable SHA-256 fingerprint for a JSON-compatible value."""
 
     canonical_json = json.dumps(
-        value,
+        _json_compatible(value),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
         allow_nan=False,
     )
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def _json_compatible(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return {key: _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_compatible(item) for item in value]
+    return value
 
 
 def normalize_asset_ids(
@@ -190,14 +202,11 @@ class KronosEvaluationConfig:
                 _require_non_empty_string(field_name, getattr(self, field_name)),
             )
 
-        if (
-            isinstance(self.timeout_seconds, bool)
-            or not isinstance(self.timeout_seconds, (int, float))
-            or not math.isfinite(float(self.timeout_seconds))
-            or self.timeout_seconds <= 0
-        ):
-            raise ValueError("timeout_seconds must be a positive finite number")
-        object.__setattr__(self, "timeout_seconds", float(self.timeout_seconds))
+        object.__setattr__(
+            self,
+            "timeout_seconds",
+            _normalize_timeout_seconds(self.timeout_seconds),
+        )
 
         if self.seed is not None and (
             isinstance(self.seed, bool) or not isinstance(self.seed, int)
@@ -212,6 +221,20 @@ def _normalize_date(field_name: str, value: str) -> str:
         return date.fromisoformat(value.strip()).isoformat()
     except ValueError as exc:
         raise ValueError(f"{field_name} must be an ISO date string") from exc
+
+
+def _normalize_timeout_seconds(value: object) -> float:
+    """Normalize timeout values and report conversion overflow as ValueError."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("timeout_seconds must be a positive finite number")
+    try:
+        seconds = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError("timeout_seconds must be a positive finite number") from exc
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError("timeout_seconds must be a positive finite number")
+    return seconds
 
 
 def _require_positive_int(field_name: str, value: int) -> None:
@@ -275,6 +298,121 @@ def _require_non_empty_string(field_name: str, value: str) -> str:
     return value.strip()
 
 
+class _FrozenDict(dict[str, Any]):
+    """A dict-shaped recursive snapshot row whose mutation methods are disabled."""
+
+    __slots__ = ()
+
+    def _immutable(self, *_args: Any, **_kwargs: Any) -> None:
+        raise TypeError("snapshot mappings are immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+
+    def __ior__(self, _other: Any) -> "_FrozenDict":
+        self._immutable()
+        return self
+
+
+def _freeze_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _FrozenDict(
+            (key, _freeze_value(item)) for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
+
+
+def _normalize_timestamp_sequence(
+    field_name: str,
+    timestamps: Iterable[str],
+) -> tuple[str, ...]:
+    if isinstance(timestamps, (str, bytes)):
+        raise ValueError(f"{field_name} must be an iterable of ISO date strings")
+    try:
+        raw_timestamps = tuple(timestamps)
+    except TypeError as exc:
+        raise ValueError(
+            f"{field_name} must be an iterable of ISO date strings"
+        ) from exc
+
+    normalized: list[str] = []
+    for index, timestamp in enumerate(raw_timestamps):
+        normalized_timestamp = _normalize_date(
+            f"{field_name}[{index}]", timestamp
+        )
+        if normalized and normalized_timestamp <= normalized[-1]:
+            raise ValueError(f"{field_name} must be strictly increasing")
+        normalized.append(normalized_timestamp)
+    return tuple(normalized)
+
+
+def _require_finite_numeric(field_name: str, value: Any) -> None:
+    if isinstance(value, (str, bytes, bool)) or value is None:
+        raise ValueError(f"{field_name} must be a finite numeric value")
+    try:
+        numeric = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a finite numeric value") from exc
+    if not math.isfinite(numeric):
+        raise ValueError(f"{field_name} must be a finite numeric value")
+
+
+def _normalize_snapshot_rows(
+    field_name: str,
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    required_numeric_fields: tuple[str, ...],
+) -> tuple[dict[str, Any], ...]:
+    if isinstance(rows, (str, bytes, Mapping)):
+        raise ValueError(f"{field_name} must be an iterable of mapping rows")
+    try:
+        raw_rows = tuple(rows)
+    except TypeError as exc:
+        raise ValueError(f"{field_name} must be an iterable of mapping rows") from exc
+
+    normalized: list[dict[str, Any]] = []
+    previous_timestamp: str | None = None
+    for index, row in enumerate(raw_rows):
+        if not isinstance(row, Mapping):
+            raise ValueError(f"{field_name}[{index}] must be a mapping")
+        if "timestamp" not in row:
+            raise ValueError(f"{field_name}[{index}] missing timestamp")
+        timestamp = _normalize_date(
+            f"{field_name}[{index}].timestamp", row["timestamp"]
+        )
+        if previous_timestamp is not None and timestamp <= previous_timestamp:
+            raise ValueError(f"{field_name} timestamps must be strictly increasing")
+        previous_timestamp = timestamp
+
+        normalized_row = dict(row)
+        normalized_row["timestamp"] = timestamp
+        for numeric_field in required_numeric_fields:
+            if numeric_field not in row:
+                raise ValueError(
+                    f"{field_name}[{index}] missing required field {numeric_field}"
+                )
+        numeric_fields = set(required_numeric_fields).union(
+            numeric_field
+            for numeric_field in _HISTORY_NUMERIC_FIELDS
+            if numeric_field in row
+        )
+        for numeric_field in numeric_fields:
+            _require_finite_numeric(
+                f"{field_name}[{index}].{numeric_field}", row[numeric_field]
+            )
+        normalized.append(_freeze_value(normalized_row))
+    return tuple(normalized)
+
+
 @dataclass(frozen=True)
 class RollingSnapshot:
     asset_id: str
@@ -285,6 +423,62 @@ class RollingSnapshot:
     input_fingerprint: str
     status: str
     reason: str | None = None
+
+    def __post_init__(self) -> None:
+        normalized_asset_id = normalize_asset_ids((self.asset_id,))[0]
+        object.__setattr__(self, "asset_id", normalized_asset_id)
+
+        normalized_origin_date = _normalize_date("origin_date", self.origin_date)
+        object.__setattr__(self, "origin_date", normalized_origin_date)
+
+        normalized_history = _normalize_snapshot_rows(
+            "history",
+            self.history,
+            required_numeric_fields=_HISTORY_NUMERIC_FIELDS,
+        )
+        object.__setattr__(self, "history", normalized_history)
+
+        normalized_future_timestamps = _normalize_timestamp_sequence(
+            "future_timestamps", self.future_timestamps
+        )
+        if any(
+            timestamp <= normalized_origin_date
+            for timestamp in normalized_future_timestamps
+        ):
+            raise ValueError("future_timestamps must be after origin_date")
+        object.__setattr__(self, "future_timestamps", normalized_future_timestamps)
+
+        normalized_realized = _normalize_snapshot_rows(
+            "realized",
+            self.realized,
+            required_numeric_fields=(),
+        )
+        if len(normalized_realized) > len(normalized_future_timestamps):
+            raise ValueError("realized cannot contain more rows than future_timestamps")
+        if any(
+            row["timestamp"] != normalized_future_timestamps[index]
+            for index, row in enumerate(normalized_realized)
+        ):
+            raise ValueError("realized timestamps must match future_timestamps")
+        object.__setattr__(self, "realized", normalized_realized)
+
+        if any(
+            row["timestamp"] > normalized_origin_date for row in normalized_history
+        ):
+            raise ValueError("history timestamps must not be after origin_date")
+
+        if not isinstance(self.input_fingerprint, str) or not _FINGERPRINT_RE.fullmatch(
+            self.input_fingerprint
+        ):
+            raise ValueError("input_fingerprint must be a 64-character hexadecimal SHA-256")
+        object.__setattr__(self, "input_fingerprint", self.input_fingerprint.lower())
+
+        status = _require_non_empty_string("status", self.status)
+        object.__setattr__(self, "status", status)
+        if self.reason is not None:
+            if not isinstance(self.reason, str):
+                raise ValueError("reason must be a string or None")
+            object.__setattr__(self, "reason", self.reason.strip())
 
     @property
     def key(self) -> str:

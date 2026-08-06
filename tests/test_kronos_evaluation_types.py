@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from stock_research.kronos_evaluation_types import (
@@ -136,6 +138,50 @@ def test_config_rejects_invalid_numeric_settings_and_models():
         )
 
 
+def test_config_normalizes_model_case_and_whitespace():
+    config = KronosEvaluationConfig(
+        asset_ids=("CN:SH:600418",),
+        start_date="2025-01-02",
+        end_date="2025-01-31",
+        models=(" SMALL ", "BASE"),
+    )
+
+    assert config.models == ("small", "base")
+
+
+def test_config_accepts_numeric_boundary_values():
+    config = KronosEvaluationConfig(
+        asset_ids=("CN:SH:600418",),
+        start_date="2025-01-02",
+        end_date="2025-01-31",
+        input_window=1,
+        roll_step=1,
+        forecast_horizon=1,
+        evaluation_horizons=(1,),
+        sample_count=1,
+    )
+    maximum_sample_config = KronosEvaluationConfig(
+        asset_ids=("CN:SH:600418",),
+        start_date="2025-01-02",
+        end_date="2025-01-31",
+        sample_count=100,
+    )
+
+    assert config.forecast_horizon == 1
+    assert config.evaluation_horizons == (1,)
+    assert maximum_sample_config.sample_count == 100
+
+
+def test_config_rejects_timeout_integer_that_overflows_float_conversion():
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        KronosEvaluationConfig(
+            asset_ids=("CN:SH:600418",),
+            start_date="2025-01-02",
+            end_date="2025-01-31",
+            timeout_seconds=10**1000,
+        )
+
+
 def test_config_rejects_invalid_dates():
     with pytest.raises(ValueError, match="start_date"):
         KronosEvaluationConfig(
@@ -207,6 +253,95 @@ def test_snapshot_key_and_fingerprint_are_stable():
     )
 
 
+def test_snapshot_defensively_copies_and_freezes_nested_bar_data():
+    source_history = [
+        {
+            "timestamp": "2025-01-02",
+            "open": 100.0,
+            "high": 103.0,
+            "low": 99.0,
+            "close": 102.0,
+            "volume": 1200.0,
+            "amount": 121000.0,
+            "metadata": {"tags": ["input"]},
+        }
+    ]
+    source_realized = [{"timestamp": "2025-01-06", "close": 105.0}]
+    fingerprint = canonical_json_fingerprint(
+        {
+            "asset_id": "CN:SH:600418",
+            "origin_date": "2025-01-02",
+            "history": source_history,
+        }
+    )
+    snapshot = RollingSnapshot(
+        asset_id="CN:SH:600418",
+        origin_date="2025-01-02",
+        history=source_history,
+        future_timestamps=("2025-01-06",),
+        realized=source_realized,
+        input_fingerprint=fingerprint,
+        status="ready",
+    )
+
+    source_history[0]["close"] = 999.0
+    source_history[0]["metadata"]["tags"].append("caller-mutated")
+    source_realized[0]["close"] = 999.0
+
+    assert snapshot.history[0]["close"] == 102.0
+    assert snapshot.history[0]["metadata"]["tags"] == ("input",)
+    assert snapshot.realized[0]["close"] == 105.0
+    assert snapshot.input_fingerprint == fingerprint
+
+    with pytest.raises(TypeError):
+        snapshot.history[0]["close"] = 999.0
+    with pytest.raises(TypeError):
+        snapshot.history[0]["metadata"]["tags"] += ("caller-mutated",)
+    with pytest.raises(TypeError):
+        snapshot.realized[0]["close"] = 999.0
+
+
+def test_snapshot_rejects_missing_or_non_finite_history_values():
+    missing_close = {
+        "timestamp": "2025-01-02",
+        "open": 100.0,
+        "high": 103.0,
+        "low": 99.0,
+        "volume": 1200.0,
+        "amount": 121000.0,
+    }
+    non_finite_close = {
+        "timestamp": "2025-01-02",
+        "open": 100.0,
+        "high": 103.0,
+        "low": 99.0,
+        "close": math.inf,
+        "volume": 1200.0,
+        "amount": 121000.0,
+    }
+
+    with pytest.raises(ValueError, match="close"):
+        RollingSnapshot(
+            asset_id="CN:SH:600418",
+            origin_date="2025-01-02",
+            history=(missing_close,),
+            future_timestamps=(),
+            realized=(),
+            input_fingerprint="0" * 64,
+            status="invalid_input",
+        )
+    with pytest.raises(ValueError, match="finite"):
+        RollingSnapshot(
+            asset_id="CN:SH:600418",
+            origin_date="2025-01-02",
+            history=(non_finite_close,),
+            future_timestamps=(),
+            realized=(),
+            input_fingerprint="0" * 64,
+            status="invalid_input",
+        )
+
+
 def test_fingerprint_is_independent_of_mapping_order():
     first = canonical_json_fingerprint({"b": 2, "a": [1, "x"]})
     second = canonical_json_fingerprint({"a": [1, "x"], "b": 2})
@@ -214,3 +349,20 @@ def test_fingerprint_is_independent_of_mapping_order():
 
     assert first == second
     assert first != changed
+
+
+def test_fingerprint_canonicalizes_nested_key_order_and_json_edges():
+    first = canonical_json_fingerprint(
+        {"z": {"β": None, "a": []}, "a": {"empty": {}}, "flags": [True, False]}
+    )
+    second = canonical_json_fingerprint(
+        {"flags": [True, False], "a": {"empty": {}}, "z": {"a": [], "β": None}}
+    )
+
+    assert first == second
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_fingerprint_rejects_non_finite_json_numbers(value):
+    with pytest.raises(ValueError):
+        canonical_json_fingerprint({"value": value})
