@@ -15,13 +15,14 @@
 
 生产服务当前只加载一个模型。small/base 对比必须使用同一批冻结输入快照；不能让两个模型分别重新查询实时数据库。
 
-本 runbook 不记录密码、令牌、认证头、私钥或其他凭据。预测命令所需认证信息只从 187 上已有的安全环境配置读取，禁止写入命令行、日志和实验报告。
+本 runbook 不记录密码、令牌、认证头、私钥或其他凭据。预测命令所需认证信息必须从**运行研究 CLI 的主机**上的安全环境配置读取；仅在 187 上配置令牌而未在 CLI 主机加载并不能工作。令牌禁止写入命令行、日志和实验报告。
 
 ## 0. 执行位置与命令约定
 
-- 标注为“本地研究仓库”的命令在研究代码所在机器执行；先进入 `/path/to/stock_research`，并使用本地 `rtk` wrapper（例如 `rtk python3`、`rtk pytest`）。`/path/to/stock_research` 是占位路径，执行前替换为实际绝对路径。
+- 标注为“本地研究 CLI 主机”的命令在运行研究代码的机器执行；先进入 `/path/to/stock_research`，并使用本地 `rtk` wrapper（例如 `rtk python3`、`rtk pytest`）。从该主机访问 187 上的 Kronos 服务时，8124 的地址是 `http://192.168.3.187:8124`，8123 同理使用 `http://192.168.3.187:8123`。`/path/to/stock_research` 是占位路径，执行前替换为实际绝对路径。
+- 如果研究 CLI 本身运行在 187 上，`http://127.0.0.1:8124` 等价于 `http://192.168.3.187:8124`；无论 CLI 在哪里运行，令牌环境变量都必须安全存在于**运行 CLI 的那台主机**，不能只存在于 187 的服务进程环境中。
 - 标注为“187 远程 shell”的命令在 187 上执行，使用普通 shell 命令，不加 `rtk` 前缀。`rtk` 不是 187 的前置条件，也不要把本地 wrapper 前缀复制到远程命令中。
-- 本 runbook 不提供 SSH 登录命令、密码或令牌值。远程命令假定操作者已经进入 187，并且安全环境变量已按现有部署方式加载。
+- 本 runbook 不提供 SSH 登录命令、密码或令牌值。187 远程 shell 命令假定操作者已经进入 187，并且服务端环境已按现有部署方式加载；研究 CLI 命令另外要求 CLI 主机自身安全加载所需令牌环境变量。
 
 ## 2. Base 安全预检与模型切换
 
@@ -43,15 +44,30 @@ KRONOS_MODEL_NAME=Kronos-base \
   --host 0.0.0.0 --port 8124
 ```
 
-另开 187 远程 shell 检查。当前客户端要求 `X-Kronos-Token`，令牌只从 187 的安全环境变量读取；不要把令牌值写进命令、历史记录、日志或报告：
+认证 health/model 预检使用仓库现有的 `KronosClient`，从研究 CLI 主机执行。下面的 stdin 脚本只读取令牌环境变量并把认证请求交给客户端；输出只包含地址、状态和模型身份，绝不打印令牌值。它同时验证 8123/8124 的模型身份：
 
 ```bash
-: "${KRONOS_INTERNAL_TOKEN:?请先从 187 的安全环境加载 KRONOS_INTERNAL_TOKEN，不要回显令牌值}"
-curl -fsS -H "X-Kronos-Token: ${KRONOS_INTERNAL_TOKEN}" http://127.0.0.1:8123/health
-curl -fsS -H "X-Kronos-Token: ${KRONOS_INTERNAL_TOKEN}" http://127.0.0.1:8124/health
+cd /path/to/stock_research
+rtk python3 - <<'PY'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("src").resolve()))
+from stock_research.kronos_evaluation_client import KronosClient
+
+token = os.environ["KRONOS_INTERNAL_TOKEN"]
+for url, expected_model in (
+    ("http://192.168.3.187:8123", "small"),
+    ("http://192.168.3.187:8124", "base"),
+):
+    with KronosClient(url, token=token, timeout=30) as client:
+        health = client.assert_model(expected_model)
+        print(f"{url} status=ok model={health['model']}")
+PY
 ```
 
-如果安全环境不允许在 shell 中注入令牌，则使用仓库的已认证客户端执行 health/model 预检；不要改用未认证的 `curl`，也不要手工填写令牌值。
+如果 CLI 主机的安全环境尚未加载 `KRONOS_INTERNAL_TOKEN`，先按现有凭据管理流程加载，不要手工填写、回显或通过进程参数传递令牌值。
 
 人工核对：
 
@@ -62,7 +78,7 @@ curl -fsS -H "X-Kronos-Token: ${KRONOS_INTERNAL_TOKEN}" http://127.0.0.1:8124/he
 
 ### 2.3 单股票预测、显存和延迟
 
-用一个临时的单股票输入目录做预检；`--allow-smoke` 只允许用于此类预检，不可用于正式 20 股票结论。以下是本地研究仓库命令，可按实际日期替换占位路径和日期：
+用一个临时的单股票输入目录做预检；`--allow-smoke` 只允许用于此类预检，不可用于正式 20 股票结论。以下是本地研究 CLI 主机命令，可按实际日期替换占位路径和日期；该示例访问 187 上的 8124，不是 CLI 主机的 loopback 地址：
 
 ```bash
 cd /path/to/stock_research
@@ -76,8 +92,11 @@ rtk python3 scripts/run_kronos_rolling_evaluation.py prepare \
 rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
   --model base \
   --output-dir /tmp/kronos-base-preflight \
-  --predict-url http://127.0.0.1:8124
+  --predict-url http://192.168.3.187:8124 \
+  --token-env KRONOS_INTERNAL_TOKEN
 ```
+
+如果这组 CLI 命令实际在 187 上执行，`--predict-url http://127.0.0.1:8124` 等价；此时 `KRONOS_INTERNAL_TOKEN` 仍必须安全存在于运行该 CLI 的 187 环境中。研究 CLI 在其他主机上运行时，必须使用 `http://192.168.3.187:8124`，并在该 CLI 主机加载令牌环境变量。
 
 预测前后各采集一次，并在请求期间观察峰值。以下命令在 187 远程 shell 执行，不使用 `rtk`：
 
@@ -162,8 +181,7 @@ rtk python3 scripts/run_kronos_rolling_evaluation.py report \
 
 ### 3.4 冻结快照与 no-dashboard 语义
 
-- `prepare` 之后，`predict` 和 `report` 只读实验目录中的 `experiment.json`、`universe.csv` 和 `input_snapshots/`。
-- 不重新查询 PostgreSQL，不读取当前 live universe，不调用 `/api/assets/...` 或其他 dashboard endpoint。
+- `prepare` 之后，`predict` 和 `report` 不重新查询 PostgreSQL 或当前 live universe，也不调用 `/api/assets/...` 或其他 dashboard endpoint；它们读取完整的冻结实验目录，包括 `experiment.json`、`universe.csv`、`input_snapshots/`、`run_manifest.csv`、Parquet 预测/真实产物，以及适用的指标、报告和 recovery/report journal 文件。
 - 不把评估结果写入线上个股工作台或生产 Kronos cache。
 - small/base 必须复用相同 `snapshot_key` 和 `input_fingerprint`；模型、权重、参数和 seed 单独记录。
 - 每次请求的 20 条采样路径不是 20 个股票；报告同时保留代表路径、P10/P50/P90 和真实未来 bars。
