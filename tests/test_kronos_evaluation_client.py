@@ -354,6 +354,77 @@ def test_health_reports_non_200_and_malformed_json(
 
 
 @pytest.mark.parametrize(
+    ("health", "expected_category", "expected_code"),
+    [
+        (
+            {"status": "degraded", "model": "Kronos-small"},
+            KronosErrorCategory.TRANSPORT,
+            KronosErrorCode.SERVICE_UNAVAILABLE,
+        ),
+        (
+            {"status": "error", "model": "Kronos-small"},
+            KronosErrorCategory.TRANSPORT,
+            KronosErrorCode.SERVICE_UNAVAILABLE,
+        ),
+        (
+            {"status": "unavailable", "model": "Kronos-small"},
+            KronosErrorCategory.TRANSPORT,
+            KronosErrorCode.SERVICE_UNAVAILABLE,
+        ),
+        (
+            {"model": "Kronos-small"},
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.INVALID_RESPONSE,
+        ),
+        (
+            {"status": 200, "model": "Kronos-small"},
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.INVALID_RESPONSE,
+        ),
+        (
+            {"status": "mystery", "model": "Kronos-small"},
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.INVALID_RESPONSE,
+        ),
+    ],
+)
+def test_health_status_taxonomy_is_precise(
+    health, expected_category, expected_code
+):
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(health=health),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.health()
+
+    assert exc_info.value.category == expected_category
+    assert exc_info.value.code == expected_code
+
+
+def test_health_semantic_error_redacts_configured_token_echo():
+    token = "secret-token"
+    health = {
+        "status": "degraded",
+        "model": "Kronos-small",
+        "echo": token,
+    }
+    client = KronosClient(
+        "http://kronos.test",
+        token=token,
+        session=FakeSession(health=health),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.health()
+
+    assert exc_info.value.raw_response["echo"] == "[REDACTED]"
+    assert token not in json.dumps(exc_info.value.raw_response)
+
+
+@pytest.mark.parametrize(
     ("prediction_response", "expected_message", "expected_category", "expected_code"),
     [
         (
@@ -469,6 +540,30 @@ def test_non_200_preserves_bounded_redacted_excerpt_for_non_json_body():
         client.predict_daily(make_snapshot(), model="small", seed=7)
 
     assert exc_info.value.raw_response is None
+    assert exc_info.value.raw_body_excerpt
+    assert len(exc_info.value.raw_body_excerpt) <= 512
+    assert "secret-token" not in exc_info.value.raw_body_excerpt
+    assert "secret-token" not in str(exc_info.value)
+    assert "upstream detail" not in str(exc_info.value)
+
+
+def test_http_200_malformed_json_preserves_bounded_redacted_excerpt():
+    body = "gateway body echo=secret-token " + ("upstream detail " * 100)
+    response = FakeResponse(
+        {"status": "ok", "model": "Kronos-small"},
+        status_code=200,
+        json_error=ValueError("malformed JSON"),
+        text=body,
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret-token",
+        session=FakeSession(health_response=response),
+    )
+
+    with pytest.raises(KronosClientError, match="malformed JSON") as exc_info:
+        client.health()
+
     assert exc_info.value.raw_body_excerpt
     assert len(exc_info.value.raw_body_excerpt) <= 512
     assert "secret-token" not in exc_info.value.raw_body_excerpt
@@ -758,6 +853,28 @@ def test_prediction_status_classification_fails_closed(
     assert exc_info.value.category == expected_category
     assert exc_info.value.code == expected_code
     assert exc_info.value.raw_response == prediction
+
+
+def test_prediction_semantic_error_redacts_configured_token_echo():
+    token = "secret-token"
+    prediction = {
+        "status": "error",
+        "message": "model failed",
+        "echo": token,
+    }
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token=token, session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+    assert exc_info.value.raw_response["echo"] == "[REDACTED]"
+    assert token not in json.dumps(exc_info.value.raw_response)
 
 
 def test_prediction_rejects_unknown_daily_status_as_protocol_error():

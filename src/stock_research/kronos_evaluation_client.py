@@ -42,6 +42,7 @@ _SENSITIVE_FIELD_TERMS = frozenset(
 _PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
 _PREDICTION_FAILURE_STATUSES = frozenset({"failed", "error"})
 _DAILY_FAILURE_STATUSES = frozenset({"error", "unavailable", "failed"})
+_HEALTH_NON_READY_STATUSES = frozenset({"degraded", "error", "unavailable"})
 
 
 class KronosErrorCategory:
@@ -82,13 +83,14 @@ class KronosClientError(RuntimeError):
         status_code: int | None = None,
         raw_response: dict[str, Any] | None = None,
         raw_body_excerpt: str | None = None,
+        redaction_token: str | None = None,
     ) -> None:
         super().__init__(message)
         self.category = category
         self.code = code
         self.status_code = status_code
         self.raw_response = (
-            _redact_sensitive_json_value(raw_response, token=None)
+            _redact_sensitive_json_value(raw_response, token=redaction_token)
             if isinstance(raw_response, Mapping)
             else raw_response
         )
@@ -176,12 +178,30 @@ class KronosClient:
         """Return ready health data with the active model normalized."""
 
         response = self._request_json("GET", "/health")
-        if response.get("status") != "ok":
+        status = response.get("status")
+        if not isinstance(status, str):
+            raise KronosClientError(
+                "Kronos health response has an invalid status",
+                category=KronosErrorCategory.PROTOCOL,
+                code=KronosErrorCode.INVALID_RESPONSE,
+                raw_response=response,
+                redaction_token=self._headers.get("X-Kronos-Token"),
+            )
+        if status != "ok":
+            if status not in _HEALTH_NON_READY_STATUSES:
+                raise KronosClientError(
+                    "Kronos health response has an unknown status",
+                    category=KronosErrorCategory.PROTOCOL,
+                    code=KronosErrorCode.INVALID_RESPONSE,
+                    raw_response=response,
+                    redaction_token=self._headers.get("X-Kronos-Token"),
+                )
             raise KronosClientError(
                 "Kronos service is not ready: expected health status 'ok'",
                 category=KronosErrorCategory.TRANSPORT,
                 code=KronosErrorCode.SERVICE_UNAVAILABLE,
                 raw_response=response,
+                redaction_token=self._headers.get("X-Kronos-Token"),
             )
 
         raw_model = response.get("model")
@@ -191,6 +211,7 @@ class KronosClient:
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=self._headers.get("X-Kronos-Token"),
             )
         try:
             normalized_model = _normalize_model_name(raw_model)
@@ -200,6 +221,7 @@ class KronosClient:
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=self._headers.get("X-Kronos-Token"),
             ) from exc
 
         normalized = _clone_json_object(response)
@@ -219,6 +241,7 @@ class KronosClient:
                 category=KronosErrorCategory.MODEL,
                 code=KronosErrorCode.MODEL_MISMATCH,
                 raw_response=_complete_raw_response(health),
+                redaction_token=self._headers.get("X-Kronos-Token"),
             )
         return health
 
@@ -300,6 +323,7 @@ class KronosClient:
             result,
             expected_horizon=len(snapshot.future_timestamps),
             requested_sample_count=sample_count,
+            redaction_token=self._headers.get("X-Kronos-Token"),
         )
         return _attach_raw_response(result)
 
@@ -375,6 +399,7 @@ class KronosClient:
                     code=KronosErrorCode.MODEL_ERROR,
                     status_code=status_code,
                     raw_response=structured_response,
+                    redaction_token=self._headers.get("X-Kronos-Token"),
                 )
             raise KronosClientError(
                 f"Kronos {path} returned HTTP {status_code}",
@@ -390,8 +415,13 @@ class KronosClient:
                         token=self._headers.get("X-Kronos-Token"),
                     )
                 ),
+                redaction_token=self._headers.get("X-Kronos-Token"),
             )
 
+        raw_body_excerpt = _bounded_raw_body_excerpt(
+            getattr(response, "text", None),
+            token=self._headers.get("X-Kronos-Token"),
+        )
         try:
             raw_response = response.json()
         except (AttributeError, TypeError, ValueError) as exc:
@@ -399,6 +429,8 @@ class KronosClient:
                 f"Kronos {path} returned malformed JSON",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.MALFORMED_JSON,
+                raw_body_excerpt=raw_body_excerpt,
+                redaction_token=self._headers.get("X-Kronos-Token"),
             ) from exc
 
         try:
@@ -408,12 +440,16 @@ class KronosClient:
                 f"Kronos {path} returned invalid JSON: {exc}",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
+                raw_body_excerpt=raw_body_excerpt,
+                redaction_token=self._headers.get("X-Kronos-Token"),
             ) from exc
         if not isinstance(normalized_response, dict):
             raise KronosClientError(
                 f"Kronos {path} response must be a JSON object",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
+                raw_body_excerpt=raw_body_excerpt,
+                redaction_token=self._headers.get("X-Kronos-Token"),
             )
         return normalized_response
 
@@ -440,7 +476,9 @@ def _validate_prediction_response(
     *,
     expected_horizon: int,
     requested_sample_count: int,
+    redaction_token: str | None,
 ) -> None:
+    response = _redact_sensitive_json_value(response, token=redaction_token)
     status = response.get("status")
     if not isinstance(status, str):
         raise KronosClientError(
