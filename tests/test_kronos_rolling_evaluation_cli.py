@@ -523,6 +523,97 @@ def test_predict_rejects_symlink_metadata_before_constructing_client(
     assert "symlink" in summary["error"]
 
 
+def _predict_args(output_dir: Path) -> list[str]:
+    return [
+        "predict",
+        "--model",
+        "small",
+        "--output-dir",
+        str(output_dir),
+        "--predict-url",
+        "http://kronos.test",
+    ]
+
+
+def _assert_predict_tree_symlink_is_rejected(
+    cli,
+    output_dir: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    (output_dir / "experiment.json").write_text(
+        json.dumps(config_metadata()),
+        encoding="utf-8",
+    )
+    (output_dir / "input_snapshots").mkdir(exist_ok=True)
+    FakePredictClient.instances.clear()
+    monkeypatch.setattr(cli, "KronosClient", FakePredictClient)
+    monkeypatch.setattr(
+        cli,
+        "run_model",
+        lambda *args, **kwargs: pytest.fail("run_model must not run"),
+    )
+    monkeypatch.setenv("KRONOS_TEST_TOKEN", "test-token")
+
+    result = cli.main(_predict_args(output_dir))
+
+    assert result != 0
+    assert (
+        sum(len(instance.asserted_models) for instance in FakePredictClient.instances)
+        == 0
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["status"] == "error"
+    assert "symlink" in summary["error"]
+
+
+def test_predict_rejects_symlinked_snapshot_file_before_assert_model(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    snapshot_source = tmp_path / "snapshot-source.json"
+    snapshot_source.write_text("{}", encoding="utf-8")
+    (output_dir / "input_snapshots").mkdir()
+    (output_dir / "input_snapshots" / "snapshot.json").symlink_to(snapshot_source)
+
+    _assert_predict_tree_symlink_is_rejected(cli, output_dir, monkeypatch, capsys)
+
+
+def test_predict_rejects_symlinked_top_level_artifact_before_assert_model(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    output_dir = tmp_path / "prepared"
+    output_dir.mkdir()
+    artifact_source = tmp_path / "forecast-source.parquet"
+    artifact_source.write_bytes(b"not parquet")
+    (output_dir / "forecast_bars.parquet").symlink_to(artifact_source)
+
+    _assert_predict_tree_symlink_is_rejected(cli, output_dir, monkeypatch, capsys)
+
+
+def test_predict_rejects_symlinked_output_parent_before_assert_model(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    cli = load_cli_module()
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    symlink_parent = tmp_path / "symlink-parent"
+    symlink_parent.symlink_to(real_parent, target_is_directory=True)
+    output_dir = symlink_parent / "prepared"
+    output_dir.mkdir()
+
+    _assert_predict_tree_symlink_is_rejected(cli, output_dir, monkeypatch, capsys)
+
+
 def test_predict_refuses_missing_preparation_metadata(tmp_path, monkeypatch, capsys):
     cli = load_cli_module()
     monkeypatch.setattr(cli, "run_model", lambda *args, **kwargs: pytest.fail("must not run"))

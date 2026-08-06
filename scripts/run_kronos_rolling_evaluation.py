@@ -28,7 +28,9 @@ if str(SRC_ROOT) not in sys.path:
 
 from stock_research.kronos_evaluation_runner import (
     EXPERIMENT_FILENAME,
+    _reject_symlink as _runner_reject_symlink,
     SNAPSHOT_DIRECTORY,
+    _validate_top_level_entries,
     build_report,
     prepare_experiment,
     run_model,
@@ -225,6 +227,7 @@ def _run_predict(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _validate_predict_output_dir(output_dir: Path) -> Path:
+    _validate_output_path_chain(output_dir)
     _reject_cli_symlink(output_dir, "experiment output directory")
     if not output_dir.exists():
         raise FileNotFoundError(f"missing experiment output directory: {output_dir}")
@@ -232,6 +235,12 @@ def _validate_predict_output_dir(output_dir: Path) -> Path:
         raise ValueError(
             f"experiment output directory must be a directory: {output_dir}"
         )
+
+    # Reuse the runner's documented top-level integrity boundary so every
+    # known artifact is checked before any client is constructed. The full
+    # content/fingerprint validation remains in run_model after its recovery
+    # steps; this preflight only moves symlink rejection ahead of the network.
+    _validate_top_level_entries(output_dir)
 
     metadata_path = output_dir / EXPERIMENT_FILENAME
     _reject_cli_symlink(metadata_path, "experiment metadata")
@@ -252,7 +261,21 @@ def _validate_predict_output_dir(output_dir: Path) -> Path:
         raise ValueError(
             f"frozen snapshot directory must be a directory: {snapshot_dir}"
         )
+    for path in snapshot_dir.iterdir():
+        _runner_reject_symlink(path, f"frozen snapshot artifact {path.name}")
+        if not path.is_file():
+            raise ValueError(
+                f"frozen snapshot artifact must be a regular file: {path}"
+            )
     return metadata_path
+
+
+def _validate_output_path_chain(output_dir: Path) -> None:
+    absolute_path = (
+        output_dir if output_dir.is_absolute() else Path.cwd() / output_dir
+    )
+    for candidate in (absolute_path, *absolute_path.parents):
+        _runner_reject_symlink(candidate, "experiment output path")
 
 
 def _reject_cli_symlink(path: Path, label: str) -> None:
