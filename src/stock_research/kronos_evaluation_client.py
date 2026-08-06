@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from datetime import date, datetime, time
 from typing import Any
 
 import requests
@@ -51,6 +52,11 @@ _PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
 _PREDICTION_FAILURE_STATUSES = frozenset({"failed", "error"})
 _DAILY_FAILURE_STATUSES = frozenset({"error", "unavailable", "failed"})
 _HEALTH_NON_READY_STATUSES = frozenset({"degraded", "error", "unavailable"})
+_DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_MIDNIGHT_ISO_PATTERN = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2})T00:00:00"
+    r"(?:\.(?P<fraction>\d+))?(?:Z|[+-]\d{2}:\d{2})?$"
+)
 
 
 class KronosErrorCategory:
@@ -358,16 +364,22 @@ class KronosClient:
             )
 
         result = self._request_json("POST", "/v1/predict", payload=payload)
+        raw_response = _clone_json_object(result)
+        expected_timestamps = tuple(snapshot.future_timestamps)
         _validate_prediction_response(
             result,
             expected_horizon=len(snapshot.future_timestamps),
-            expected_timestamps=tuple(snapshot.future_timestamps),
+            expected_timestamps=expected_timestamps,
             requested_sample_count=sample_count,
             redaction_token=redaction_token,
             requested_model=requested_model,
             health=health,
         )
-        return _attach_raw_response(result)
+        normalized_result = _normalize_representative_path_timestamps(
+            result,
+            expected_timestamps=expected_timestamps,
+        )
+        return _attach_raw_response(normalized_result, raw_response=raw_response)
 
     def _request_json(
         self,
@@ -836,7 +848,10 @@ def _valid_representative_path(
         timestamp = item.get("timestamp")
         if not isinstance(timestamp, str) or not timestamp.strip():
             return False
-        if expected_timestamps is not None and timestamp != expected_timestamps[index]:
+        if expected_timestamps is not None and _normalize_daily_timestamp(
+            timestamp,
+            expected_timestamps[index],
+        ) is None:
             return False
         numeric_values = [
             item.get(field_name)
@@ -850,6 +865,57 @@ def _valid_representative_path(
         if low_value > min(open_value, close_value) or high_value < low_value:
             return False
     return True
+
+
+def _normalize_daily_timestamp(
+    timestamp: Any,
+    expected_timestamp: Any,
+) -> str | None:
+    if not isinstance(timestamp, str) or not isinstance(expected_timestamp, str):
+        return None
+    if timestamp == expected_timestamp:
+        return expected_timestamp
+    if not _DATE_ONLY_PATTERN.fullmatch(expected_timestamp):
+        return None
+
+    match = _MIDNIGHT_ISO_PATTERN.fullmatch(timestamp)
+    if match is None:
+        return None
+    fraction = match.group("fraction")
+    if fraction and any(character != "0" for character in fraction):
+        return None
+    try:
+        expected_date = date.fromisoformat(expected_timestamp)
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.date() != expected_date:
+        return None
+    if parsed.time().replace(tzinfo=None) != time.min:
+        return None
+    return expected_timestamp
+
+
+def _normalize_representative_path_timestamps(
+    response: dict[str, Any],
+    *,
+    expected_timestamps: tuple[str, ...],
+) -> dict[str, Any]:
+    normalized = _clone_json_object(response)
+    daily, _ = _extract_daily_forecast(normalized)
+    if not isinstance(daily, Mapping):  # pragma: no cover - validated before call.
+        return normalized
+    candidate = daily.get("representative_path")
+    if not isinstance(candidate, list):  # pragma: no cover - validated before call.
+        return normalized
+    for index, expected_timestamp in enumerate(expected_timestamps):
+        item = candidate[index]
+        if isinstance(item, dict):  # pragma: no cover - validated before call.
+            item["timestamp"] = _normalize_daily_timestamp(
+                item["timestamp"],
+                expected_timestamp,
+            )
+    return normalized
 
 
 def _response_fields(

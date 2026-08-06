@@ -1757,6 +1757,47 @@ def test_prediction_accepts_missing_optional_horizon_field():
     client.predict_daily(make_snapshot(), model="small", seed=7)
 
 
+def test_prediction_normalizes_midnight_iso_daily_path_without_mutating_raw_response():
+    prediction = make_prediction_response(
+        representative_path=[
+            {
+                "timestamp": "2025-01-06T00:00:00",
+                "open": 104.0,
+                "high": 106.0,
+                "low": 103.0,
+                "close": 105.0,
+                "volume": 1400.0,
+                "amount": 145000.0,
+            },
+            {
+                "timestamp": "2025-01-07T00:00:00",
+                "open": 105.0,
+                "high": 107.0,
+                "low": 104.0,
+                "close": 106.0,
+                "volume": 1500.0,
+                "amount": 156000.0,
+            },
+        ]
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction=prediction,
+        ),
+    )
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    path = result["daily"]["representative_path"]
+    assert [row["timestamp"] for row in path] == ["2025-01-06", "2025-01-07"]
+    assert [
+        row["timestamp"] for row in result["raw_response"]["daily"]["representative_path"]
+    ] == ["2025-01-06T00:00:00", "2025-01-07T00:00:00"]
+
+
 def test_prediction_rejects_missing_representative_path():
     prediction = make_prediction_response(include_representative_path=False)
     client = KronosClient(
