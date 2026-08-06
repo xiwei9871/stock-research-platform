@@ -14,6 +14,7 @@ from stock_research.kronos_evaluation_types import (
     RollingSnapshot,
     canonical_json_fingerprint,
     normalize_asset_ids,
+    snapshot_to_json_payload,
     thaw_json_value,
 )
 
@@ -164,25 +165,6 @@ def prepare_rolling_snapshots(
         forecast_horizon,
         origin_dates=origin_dates,
         asset_ids=asset_ids,
-    )
-
-
-def snapshot_to_json_payload(snapshot: RollingSnapshot) -> dict[str, Any]:
-    """Return an independent JSON-compatible payload for a frozen snapshot."""
-
-    if not isinstance(snapshot, RollingSnapshot):
-        raise TypeError("snapshot must be a RollingSnapshot")
-    return thaw_json_value(
-        {
-            "asset_id": snapshot.asset_id,
-            "origin_date": snapshot.origin_date,
-            "history": snapshot.history,
-            "future_timestamps": snapshot.future_timestamps,
-            "realized": snapshot.realized,
-            "input_fingerprint": snapshot.input_fingerprint,
-            "status": snapshot.status,
-            "reason": snapshot.reason,
-        }
     )
 
 

@@ -39,8 +39,11 @@ except ModuleNotFoundError:
 from stock_research.kronos_evaluation_client import (  # noqa: E402
     KronosClient,
     KronosClientError,
+    KronosErrorCategory,
+    KronosErrorCode,
 )
 from stock_research.kronos_evaluation_types import (  # noqa: E402
+    DEFAULT_KRONOS_SEED,
     RollingSnapshot,
     canonical_json_fingerprint,
 )
@@ -233,14 +236,16 @@ def test_model_mismatch_fails_closed_without_prediction_or_fallback(
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
-    with pytest.raises(KronosClientError, match="model mismatch"):
+    with pytest.raises(KronosClientError, match="model mismatch") as exc_info:
         client.predict_daily(make_snapshot(), model=requested_model)
 
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_MISMATCH
     assert [request["method"] for request in session.requests] == ["GET"]
 
 
 @pytest.mark.parametrize(
-    ("health_response", "expected_message"),
+    ("health_response", "expected_message", "expected_category", "expected_code"),
     [
         (
             FakeResponse(
@@ -249,6 +254,8 @@ def test_model_mismatch_fails_closed_without_prediction_or_fallback(
                 text="service unavailable",
             ),
             "HTTP 503",
+            KronosErrorCategory.HTTP,
+            KronosErrorCode.HTTP_ERROR,
         ),
         (
             FakeResponse(
@@ -258,11 +265,13 @@ def test_model_mismatch_fails_closed_without_prediction_or_fallback(
                 text="not json",
             ),
             "malformed JSON",
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.MALFORMED_JSON,
         ),
     ],
 )
 def test_health_reports_non_200_and_malformed_json(
-    health_response, expected_message
+    health_response, expected_message, expected_category, expected_code
 ):
     client = KronosClient(
         "http://kronos.test",
@@ -270,12 +279,15 @@ def test_health_reports_non_200_and_malformed_json(
         session=FakeSession(health_response=health_response),
     )
 
-    with pytest.raises(KronosClientError, match=expected_message):
+    with pytest.raises(KronosClientError, match=expected_message) as exc_info:
         client.health()
+
+    assert exc_info.value.category == expected_category
+    assert exc_info.value.code == expected_code
 
 
 @pytest.mark.parametrize(
-    ("prediction_response", "expected_message"),
+    ("prediction_response", "expected_message", "expected_category", "expected_code"),
     [
         (
             FakeResponse(
@@ -284,6 +296,8 @@ def test_health_reports_non_200_and_malformed_json(
                 text="bad request",
             ),
             "HTTP 422",
+            KronosErrorCategory.HTTP,
+            KronosErrorCode.HTTP_ERROR,
         ),
         (
             FakeResponse(
@@ -293,11 +307,13 @@ def test_health_reports_non_200_and_malformed_json(
                 text="not json",
             ),
             "malformed JSON",
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.MALFORMED_JSON,
         ),
     ],
 )
 def test_prediction_reports_non_200_and_malformed_json(
-    prediction_response, expected_message
+    prediction_response, expected_message, expected_category, expected_code
 ):
     client = KronosClient(
         "http://kronos.test",
@@ -308,19 +324,34 @@ def test_prediction_reports_non_200_and_malformed_json(
         ),
     )
 
-    with pytest.raises(KronosClientError, match=expected_message):
+    with pytest.raises(KronosClientError, match=expected_message) as exc_info:
         client.predict_daily(make_snapshot(), model="small")
+
+    assert exc_info.value.category == expected_category
+    assert exc_info.value.code == expected_code
 
 
 @pytest.mark.parametrize(
-    ("method", "exception", "expected_message"),
+    ("method", "exception", "expected_message", "expected_category", "expected_code"),
     [
-        ("get", requests.Timeout("timed out"), "timed out"),
-        ("post", requests.RequestException("connection reset"), "request failed"),
+        (
+            "get",
+            requests.Timeout("timed out"),
+            "timed out",
+            KronosErrorCategory.TIMEOUT,
+            KronosErrorCode.TIMEOUT,
+        ),
+        (
+            "post",
+            requests.RequestException("connection reset"),
+            "request failed",
+            KronosErrorCategory.TRANSPORT,
+            KronosErrorCode.TRANSPORT_ERROR,
+        ),
     ],
 )
 def test_request_errors_are_reported_without_fallback(
-    method, exception, expected_message
+    method, exception, expected_message, expected_category, expected_code
 ):
     session = FakeSession(
         health={"status": "ok", "model": "Kronos-small"},
@@ -329,17 +360,23 @@ def test_request_errors_are_reported_without_fallback(
     )
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
-    with pytest.raises(KronosClientError, match=expected_message):
+    with pytest.raises(KronosClientError, match=expected_message) as exc_info:
         if method == "get":
             client.health()
         else:
             client.predict_daily(make_snapshot(), model="small")
 
+    assert exc_info.value.category == expected_category
+    assert exc_info.value.code == expected_code
+
 
 @pytest.mark.parametrize("token", [None, "", "   "])
 def test_missing_token_is_rejected_before_any_request(token):
-    with pytest.raises(KronosClientError, match="token"):
+    with pytest.raises(KronosClientError, match="token") as exc_info:
         KronosClient("http://kronos.test", token=token, session=FakeSession())
+
+    assert exc_info.value.category == KronosErrorCategory.VALIDATION
+    assert exc_info.value.code == KronosErrorCode.TOKEN_REQUIRED
 
 
 @pytest.mark.parametrize("invalid_payload", [None, [], "not an object"])
@@ -355,8 +392,11 @@ def test_invalid_json_object_response_is_rejected(invalid_payload):
         ),
     )
 
-    with pytest.raises(KronosClientError, match="JSON object"):
+    with pytest.raises(KronosClientError, match="JSON object") as exc_info:
         client.predict_daily(make_snapshot(), model="small")
+
+    assert exc_info.value.category == KronosErrorCategory.PROTOCOL
+    assert exc_info.value.code == KronosErrorCode.INVALID_RESPONSE
 
 
 def test_unknown_or_missing_health_model_fails_closed():
@@ -367,5 +407,149 @@ def test_unknown_or_missing_health_model_fails_closed():
             session=FakeSession(health=health),
         )
 
-        with pytest.raises(KronosClientError, match="model"):
+        with pytest.raises(KronosClientError, match="model") as exc_info:
             client.health()
+
+        assert exc_info.value.category == KronosErrorCategory.PROTOCOL
+        assert exc_info.value.code == KronosErrorCode.INVALID_RESPONSE
+
+
+def test_predict_daily_uses_the_canonical_seed_when_omitted():
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    client.predict_daily(make_snapshot(), model="small")
+
+    assert session.requests[-1]["json"]["seed"] == DEFAULT_KRONOS_SEED
+
+
+def test_predict_daily_posts_explicit_base_model():
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-base"},
+        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="base", seed=7)
+
+    assert result["status"] == "succeeded"
+    assert session.requests[-1]["method"] == "POST"
+    assert session.requests[-1]["json"]["model"] == "base"
+    assert session.requests[-1]["json"]["seed"] == 7
+
+
+@pytest.mark.parametrize("sample_count", [0, 101, True, 1.5, "20", None])
+def test_predict_daily_rejects_sample_count_outside_integer_range(sample_count):
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError, match="sample_count") as exc_info:
+        client.predict_daily(
+            make_snapshot(),
+            model="small",
+            sample_count=sample_count,
+            seed=7,
+        )
+
+    assert exc_info.value.category == KronosErrorCategory.VALIDATION
+    assert exc_info.value.code == KronosErrorCode.INVALID_ARGUMENT
+    assert session.requests == []
+
+
+@pytest.mark.parametrize("sample_count", [1, 100])
+def test_predict_daily_accepts_sample_count_boundaries(sample_count):
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    client.predict_daily(
+        make_snapshot(),
+        model="small",
+        sample_count=sample_count,
+        seed=7,
+    )
+
+    assert session.requests[-1]["json"]["sample_count"] == sample_count
+
+
+def test_health_requires_exact_ok_status_and_blocks_prediction_when_unavailable():
+    session = FakeSession(
+        health={"status": "error", "model": "Kronos-small"},
+        prediction={"status": "succeeded", "result": {"daily": {"p50": [1.0]}}},
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError, match="not ready") as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.TRANSPORT
+    assert exc_info.value.code == KronosErrorCode.SERVICE_UNAVAILABLE
+    assert [request["method"] for request in session.requests] == ["GET"]
+
+
+@pytest.mark.parametrize(
+    ("prediction", "expected_category", "expected_code"),
+    [
+        (
+            {"status": "error", "message": "model failed"},
+            KronosErrorCategory.MODEL,
+            KronosErrorCode.MODEL_ERROR,
+        ),
+        (
+            {},
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.INVALID_RESPONSE,
+        ),
+        (
+            {"status": "succeeded", "result": {}},
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.INVALID_RESPONSE,
+        ),
+        (
+            {"status": "succeeded", "result": {"daily": []}},
+            KronosErrorCategory.PROTOCOL,
+            KronosErrorCode.INVALID_RESPONSE,
+        ),
+    ],
+)
+def test_prediction_requires_semantically_successful_daily_result(
+    prediction, expected_category, expected_code
+):
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError, match="prediction response") as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == expected_category
+    assert exc_info.value.code == expected_code
+    assert exc_info.value.raw_response == prediction
+
+
+def test_prediction_preserves_upstream_raw_response_collision_safely():
+    prediction = {
+        "status": "succeeded",
+        "result": {"daily": {"p50": [1.0]}},
+        "raw_response": {"upstream": "must remain"},
+    }
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert result["raw_response"] == prediction["raw_response"]
+    assert result["_kronos_raw_response"] == prediction

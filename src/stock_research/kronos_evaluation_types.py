@@ -21,6 +21,7 @@ _EXCHANGE_SUFFIX_ASSET_RE = re.compile(r"^(\d{6})\.(SH|SZ|BJ)$", re.IGNORECASE)
 _BARE_ASSET_RE = re.compile(r"^\d{6}$")
 _FINGERPRINT_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 _HISTORY_NUMERIC_FIELDS = ("open", "high", "low", "close", "volume", "amount")
+DEFAULT_KRONOS_SEED = 20260806
 
 ExchangeResolver = Callable[[str], str | Iterable[str] | None]
 
@@ -156,6 +157,8 @@ def _asset_id_from_exchange_symbol(exchange: str, symbol: str) -> str:
 
 @dataclass(frozen=True)
 class KronosEvaluationConfig:
+    """Validated rolling-evaluation settings with one canonical default seed."""
+
     asset_ids: tuple[str, ...]
     start_date: str
     end_date: str
@@ -170,7 +173,7 @@ class KronosEvaluationConfig:
     predict_url: str = "http://192.168.3.187:8123"
     token_env: str = "KRONOS_INTERNAL_TOKEN"
     timeout_seconds: float = 60.0
-    seed: int | None = 20260806
+    seed: int | None = DEFAULT_KRONOS_SEED
 
     def __post_init__(self) -> None:
         normalized_asset_ids = normalize_asset_ids(self.asset_ids)
@@ -490,3 +493,22 @@ class RollingSnapshot:
     @property
     def key(self) -> str:
         return f"{self.asset_id}|{self.origin_date}"
+
+
+def snapshot_to_json_payload(snapshot: RollingSnapshot) -> dict[str, Any]:
+    """Return an independent JSON-compatible payload for a frozen snapshot."""
+
+    if not isinstance(snapshot, RollingSnapshot):
+        raise TypeError("snapshot must be a RollingSnapshot")
+    return thaw_json_value(
+        {
+            "asset_id": snapshot.asset_id,
+            "origin_date": snapshot.origin_date,
+            "history": snapshot.history,
+            "future_timestamps": snapshot.future_timestamps,
+            "realized": snapshot.realized,
+            "input_fingerprint": snapshot.input_fingerprint,
+            "status": snapshot.status,
+            "reason": snapshot.reason,
+        }
+    )
