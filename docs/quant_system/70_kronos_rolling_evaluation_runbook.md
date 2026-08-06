@@ -17,6 +17,12 @@
 
 本 runbook 不记录密码、令牌、认证头、私钥或其他凭据。预测命令所需认证信息只从 187 上已有的安全环境配置读取，禁止写入命令行、日志和实验报告。
 
+## 0. 执行位置与命令约定
+
+- 标注为“本地研究仓库”的命令在研究代码所在机器执行；先进入 `/path/to/stock_research`，并使用本地 `rtk` wrapper（例如 `rtk python3`、`rtk pytest`）。`/path/to/stock_research` 是占位路径，执行前替换为实际绝对路径。
+- 标注为“187 远程 shell”的命令在 187 上执行，使用普通 shell 命令，不加 `rtk` 前缀。`rtk` 不是 187 的前置条件，也不要把本地 wrapper 前缀复制到远程命令中。
+- 本 runbook 不提供 SSH 登录命令、密码或令牌值。远程命令假定操作者已经进入 187，并且安全环境变量已按现有部署方式加载。
+
 ## 2. Base 安全预检与模型切换
 
 ### 2.1 预检原则
@@ -37,12 +43,15 @@ KRONOS_MODEL_NAME=Kronos-base \
   --host 0.0.0.0 --port 8124
 ```
 
-另开终端检查：
+另开 187 远程 shell 检查。当前客户端要求 `X-Kronos-Token`，令牌只从 187 的安全环境变量读取；不要把令牌值写进命令、历史记录、日志或报告：
 
 ```bash
-rtk curl -fsS http://127.0.0.1:8123/health
-rtk curl -fsS http://127.0.0.1:8124/health
+: "${KRONOS_INTERNAL_TOKEN:?请先从 187 的安全环境加载 KRONOS_INTERNAL_TOKEN，不要回显令牌值}"
+curl -fsS -H "X-Kronos-Token: ${KRONOS_INTERNAL_TOKEN}" http://127.0.0.1:8123/health
+curl -fsS -H "X-Kronos-Token: ${KRONOS_INTERNAL_TOKEN}" http://127.0.0.1:8124/health
 ```
+
+如果安全环境不允许在 shell 中注入令牌，则使用仓库的已认证客户端执行 health/model 预检；不要改用未认证的 `curl`，也不要手工填写令牌值。
 
 人工核对：
 
@@ -53,9 +62,10 @@ rtk curl -fsS http://127.0.0.1:8124/health
 
 ### 2.3 单股票预测、显存和延迟
 
-用一个临时的单股票输入目录做预检；`--allow-smoke` 只允许用于此类预检，不可用于正式 20 股票结论。可按实际日期替换下面的占位路径和日期：
+用一个临时的单股票输入目录做预检；`--allow-smoke` 只允许用于此类预检，不可用于正式 20 股票结论。以下是本地研究仓库命令，可按实际日期替换占位路径和日期：
 
 ```bash
+cd /path/to/stock_research
 rtk python3 scripts/run_kronos_rolling_evaluation.py prepare \
   --universe-file /path/to/one_stock.csv \
   --start-date 2025-01-02 \
@@ -69,10 +79,10 @@ rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
   --predict-url http://127.0.0.1:8124
 ```
 
-预测前后各采集一次，并在请求期间观察峰值：
+预测前后各采集一次，并在请求期间观察峰值。以下命令在 187 远程 shell 执行，不使用 `rtk`：
 
 ```bash
-rtk nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv
+nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv
 ```
 
 记录以下证据：
@@ -85,13 +95,15 @@ rtk nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu -
 
 ### 2.4 GPU 显存不足时的串行切换
 
-如果 8124 无法加载 base 或出现 CUDA OOM：
+本仓库没有经过验证的 Kronos service-switch 脚本或 systemd unit，也不提供任何精确的切换命令。串行切换是硬前置条件，不是可以临时发挥的操作步骤。如果 8124 无法加载 base 或出现 CUDA OOM，只有在满足下面的前置条件后才能考虑串行切换：
 
-1. 立即停止研究进程（8124），保留 8123 生产 small 运行。
-2. 使用现有、已批准的 service-switch 流程串行加载 base；不要临时改造启动脚本。
-3. 在停止 8123 **之前**，把该流程的反向命令（base → small）、进程/日志位置和验证步骤写入操作记录，并先确认可执行。没有可用回滚命令时，禁止停止生产。
-4. 串行切换后先查 `/health`，再做同一只股票的单次预检；身份或显存不合格就立即执行反向切换。
-5. base 评估结束后执行反向 service-switch，确认 8123 恢复 `Kronos-small`，再关闭临时进程和归档日志。
+1. 在停止 8123 **之前**，从 187 服务负责人取得当前环境专用、已批准的正向命令（small → base）和反向命令（base → small）。同时取得进程/日志位置、health 验证步骤和失败处置方式。
+2. 在不影响生产的条件下对正向/反向流程做 dry-run 或等价的安全演练，逐条把命令、操作者、时间、输出摘要和验证结果记录到操作记录中；必须先验证反向回滚可执行。
+3. 只有在正向命令、反向命令和回滚验证都已记录并确认可用后，才可停止 8123，按服务负责人提供的流程串行加载 base。
+4. 串行切换后先查已认证的 `/health`，再做同一只股票的单次预检；身份或显存不合格就立即执行已验证的反向命令。
+5. base 评估结束后执行已验证的反向命令，确认 8123 恢复 `Kronos-small`，再关闭临时进程和归档日志。
+
+如果服务负责人无法及时提供环境专用的正向/反向命令，或无法在停产前验证回滚，则停止 base 评估，保持 8123 上的生产 small 继续运行。**本仓库不供应、也不应推断任何替代切换命令。**
 
 **安全底线：永远不要在 rollback 尚未准备好之前停止生产服务。** 任何切换失败都标记为 `unavailable`/`model_error`，不能当作预测准确率为零，也不能自动 fallback。
 
@@ -99,21 +111,29 @@ rtk nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu -
 
 ### 3.1 Prepare：一次性冻结输入
 
-正式实验要求 universe 规范化后恰好 20 只股票；不要使用 `--allow-smoke`。准备阶段会冻结历史窗口、未来真实行情、参数、代码版本和输入指纹。
+正式实验要求由操作者提供的 universe 规范化后恰好 20 只股票；仓库不内置或假定某个 `evaluation_universe_20.csv`。不要使用 `--allow-smoke`。准备阶段会冻结历史窗口、未来真实行情、参数、代码版本和输入指纹。
+
+下面的 `UNIVERSE_FILE` 必须替换为操作者实际准备的**绝对路径**。先做存在性预检；文件不存在时不得启动实验：
 
 ```bash
+cd /path/to/stock_research
+UNIVERSE_FILE=/absolute/path/to/operator-supplied/evaluation_universe_20.csv
+test -f "$UNIVERSE_FILE" || { echo "universe file does not exist: $UNIVERSE_FILE" >&2; exit 1; }
 rtk python3 scripts/run_kronos_rolling_evaluation.py prepare \
-  --universe-file config/kronos/evaluation_universe_20.csv \
+  --universe-file "$UNIVERSE_FILE" \
   --start-date 2025-01-02 \
   --end-date 2025-01-31 \
   --output-dir outputs/research/kronos_rolling_eval/2025-01
 ```
+
+以上是本地研究仓库命令，`UNIVERSE_FILE` 由操作者负责提供并核对为 20 只股票；它不是本仓库已经存在的配置文件。
 
 ### 3.2 Predict：相同快照分别运行两个模型
 
 先跑 small：
 
 ```bash
+cd /path/to/stock_research
 rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
   --model small \
   --output-dir outputs/research/kronos_rolling_eval/2025-01 \
@@ -123,6 +143,7 @@ rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
 完成 base 的 `/health` 预检和显存检查后，再跑 base：
 
 ```bash
+cd /path/to/stock_research
 rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
   --model base \
   --output-dir outputs/research/kronos_rolling_eval/2025-01 \
@@ -134,6 +155,7 @@ rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
 ### 3.3 Report：只从实验目录生成报告
 
 ```bash
+cd /path/to/stock_research
 rtk python3 scripts/run_kronos_rolling_evaluation.py report \
   --output-dir outputs/research/kronos_rolling_eval/2025-01
 ```
@@ -178,7 +200,7 @@ report.md
 |---|---|
 | `success` | 该股票、截止日、模型运行成功，可进入对应 horizon 指标。 |
 | `insufficient_input` | 历史不足 250 根；不补数据，不算作模型准确率。 |
-| `insufficient_truth` | 未来真实行情不足；只排除受影响 horizon。 |
+| `insufficient_truth` | 当前 data builder 会把整个 snapshot 标为 `insufficient_truth`；该 snapshot 在所有 horizon 上都排除出评分和基线。补齐完整未来真实行情后，必须重新 `prepare`，才能重新纳入评估。 |
 | `invalid_input` | 重复日期、NaN 或非法 OHLC；停止该单元并查数据源。 |
 | `model_error` / `unavailable` | 模型、GPU、服务加载或健康检查失败；不是预测得分为零。 |
 | `timeout` / `transport_error` / `protocol_error` | 网络、超时或响应契约问题；保留原始错误，不 fallback。 |
