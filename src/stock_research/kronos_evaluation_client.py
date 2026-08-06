@@ -200,7 +200,7 @@ class KronosClient:
                     redaction_token=self._headers.get("X-Kronos-Token"),
                 )
             raise KronosClientError(
-                "Kronos service is not ready: expected health status 'ok'",
+                "Kronos service is not ready",
                 category=KronosErrorCategory.TRANSPORT,
                 code=KronosErrorCode.SERVICE_UNAVAILABLE,
                 raw_response=response,
@@ -239,8 +239,7 @@ class KronosClient:
         active_model = health.get("model")
         if active_model != requested_model:
             raise KronosClientError(
-                "Kronos model mismatch: "
-                f"requested {requested_model}, active {active_model}",
+                "Kronos model mismatch",
                 category=KronosErrorCategory.MODEL,
                 code=KronosErrorCode.MODEL_MISMATCH,
                 raw_response=_complete_raw_response(health),
@@ -271,8 +270,7 @@ class KronosClient:
             )
         if snapshot.status != "ready":
             raise KronosClientError(
-                "cannot predict a snapshot whose status is "
-                f"{snapshot.status!r}",
+                "Kronos snapshot is not ready",
                 category=KronosErrorCategory.VALIDATION,
                 code=KronosErrorCode.INVALID_ARGUMENT,
             )
@@ -438,7 +436,7 @@ class KronosClient:
             normalized_response = _clone_json_value(raw_response)
         except (TypeError, ValueError) as exc:
             raise KronosClientError(
-                f"Kronos {path} returned invalid JSON: {exc}",
+                f"Kronos {path} returned invalid JSON",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_body_excerpt=_bounded_raw_body_excerpt(
@@ -464,14 +462,14 @@ class KronosClient:
 def _normalize_model_name(value: Any, *, label: str = "model") -> str:
     if not isinstance(value, str):
         raise KronosClientError(
-            f"{label} must be small or base",
+            "Kronos model argument is invalid",
             category=KronosErrorCategory.VALIDATION,
             code=KronosErrorCode.INVALID_ARGUMENT,
         )
     normalized = _MODEL_ALIASES.get(value.strip().lower())
     if normalized is None:
         raise KronosClientError(
-            f"{label} must be small or base",
+            "Kronos model argument is invalid",
             category=KronosErrorCategory.VALIDATION,
             code=KronosErrorCode.INVALID_ARGUMENT,
         )
@@ -832,7 +830,7 @@ def _redact_sensitive_assignments(value: str) -> str:
             continue
 
         value_start = separator_index + 1
-        while value_start < len(value) and value[value_start] in " \t":
+        while value_start < len(value) and value[value_start].isspace():
             value_start += 1
         if (
             value_start >= len(value)
@@ -905,7 +903,8 @@ def _scan_assignment_field(
         and field_end - start < _MAX_ASSIGNMENT_FIELD_LENGTH
         and (
             value[field_end].isalnum()
-            or value[field_end] in "_.- \t"
+            or value[field_end] in "_.-"
+            or value[field_end].isspace()
         )
     ):
         field_end += 1
@@ -913,12 +912,14 @@ def _scan_assignment_field(
     if field_end == start:
         return None
 
-    field_name = value[start:field_end].strip(" \t")
+    field_name = value[start:field_end].strip()
     if not field_name:
         return None
 
     separator_end = field_end
-    while separator_end < len(value) and value[separator_end] in " \t\"'":
+    while separator_end < len(value) and (
+        value[separator_end].isspace() or value[separator_end] in "\"'"
+    ):
         separator_end += 1
     if separator_end >= len(value) or value[separator_end] not in ":=":
         return field_name, field_end, None
@@ -938,7 +939,7 @@ def _scan_bearer_value(value: str, start: int) -> tuple[int, int] | None:
     if separator_end >= len(value) or not value[separator_end].isspace():
         return None
     value_start = separator_end
-    while value_start < len(value) and value[value_start] in " \t":
+    while value_start < len(value) and value[value_start].isspace():
         value_start += 1
     if value_start >= len(value):
         return None

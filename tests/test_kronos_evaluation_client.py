@@ -338,6 +338,37 @@ def test_model_mismatch_fails_closed_without_prediction_or_fallback(
     assert [request["method"] for request in session.requests] == ["GET"]
 
 
+def test_model_mismatch_message_does_not_echo_configured_token():
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-base"},
+        prediction={"status": "must not be sent"},
+    )
+    client = KronosClient("http://kronos.test", token="small", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert str(exc_info.value) == "Kronos model mismatch"
+    assert "small" not in str(exc_info.value)
+
+
+def test_health_status_message_does_not_echo_configured_token():
+    client = KronosClient(
+        "http://kronos.test",
+        token="error",
+        session=FakeSession(
+            health={"status": "error", "model": "Kronos-small"}
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.health()
+
+    assert exc_info.value.category == KronosErrorCategory.TRANSPORT
+    assert exc_info.value.code == KronosErrorCode.SERVICE_UNAVAILABLE
+    assert "error" not in str(exc_info.value)
+
+
 @pytest.mark.parametrize(
     ("health_response", "expected_message", "expected_category", "expected_code"),
     [
@@ -635,6 +666,67 @@ def test_plaintext_scanner_redacts_spaced_fields_and_unquoted_phrases():
 
     for secret in secret_values:
         assert secret not in exc_info.value.raw_body_excerpt
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r", "\r\n"])
+def test_plaintext_scanner_consumes_newline_around_keyed_separator(newline):
+    secret = "newline-keyed-secret"
+    body = f"private_key {newline} = {newline}\"{secret}\""
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert secret not in exc_info.value.raw_body_excerpt
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r", "\r\n"])
+def test_plaintext_scanner_keeps_newline_as_unquoted_delimiter_after_value(newline):
+    secret = "newline-unquoted-secret"
+    body = f"private_key={newline}{secret}{newline}diagnostic=keep"
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert secret not in exc_info.value.raw_body_excerpt
+    assert "diagnostic=keep" in exc_info.value.raw_body_excerpt
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r", "\r\n"])
+def test_plaintext_scanner_consumes_newline_after_bearer_scheme(newline):
+    secret = "newline-bearer-secret"
+    body = f"Bearer{newline}\"{secret}\""
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert secret not in exc_info.value.raw_body_excerpt
 
 
 def test_plaintext_scanner_honors_escaped_quotes():
@@ -967,6 +1059,22 @@ def test_prediction_status_is_validated_before_token_redaction():
 
     assert result["status"] == "partial"
     assert result["raw_response"] == prediction
+
+
+def test_prediction_status_message_does_not_echo_configured_token():
+    prediction = make_prediction_response(status="failed")
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="failed", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+    assert "failed" not in str(exc_info.value)
 
 
 def test_502_failed_prediction_is_classified_before_token_redaction():
