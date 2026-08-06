@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from bisect import bisect_right
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -33,7 +33,12 @@ DAILY_BAR_COLUMNS = (
     "trade_status",
     "is_st",
 )
-REQUIRED_FRAME_COLUMNS = ("trade_date", "asset_id", *KRONOS_HISTORY_FIELDS)
+REQUIRED_FRAME_COLUMNS = (
+    "trade_date",
+    "asset_id",
+    *KRONOS_HISTORY_FIELDS,
+    "trade_status",
+)
 SNAPSHOT_STATUSES = frozenset(
     {"ready", "insufficient_input", "insufficient_truth", "invalid_input"}
 )
@@ -50,7 +55,7 @@ ORDER BY asset_id, trade_date
 GLOBAL_TRADE_DATES_SQL = """
 SELECT DISTINCT trade_date::text AS trade_date
 FROM market_daily_bar
-WHERE adjust_type = %s AND trade_date <= %s
+WHERE adjust_type = %s AND trade_date BETWEEN %s AND %s
 ORDER BY trade_date
 """
 
@@ -59,9 +64,19 @@ ORDER BY trade_date
 class _Bar:
     asset_id: str
     timestamp: str
-    values: Mapping[str, float]
+    values: Mapping[str, float] | None
+    trade_status: Any
+    error: str | None = None
+
+    @property
+    def is_tradable(self) -> bool:
+        return self.error is None and self.values is not None and _is_tradable_status(
+            self.trade_status
+        )
 
     def snapshot_row(self) -> dict[str, Any]:
+        if not self.is_tradable:
+            raise ValueError("cannot serialize a non-tradable or invalid bar")
         return {"timestamp": self.timestamp, **dict(self.values)}
 
 
@@ -97,12 +112,16 @@ def load_daily_bars(
 
 def load_global_trade_dates(
     adjust_type: str,
+    start_date: str,
     max_date: str,
     service: str,
 ) -> list[str]:
     """Load the ordered global calendar used to select future timestamps."""
 
+    normalized_start_date = _normalize_date_value(start_date, "start_date")
     normalized_max_date = _normalize_date_value(max_date, "max_date")
+    if normalized_start_date > normalized_max_date:
+        raise ValueError("start_date must be on or before max_date")
     normalized_adjust_type = _require_non_empty_text("adjust_type", adjust_type)
     normalized_service = _require_non_empty_text("service", service)
 
@@ -110,7 +129,7 @@ def load_global_trade_dates(
         rows = fetch_all(
             conn,
             GLOBAL_TRADE_DATES_SQL,
-            [normalized_adjust_type, normalized_max_date],
+            [normalized_adjust_type, normalized_start_date, normalized_max_date],
         )
 
     dates = [_normalize_date_value(row["trade_date"], "trade_date") for row in rows]
@@ -120,18 +139,24 @@ def load_global_trade_dates(
 
 def prepare_rolling_snapshots(
     asset_ids: Sequence[str],
+    start_date: str,
     max_date: str,
     adjust_type: str,
     service: str,
     input_window: int,
     forecast_horizon: int,
     *,
-    origin_dates: Iterable[str] | None = None,
+    origin_dates: Iterable[str],
 ) -> list[RollingSnapshot]:
     """Load bars and the full-market calendar before building snapshots."""
 
     frame = load_daily_bars(asset_ids, max_date, adjust_type, service)
-    trade_dates = load_global_trade_dates(adjust_type, max_date, service)
+    trade_dates = load_global_trade_dates(
+        adjust_type,
+        start_date,
+        max_date,
+        service,
+    )
     return build_rolling_snapshots(
         frame,
         trade_dates,
@@ -181,30 +206,29 @@ def build_rolling_snapshots(
     input_window: int,
     forecast_horizon: int,
     *,
-    origin_dates: Iterable[str] | None = None,
+    origin_dates: Iterable[str],
 ) -> list[RollingSnapshot]:
     """Build immutable, point-in-time rolling snapshots without future leakage.
 
     ``trade_dates`` is the authoritative, strictly ordered full-market
-    calendar.  It is never inferred from the asset-filtered frame.  By
-    default every calendar date is an origin; ``origin_dates`` can restrict
-    the origins while still requiring all future timestamps to come from the
-    explicit full-market calendar.
+    calendar.  It is never inferred from the asset-filtered frame.
+    ``origin_dates`` is an explicit bounded evaluation window. Every origin
+    must be contained in the full-market calendar, while all future
+    timestamps still come only from that calendar.
     """
 
     _require_positive_int("input_window", input_window)
     _require_positive_int("forecast_horizon", forecast_horizon)
     calendar = _normalize_date_sequence("trade_dates", trade_dates)
-    if origin_dates is None:
-        origins = calendar
-    else:
-        origins = _normalize_date_sequence("origin_dates", origin_dates)
-        missing_origins = sorted(set(origins) - set(calendar))
-        if missing_origins:
-            raise ValueError(
-                "origin_dates must be contained in trade_dates: "
-                + ", ".join(missing_origins)
-            )
+    origins = _normalize_date_sequence("origin_dates", origin_dates)
+    if not origins:
+        raise ValueError("origin_dates must not be empty")
+    missing_origins = sorted(set(origins) - set(calendar))
+    if missing_origins:
+        raise ValueError(
+            "origin_dates must be contained in trade_dates: "
+            + ", ".join(missing_origins)
+        )
     _require_frame_columns(frame, REQUIRED_FRAME_COLUMNS)
     if frame.empty:
         return []
@@ -214,53 +238,77 @@ def build_rolling_snapshots(
 
     for asset_id in sorted(asset_ids):
         bars = bars_by_asset.get(asset_id, ())
-        invalid_reason = _first_invalid_reason(bars)
-        valid_bars = tuple(bar for bar in bars if isinstance(bar, _Bar))
-        bars_by_date = {bar.timestamp: bar for bar in valid_bars}
+        bars_by_date: dict[str, tuple[_Bar, ...]] = {}
+        for bar in bars:
+            bars_by_date[bar.timestamp] = bars_by_date.get(bar.timestamp, ()) + (bar,)
 
         for origin in origins:
+            future_start = bisect_right(calendar, origin)
             future_timestamps = tuple(
-                calendar[
-                    bisect_right(calendar, origin) : bisect_right(
-                        calendar, origin
-                    )
-                    + forecast_horizon
-                ]
+                calendar[future_start : future_start + forecast_horizon]
             )
 
-            if invalid_reason is not None:
+            history_candidates = tuple(
+                bar for bar in bars if bar.timestamp <= origin
+            )
+            history_window = history_candidates[-input_window:]
+            history_rows = tuple(
+                bar.snapshot_row() for bar in history_window if bar.is_tradable
+            )
+            history_error = next(
+                (bar.error for bar in history_window if bar.error is not None),
+                None,
+            )
+            if history_error is not None:
                 snapshots.append(
                     _make_snapshot(
                         asset_id=asset_id,
                         origin_date=origin,
-                        history=(),
+                        history=history_rows,
                         future_timestamps=future_timestamps,
                         realized=(),
                         status="invalid_input",
-                        reason=invalid_reason,
+                        reason=history_error,
                     )
                 )
                 continue
 
-            history_bars = tuple(
-                bar for bar in valid_bars if bar.timestamp <= origin
+            suspended_history = next(
+                (
+                    bar
+                    for bar in history_window
+                    if bar.error is None and not bar.is_tradable
+                ),
+                None,
             )
-            history = tuple(
-                bar.snapshot_row()
-                for bar in history_bars[-input_window:]
-            )
-
-            if len(history_bars) < input_window:
+            if suspended_history is not None:
                 snapshots.append(
                     _make_snapshot(
                         asset_id=asset_id,
                         origin_date=origin,
-                        history=history,
+                        history=history_rows,
                         future_timestamps=future_timestamps,
                         realized=(),
                         status="insufficient_input",
                         reason=(
-                            f"only {len(history_bars)} history bars available; "
+                            "suspended/non-tradable history bar at "
+                            f"{suspended_history.timestamp}"
+                        ),
+                    )
+                )
+                continue
+
+            if len(history_rows) < input_window:
+                snapshots.append(
+                    _make_snapshot(
+                        asset_id=asset_id,
+                        origin_date=origin,
+                        history=history_rows,
+                        future_timestamps=future_timestamps,
+                        realized=(),
+                        status="insufficient_input",
+                        reason=(
+                            f"only {len(history_rows)} tradable history bars available; "
                             f"input_window={input_window}"
                         ),
                     )
@@ -269,30 +317,65 @@ def build_rolling_snapshots(
 
             realized_rows: list[dict[str, Any]] = []
             missing_truth: str | None = None
+            suspended_truth: str | None = None
+            invalid_truth: str | None = None
             for timestamp in future_timestamps:
-                bar = bars_by_date.get(timestamp)
-                if bar is None:
+                timestamp_bars = bars_by_date.get(timestamp, ())
+                if not timestamp_bars:
                     missing_truth = timestamp
                     break
-                realized_rows.append(bar.snapshot_row())
+                invalid_bar = next(
+                    (bar for bar in timestamp_bars if bar.error is not None),
+                    None,
+                )
+                if invalid_bar is not None:
+                    invalid_truth = invalid_bar.error
+                    break
+                suspended_bar = next(
+                    (bar for bar in timestamp_bars if not bar.is_tradable),
+                    None,
+                )
+                if suspended_bar is not None:
+                    suspended_truth = timestamp
+                    break
+                realized_rows.append(timestamp_bars[0].snapshot_row())
+
+            if invalid_truth is not None:
+                snapshots.append(
+                    _make_snapshot(
+                        asset_id=asset_id,
+                        origin_date=origin,
+                        history=history_rows,
+                        future_timestamps=future_timestamps,
+                        realized=tuple(realized_rows),
+                        status="invalid_input",
+                        reason=invalid_truth,
+                    )
+                )
+                continue
 
             if (
                 len(future_timestamps) < forecast_horizon
                 or missing_truth is not None
+                or suspended_truth is not None
             ):
                 reason = (
                     f"missing real bar for future timestamp {missing_truth}"
                     if missing_truth is not None
                     else (
-                        f"only {len(future_timestamps)} future timestamps available; "
-                        f"forecast_horizon={forecast_horizon}"
+                        f"suspended/non-tradable future bar at {suspended_truth}"
+                        if suspended_truth is not None
+                        else (
+                            f"only {len(future_timestamps)} future timestamps available; "
+                            f"forecast_horizon={forecast_horizon}"
+                        )
                     )
                 )
                 snapshots.append(
                     _make_snapshot(
                         asset_id=asset_id,
                         origin_date=origin,
-                        history=history,
+                        history=history_rows,
                         future_timestamps=future_timestamps,
                         realized=tuple(realized_rows),
                         status="insufficient_truth",
@@ -305,7 +388,7 @@ def build_rolling_snapshots(
                 _make_snapshot(
                     asset_id=asset_id,
                     origin_date=origin,
-                    history=history,
+                    history=history_rows,
                     future_timestamps=future_timestamps,
                     realized=tuple(realized_rows),
                     status="ready",
@@ -358,12 +441,9 @@ def _make_snapshot(
 
 def _normalize_bars(
     frame: pd.DataFrame,
-) -> tuple[dict[str, tuple[object, ...]], set[str]]:
-    bars: dict[str, list[object]] = {}
+) -> tuple[dict[str, tuple[_Bar, ...]], set[str]]:
+    bars: dict[str, list[_Bar]] = {}
     asset_ids: set[str] = set()
-    seen_dates: dict[str, set[str]] = {}
-    previous_dates: dict[str, str] = {}
-    invalid_reasons: dict[str, str] = {}
 
     for index, row in frame.iterrows():
         raw_asset_id = row["asset_id"]
@@ -373,40 +453,46 @@ def _normalize_bars(
             raise ValueError(f"invalid asset_id at frame row {index}: {exc}") from exc
         asset_ids.add(asset_id)
         bars.setdefault(asset_id, [])
-        seen_dates.setdefault(asset_id, set())
 
-        try:
-            timestamp = _normalize_date_value(
-                row["trade_date"], f"frame row {index}.trade_date"
-            )
-        except ValueError as exc:
-            invalid_reasons.setdefault(asset_id, str(exc))
-            continue
-        if timestamp in seen_dates[asset_id]:
-            invalid_reasons.setdefault(
-                asset_id,
-                f"duplicate trade_date {timestamp} for asset {asset_id}",
-            )
-        elif (
-            asset_id in previous_dates
-            and timestamp <= previous_dates[asset_id]
-        ):
-            invalid_reasons.setdefault(
-                asset_id,
-                f"trade dates for asset {asset_id} must be strictly increasing",
-            )
-        seen_dates[asset_id].add(timestamp)
-        previous_dates[asset_id] = timestamp
+        timestamp = _normalize_date_value(
+            row["trade_date"], f"frame row {index}.trade_date"
+        )
 
+        error: str | None = None
         try:
             values = _normalize_history_values(row, asset_id, timestamp)
         except ValueError as exc:
-            invalid_reasons.setdefault(asset_id, str(exc))
-            continue
-        bars[asset_id].append(_Bar(asset_id, timestamp, values))
+            values = None
+            error = str(exc)
+        bars[asset_id].append(
+            _Bar(
+                asset_id=asset_id,
+                timestamp=timestamp,
+                values=values,
+                trade_status=row["trade_status"],
+                error=error,
+            )
+        )
 
-    for asset_id, reason in invalid_reasons.items():
-        bars[asset_id].append(reason)
+    for asset_id, asset_bars in bars.items():
+        positions_by_date: dict[str, list[int]] = {}
+        for position, bar in enumerate(asset_bars):
+            positions_by_date.setdefault(bar.timestamp, []).append(position)
+        for timestamp, positions in positions_by_date.items():
+            if len(positions) <= 1:
+                continue
+            reason = f"duplicate trade_date {timestamp} for asset {asset_id}"
+            for position in positions:
+                asset_bars[position] = _with_error(asset_bars[position], reason)
+
+        previous_timestamp: str | None = None
+        for position, bar in enumerate(asset_bars):
+            if previous_timestamp is not None and bar.timestamp <= previous_timestamp:
+                reason = (
+                    f"trade dates for asset {asset_id} must be strictly increasing"
+                )
+                asset_bars[position] = _with_error(asset_bars[position], reason)
+            previous_timestamp = bar.timestamp
 
     return (
         {asset_id: tuple(asset_bars) for asset_id, asset_bars in bars.items()},
@@ -414,11 +500,8 @@ def _normalize_bars(
     )
 
 
-def _first_invalid_reason(bars: Sequence[object]) -> str | None:
-    for bar in bars:
-        if isinstance(bar, str):
-            return bar
-    return None
+def _with_error(bar: _Bar, reason: str) -> _Bar:
+    return replace(bar, error=bar.error or reason)
 
 
 def _normalize_history_values(
@@ -455,6 +538,18 @@ def _finite_float(value: Any, field_name: str) -> float:
     return numeric
 
 
+def _is_tradable_status(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip() == "1"
+    if isinstance(value, bool) or value is None:
+        return False
+    try:
+        numeric = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return False
+    return math.isfinite(numeric) and numeric == 1.0
+
+
 def _normalize_date_sequence(field_name: str, values: Iterable[str]) -> tuple[str, ...]:
     if isinstance(values, (str, bytes)):
         raise ValueError(f"{field_name} must be an iterable of ISO date strings")
@@ -481,6 +576,12 @@ def _require_strictly_increasing(field_name: str, values: Sequence[str]) -> None
 
 
 def _normalize_date_value(value: Any, field_name: str) -> str:
+    try:
+        missing = bool(pd.isna(value))
+    except (TypeError, ValueError):
+        missing = False
+    if missing:
+        raise ValueError(f"{field_name} must be an ISO date")
     if isinstance(value, bool) or value is None:
         raise ValueError(f"{field_name} must be an ISO date")
     if isinstance(value, datetime):
@@ -494,7 +595,10 @@ def _normalize_date_value(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be an ISO date")
     try:
-        return pd.Timestamp(value.strip()).date().isoformat()
+        timestamp = pd.Timestamp(value.strip())
+        if pd.isna(timestamp):
+            raise ValueError(f"{field_name} must be an ISO date")
+        return timestamp.date().isoformat()
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} must be an ISO date") from exc
 

@@ -56,7 +56,7 @@ def make_daily_frame(
             "close": closes,
             "volume": 1_000.0 + index,
             "amount": 100_000.0 + index * 100.0,
-            "trade_status": "normal",
+            "trade_status": "1",
             "is_st": False,
         }
     )
@@ -79,6 +79,7 @@ def test_build_snapshots_uses_only_bars_at_or_before_origin():
         trade_dates=make_trade_dates(20),
         input_window=5,
         forecast_horizon=3,
+        origin_dates=["2024-01-15"],
     )
 
     snapshot = next(
@@ -109,6 +110,7 @@ def test_missing_history_is_statused_without_padding():
         trade_dates=make_trade_dates(7),
         input_window=5,
         forecast_horizon=3,
+        origin_dates=["2024-01-03"],
     )
 
     snapshot = next(
@@ -135,6 +137,7 @@ def test_missing_truth_is_statused_without_padding():
         trade_dates=make_trade_dates(7),
         input_window=3,
         forecast_horizon=3,
+        origin_dates=["2024-01-03"],
     )
 
     snapshot = next(
@@ -174,6 +177,7 @@ def test_explicit_global_calendar_detects_missing_asset_truth_without_padding():
         trade_dates=global_calendar,
         input_window=3,
         forecast_horizon=3,
+        origin_dates=["2024-01-03"],
     )
     snapshot = next(
         snapshot for snapshot in snapshots if snapshot.origin_date == "2024-01-03"
@@ -194,6 +198,7 @@ def test_input_fingerprint_changes_when_a_history_value_changes():
         trade_dates=make_trade_dates(10),
         input_window=5,
         forecast_horizon=1,
+        origin_dates=["2024-01-06"],
     )
     first = next(
         snapshot for snapshot in first_snapshots if snapshot.origin_date == "2024-01-06"
@@ -204,6 +209,7 @@ def test_input_fingerprint_changes_when_a_history_value_changes():
         trade_dates=make_trade_dates(10),
         input_window=5,
         forecast_horizon=1,
+        origin_dates=["2024-01-06"],
     )
     changed = next(
         snapshot
@@ -258,6 +264,7 @@ def test_invalid_ohlc_or_nan_returns_invalid_input(column, value, reason_fragmen
         trade_dates=make_trade_dates(8),
         input_window=3,
         forecast_horizon=1,
+        origin_dates=["2024-01-05"],
     )
     snapshot = next(
         snapshot for snapshot in snapshots if snapshot.origin_date == "2024-01-05"
@@ -276,6 +283,7 @@ def test_duplicate_asset_dates_are_invalid_input():
         trade_dates=make_trade_dates(8),
         input_window=3,
         forecast_horizon=1,
+        origin_dates=["2024-01-05"],
     )
     snapshot = next(
         snapshot for snapshot in snapshots if snapshot.origin_date == "2024-01-05"
@@ -285,15 +293,112 @@ def test_duplicate_asset_dates_are_invalid_input():
     assert snapshot.reason == "duplicate trade_date 2024-01-04 for asset CN:SH:600418"
 
 
+def test_suspended_history_bar_is_insufficient_input_without_substitution():
+    frame = make_daily_frame(periods=8)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-04"), "trade_status"] = "0"
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=1,
+        origin_dates=["2024-01-05"],
+    )[0]
+
+    assert snapshot.status == "insufficient_input"
+    assert [row["timestamp"] for row in snapshot.history] == [
+        "2024-01-03",
+        "2024-01-05",
+    ]
+    assert "suspended" in snapshot.reason
+
+
+def test_suspended_future_bar_is_insufficient_truth_without_realized_padding():
+    frame = make_daily_frame(periods=7)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-04"), "trade_status"] = "0"
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(7),
+        input_window=3,
+        forecast_horizon=3,
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "insufficient_truth"
+    assert snapshot.future_timestamps == (
+        "2024-01-04",
+        "2024-01-05",
+        "2024-01-06",
+    )
+    assert snapshot.realized == ()
+    assert "suspended" in snapshot.reason
+
+
+def test_malformed_bar_only_invalidates_origins_that_use_it():
+    frame = make_daily_frame(periods=12)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-07"), "close"] = float("nan")
+
+    snapshots = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(12),
+        input_window=3,
+        forecast_horizon=1,
+        origin_dates=["2024-01-05", "2024-01-07", "2024-01-10"],
+    )
+    by_origin = {snapshot.origin_date: snapshot for snapshot in snapshots}
+
+    assert by_origin["2024-01-05"].status == "ready"
+    assert by_origin["2024-01-07"].status == "invalid_input"
+    assert "finite" in by_origin["2024-01-07"].reason
+    assert by_origin["2024-01-10"].status == "ready"
+
+
+def test_nat_trade_date_is_rejected_before_string_normalization():
+    frame = make_daily_frame(periods=8)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-04"), "trade_date"] = pd.NaT
+
+    with pytest.raises(ValueError, match="trade_date"):
+        data.build_rolling_snapshots(
+            frame,
+            trade_dates=make_trade_dates(8),
+            input_window=3,
+            forecast_horizon=1,
+            origin_dates=["2024-01-05"],
+        )
+
+
+def test_origin_dates_are_required_and_non_empty():
+    frame = make_daily_frame(periods=8)
+
+    with pytest.raises(TypeError):
+        data.build_rolling_snapshots(
+            frame,
+            trade_dates=make_trade_dates(8),
+            input_window=3,
+            forecast_horizon=1,
+        )
+
+    with pytest.raises(ValueError, match="origin_dates"):
+        data.build_rolling_snapshots(
+            frame,
+            trade_dates=make_trade_dates(8),
+            input_window=3,
+            forecast_horizon=1,
+            origin_dates=[],
+        )
+
+
 def test_missing_required_column_is_rejected():
     frame = make_daily_frame(periods=8).drop(columns=["close"])
 
     with pytest.raises(ValueError, match="required columns.*close"):
         data.build_rolling_snapshots(
             frame,
-            trade_dates=["2024-01-05"],
+            trade_dates=make_trade_dates(8),
             input_window=3,
             forecast_horizon=1,
+            origin_dates=["2024-01-05"],
         )
 
 
@@ -306,6 +411,7 @@ def test_calendar_ordering_is_validated():
             trade_dates=["2024-01-05", "2024-01-04"],
             input_window=3,
             forecast_horizon=1,
+            origin_dates=["2024-01-05"],
         )
 
 
@@ -321,7 +427,7 @@ def test_load_daily_bars_uses_normalized_ids_and_safe_sql(monkeypatch):
             "close": 101.0,
             "volume": 1_000.0,
             "amount": 100_000.0,
-            "trade_status": "normal",
+            "trade_status": "1",
             "is_st": False,
         }
     ]
@@ -373,14 +479,17 @@ def test_load_global_trade_dates_returns_ordered_calendar(monkeypatch):
     monkeypatch.setattr(data, "connect", fake_connect)
     monkeypatch.setattr(data, "fetch_all", fake_fetch_all)
 
-    result = data.load_global_trade_dates("qfq", "2024-01-31", "research")
+    result = data.load_global_trade_dates(
+        "qfq", "2024-01-01", "2024-01-31", "research"
+    )
 
     assert calls["service"] == "research"
     assert result == ["2024-01-02", "2024-01-03"]
     assert "SELECT DISTINCT trade_date::text AS trade_date" in " ".join(
         calls["sql"].split()
     )
-    assert calls["params"] == ["qfq", "2024-01-31"]
+    assert "trade_date BETWEEN %s AND %s" in " ".join(calls["sql"].split())
+    assert calls["params"] == ["qfq", "2024-01-01", "2024-01-31"]
 
 
 def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch):
@@ -392,8 +501,8 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
         calls.append(("bars", asset_ids, max_date, adjust_type, service))
         return frame
 
-    def fake_load_global_trade_dates(adjust_type, max_date, service):
-        calls.append(("calendar", adjust_type, max_date, service))
+    def fake_load_global_trade_dates(adjust_type, start_date, max_date, service):
+        calls.append(("calendar", adjust_type, start_date, max_date, service))
         return global_calendar
 
     def fake_build_rolling_snapshots(
@@ -402,7 +511,7 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
         input_window,
         forecast_horizon,
         *,
-        origin_dates=None,
+        origin_dates,
     ):
         calls.append(
             (
@@ -422,6 +531,7 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
 
     result = data.prepare_rolling_snapshots(
         ("sh.600418",),
+        "2024-01-01",
         "2024-01-31",
         "qfq",
         "research",
@@ -438,7 +548,7 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
         "qfq",
         "research",
     )
-    assert calls[1] == ("calendar", "qfq", "2024-01-31", "research")
+    assert calls[1] == ("calendar", "qfq", "2024-01-01", "2024-01-31", "research")
     assert calls[2][0] == "build"
     assert calls[2][1] is frame
     assert calls[2][2] == global_calendar
