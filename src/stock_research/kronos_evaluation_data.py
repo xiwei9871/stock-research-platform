@@ -539,15 +539,7 @@ def _finite_float(value: Any, field_name: str) -> float:
 
 
 def _is_tradable_status(value: Any) -> bool:
-    if isinstance(value, str):
-        return value.strip() == "1"
-    if isinstance(value, bool) or value is None:
-        return False
-    try:
-        numeric = float(value)
-    except (OverflowError, TypeError, ValueError):
-        return False
-    return math.isfinite(numeric) and numeric == 1.0
+    return isinstance(value, str) and value == "1"
 
 
 def _normalize_date_sequence(field_name: str, values: Iterable[str]) -> tuple[str, ...]:

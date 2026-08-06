@@ -335,6 +335,39 @@ def test_suspended_future_bar_is_insufficient_truth_without_realized_padding():
     assert "suspended" in snapshot.reason
 
 
+@pytest.mark.parametrize(
+    ("trade_status", "expected_status"),
+    [
+        ("1", "ready"),
+        (None, "insufficient_truth"),
+        (1, "insufficient_truth"),
+        (1.0, "insufficient_truth"),
+        (" 1 ", "insufficient_truth"),
+    ],
+)
+def test_only_exact_string_one_is_tradable(trade_status, expected_status):
+    frame = make_daily_frame(periods=7)
+    frame["trade_status"] = frame["trade_status"].astype(object)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-04"), "trade_status"] = (
+        trade_status
+    )
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(7),
+        input_window=3,
+        forecast_horizon=3,
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == expected_status
+    if expected_status == "ready":
+        assert len(snapshot.realized) == 3
+    else:
+        assert snapshot.realized == ()
+        assert "suspended" in snapshot.reason
+
+
 def test_malformed_bar_only_invalidates_origins_that_use_it():
     frame = make_daily_frame(periods=12)
     frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-07"), "close"] = float("nan")
