@@ -20,9 +20,21 @@ const chartMocks = vi.hoisted(() => {
       applyOptions: vi.fn()
     }))
   };
+  const forecastCandleSeries = {
+    setData: vi.fn()
+  };
+  const forecastLineSeries = {
+    setData: vi.fn()
+  };
+  let candlestickSeriesCount = 0;
   const panes = [{ setStretchFactor: vi.fn() }, { setStretchFactor: vi.fn() }];
   const chart = {
-    addSeries: vi.fn((definition: string) => (definition === 'HistogramSeries' ? volumeSeries : candleSeries)),
+    addSeries: vi.fn((definition: string) => {
+      if (definition === 'HistogramSeries') return volumeSeries;
+      if (definition === 'LineSeries') return forecastLineSeries;
+      candlestickSeriesCount += 1;
+      return candlestickSeriesCount === 1 ? candleSeries : forecastCandleSeries;
+    }),
     applyOptions: vi.fn(),
     panes: vi.fn(() => panes),
     remove: vi.fn(),
@@ -33,16 +45,23 @@ const chartMocks = vi.hoisted(() => {
   return {
     chart,
     candleSeries,
+    forecastCandleSeries,
+    forecastLineSeries,
     volumeSeries,
     panes,
     timeScale,
     createChart: vi.fn(() => chart),
-    createSeriesMarkers: vi.fn()
+    createSeriesMarkers: vi.fn(),
+    resetSeries: () => {
+      candlestickSeriesCount = 0;
+    }
   };
 });
 
 vi.mock('lightweight-charts', () => ({
   CandlestickSeries: 'CandlestickSeries',
+  LineSeries: 'LineSeries',
+  LineStyle: { Dashed: 2, Dotted: 3 },
   HistogramSeries: 'HistogramSeries',
   createChart: chartMocks.createChart,
   createSeriesMarkers: chartMocks.createSeriesMarkers
@@ -63,6 +82,7 @@ function latestTickMarkFormatter() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chartMocks.resetSeries();
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
     value: 720
@@ -75,6 +95,39 @@ afterEach(() => {
 });
 
 describe('AssetChart', () => {
+  it('adds Kronos forecast candles to the main price chart and extends the visible range', async () => {
+    const forecast = {
+      representative_path: [
+        { timestamp: '2026-06-03', open: 11.2, high: 11.8, low: 11, close: 11.6 },
+        { timestamp: '2026-06-04', open: 11.6, high: 12.2, low: 11.4, close: 12 }
+      ],
+      p50: [11.5, 11.9]
+    };
+
+    render(
+      <AssetChart
+        bars={[
+          { time: '2026-06-01', open: 10, high: 11, low: 9.8, close: 10.5, volume: 100, amount: 1000 },
+          { time: '2026-06-02', open: 10.5, high: 11.2, low: 10.2, close: 11, volume: 120, amount: 1300 }
+        ]}
+        {...({ kronosForecast: forecast } as any)}
+      />
+    );
+
+    await waitFor(() => expect(chartMocks.forecastCandleSeries.setData).toHaveBeenCalledTimes(1));
+
+    expect(chartMocks.forecastCandleSeries.setData).toHaveBeenCalledWith([
+      { time: '2026-06-03', open: 11.2, high: 11.8, low: 11, close: 11.6 },
+      { time: '2026-06-04', open: 11.6, high: 12.2, low: 11.4, close: 12 }
+    ]);
+    expect(chartMocks.forecastLineSeries.setData).toHaveBeenCalledWith([
+      { time: '2026-06-03', value: 11.5 },
+      { time: '2026-06-04', value: 11.9 }
+    ]);
+    expect(chartMocks.timeScale.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: 0, to: 3 });
+    expect(screen.getByRole('note', { name: 'Kronos预测已叠加到价格走势' })).toBeInTheDocument();
+  });
+
   it('configures the built-in time axis to avoid clipped edge labels and uneven tick density', () => {
     render(
       <AssetChart

@@ -3,6 +3,8 @@ import {
   createChart,
   createSeriesMarkers,
   HistogramSeries,
+  LineSeries,
+  LineStyle,
   type IChartApi,
   type SeriesMarker,
   type Time
@@ -10,6 +12,7 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { KronosForecastPeriod } from '../api/kronos';
 import type { BarPoint } from '../api/types';
 import { toAlignedPriceVolumeData } from './chartData';
 
@@ -19,6 +22,7 @@ type ChartTimeAxisPeriod = '1D' | '1W' | '1M' | 'intraday';
 type AssetChartProps = {
   bars: BarPoint[];
   markers?: SeriesMarker<Time>[];
+  kronosForecast?: KronosForecastPeriod | null;
   visibleBarCount?: number;
   timeAxisMode?: ChartTimeAxisMode;
   timeAxisPeriod?: ChartTimeAxisPeriod;
@@ -65,6 +69,46 @@ function normalizeBarTime(input: string): Time | null {
   }
 
   return Math.floor(milliseconds / 1000) as Time;
+}
+
+function comparableTime(time: Time) {
+  if (typeof time === 'string') {
+    const milliseconds = Date.parse(`${time}T00:00:00Z`);
+    return Number.isNaN(milliseconds) ? Number.NEGATIVE_INFINITY : milliseconds;
+  }
+  return Number(time) * 1000;
+}
+
+function forecastQuantile(forecast: KronosForecastPeriod | null | undefined, name: 'p10' | 'p50' | 'p90') {
+  const values = forecast?.[name] ?? forecast?.summary?.close?.[name];
+  if (!Array.isArray(values)) {
+    return null;
+  }
+  const normalized = values.map((value) => Number(value));
+  return normalized.every((value) => Number.isFinite(value)) ? normalized : null;
+}
+
+function toForecastCandles(forecast: KronosForecastPeriod | null | undefined, lastHistoryTime?: Time) {
+  const lastHistoryComparable = lastHistoryTime === undefined ? null : comparableTime(lastHistoryTime);
+  return (forecast?.representative_path ?? [])
+    .map((bar) => {
+      const time = normalizeBarTime(bar.timestamp);
+      if (
+        time === null ||
+        ![bar.open, bar.high, bar.low, bar.close].every((value) => Number.isFinite(Number(value))) ||
+        (lastHistoryComparable !== null && comparableTime(time) <= lastHistoryComparable)
+      ) {
+        return null;
+      }
+      return {
+        time,
+        open: Number(bar.open),
+        high: Number(bar.high),
+        low: Number(bar.low),
+        close: Number(bar.close)
+      };
+    })
+    .filter((bar): bar is { time: Time; open: number; high: number; low: number; close: number } => bar !== null);
 }
 
 type ChartTimeContext = {
@@ -257,7 +301,14 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function AssetChart({ bars, markers, visibleBarCount, timeAxisMode = 'daily', timeAxisPeriod }: AssetChartProps) {
+export function AssetChart({
+  bars,
+  markers,
+  kronosForecast = null,
+  visibleBarCount,
+  timeAxisMode = 'daily',
+  timeAxisPeriod
+}: AssetChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const windowDragRef = useRef<WindowDragState | null>(null);
@@ -272,6 +323,11 @@ export function AssetChart({ bars, markers, visibleBarCount, timeAxisMode = 'dai
     () => toAlignedPriceVolumeData(bars, chartTimeContext.resolveTime),
     [bars, chartTimeContext]
   );
+  const forecastCandleData = useMemo(
+    () => toForecastCandles(kronosForecast, priceVolumeData.candles.at(-1)?.time),
+    [kronosForecast, priceVolumeData.candles]
+  );
+  const forecastCount = forecastCandleData.length;
   const windowSize =
     visibleBarCount && priceVolumeData.chartPointCount > visibleBarCount
       ? visibleBarCount
@@ -414,6 +470,51 @@ export function AssetChart({ bars, markers, visibleBarCount, timeAxisMode = 'dai
       createSeriesMarkers(candleSeries, chartMarkers);
     }
 
+    if (forecastCandleData.length > 0) {
+      const forecastSeries = chart.addSeries(
+        CandlestickSeries,
+        {
+          upColor: '#8b5cf6',
+          downColor: '#8b5cf6',
+          borderVisible: false,
+          wickUpColor: '#7c3aed',
+          wickDownColor: '#7c3aed',
+          lastValueVisible: false,
+          priceLineVisible: false
+        },
+        0
+      );
+      forecastSeries.setData(forecastCandleData);
+
+      const addForecastLine = (name: 'p10' | 'p50' | 'p90', color: string, lineStyle: LineStyle) => {
+        const values = forecastQuantile(kronosForecast, name);
+        if (!values || values.length !== forecastCandleData.length) {
+          return;
+        }
+        const lineSeries = chart.addSeries(
+          LineSeries,
+          {
+            color,
+            lineWidth: name === 'p50' ? 2 : 1,
+            lineStyle,
+            lastValueVisible: false,
+            priceLineVisible: false
+          },
+          0
+        );
+        lineSeries.setData(
+          forecastCandleData.map((bar, index) => ({
+            time: bar.time,
+            value: values[index]
+          }))
+        );
+      };
+
+      addForecastLine('p10', '#f59e0b', LineStyle.Dashed);
+      addForecastLine('p50', '#7c3aed', LineStyle.Dotted);
+      addForecastLine('p90', '#0ea5e9', LineStyle.Dashed);
+    }
+
     const volumeSeries = chart.addSeries(HistogramSeries, {
       lastValueVisible: false,
       priceFormat: { type: 'volume' },
@@ -482,25 +583,30 @@ export function AssetChart({ bars, markers, visibleBarCount, timeAxisMode = 'dai
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeAxisPeriod, chartTimeContext, markers, priceVolumeData, timeAxisMode]);
+  }, [activeAxisPeriod, chartTimeContext, forecastCandleData, kronosForecast, markers, priceVolumeData, timeAxisMode]);
 
   useEffect(() => {
     if (!chartRef.current || priceVolumeData.chartPointCount === 0) {
       return;
     }
-    if (windowSize < priceVolumeData.chartPointCount) {
+    if (windowSize < priceVolumeData.chartPointCount || forecastCount > 0) {
       chartRef.current.timeScale().setVisibleLogicalRange({
         from: safeRangeStart,
-        to: safeRangeStart + windowSize - 1
+        to: safeRangeStart + windowSize + forecastCount - 1
       });
     } else {
       chartRef.current.timeScale().fitContent();
     }
-  }, [priceVolumeData.chartPointCount, safeRangeStart, windowSize]);
+  }, [forecastCount, priceVolumeData.chartPointCount, safeRangeStart, windowSize]);
 
   return (
     <div className="asset-chart-shell">
       <div className="asset-chart" ref={containerRef} />
+      {forecastCount > 0 ? (
+        <p className="muted asset-chart-forecast-note" role="note" aria-label="Kronos预测已叠加到价格走势">
+          紫色K线为Kronos预测，虚线为P10/P50/P90收盘区间。
+        </p>
+      ) : null}
       {hoverData ? (
         <div
           className="asset-chart-tooltip"

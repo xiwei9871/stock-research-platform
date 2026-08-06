@@ -49,7 +49,7 @@ export function KronosPredictionChart({ historyBars, forecast, overlayHistory }:
       ...historyBars.slice(-history.length).map((bar) => shortTime(bar.time)),
       ...futureBars.map((bar) => shortTime(bar.timestamp))
     ];
-    const prefix = Array.from({ length: history.length }, () => null);
+    const prefix = Array.from({ length: history.length }, () => '-');
     const p10 = forecastQuantile(forecast, 'p10');
     const p50 = forecastQuantile(forecast, 'p50');
     const p90 = forecastQuantile(forecast, 'p90');
@@ -59,7 +59,7 @@ export function KronosPredictionChart({ historyBars, forecast, overlayHistory }:
       series.push({
         type: 'candlestick',
         name: '历史K线',
-        data: [...history, ...Array.from({ length: futureBars.length }, () => null)],
+        data: [...history, ...Array.from({ length: futureBars.length }, () => '-')],
         itemStyle: {
           color: '#ef4444',
           color0: '#16a34a',

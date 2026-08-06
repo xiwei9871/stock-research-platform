@@ -20,6 +20,7 @@ import type {
   StockMarketContextHeatmapPayload
 } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
+import type { KronosForecastPeriod } from '../api/kronos';
 import { OperatorDecisionPanel } from './OperatorDecisionPanel';
 import { BusinessQualitySection } from './stock-workspace/BusinessQualitySection';
 import { CompanyBasicsSection } from './stock-workspace/CompanyBasicsSection';
@@ -500,6 +501,7 @@ export function StockWorkspace({
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
   const [chartBars, setChartBars] = useState<BarPoint[]>([]);
+  const [kronosDailyForecast, setKronosDailyForecast] = useState<KronosForecastPeriod | null>(null);
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
@@ -582,6 +584,7 @@ export function StockWorkspace({
       setIsLoading(true);
       setError(null);
       setNewsError(null);
+      setKronosDailyForecast(null);
       setAssetId(normalizedAssetId);
 
       try {
@@ -1324,6 +1327,7 @@ export function StockWorkspace({
             {!isChartLoading && chartBars.length > 0 ? (
               <AssetChart
                 bars={chartBars}
+                kronosForecast={chartResolution === '1D' ? kronosDailyForecast : null}
                 timeAxisMode={isIntradayChartActive ? 'intraday' : 'daily'}
                 timeAxisPeriod={chartAxisPeriod}
                 visibleBarCount={STOCK_CHART_VISIBLE_BARS}
@@ -1334,6 +1338,7 @@ export function StockWorkspace({
               <KronosPredictionPanel
                 assetId={profile.canonical_asset_id}
                 historyBars={chartResolution === '1D' ? chartBars : []}
+                onDailyForecastChange={setKronosDailyForecast}
                 showHistory={chartResolution === '1D'}
               />
             ) : null}

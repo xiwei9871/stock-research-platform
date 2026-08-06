@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KronosPredictionPanel } from '../src/components/stock-workspace/KronosPredictionPanel';
 
 const apiMocks = vi.hoisted(() => ({
   createKronosPrediction: vi.fn(),
-  fetchKronosRun: vi.fn()
+  fetchKronosRun: vi.fn(),
+  fetchLatestKronosPrediction: vi.fn()
 }));
 
 vi.mock('../src/api/kronos', () => apiMocks);
@@ -40,14 +41,32 @@ function makeRun() {
 describe('KronosPredictionPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.fetchLatestKronosPrediction.mockRejectedValue(new Error('no cached prediction'));
     apiMocks.createKronosPrediction.mockResolvedValue(makeRun());
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('uses an existing completed prediction instead of starting a new run', async () => {
+    const cachedRun = makeRun();
+    apiMocks.fetchLatestKronosPrediction.mockResolvedValue(cachedRun);
+
+    render(<KronosPredictionPanel assetId="CN:SH:600418" />);
+
+    expect(await screen.findByText('已完成')).toBeInTheDocument();
+    expect(apiMocks.fetchLatestKronosPrediction).toHaveBeenCalledWith('600418');
+    expect(apiMocks.createKronosPrediction).not.toHaveBeenCalled();
+  });
+
   it('automatically submits the six-digit stock code and renders the completed prediction', async () => {
+    const onDailyForecastChange = vi.fn();
     render(
       <KronosPredictionPanel
         assetId="CN:SH:600418"
         historyBars={[{ time: '2026-08-05', open: 9, high: 10, low: 8.5, close: 9.5, volume: 1, amount: 2 }]}
+        onDailyForecastChange={onDailyForecastChange}
         showHistory
       />
     );
@@ -56,6 +75,7 @@ describe('KronosPredictionPanel', () => {
     expect(screen.getByText('数据截至 2026-08-05 15:00:00 · 20条采样路径')).toBeInTheDocument();
     expect(screen.getByTestId('kronos-prediction-chart')).toBeInTheDocument();
     expect(apiMocks.createKronosPrediction).toHaveBeenCalledWith('600418', { force: false });
+    expect(onDailyForecastChange).toHaveBeenLastCalledWith(makeRun().result.daily);
   });
 
   it('shows a clear diagnostic when the asset is not an A-share code', async () => {
@@ -65,4 +85,3 @@ describe('KronosPredictionPanel', () => {
     expect(apiMocks.createKronosPrediction).not.toHaveBeenCalled();
   });
 });
-
