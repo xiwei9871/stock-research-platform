@@ -3209,8 +3209,11 @@ def _prepare_report_artifacts_for_generation_locked(
     """Migrate or remove legacy report files before strict validation.
 
     Returns ``True`` only for a complete, same-generation four-file report
-    set that still needs semantic comparison against newly derived content.
-    Such a set is never silently overwritten.
+    set that still needs semantic comparison against newly derived content
+    during report construction.  A run/resume treats a digest-less legacy
+    bundle as unauthenticated and removes it through the durable invalidation
+    transaction before continuing.  Current digest-backed bundles are
+    authenticated before this legacy branch and still fail closed on edits.
     """
 
     paths = [output_dir / filename for filename in _REPORT_PUBLISHED_FILENAMES]
@@ -3243,9 +3246,8 @@ def _prepare_report_artifacts_for_generation_locked(
         _invalidate_derived_report_artifacts_locked(output_dir)
         return False
     if not for_build:
-        raise ValueError(
-            "same-generation legacy report artifacts require build_report migration"
-        )
+        _invalidate_derived_report_artifacts_locked(output_dir)
+        return False
     return True
 
 

@@ -1796,6 +1796,32 @@ def test_legacy_four_file_report_migrates_to_authenticated_digest(
     assert digest["schema_version"] == 2
 
 
+def test_run_model_migrates_legacy_report_bundle_without_build_report(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+    (output_dir / runner.REPORT_DIGEST_FILENAME).unlink()
+
+    result = run_model(
+        config,
+        model="small",
+        output_dir=output_dir,
+        client=FakeClient(),
+    )
+
+    assert result.cache_hit_count == len(config.asset_ids)
+    for filename in runner._REPORT_PUBLISHED_FILENAMES:
+        assert not (output_dir / filename).exists()
+
+
 def test_legacy_same_generation_report_tampering_is_not_overwritten(
     prepared_experiment,
 ):
