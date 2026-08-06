@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BarPoint } from '../../api/types';
 import {
   createKronosPrediction,
+  fetchLatestKronosPrediction,
   fetchKronosRun,
   type KronosForecastPeriod,
   type KronosForecastPeriodKey,
@@ -22,6 +23,7 @@ const PERIODS: Array<{ key: KronosForecastPeriodKey; label: string }> = [
 type KronosPredictionPanelProps = {
   assetId: string;
   historyBars?: BarPoint[];
+  onDailyForecastChange?: (forecast: KronosForecastPeriod | null) => void;
   showHistory?: boolean;
 };
 
@@ -40,6 +42,10 @@ function getForecastPeriod(result: KronosPredictionResult | null | undefined, ke
 
 function isAvailable(period: KronosForecastPeriod | null) {
   return Boolean(period?.representative_path?.length);
+}
+
+function hasPredictionResult(run: KronosRun) {
+  return Boolean(run.result && (isAvailable(run.result.daily ?? null) || isAvailable(run.result.intraday ?? null)));
 }
 
 function statusText(status: KronosRunStatus | 'idle') {
@@ -81,6 +87,7 @@ function diagnosticsFromRun(run: KronosRun | null) {
 export function KronosPredictionPanel({
   assetId,
   historyBars = [],
+  onDailyForecastChange,
   showHistory = false
 }: KronosPredictionPanelProps) {
   const [status, setStatus] = useState<KronosRunStatus | 'idle'>('idle');
@@ -145,6 +152,24 @@ export function KronosPredictionPanel({
       }
 
       try {
+        if (!force) {
+          try {
+            const cachedRun = await fetchLatestKronosPrediction(code);
+            if (generation !== generationRef.current) return;
+            if (hasPredictionResult(cachedRun)) {
+              applyRun(cachedRun);
+              return;
+            }
+            if (cachedRun.status === 'queued' || cachedRun.status === 'running') {
+              applyRun(cachedRun);
+              pollTimerRef.current = setTimeout(() => void pollRun(cachedRun.run_id, generation), 1500);
+              return;
+            }
+          } catch {
+            // A missing or unavailable cached run falls through to a new prediction request.
+          }
+        }
+
         const nextRun = await createKronosPrediction(code, { force });
         if (generation !== generationRef.current) return;
         applyRun(nextRun);
@@ -183,6 +208,11 @@ export function KronosPredictionPanel({
 
   const selectedForecast = getForecastPeriod(run?.result, forecastPeriod);
   const selectedLabel = PERIODS.find((item) => item.key === forecastPeriod)?.label ?? forecastPeriod;
+  const dailyForecast = getForecastPeriod(run?.result, 'daily');
+
+  useEffect(() => {
+    onDailyForecastChange?.(dailyForecast);
+  }, [dailyForecast, onDailyForecastChange]);
 
   return (
     <section className="workspace-band kronos-panel" role="region" aria-label="Kronos预测">
@@ -254,4 +284,3 @@ export function KronosPredictionPanel({
     </section>
   );
 }
-

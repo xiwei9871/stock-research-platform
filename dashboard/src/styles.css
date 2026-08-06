@@ -2574,6 +2574,12 @@ body {
   font-size: 12px;
 }
 
+.asset-chart-forecast-note {
+  margin: -2px 0 0;
+  color: #6d28d9;
+  font-size: 12px;
+}
+
 .chart-axis-ticks {
   display: grid;
   gap: 8px;
