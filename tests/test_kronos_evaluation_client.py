@@ -402,6 +402,16 @@ def test_non_200_preserves_structured_json_without_leaking_upstream_text():
     structured_error = {
         "error": "invalid request",
         "request_id": "req-422",
+        "token": "server-token-value",
+        "details": {
+            "authorization": "Bearer upstream-auth-value",
+            "api_key": "upstream-api-key-value",
+            "nested": {
+                "password": "upstream-password-value",
+                "secret": "upstream-secret-value",
+                "diagnostic": "keep this diagnostic",
+            },
+        },
     }
     response = FakeResponse(
         structured_error,
@@ -421,7 +431,19 @@ def test_non_200_preserves_structured_json_without_leaking_upstream_text():
         client.predict_daily(make_snapshot(), model="small", seed=7)
 
     assert exc_info.value.status_code == 422
-    assert exc_info.value.raw_response == structured_error
+    assert exc_info.value.raw_response["error"] == "invalid request"
+    assert exc_info.value.raw_response["request_id"] == "req-422"
+    assert exc_info.value.raw_response["token"] == "[REDACTED]"
+    assert exc_info.value.raw_response["details"]["authorization"] == "[REDACTED]"
+    assert exc_info.value.raw_response["details"]["api_key"] == "[REDACTED]"
+    assert exc_info.value.raw_response["details"]["nested"]["password"] == "[REDACTED]"
+    assert exc_info.value.raw_response["details"]["nested"]["secret"] == "[REDACTED]"
+    assert (
+        exc_info.value.raw_response["details"]["nested"]["diagnostic"]
+        == "keep this diagnostic"
+    )
+    assert "server-token-value" not in json.dumps(exc_info.value.raw_response)
+    assert "upstream-auth-value" not in json.dumps(exc_info.value.raw_response)
     assert exc_info.value.raw_body_excerpt is None
     assert "secret-token" not in str(exc_info.value)
     assert "upstream detail" not in str(exc_info.value)
@@ -452,6 +474,55 @@ def test_non_200_preserves_bounded_redacted_excerpt_for_non_json_body():
     assert "secret-token" not in exc_info.value.raw_body_excerpt
     assert "secret-token" not in str(exc_info.value)
     assert "upstream detail" not in str(exc_info.value)
+
+
+def test_structured_502_failed_prediction_is_classified_as_model_error():
+    structured_failure = {
+        "status": "failed",
+        "message": "CUDA inference failed",
+        "diagnostics": {"token": "remote-token", "device": "cuda:0"},
+    }
+    response = FakeResponse(structured_failure, status_code=502)
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError, match="model failure") as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.raw_response["status"] == "failed"
+    assert exc_info.value.raw_response["diagnostics"]["token"] == "[REDACTED]"
+    assert exc_info.value.raw_body_excerpt is None
+
+
+def test_generic_structured_502_remains_an_http_error():
+    response = FakeResponse(
+        {"status": "bad_gateway", "message": "gateway unavailable"},
+        status_code=502,
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError, match="HTTP 502") as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.HTTP
+    assert exc_info.value.code == KronosErrorCode.HTTP_ERROR
+    assert exc_info.value.status_code == 502
 
 
 @pytest.mark.parametrize(
@@ -660,6 +731,52 @@ def test_prediction_requires_semantically_successful_daily_result(
     assert exc_info.value.raw_response == prediction
 
 
+@pytest.mark.parametrize(
+    ("status", "expected_category", "expected_code"),
+    [
+        ("failed", KronosErrorCategory.MODEL, KronosErrorCode.MODEL_ERROR),
+        ("error", KronosErrorCategory.MODEL, KronosErrorCode.MODEL_ERROR),
+        ("unknown", KronosErrorCategory.PROTOCOL, KronosErrorCode.INVALID_RESPONSE),
+        (123, KronosErrorCategory.PROTOCOL, KronosErrorCode.INVALID_RESPONSE),
+        (None, KronosErrorCategory.PROTOCOL, KronosErrorCode.INVALID_RESPONSE),
+    ],
+)
+def test_prediction_status_classification_fails_closed(
+    status, expected_category, expected_code
+):
+    prediction = make_prediction_response()
+    prediction["status"] = status
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == expected_category
+    assert exc_info.value.code == expected_code
+    assert exc_info.value.raw_response == prediction
+
+
+def test_prediction_rejects_unknown_daily_status_as_protocol_error():
+    prediction = make_prediction_response()
+    prediction["daily"]["status"] = "mystery"
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.PROTOCOL
+    assert exc_info.value.code == KronosErrorCode.INVALID_RESPONSE
+    assert exc_info.value.raw_response == prediction
+
+
 @pytest.mark.parametrize("status", ["partial", "complete"])
 def test_prediction_accepts_service_daily_envelope_statuses(status):
     prediction = make_prediction_response(status=status)
@@ -692,11 +809,16 @@ def test_prediction_rejects_failed_service_envelope_statuses(status):
     assert exc_info.value.raw_response == prediction
 
 
-def test_prediction_rejects_missing_top_level_daily_envelope():
+def test_prediction_rejects_explicit_null_daily_before_legacy_fallback():
+    compatibility_response = make_prediction_response(
+        envelope="result",
+        sample_count_location="result",
+    )
     prediction = {
         "status": "partial",
         "sample_count": 20,
         "daily": None,
+        "result": compatibility_response["result"],
         "intraday": None,
     }
     session = FakeSession(

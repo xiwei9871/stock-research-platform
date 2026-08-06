@@ -22,7 +22,25 @@ _MODEL_ALIASES = {
     "kronos-base": "base",
 }
 _MAX_RAW_BODY_EXCERPT = 512
+_REDACTED = "[REDACTED]"
+_SENSITIVE_FIELD_TERMS = frozenset(
+    {
+        "authorization",
+        "token",
+        "secret",
+        "password",
+        "apikey",
+        "accesskey",
+        "refreshtoken",
+        "clientsecret",
+        "credential",
+        "cookie",
+        "privatekey",
+        "passphrase",
+    }
+)
 _PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
+_PREDICTION_FAILURE_STATUSES = frozenset({"failed", "error"})
 _DAILY_FAILURE_STATUSES = frozenset({"error", "unavailable", "failed"})
 
 
@@ -69,7 +87,11 @@ class KronosClientError(RuntimeError):
         self.category = category
         self.code = code
         self.status_code = status_code
-        self.raw_response = raw_response
+        self.raw_response = (
+            _redact_sensitive_json_value(raw_response, token=None)
+            if isinstance(raw_response, Mapping)
+            else raw_response
+        )
         self.raw_body_excerpt = raw_body_excerpt
 
 
@@ -337,7 +359,23 @@ class KronosClient:
                 code=KronosErrorCode.INVALID_RESPONSE,
             )
         if status_code != 200:
-            structured_response = _try_clone_structured_response(response)
+            structured_response = _try_clone_structured_response(
+                response,
+                token=self._headers.get("X-Kronos-Token"),
+            )
+            if (
+                path == "/v1/predict"
+                and status_code == 502
+                and isinstance(structured_response, Mapping)
+                and structured_response.get("status") == "failed"
+            ):
+                raise KronosClientError(
+                    "Kronos /v1/predict remote model failure (HTTP 502)",
+                    category=KronosErrorCategory.MODEL,
+                    code=KronosErrorCode.MODEL_ERROR,
+                    status_code=status_code,
+                    raw_response=structured_response,
+                )
             raise KronosClientError(
                 f"Kronos {path} returned HTTP {status_code}",
                 category=KronosErrorCategory.HTTP,
@@ -404,16 +442,23 @@ def _validate_prediction_response(
     requested_sample_count: int,
 ) -> None:
     status = response.get("status")
-    if not isinstance(status, str) or status not in _PREDICTION_SUCCESS_STATUSES:
-        if status is not None:
-            raise KronosClientError(
-                "Kronos prediction response did not succeed",
-                category=KronosErrorCategory.MODEL,
-                code=KronosErrorCode.MODEL_ERROR,
-                raw_response=response,
-            )
+    if not isinstance(status, str):
         raise KronosClientError(
-            "Kronos prediction response is missing success status",
+            "Kronos prediction response has an invalid status",
+            category=KronosErrorCategory.PROTOCOL,
+            code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+        )
+    if status in _PREDICTION_FAILURE_STATUSES:
+        raise KronosClientError(
+            "Kronos prediction response did not succeed",
+            category=KronosErrorCategory.MODEL,
+            code=KronosErrorCode.MODEL_ERROR,
+            raw_response=response,
+        )
+    if status not in _PREDICTION_SUCCESS_STATUSES:
+        raise KronosClientError(
+            "Kronos prediction response has an unknown status",
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
@@ -428,10 +473,33 @@ def _validate_prediction_response(
             raw_response=response,
         )
     daily_status = daily.get("status")
-    if (
-        isinstance(daily_status, str)
-        and daily_status.strip().lower() in _DAILY_FAILURE_STATUSES
-    ) or daily.get("unavailable") is True or daily.get("error") is not None:
+    if "status" in daily and not isinstance(daily_status, str):
+        raise KronosClientError(
+            "Kronos prediction response daily status is invalid",
+            category=KronosErrorCategory.PROTOCOL,
+            code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+        )
+    if isinstance(daily_status, str) and daily_status in _DAILY_FAILURE_STATUSES:
+        raise KronosClientError(
+            "Kronos prediction response daily forecast is unavailable",
+            category=KronosErrorCategory.MODEL,
+            code=KronosErrorCode.MODEL_ERROR,
+            raw_response=response,
+        )
+    if isinstance(daily_status, str) and daily_status not in {
+        "ok",
+        "partial",
+        "complete",
+        "succeeded",
+    }:
+        raise KronosClientError(
+            "Kronos prediction response daily status is unknown",
+            category=KronosErrorCategory.PROTOCOL,
+            code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+        )
+    if daily.get("unavailable") is True or daily.get("error") is not None:
         raise KronosClientError(
             "Kronos prediction response daily forecast is unavailable",
             category=KronosErrorCategory.MODEL,
@@ -542,8 +610,8 @@ def _validate_prediction_response(
 def _extract_daily_forecast(
     response: Mapping[str, Any],
 ) -> tuple[Any, Mapping[str, Any]]:
-    top_level_daily = response.get("daily")
-    if top_level_daily is not None:
+    if "daily" in response:
+        top_level_daily = response["daily"]
         result = response.get("result")
         return top_level_daily, result if isinstance(result, Mapping) else {}
 
@@ -628,7 +696,12 @@ def _bounded_raw_body_excerpt(body: Any, *, token: str | None) -> str | None:
         excerpt,
     )
     excerpt = re.sub(
-        r"(?i)((?:x-kronos-token|token|api[-_]?key|secret)\s*[:=]\s*)[^\s<>'\";,]+",
+        r"(?i)((?:authorization|x-kronos-token|token|secret|password|api[-_]?key|credential|cookie)\s*[:=]\s*(?:bearer\s+)?)[^\s<>'\";,]+",
+        r"\1[REDACTED]",
+        excerpt,
+    )
+    excerpt = re.sub(
+        r"(?i)(\b(?:bearer)\s+)[^\s<>'\";,]+",
         r"\1[REDACTED]",
         excerpt,
     )
@@ -637,7 +710,11 @@ def _bounded_raw_body_excerpt(body: Any, *, token: str | None) -> str | None:
     return excerpt
 
 
-def _try_clone_structured_response(response: Any) -> dict[str, Any] | None:
+def _try_clone_structured_response(
+    response: Any,
+    *,
+    token: str | None,
+) -> dict[str, Any] | None:
     try:
         raw_response = response.json()
     except (AttributeError, TypeError, ValueError):
@@ -648,7 +725,55 @@ def _try_clone_structured_response(response: Any) -> dict[str, Any] | None:
         return None
     if not isinstance(cloned_response, dict):
         return None
-    return cloned_response
+    return _redact_sensitive_json_value(
+        cloned_response,
+        token=token,
+    )
+
+
+def _redact_sensitive_json_value(value: Any, *, token: str | None) -> Any:
+    if isinstance(value, Mapping):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):  # pragma: no cover - clone validates keys.
+                continue
+            if _is_sensitive_field_name(key):
+                redacted[key] = _REDACTED
+            else:
+                redacted[key] = _redact_sensitive_json_value(item, token=token)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_sensitive_json_value(item, token=token) for item in value]
+    if isinstance(value, str):
+        return _redact_sensitive_text(value, token=token)
+    return value
+
+
+def _is_sensitive_field_name(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]", "", key.lower())
+    return any(term in normalized for term in _SENSITIVE_FIELD_TERMS)
+
+
+def _redact_sensitive_text(value: str, *, token: str | None) -> str:
+    redacted = value
+    if token:
+        redacted = re.sub(
+            re.escape(token),
+            _REDACTED,
+            redacted,
+            flags=re.IGNORECASE,
+        )
+    redacted = re.sub(
+        r"(?i)(\bbearer\s+)[^\s<>'\";,]+",
+        rf"\1{_REDACTED}",
+        redacted,
+    )
+    redacted = re.sub(
+        r"(?i)((?:authorization|token|secret|password|api[-_]?key)\s*[:=]\s*)[^\s<>'\";,]+",
+        rf"\1{_REDACTED}",
+        redacted,
+    )
+    return redacted
 
 
 def _complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
