@@ -345,6 +345,7 @@ class KronosClient:
         _validate_prediction_response(
             result,
             expected_horizon=len(snapshot.future_timestamps),
+            expected_timestamps=tuple(snapshot.future_timestamps),
             requested_sample_count=sample_count,
             redaction_token=redaction_token,
         )
@@ -521,6 +522,7 @@ def _validate_prediction_response(
     response: dict[str, Any],
     *,
     expected_horizon: int,
+    expected_timestamps: tuple[str, ...] | None = None,
     requested_sample_count: int,
     redaction_token: str | None,
 ) -> None:
@@ -651,6 +653,20 @@ def _validate_prediction_response(
                 redaction_token=redaction_token,
             )
 
+    representative_path = daily.get("representative_path")
+    if not _valid_representative_path(
+        representative_path,
+        expected_horizon=expected_horizon,
+        expected_timestamps=expected_timestamps,
+    ):
+        raise KronosClientError(
+            "Kronos prediction response has an invalid representative daily path",
+            category=KronosErrorCategory.PROTOCOL,
+            code=KronosErrorCode.INVALID_RESPONSE,
+            raw_response=response,
+            redaction_token=redaction_token,
+        )
+
     sample_count_fields = _response_fields(
         response,
         result,
@@ -736,6 +752,45 @@ def _find_daily_quantiles(daily: Mapping[str, Any]) -> Mapping[str, Any] | None:
     ):
         return close
     return None
+
+
+def _valid_representative_path(
+    candidate: Any,
+    *,
+    expected_horizon: int,
+    expected_timestamps: tuple[str, ...] | None,
+) -> bool:
+    required_fields = {
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+    }
+    if not isinstance(candidate, (list, tuple)) or len(candidate) != expected_horizon:
+        return False
+    for index, item in enumerate(candidate):
+        if not isinstance(item, Mapping) or set(item) != required_fields:
+            return False
+        timestamp = item.get("timestamp")
+        if not isinstance(timestamp, str) or not timestamp.strip():
+            return False
+        if expected_timestamps is not None and timestamp != expected_timestamps[index]:
+            return False
+        numeric_values = [
+            item.get(field_name)
+            for field_name in ("open", "high", "low", "close", "volume", "amount")
+        ]
+        if any(not _is_finite_number(value) for value in numeric_values):
+            return False
+        open_value, high_value, low_value, close_value = numeric_values[:4]
+        if high_value < max(open_value, close_value):
+            return False
+        if low_value > min(open_value, close_value) or high_value < low_value:
+            return False
+    return True
 
 
 def _response_fields(

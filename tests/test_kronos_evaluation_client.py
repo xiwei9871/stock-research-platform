@@ -198,6 +198,8 @@ def make_prediction_response(
     envelope="service",
     status=None,
     quantiles=None,
+    include_representative_path=True,
+    representative_path=None,
 ):
     quantiles = quantiles or {
         "p10": [1.0, 1.1],
@@ -214,6 +216,27 @@ def make_prediction_response(
 
     if include_horizon:
         daily["horizon"] = horizon
+    if include_representative_path:
+        daily["representative_path"] = representative_path or [
+            {
+                "timestamp": "2025-01-06",
+                "open": 104.0,
+                "high": 106.0,
+                "low": 103.0,
+                "close": 105.0,
+                "volume": 1400.0,
+                "amount": 145000.0,
+            },
+            {
+                "timestamp": "2025-01-07",
+                "open": 105.0,
+                "high": 107.0,
+                "low": 104.0,
+                "close": 106.0,
+                "volume": 1500.0,
+                "amount": 156000.0,
+            },
+        ]
 
     response_sample_count = None
     if envelope == "service":
@@ -1667,6 +1690,63 @@ def test_prediction_accepts_missing_optional_horizon_field():
     client = KronosClient("http://kronos.test", token="secret", session=session)
 
     client.predict_daily(make_snapshot(), model="small", seed=7)
+
+
+def test_prediction_rejects_missing_representative_path():
+    prediction = make_prediction_response(include_representative_path=False)
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction=prediction,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.PROTOCOL
+    assert exc_info.value.code == KronosErrorCode.INVALID_RESPONSE
+
+
+def test_prediction_rejects_malformed_representative_path():
+    prediction = make_prediction_response(
+        representative_path=[
+            {
+                "timestamp": "2025-01-06",
+                "open": 104.0,
+                "high": 103.0,
+                "low": 103.0,
+                "close": 105.0,
+                "volume": 1400.0,
+                "amount": 145000.0,
+            },
+            {
+                "timestamp": "2025-01-07",
+                "open": 105.0,
+                "high": 107.0,
+                "low": 104.0,
+                "close": 106.0,
+                "volume": 1500.0,
+                "amount": 156000.0,
+            },
+        ]
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction=prediction,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.PROTOCOL
+    assert exc_info.value.code == KronosErrorCode.INVALID_RESPONSE
 
 
 def test_model_mismatch_preserves_complete_health_response_on_raw_key_collision():

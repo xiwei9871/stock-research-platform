@@ -74,6 +74,7 @@ MANIFEST_COLUMNS = (
     "error_category",
     "error_code",
     "input_fingerprint",
+    "snapshot_fingerprint",
     "model_identity",
     "weights_identity",
     "parameters_json",
@@ -92,6 +93,7 @@ MANIFEST_COLUMNS = (
     "forecast_fingerprint",
     "realized_fingerprint",
     "cache_hit",
+    "generation",
 )
 
 FORECAST_COLUMNS = (
@@ -142,6 +144,19 @@ REALIZED_COLUMNS = (
     "weights_identity",
     "device",
     "cuda",
+)
+
+_SNAPSHOT_JSON_KEYS = frozenset(
+    {
+        "asset_id",
+        "origin_date",
+        "history",
+        "future_timestamps",
+        "realized",
+        "input_fingerprint",
+        "status",
+        "reason",
+    }
 )
 
 _METRIC_OUTPUT_COLUMNS = (
@@ -219,6 +234,7 @@ class PreparationResult:
     snapshot_count: int
     snapshot_fingerprints: tuple[str, ...]
     status_counts: Mapping[str, int]
+    snapshot_full_fingerprints: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -276,6 +292,22 @@ def prepare_experiment(
         _validate_existing_experiment_config(metadata, config)
         return _existing_preparation_result(normalized_output_dir, metadata, config)
 
+    if normalized_output_dir.exists():
+        try:
+            has_existing_entries = any(normalized_output_dir.iterdir())
+        except OSError as exc:
+            raise FileExistsError(
+                f"cannot safely prepare experiment in {normalized_output_dir}"
+            ) from exc
+        if has_existing_entries:
+            raise FileExistsError(
+                f"output directory is non-empty and lacks {EXPERIMENT_FILENAME}"
+            )
+
+    # Preparation always creates the two required Parquet artifacts.  Check
+    # the real writer before creating any experiment files so a missing
+    # dependency cannot leave a partially prepared directory behind.
+    _load_pyarrow()
     normalized_output_dir.mkdir(parents=True, exist_ok=True)
     loaded = (
         _default_snapshot_loader(config)
@@ -310,20 +342,11 @@ def prepare_experiment(
         for snapshot in snapshots
         for model in config.models
     ]
-    _atomic_write_csv(
-        normalized_output_dir / MANIFEST_FILENAME,
-        manifest_rows,
-        MANIFEST_COLUMNS,
-    )
-    _atomic_write_table(
-        normalized_output_dir / FORECAST_FILENAME,
+    _write_run_artifacts(
+        normalized_output_dir,
+        {row["run_key"]: row for row in manifest_rows},
         [],
-        FORECAST_COLUMNS,
-    )
-    _atomic_write_table(
-        normalized_output_dir / REALIZED_FILENAME,
         [],
-        REALIZED_COLUMNS,
     )
     _atomic_write_json(experiment_path, metadata)
 
@@ -363,8 +386,15 @@ def run_model(
     if not snapshots:
         raise ValueError("prepared experiment has no input snapshots")
 
-    forecast_rows = _read_table(normalized_output_dir / FORECAST_FILENAME)
-    realized_rows = _read_table(normalized_output_dir / REALIZED_FILENAME)
+    forecast_rows, forecast_generation = _read_table_with_generation(
+        normalized_output_dir / FORECAST_FILENAME,
+        FORECAST_COLUMNS,
+    )
+    realized_rows, realized_generation = _read_table_with_generation(
+        normalized_output_dir / REALIZED_FILENAME,
+        REALIZED_COLUMNS,
+    )
+    _validate_artifact_generation(manifest, forecast_generation, realized_generation)
     parameters_by_key = {
         snapshot.key: _prediction_parameters(config, snapshot)
         for snapshot in snapshots
@@ -576,8 +606,22 @@ def build_report(*, output_dir: Path) -> dict[str, Any]:
         metadata,
         report_config,
     )
-    forecast_rows = _read_table(normalized_output_dir / FORECAST_FILENAME)
-    realized_rows = _read_table(normalized_output_dir / REALIZED_FILENAME)
+    forecast_rows, forecast_generation = _read_table_with_generation(
+        normalized_output_dir / FORECAST_FILENAME,
+        FORECAST_COLUMNS,
+    )
+    realized_rows, realized_generation = _read_table_with_generation(
+        normalized_output_dir / REALIZED_FILENAME,
+        REALIZED_COLUMNS,
+    )
+    _validate_artifact_generation(manifest, forecast_generation, realized_generation)
+    _validate_report_artifacts(
+        snapshots,
+        manifest,
+        report_config,
+        forecast_rows,
+        realized_rows,
+    )
 
     horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
     raw_seed = config_payload.get("seed")
@@ -785,13 +829,7 @@ def _validate_prepared_snapshots(
         if snapshot.key in seen_keys:
             raise ValueError(f"duplicate snapshot key {snapshot.key}")
         seen_keys.add(snapshot.key)
-        expected_fingerprint = canonical_json_fingerprint(
-            {
-                "asset_id": snapshot.asset_id,
-                "origin_date": snapshot.origin_date,
-                "history": thaw_json_value(snapshot.history),
-            }
-        )
+        expected_fingerprint = _snapshot_input_fingerprint(snapshot)
         if snapshot.input_fingerprint != expected_fingerprint:
             raise ValueError(f"snapshot {snapshot.key} has an invalid input fingerprint")
     return tuple(normalized)
@@ -818,6 +856,7 @@ def _build_experiment_metadata(
                 "origin_date": snapshot.origin_date,
                 "status": snapshot.status,
                 "input_fingerprint": snapshot.input_fingerprint,
+                "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
             }
             for snapshot in snapshots
         ],
@@ -887,7 +926,14 @@ def _validate_experiment_integrity(
     for item in raw_snapshot_metadata:
         if not isinstance(item, Mapping):
             raise ValueError("experiment snapshot metadata entry is invalid")
-        required_fields = {"key", "asset_id", "origin_date", "status", "input_fingerprint"}
+        required_fields = {
+            "key",
+            "asset_id",
+            "origin_date",
+            "status",
+            "input_fingerprint",
+            "snapshot_fingerprint",
+        }
         if set(item) != required_fields:
             raise ValueError("experiment snapshot metadata fields are invalid")
         entry = {field: _jsonable(item[field]) for field in required_fields}
@@ -935,6 +981,7 @@ def _validate_experiment_integrity(
             "origin_date": snapshot.origin_date,
             "status": snapshot.status,
             "input_fingerprint": snapshot.input_fingerprint,
+            "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         }
         if actual != expected:
             raise ValueError(f"frozen snapshot {snapshot.key} does not match experiment metadata")
@@ -1000,6 +1047,7 @@ def _load_and_validate_manifest(
             or source.get("origin_date") != snapshot.origin_date
             or source.get("model") != model
             or source.get("input_fingerprint") != snapshot.input_fingerprint
+            or source.get("snapshot_fingerprint") != _snapshot_full_fingerprint(snapshot)
             or _parse_json_cell(source.get("parameters_json"))
             != _jsonable(expected_parameters)
             or _as_int(source.get("sample_count")) != config.sample_count
@@ -1055,6 +1103,11 @@ def _existing_preparation_result(
         snapshot_count=int(metadata.get("snapshot_count", len(snapshot_paths))),
         snapshot_fingerprints=fingerprints,
         status_counts=dict(sorted(status_counts.items())),
+        snapshot_full_fingerprints=tuple(
+            item.get("snapshot_fingerprint", "")
+            for item in metadata.get("snapshot_fingerprints", [])
+            if isinstance(item, Mapping)
+        ),
     )
 
 
@@ -1080,6 +1133,10 @@ def _preparation_result_from_paths(
             for item in metadata["snapshot_fingerprints"]
         ),
         status_counts=dict(sorted(status_counts.items())),
+        snapshot_full_fingerprints=tuple(
+            item["snapshot_fingerprint"]
+            for item in metadata["snapshot_fingerprints"]
+        ),
     )
 
 
@@ -1089,6 +1146,8 @@ def _read_frozen_snapshots(output_dir: Path) -> tuple[RollingSnapshot, ...]:
     snapshots: list[RollingSnapshot] = []
     for path in paths:
         payload = _read_json(path)
+        if set(payload) != _SNAPSHOT_JSON_KEYS:
+            raise ValueError(f"frozen snapshot {path.name} has unknown or missing keys")
         try:
             snapshot = RollingSnapshot(
                 asset_id=payload["asset_id"],
@@ -1102,21 +1161,53 @@ def _read_frozen_snapshots(output_dir: Path) -> tuple[RollingSnapshot, ...]:
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"invalid frozen snapshot {path.name}: {exc}") from exc
-        expected_fingerprint = canonical_json_fingerprint(
-            {
-                "asset_id": snapshot.asset_id,
-                "origin_date": snapshot.origin_date,
-                "history": thaw_json_value(snapshot.history),
-            }
-        )
+        expected_fingerprint = _snapshot_input_fingerprint(snapshot)
         if snapshot.input_fingerprint != expected_fingerprint:
             raise ValueError(f"frozen snapshot {path.name} has an invalid fingerprint")
+        expected_full_fingerprint = _snapshot_full_fingerprint(snapshot)
+        payload_full_fingerprint = canonical_json_fingerprint(
+            {
+                "asset_id": payload["asset_id"],
+                "origin_date": payload["origin_date"],
+                "history": payload["history"],
+                "future_timestamps": payload["future_timestamps"],
+                "realized": payload["realized"],
+                "status": payload["status"],
+                "reason": payload["reason"],
+            }
+        )
+        if payload_full_fingerprint != expected_full_fingerprint:
+            raise ValueError(f"frozen snapshot {path.name} has an invalid full fingerprint")
         snapshots.append(snapshot)
     return tuple(snapshots)
 
 
 def _snapshot_filename(snapshot: RollingSnapshot) -> str:
     return f"{snapshot.asset_id}__{snapshot.origin_date}.json"
+
+
+def _snapshot_input_fingerprint(snapshot: RollingSnapshot) -> str:
+    return canonical_json_fingerprint(
+        {
+            "asset_id": snapshot.asset_id,
+            "origin_date": snapshot.origin_date,
+            "history": thaw_json_value(snapshot.history),
+        }
+    )
+
+
+def _snapshot_full_fingerprint(snapshot: RollingSnapshot) -> str:
+    return canonical_json_fingerprint(
+        {
+            "asset_id": snapshot.asset_id,
+            "origin_date": snapshot.origin_date,
+            "history": thaw_json_value(snapshot.history),
+            "future_timestamps": list(snapshot.future_timestamps),
+            "realized": thaw_json_value(snapshot.realized),
+            "status": snapshot.status,
+            "reason": snapshot.reason,
+        }
+    )
 
 
 def _initial_manifest_row(
@@ -1135,6 +1226,7 @@ def _initial_manifest_row(
         "error_category": "",
         "error_code": "",
         "input_fingerprint": snapshot.input_fingerprint,
+        "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         "model_identity": "",
         "weights_identity": "",
         "parameters_json": _canonical_json(_prediction_parameters(config, snapshot)),
@@ -1153,6 +1245,7 @@ def _initial_manifest_row(
         "forecast_fingerprint": "",
         "realized_fingerprint": "",
         "cache_hit": False,
+        "generation": "",
     }
 
 
@@ -1227,6 +1320,7 @@ def _attempt_row_update(
         "error_category": "",
         "error_code": "",
         "input_fingerprint": snapshot.input_fingerprint,
+        "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         "model_identity": _first_identity({}, health, model) or "",
         "weights_identity": _first_weight_identity({}, health) or "",
         "parameters_json": _canonical_json(parameters),
@@ -1245,6 +1339,7 @@ def _attempt_row_update(
         "forecast_fingerprint": "",
         "realized_fingerprint": "",
         "cache_hit": False,
+        "generation": "",
     }
 
 
@@ -1266,6 +1361,7 @@ def _unavailable_row_update(
         "error_category": failure.category,
         "error_code": failure.code,
         "input_fingerprint": snapshot.input_fingerprint,
+        "snapshot_fingerprint": _snapshot_full_fingerprint(snapshot),
         "model_identity": "",
         "weights_identity": "",
         "parameters_json": _canonical_json(parameters),
@@ -1284,6 +1380,7 @@ def _unavailable_row_update(
         "forecast_fingerprint": "",
         "realized_fingerprint": "",
         "cache_hit": False,
+        "generation": "",
     }
 
 
@@ -1298,9 +1395,25 @@ def _manifest_cache_matches(
 ) -> bool:
     if row.get("status") != _SUCCESS_MANIFEST_STATUS:
         return False
+    if (
+        not _valid_iso_timestamp(row.get("started_at"))
+        or not _valid_iso_timestamp(row.get("finished_at"))
+        or _finite_number(row.get("latency_ms")) is None
+        or _finite_number(row.get("latency_ms")) < 0
+        or row.get("reason") not in (None, "")
+        or row.get("error_category") not in (None, "")
+        or row.get("error_code") not in (None, "")
+    ):
+        return False
     if row.get("input_fingerprint") != snapshot.input_fingerprint:
         return False
+    if row.get("snapshot_fingerprint") != _snapshot_full_fingerprint(snapshot):
+        return False
     if row.get("model") != model:
+        return False
+    if row.get("forecast_artifact") != FORECAST_FILENAME:
+        return False
+    if row.get("realized_artifact") != REALIZED_FILENAME:
         return False
     if _parse_json_cell(row.get("parameters_json")) != _jsonable(dict(parameters)):
         return False
@@ -1312,7 +1425,10 @@ def _manifest_cache_matches(
         current_identity = _explicit_identity(health)
         current_weights = _explicit_weight_identity(health)
         if row.get("model_identity") or current_identity:
-            if row.get("model_identity") != (current_identity or ""):
+            if not _identity_values_compatible(
+                row.get("model_identity"),
+                current_identity,
+            ):
                 return False
         if row.get("weights_identity") or current_weights:
             if row.get("weights_identity") != (current_weights or ""):
@@ -1470,15 +1586,126 @@ def _validate_cached_artifact_rows(
     return set(realized_by_horizon) == set(range(1, len(snapshot.realized) + 1))
 
 
+def _validate_artifact_generation(
+    manifest: Mapping[str, Mapping[str, Any]],
+    forecast_generation: str | None,
+    realized_generation: str | None,
+) -> None:
+    manifest_generations = {
+        str(row.get("generation", ""))
+        for row in manifest.values()
+    }
+    if len(manifest_generations) != 1 or "" in manifest_generations:
+        raise ValueError("artifact generation marker is missing or mixed in manifest")
+    manifest_generation = next(iter(manifest_generations))
+    if forecast_generation != manifest_generation or realized_generation != manifest_generation:
+        raise ValueError("artifact generation markers are mixed")
+
+
+def _validate_report_artifacts(
+    snapshots: Sequence[RollingSnapshot],
+    manifest: Mapping[str, Mapping[str, Any]],
+    config: KronosEvaluationConfig,
+    forecast_rows: Sequence[Mapping[str, Any]],
+    realized_rows: Sequence[Mapping[str, Any]],
+) -> None:
+    expected_by_key = {
+        f"{snapshot.key}|{model}": (snapshot, model)
+        for snapshot in snapshots
+        for model in config.models
+    }
+    forecast_by_key: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    realized_by_key: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for artifact_name, rows, grouped in (
+        (FORECAST_FILENAME, forecast_rows, forecast_by_key),
+        (REALIZED_FILENAME, realized_rows, realized_by_key),
+    ):
+        for row in rows:
+            run_key = str(row.get("run_key", ""))
+            if run_key not in expected_by_key:
+                raise ValueError(f"{artifact_name} contains an out-of-experiment run key")
+            grouped[run_key].append(row)
+
+    for run_key, (snapshot, model) in expected_by_key.items():
+        manifest_row = manifest[run_key]
+        status = manifest_row.get("status")
+        if status == _SUCCESS_MANIFEST_STATUS:
+            if not _manifest_cache_matches(
+                manifest_row,
+                snapshot,
+                model,
+                _prediction_parameters(config, snapshot),
+                None,
+                forecast_rows,
+                realized_rows,
+            ):
+                raise ValueError(f"artifact validation failed for successful run {run_key}")
+        elif forecast_by_key.get(run_key) or realized_by_key.get(run_key):
+            raise ValueError(f"failed run {run_key} has stale artifact rows")
+
+
 def _artifact_fingerprint(
     rows: Sequence[Mapping[str, Any]],
     columns: Sequence[str],
 ) -> str:
     canonical_rows = [
-        {column: _jsonable(row.get(column)) for column in columns}
+        {
+            column: _canonical_artifact_value(column, row.get(column))
+            for column in columns
+        }
         for row in _sort_artifact_rows(rows)
     ]
     return canonical_json_fingerprint(canonical_rows)
+
+
+_ARTIFACT_FLOAT_COLUMNS = frozenset(
+    {
+        "representative_open",
+        "representative_high",
+        "representative_low",
+        "representative_close",
+        "representative_volume",
+        "representative_amount",
+        "p10",
+        "p50",
+        "p90",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+    }
+)
+_ARTIFACT_INT_COLUMNS = frozenset({"horizon", "sample_count", "seed"})
+
+
+def _canonical_artifact_value(column: str, value: Any) -> Any:
+    if value is None:
+        return None
+    if column in _ARTIFACT_FLOAT_COLUMNS:
+        numeric = _finite_number(value)
+        return numeric if numeric is not None else _jsonable(value)
+    if column in _ARTIFACT_INT_COLUMNS:
+        integer = _as_int(value)
+        return integer if integer is not None else _jsonable(value)
+    if column == "cuda":
+        return value if isinstance(value, bool) else _jsonable(value)
+    if column in {
+        "asset_id",
+        "origin_date",
+        "model",
+        "run_key",
+        "input_fingerprint",
+        "timestamp",
+        "representative_path_json",
+        "status",
+        "model_identity",
+        "weights_identity",
+        "device",
+    }:
+        return str(value)
+    return _jsonable(value)
 
 
 def _build_artifact_rows(
@@ -1517,7 +1744,7 @@ def _build_artifact_rows(
             raw_response=raw_response,
         )
 
-    _validate_response_model_identity(response_model_metadata, model, raw_response)
+    _validate_response_model_identity(response, health, model, raw_response)
     _validate_response_parameters(
         response,
         expected_horizon=len(snapshot.future_timestamps),
@@ -1633,6 +1860,7 @@ def _build_artifact_rows(
 
 def _extract_quantiles(response: Mapping[str, Any]) -> Mapping[str, Any]:
     daily = _extract_daily(response)
+    result = response.get("result")
     if not isinstance(daily, Mapping):
         raise _RunnerFailure(
             "Kronos prediction response has no daily forecast",
@@ -1758,8 +1986,14 @@ def _extract_representative_path(
                 raw_response=raw_response,
             )
         timestamp = source.get("timestamp")
-        if timestamp is None:
-            timestamp = expected_timestamps[index] if index < len(expected_timestamps) else None
+        if not isinstance(timestamp, str) or not timestamp:
+            raise _RunnerFailure(
+                f"Kronos representative path row {index + 1} has no timestamp",
+                status="protocol_error",
+                category="protocol",
+                code="invalid_representative_path",
+                raw_response=raw_response,
+            )
         row = {"timestamp": timestamp}
         for field_name in ("open", "high", "low", "close", "volume", "amount"):
             numeric = _finite_number(source.get(field_name))
@@ -1842,22 +2076,13 @@ def _validate_forecast_ohlc(
 
 
 def _response_model_metadata(response: Mapping[str, Any]) -> dict[str, Any]:
-    raw = response.get("raw_response")
     metadata: dict[str, Any] = {}
-    for source in (response, raw if isinstance(raw, Mapping) else {}):
-        for key in (
-            "model",
-            "model_identity",
-            "model_name",
-            "weights",
-            "weights_identity",
-            "weights_fingerprint",
-            "device",
-            "cuda",
-            "cuda_available",
-        ):
-            if key in source and key not in metadata:
-                metadata[key] = source[key]
+    for _, key, value in _iter_identity_fields(response):
+        if key not in metadata:
+            metadata[key] = value
+    for _, key, value in _iter_metadata_fields(response):
+        if key not in metadata:
+            metadata[key] = value
     return metadata
 
 
@@ -1865,95 +2090,157 @@ def _validate_health_model_identity(
     health: Mapping[str, Any],
     requested_model: str,
 ) -> None:
-    for field_name in ("model", "model_identity", "model_name"):
-        if field_name not in health or health.get(field_name) in (None, ""):
-            continue
-        normalized = _normalize_model_identity(health.get(field_name))
-        if normalized is None:
-            raise _RunnerFailure(
-                f"Kronos health has unknown {field_name}",
-                status="protocol_error",
-                category="protocol",
-                code="unknown_model_identity",
-                raw_response=health,
-            )
-        if normalized != requested_model:
-            raise _RunnerFailure(
-                "Kronos health model does not match the requested model",
-                status="unavailable",
-                category="model",
-                code="model_mismatch",
-                raw_response=health,
-            )
-    _validate_weights_identity(health, requested_model, health)
+    _validate_model_identity_payloads(
+        (("health", health),),
+        requested_model,
+        health,
+    )
 
 
 def _validate_response_model_identity(
-    response_metadata: Mapping[str, Any],
+    response: Mapping[str, Any],
+    health: Mapping[str, Any],
     requested_model: str,
     raw_response: Mapping[str, Any],
 ) -> None:
-    for field_name in ("model", "model_identity", "model_name"):
-        if field_name not in response_metadata or response_metadata.get(field_name) in (None, ""):
-            continue
-        normalized = _normalize_model_identity(response_metadata.get(field_name))
-        if normalized is None:
+    _validate_model_identity_payloads(
+        (("health", health), ("response", response)),
+        requested_model,
+        raw_response,
+    )
+
+
+def _validate_model_identity_payloads(
+    payloads: Sequence[tuple[str, Mapping[str, Any]]],
+    requested_model: str,
+    raw_response: Mapping[str, Any],
+) -> None:
+    model_records: list[tuple[str, str, str, str | None]] = []
+    weight_records: list[tuple[str, str, str, str | None]] = []
+    for source_name, payload in payloads:
+        for location, field_name, value in _iter_identity_fields(payload):
+            if value in (None, ""):
+                continue
+            if field_name in {"model", "model_identity", "model_name"}:
+                parsed = _model_identity_parts(value)
+                if parsed is None:
+                    raise _RunnerFailure(
+                        f"Kronos {source_name} has unknown {field_name}",
+                        status="protocol_error",
+                        category="protocol",
+                        code="unknown_model_identity",
+                        raw_response=raw_response,
+                    )
+                model_records.append(
+                    (source_name, location, parsed[0], parsed[1])
+                )
+            elif field_name in {
+                "weights",
+                "weights_identity",
+                "weights_fingerprint",
+            }:
+                parsed = _model_identity_parts(value, allow_weight_prefix=True)
+                if parsed is not None:
+                    weight_records.append(
+                        (source_name, location, parsed[0], parsed[1])
+                    )
+
+    for source_name, location, family, _ in model_records:
+        if family != requested_model:
             raise _RunnerFailure(
-                f"Kronos prediction has unknown {field_name}",
-                status="protocol_error",
-                category="protocol",
-                code="unknown_model_identity",
-                raw_response=raw_response,
-            )
-        if normalized != requested_model:
-            raise _RunnerFailure(
-                "Kronos prediction model identity does not match the requested model",
-                status="model_error",
+                f"Kronos {source_name} model identity does not match the requested model",
+                status="model_error" if source_name == "response" else "unavailable",
                 category="model",
-                code="model_identity_mismatch",
+                code="model_identity_mismatch" if source_name == "response" else "model_mismatch",
                 raw_response=raw_response,
             )
-    _validate_weights_identity(response_metadata, requested_model, raw_response)
-
-
-def _validate_weights_identity(
-    metadata: Mapping[str, Any],
-    requested_model: str,
-    raw_response: Mapping[str, Any],
-) -> None:
-    for field_name in ("weights", "weights_identity", "weights_fingerprint"):
-        value = metadata.get(field_name)
-        if value in (None, ""):
-            continue
-        family = _model_family_from_identity(value)
-        if family is not None and family != requested_model:
+    for source_name, location, family, _ in weight_records:
+        if family != requested_model:
             raise _RunnerFailure(
                 "Kronos weights identity does not match the requested model",
-                status="model_error",
+                status="model_error" if source_name == "response" else "unavailable",
                 category="model",
                 code="weights_identity_mismatch",
                 raw_response=raw_response,
             )
-        if family is None and not _is_opaque_weights_identity(value):
-            raise _RunnerFailure(
-                f"Kronos has unknown {field_name}",
-                status="protocol_error",
-                category="protocol",
-                code="unknown_weights_identity",
-                raw_response=raw_response,
-            )
+
+    versioned_records = model_records + weight_records
+    versions = {version for _, _, _, version in versioned_records if version is not None}
+    if len(versions) > 1:
+        raise _RunnerFailure(
+            "Kronos model identities have conflicting versions",
+            status="model_error",
+            category="model",
+            code="model_identity_version_mismatch",
+            raw_response=raw_response,
+        )
 
 
-def _is_opaque_weights_identity(value: Any) -> bool:
-    if isinstance(value, (Mapping, list, tuple)):
-        return True
-    if not isinstance(value, str):
-        return False
-    normalized = value.strip().lower()
-    return bool(
-        re.fullmatch(r"(?:sha(?:256|1|512):)?[0-9a-f]{16,}", normalized)
-        or normalized.startswith(("sha256:", "sha1:", "sha512:", "blake2"))
-    )
+def _iter_identity_fields(
+    value: Any,
+    path: str = "",
+    seen: set[int] | None = None,
+) -> Iterable[tuple[str, str, Any]]:
+    if seen is None:
+        seen = set()
+    if isinstance(value, Mapping):
+        object_id = id(value)
+        if object_id in seen:
+            return
+        seen.add(object_id)
+        for key, item in value.items():
+            if not isinstance(key, str):
+                continue
+            location = f"{path}.{key}" if path else key
+            if key in {
+                "model",
+                "model_identity",
+                "model_name",
+                "weights",
+                "weights_identity",
+                "weights_fingerprint",
+            }:
+                yield location, key, item
+            if isinstance(item, (Mapping, list, tuple)):
+                yield from _iter_identity_fields(item, location, seen)
+    elif isinstance(value, (list, tuple)):
+        object_id = id(value)
+        if object_id in seen:
+            return
+        seen.add(object_id)
+        for index, item in enumerate(value):
+            if isinstance(item, (Mapping, list, tuple)):
+                yield from _iter_identity_fields(item, f"{path}[{index}]", seen)
+
+
+def _iter_metadata_fields(
+    value: Any,
+    path: str = "",
+    seen: set[int] | None = None,
+) -> Iterable[tuple[str, str, Any]]:
+    if seen is None:
+        seen = set()
+    if isinstance(value, Mapping):
+        object_id = id(value)
+        if object_id in seen:
+            return
+        seen.add(object_id)
+        for key, item in value.items():
+            if not isinstance(key, str):
+                continue
+            location = f"{path}.{key}" if path else key
+            if key in {"device", "cuda", "cuda_available"}:
+                yield location, key, item
+            if isinstance(item, (Mapping, list, tuple)):
+                yield from _iter_metadata_fields(item, location, seen)
+    elif isinstance(value, (list, tuple)):
+        object_id = id(value)
+        if object_id in seen:
+            return
+        seen.add(object_id)
+        for index, item in enumerate(value):
+            if isinstance(item, (Mapping, list, tuple)):
+                yield from _iter_metadata_fields(item, f"{path}[{index}]", seen)
 
 
 def _normalize_model_identity(value: Any) -> str | None:
@@ -1961,19 +2248,38 @@ def _normalize_model_identity(value: Any) -> str | None:
 
 
 def _model_family_from_identity(value: Any) -> str | None:
+    parsed = _model_identity_parts(value, allow_weight_prefix=True)
+    return parsed[0] if parsed is not None else None
+
+
+def _model_identity_parts(
+    value: Any,
+    *,
+    allow_weight_prefix: bool = False,
+) -> tuple[str, str | None] | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower().replace("_", "-").replace(" ", "-")
     normalized = re.sub(r"-+", "-", normalized)
-    if re.fullmatch(r"(?:kronos-)?small(?:-v\d+)?", normalized):
-        return "small"
-    if re.fullmatch(r"(?:kronos-)?base(?:-v\d+)?", normalized):
-        return "base"
-    for family in ("small", "base"):
-        if re.search(rf"(?:^|-)kronos?-?{family}(?:-|$)", normalized):
-            return family
-        if re.search(rf"(?:^|-)weights?-?{family}(?:-|$)", normalized):
-            return family
+    match = re.fullmatch(
+        r"(?:kronos-)?(small|base)(?:-v(\d+))?",
+        normalized,
+    )
+    if match:
+        return (
+            match.group(1),
+            f"v{int(match.group(2))}" if match.group(2) else None,
+        )
+    if allow_weight_prefix:
+        match = re.fullmatch(
+            r"(?:kronos-)?weights-(small|base)(?:-v(\d+))?",
+            normalized,
+        )
+        if match:
+            return (
+                match.group(1),
+                f"v{int(match.group(2))}" if match.group(2) else None,
+            )
     return None
 
 
@@ -2495,17 +2801,107 @@ def _write_run_artifacts(
     realized_rows: Sequence[Mapping[str, Any]],
 ) -> None:
     normalized_manifest = [manifest[key] for key in sorted(manifest)]
-    _atomic_write_csv(output_dir / MANIFEST_FILENAME, normalized_manifest, MANIFEST_COLUMNS)
-    _atomic_write_table(
+    normalized_forecast = _sort_artifact_rows(forecast_rows)
+    normalized_realized = _sort_artifact_rows(realized_rows)
+    generation = _artifact_generation(
+        normalized_manifest,
+        normalized_forecast,
+        normalized_realized,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    final_paths = [
+        output_dir / MANIFEST_FILENAME,
         output_dir / FORECAST_FILENAME,
-        _sort_artifact_rows(forecast_rows),
-        FORECAST_COLUMNS,
-    )
-    _atomic_write_table(
         output_dir / REALIZED_FILENAME,
-        _sort_artifact_rows(realized_rows),
-        REALIZED_COLUMNS,
+    ]
+    staged_paths: list[Path] = []
+    try:
+        manifest_with_generation = []
+        for source in normalized_manifest:
+            row = dict(source)
+            row["generation"] = generation
+            manifest_with_generation.append(row)
+        for final_path in final_paths:
+            staged_path = _staged_path(final_path)
+            staged_paths.append(staged_path)
+        _atomic_write_csv(staged_paths[0], manifest_with_generation, MANIFEST_COLUMNS)
+        _atomic_write_table(
+            staged_paths[1],
+            normalized_forecast,
+            FORECAST_COLUMNS,
+            generation=generation,
+        )
+        _atomic_write_table(
+            staged_paths[2],
+            normalized_realized,
+            REALIZED_COLUMNS,
+            generation=generation,
+        )
+        _commit_staged_artifacts(staged_paths, final_paths)
+    finally:
+        for staged_path in staged_paths:
+            try:
+                staged_path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def _artifact_generation(
+    manifest_rows: Sequence[Mapping[str, Any]],
+    forecast_rows: Sequence[Mapping[str, Any]],
+    realized_rows: Sequence[Mapping[str, Any]],
+) -> str:
+    volatile_manifest_fields = {
+        "started_at",
+        "finished_at",
+        "latency_ms",
+        "cache_hit",
+        "generation",
+    }
+    stable_manifest = [
+        {
+            column: _jsonable(row.get(column))
+            for column in MANIFEST_COLUMNS
+            if column not in volatile_manifest_fields
+        }
+        for row in manifest_rows
+    ]
+    return canonical_json_fingerprint(
+        {
+            "manifest": stable_manifest,
+            "forecast": [
+                {column: _jsonable(row.get(column)) for column in FORECAST_COLUMNS}
+                for row in forecast_rows
+            ],
+            "realized": [
+                {column: _jsonable(row.get(column)) for column in REALIZED_COLUMNS}
+                for row in realized_rows
+            ],
+        }
     )
+
+
+def _staged_path(final_path: Path) -> Path:
+    with tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=final_path.parent,
+        prefix=f".{final_path.name}.",
+        suffix=".stage",
+        delete=False,
+    ) as handle:
+        staged_path = Path(handle.name)
+    staged_path.unlink()
+    return staged_path
+
+
+def _commit_staged_artifacts(
+    staged_paths: Sequence[Path],
+    final_paths: Sequence[Path],
+) -> None:
+    if len(staged_paths) != len(final_paths):
+        raise ValueError("staged and final artifact path counts differ")
+    for staged_path, final_path in zip(staged_paths, final_paths):
+        os.replace(staged_path, final_path)
 
 
 def _sort_artifact_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -2544,12 +2940,28 @@ def _load_manifest(path: Path) -> list[dict[str, Any]]:
         return [dict(row) for row in csv.DictReader(handle)]
 
 
-def _read_table(path: Path) -> list[dict[str, Any]]:
+def _read_table(path: Path, columns: Sequence[str] | None = None) -> list[dict[str, Any]]:
+    rows, _ = _read_table_with_generation(path, columns)
+    return rows
+
+
+def _read_table_with_generation(
+    path: Path,
+    columns: Sequence[str] | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
     if not path.exists():
-        return []
-    _, parquet = _load_pyarrow()
+        raise FileNotFoundError(f"missing Parquet artifact: {path}")
+    pa, parquet = _load_pyarrow()
     try:
-        return [dict(row) for row in parquet.read_table(path).to_pylist()]
+        table = parquet.read_table(path)
+        if columns is not None:
+            expected_schema = _artifact_schema(pa, columns)
+            if not table.schema.equals(expected_schema, check_metadata=False):
+                raise ValueError(f"Parquet artifact {path} has an invalid schema")
+        metadata = table.schema.metadata or {}
+        raw_generation = metadata.get(b"kronos_generation")
+        generation = raw_generation.decode("utf-8") if raw_generation is not None else None
+        return [dict(row) for row in table.to_pylist()], generation
     except Exception as exc:  # noqa: BLE001 - preserve a clear artifact failure.
         raise RuntimeError(f"failed to read Parquet artifact {path}: {exc}") from exc
 
@@ -2582,13 +2994,7 @@ def _atomic_write_csv(
     _atomic_write_text(path, buffer.getvalue())
 
 
-def _atomic_write_table(
-    path: Path,
-    rows: Sequence[Mapping[str, Any]],
-    columns: Sequence[str],
-) -> None:
-    pa, parquet = _load_pyarrow()
-
+def _artifact_schema(pa: Any, columns: Sequence[str]) -> Any:
     arrow_types = {
         "asset_id": pa.string(),
         "origin_date": pa.string(),
@@ -2621,9 +3027,22 @@ def _atomic_write_table(
         "volume": pa.float64(),
         "amount": pa.float64(),
     }
-    schema = pa.schema(
+    return pa.schema(
         [pa.field(column, arrow_types.get(column, pa.string())) for column in columns]
     )
+
+
+def _atomic_write_table(
+    path: Path,
+    rows: Sequence[Mapping[str, Any]],
+    columns: Sequence[str],
+    *,
+    generation: str | None = None,
+) -> None:
+    pa, parquet = _load_pyarrow()
+    schema = _artifact_schema(pa, columns)
+    if generation is not None:
+        schema = schema.with_metadata({b"kronos_generation": generation.encode("utf-8")})
     normalized_rows = [
         {column: _pyarrow_value(row.get(column)) for column in columns}
         for row in rows
@@ -2802,6 +3221,16 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
+def _valid_iso_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _elapsed_milliseconds(start_clock: float) -> float:
     elapsed = (time.perf_counter() - start_clock) * 1000.0
     return round(elapsed, 6)
@@ -2826,50 +3255,75 @@ def _first_identity(
     health: Mapping[str, Any],
     fallback_model: str | None = None,
 ) -> str | None:
-    value = _first_value(
-        response_metadata,
-        health,
-        "model_identity",
-        "model_name",
-    )
-    if value is None:
-        value = _first_value(response_metadata, health, "model")
-    if value is None:
-        return fallback_model
-    return str(value)
+    for source in (response_metadata, health):
+        value = _explicit_identity(source)
+        if value is not None:
+            return value
+    return fallback_model
 
 
 def _explicit_identity(source: Mapping[str, Any]) -> str | None:
-    value = _first_value(source, "model_identity", "model_name", "model")
-    return None if value is None else str(value)
+    records = list(_iter_identity_fields(source))
+    for field_name in ("model_identity", "model_name", "model"):
+        values = [
+            value
+            for _, key, value in records
+            if key == field_name and value not in (None, "")
+        ]
+        if not values:
+            continue
+        versioned = [
+            value
+            for value in values
+            if _model_identity_parts(value) is not None
+            and _model_identity_parts(value)[1] is not None
+        ]
+        value = versioned[0] if versioned else values[0]
+        return str(value)
+    return None
+
+
+def _identity_values_compatible(left: Any, right: Any) -> bool:
+    """Compare model identities while treating family-only values as wildcards."""
+
+    if left in (None, "") or right in (None, ""):
+        return left in (None, "") and right in (None, "")
+    left_parts = _model_identity_parts(left)
+    right_parts = _model_identity_parts(right)
+    if left_parts is None or right_parts is None:
+        return str(left) == str(right)
+    if left_parts[0] != right_parts[0]:
+        return False
+    return (
+        left_parts[1] is None
+        or right_parts[1] is None
+        or left_parts[1] == right_parts[1]
+    )
 
 
 def _first_weight_identity(
     response_metadata: Mapping[str, Any],
     health: Mapping[str, Any],
 ) -> str | None:
-    value = _first_value(
-        response_metadata,
-        health,
-        "weights_identity",
-        "weights_fingerprint",
-        "weights",
-    )
-    if value is None:
-        return None
-    return _canonical_json(value) if isinstance(value, (Mapping, list, tuple)) else str(value)
+    for source in (response_metadata, health):
+        value = _explicit_weight_identity(source)
+        if value is not None:
+            return value
+    return None
 
 
 def _explicit_weight_identity(source: Mapping[str, Any]) -> str | None:
-    value = _first_value(
-        source,
-        "weights_identity",
-        "weights_fingerprint",
-        "weights",
-    )
-    return None if value is None else (
-        _canonical_json(value) if isinstance(value, (Mapping, list, tuple)) else str(value)
-    )
+    records = list(_iter_identity_fields(source))
+    for field_name in ("weights_identity", "weights_fingerprint", "weights"):
+        for _, key, value in records:
+            if key != field_name or value in (None, ""):
+                continue
+            return (
+                _canonical_json(value)
+                if isinstance(value, (Mapping, list, tuple))
+                else str(value)
+            )
+    return None
 
 
 def _raw_response_for_manifest(response: Mapping[str, Any] | None) -> Mapping[str, Any]:

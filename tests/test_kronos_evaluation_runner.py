@@ -131,6 +131,10 @@ class FakeClient:
         response_model_identity: str | None = None,
         response_weights_identity: str | None = None,
         include_representative_path: bool = True,
+        include_response_identity: bool = True,
+        response_result: dict[str, Any] | None = None,
+        response_daily_overrides: dict[str, Any] | None = None,
+        response_raw_overrides: dict[str, Any] | None = None,
     ) -> None:
         self.model = model
         self.model_identity = model_identity
@@ -142,6 +146,10 @@ class FakeClient:
         self.response_model_identity = response_model_identity
         self.response_weights_identity = response_weights_identity
         self.include_representative_path = include_representative_path
+        self.include_response_identity = include_response_identity
+        self.response_result = response_result
+        self.response_daily_overrides = response_daily_overrides
+        self.response_raw_overrides = response_raw_overrides
         self.calls: list[tuple[str, str, int, int | None]] = []
 
     def health(self) -> dict[str, Any]:
@@ -186,27 +194,43 @@ class FakeClient:
         }
         if self.include_representative_path:
             daily["representative_path"] = representative_path
+        if self.response_daily_overrides:
+            daily.update(self.response_daily_overrides)
         response_model = self.response_model or self.model
         response_model_identity = self.response_model_identity or self.model_identity
         response_weights_identity = (
             self.response_weights_identity or self.weights_identity
         )
-        return {
+        response = {
             "status": "succeeded",
             "sample_count": sample_count,
-            "model": response_model,
-            "model_identity": response_model_identity,
-            "weights_identity": response_weights_identity,
             "daily": daily,
             "raw_response": {
                 "status": "succeeded",
-                "model": response_model,
-                "model_identity": response_model_identity,
-                "weights_identity": response_weights_identity,
                 "sample_count": sample_count,
                 "daily": daily,
             },
         }
+        if self.include_response_identity:
+            response.update(
+                {
+                    "model": response_model,
+                    "model_identity": response_model_identity,
+                    "weights_identity": response_weights_identity,
+                }
+            )
+            response["raw_response"].update(
+                {
+                    "model": response_model,
+                    "model_identity": response_model_identity,
+                    "weights_identity": response_weights_identity,
+                }
+            )
+        if self.response_result is not None:
+            response["result"] = self.response_result
+        if self.response_raw_overrides:
+            response["raw_response"].update(self.response_raw_overrides)
+        return response
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -271,6 +295,26 @@ def test_preparation_writes_frozen_metadata_universe_snapshots_and_empty_artifac
         row["input_fingerprint"] in {snapshot.input_fingerprint for snapshot in snapshots}
         for row in read_csv_rows(output_dir / "run_manifest.csv")
     )
+    assert all(
+        "snapshot_fingerprint" in item
+        for item in metadata["snapshot_fingerprints"]
+    )
+
+
+def test_fresh_prepare_rejects_nonempty_output_without_experiment_metadata(
+    tmp_path,
+):
+    output_dir = tmp_path / "nonempty"
+    output_dir.mkdir()
+    (output_dir / "input_snapshots").mkdir()
+    (output_dir / "input_snapshots" / "stale.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="non-empty"):
+        prepare_experiment(
+            make_config(),
+            output_dir=output_dir,
+            snapshot_loader=make_loader([make_snapshot("CN:SH:600418")]),
+        )
 
 
 def test_artifact_replacement_is_atomic_and_leaves_no_temp_files(prepared_experiment):
@@ -350,6 +394,32 @@ def test_health_failure_preserves_completed_rows_and_artifacts_on_resume(
     assert (output_dir / "realized_bars.parquet").read_bytes() == before_realized
 
 
+@pytest.mark.parametrize("field", ["future_timestamps", "realized"])
+def test_tampered_full_snapshot_payload_is_rejected(prepared_experiment, field):
+    output_dir, config, _, _ = prepared_experiment
+    snapshot_path = output_dir / "input_snapshots" / "CN:SH:600418__2025-01-03.json"
+    payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    if field == "future_timestamps":
+        payload[field][0] = "2025-01-06"
+    else:
+        payload[field][0]["close"] += 0.25
+    snapshot_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="snapshot|fingerprint"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
+def test_frozen_snapshot_rejects_unknown_json_keys(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    snapshot_path = output_dir / "input_snapshots" / "CN:SH:600418__2025-01-03.json"
+    payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    payload["unexpected"] = "tampered"
+    snapshot_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="snapshot"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
 def test_changed_model_identity_forces_rerun(prepared_experiment):
     output_dir, config, _, _ = prepared_experiment
     first_client = FakeClient()
@@ -381,6 +451,81 @@ def test_response_model_identity_mismatch_is_recorded_without_forecast_rows(
     assert {row["status"] for row in rows} == {"model_error"}
     assert {row["error_category"] for row in rows} == {"model"}
     assert len(read_table_rows(output_dir / "forecast_bars.parquet")) == 0
+
+
+def test_nested_response_model_conflict_is_recorded_without_success(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(response_result={"model": "base"})
+
+    result = run_model(config, model="small", output_dir=output_dir, client=client)
+
+    assert result.attempted_count == 2
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"model_error"}
+    assert {row["error_code"] for row in rows} == {"model_identity_mismatch"}
+
+
+def test_health_and_response_version_mismatch_is_recorded_without_success(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(
+        model_identity="small-v1",
+        response_model_identity="small-v2",
+    )
+
+    run_model(config, model="small", output_dir=output_dir, client=client)
+
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"model_error"}
+
+
+def test_opaque_weights_identity_is_preserved_as_metadata(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(response_weights_identity="build-2026-08-06-gpu-a")
+
+    run_model(config, model="small", output_dir=output_dir, client=client)
+
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"success"}
+    assert {row["weights_identity"] for row in rows} == {"build-2026-08-06-gpu-a"}
+
+
+def test_response_without_identity_uses_passed_health(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    client = FakeClient(include_response_identity=False)
+
+    run_model(config, model="small", output_dir=output_dir, client=client)
+
+    rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
+    assert {row["status"] for row in rows} == {"success"}
+
+
+def test_family_only_response_identity_resumes_against_versioned_health(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    first_client = FakeClient(
+        model_identity="small-v1",
+        response_model_identity="small",
+    )
+    run_model(config, model="small", output_dir=output_dir, client=first_client)
+
+    resume_client = FakeClient(
+        model_identity="small-v1",
+        response_model_identity="small",
+    )
+    result = run_model(config, model="small", output_dir=output_dir, client=resume_client)
+
+    assert result.cache_hit_count == 2
+    assert result.attempted_count == 0
+    assert resume_client.calls == []
 
 
 def test_changed_frozen_input_fingerprint_is_rejected_as_tampering(prepared_experiment):
@@ -451,9 +596,10 @@ def test_modified_same_count_forecast_artifact_forces_rerun(prepared_experiment)
     import pyarrow.parquet as parquet
 
     forecast_path = output_dir / "forecast_bars.parquet"
-    rows = parquet.read_table(forecast_path).to_pylist()
+    table = parquet.read_table(forecast_path)
+    rows = table.to_pylist()
     rows[0]["p50"] += 0.5
-    parquet.write_table(pa.Table.from_pylist(rows), forecast_path)
+    parquet.write_table(pa.Table.from_pylist(rows, schema=table.schema), forecast_path)
 
     changed_client = FakeClient()
     result = run_model(config, model="small", output_dir=output_dir, client=changed_client)
@@ -461,6 +607,63 @@ def test_modified_same_count_forecast_artifact_forces_rerun(prepared_experiment)
     assert result.cache_hit_count == 1
     assert result.attempted_count == 1
     assert len(changed_client.calls) == 1
+
+
+@pytest.mark.parametrize("mutation", ["forecast", "realized", "delete_forecast", "delete_realized"])
+def test_build_report_fails_closed_on_tampered_or_missing_success_artifacts(
+    prepared_experiment,
+    mutation,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    import pyarrow as pa
+    import pyarrow.parquet as parquet
+
+    if mutation == "forecast":
+        path = output_dir / "forecast_bars.parquet"
+        table = parquet.read_table(path)
+        rows = table.to_pylist()
+        rows[0]["p50"] += 0.5
+        parquet.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+    elif mutation == "realized":
+        path = output_dir / "realized_bars.parquet"
+        table = parquet.read_table(path)
+        rows = table.to_pylist()
+        rows[0]["close"] += 0.5
+        parquet.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
+    else:
+        (output_dir / ("forecast_bars.parquet" if mutation == "delete_forecast" else "realized_bars.parquet")).unlink()
+
+    with pytest.raises((FileNotFoundError, RuntimeError, ValueError), match="artifact|Parquet|fingerprint|generation|schema"):
+        build_report(output_dir=output_dir)
+
+
+def test_build_report_rejects_mixed_generation_after_partial_commit(
+    prepared_experiment,
+    monkeypatch,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    original_commit = runner._commit_staged_artifacts
+
+    def partial_commit(staged_paths, final_paths):
+        original_commit(staged_paths[:1], final_paths[:1])
+        raise OSError("injected commit failure")
+
+    monkeypatch.setattr(runner, "_commit_staged_artifacts", partial_commit)
+    with pytest.raises(OSError, match="injected"):
+        run_model(
+            config,
+            model="small",
+            output_dir=output_dir,
+            client=FakeClient(model_identity="small-v2"),
+        )
+
+    monkeypatch.undo()
+    with pytest.raises(ValueError, match="generation"):
+        build_report(output_dir=output_dir)
 
 
 def test_forecast_artifact_contains_representative_ohlcv_and_path(prepared_experiment):
@@ -492,6 +695,17 @@ def test_missing_representative_path_is_protocol_failure(prepared_experiment):
     rows = [row for row in read_csv_rows(output_dir / "run_manifest.csv") if row["model"] == "small"]
     assert {row["status"] for row in rows} == {"protocol_error"}
     assert len(read_table_rows(output_dir / "forecast_bars.parquet")) == 0
+
+
+def test_extract_quantiles_supports_result_summary_branch():
+    quantiles = {"p10": [1.0], "p50": [1.5], "p90": [2.0]}
+    response = {
+        "status": "succeeded",
+        "daily": {"representative_path": []},
+        "result": {"summary": {"close": quantiles}},
+    }
+
+    assert runner._extract_quantiles(response) == quantiles
 
 
 def test_parquet_dependency_failure_is_explicit(monkeypatch, tmp_path):
