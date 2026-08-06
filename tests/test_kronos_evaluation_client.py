@@ -605,6 +605,36 @@ def test_plaintext_excerpt_redacts_all_sensitive_key_value_forms():
         assert value not in exc_info.value.raw_body_excerpt
 
 
+@pytest.mark.parametrize(
+    ("field_name", "secret_prefix", "quote"),
+    [
+        ("private_key", "private-key-secret", '"'),
+        ("secret_key", "secret-key-secret", "'"),
+        ("passphrase", "passphrase-secret", '"'),
+    ],
+)
+def test_plaintext_excerpt_redacts_long_unterminated_quoted_assignments(
+    field_name, secret_prefix, quote
+):
+    secret = secret_prefix + ("-secret-fragment" * 300)
+    body = f"diagnostic=keep {field_name}={quote}{secret}"
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert "diagnostic=keep" in exc_info.value.raw_body_excerpt
+    assert secret_prefix not in exc_info.value.raw_body_excerpt
+
+
 def test_nested_plaintext_values_are_redacted_in_structured_errors():
     nested_text = (
         'private_key="private-key-value" '
@@ -645,6 +675,40 @@ def test_nested_plaintext_values_are_redacted_in_structured_errors():
         "accesskey-value",
     ):
         assert value not in serialized_response
+
+
+def test_nested_text_redacts_long_unterminated_quoted_assignments():
+    nested_values = [
+        'private_key="nested-private-key-secret' + ("-fragment" * 40),
+        "secret_key='nested-secret-key-secret" + ("-fragment" * 40),
+        'passphrase="nested-passphrase-secret' + ("-fragment" * 40),
+    ]
+    structured_error = {
+        "error": "invalid request",
+        "details": {"messages": nested_values, "diagnostic": "keep this"},
+    }
+    response = FakeResponse(structured_error, status_code=422)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    raw_response = exc_info.value.raw_response
+    assert raw_response["details"]["diagnostic"] == "keep this"
+    serialized_response = json.dumps(raw_response)
+    for secret_prefix in (
+        "nested-private-key-secret",
+        "nested-secret-key-secret",
+        "nested-passphrase-secret",
+    ):
+        assert secret_prefix not in serialized_response
 
 
 def test_successful_200_response_does_not_read_response_text():
@@ -733,6 +797,41 @@ def test_structured_502_failed_prediction_is_classified_as_model_error():
     assert exc_info.value.raw_response["status"] == "failed"
     assert exc_info.value.raw_response["diagnostics"]["token"] == "[REDACTED]"
     assert exc_info.value.raw_body_excerpt is None
+
+
+def test_prediction_status_is_validated_before_token_redaction():
+    prediction = make_prediction_response()
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=prediction,
+    )
+    client = KronosClient("http://kronos.test", token="partial", session=session)
+
+    result = client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert result["status"] == "partial"
+    assert result["raw_response"] == prediction
+
+
+def test_502_failed_prediction_is_classified_before_token_redaction():
+    response = FakeResponse(
+        {"status": "failed", "message": "CUDA inference failed"},
+        status_code=502,
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="failed",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
 
 
 def test_generic_structured_502_remains_an_http_error():
@@ -1106,14 +1205,8 @@ def test_prediction_rejects_error_or_unavailable_daily_envelope(daily_status):
     with pytest.raises(KronosClientError) as exc_info:
         client.predict_daily(make_snapshot(), model="small", seed=7)
 
-    assert exc_info.value.category in {
-        KronosErrorCategory.MODEL,
-        KronosErrorCategory.PROTOCOL,
-    }
-    assert exc_info.value.code in {
-        KronosErrorCode.MODEL_ERROR,
-        KronosErrorCode.INVALID_RESPONSE,
-    }
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
     assert exc_info.value.raw_response == prediction
 
 

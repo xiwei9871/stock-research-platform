@@ -45,7 +45,9 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?P<key>[a-z_][a-z0-9_.-]*)"
     r"(?P<separator>\s*[\"']?\s*[:=]\s*(?:bearer\s+)?)"
     r"(?:"
-    r"(?P<quote>[\"'])(?P<quoted_value>[^\"']*)(?P=quote)"
+    r'(?P<double_quote>")(?P<double_value>[^"]*)(?P<double_close>"|$)'
+    r"|"
+    r"(?P<single_quote>')(?P<single_value>[^']*)(?P<single_close>'|$)"
     r"|(?P<unquoted_value>[^\s<>'\";,}]+)"
     r")"
 )
@@ -395,7 +397,6 @@ class KronosClient:
         if status_code != 200:
             structured_response = _try_clone_structured_response(
                 response,
-                token=self._headers.get("X-Kronos-Token"),
             )
             if (
                 path == "/v1/predict"
@@ -493,7 +494,6 @@ def _validate_prediction_response(
     requested_sample_count: int,
     redaction_token: str | None,
 ) -> None:
-    response = _redact_sensitive_json_value(response, token=redaction_token)
     status = response.get("status")
     if not isinstance(status, str):
         raise KronosClientError(
@@ -501,6 +501,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     if status in _PREDICTION_FAILURE_STATUSES:
         raise KronosClientError(
@@ -508,6 +509,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.MODEL,
             code=KronosErrorCode.MODEL_ERROR,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     if status not in _PREDICTION_SUCCESS_STATUSES:
         raise KronosClientError(
@@ -515,6 +517,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
 
     daily, result = _extract_daily_forecast(response)
@@ -524,6 +527,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     daily_status = daily.get("status")
     if "status" in daily and not isinstance(daily_status, str):
@@ -532,6 +536,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     if isinstance(daily_status, str) and daily_status in _DAILY_FAILURE_STATUSES:
         raise KronosClientError(
@@ -539,6 +544,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.MODEL,
             code=KronosErrorCode.MODEL_ERROR,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     if isinstance(daily_status, str) and daily_status not in {
         "ok",
@@ -551,6 +557,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     if daily.get("unavailable") is True or daily.get("error") is not None:
         raise KronosClientError(
@@ -558,6 +565,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.MODEL,
             code=KronosErrorCode.MODEL_ERROR,
             raw_response=response,
+            redaction_token=redaction_token,
         )
 
     quantiles = _find_daily_quantiles(daily)
@@ -567,6 +575,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
 
     quantile_values: dict[str, list[Any]] = {}
@@ -578,6 +587,7 @@ def _validate_prediction_response(
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=redaction_token,
             )
         if not values or len(values) != expected_horizon:
             raise KronosClientError(
@@ -585,6 +595,7 @@ def _validate_prediction_response(
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=redaction_token,
             )
         if any(not _is_finite_number(value) for value in values):
             raise KronosClientError(
@@ -592,6 +603,7 @@ def _validate_prediction_response(
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=redaction_token,
             )
         quantile_values[quantile_name] = list(values)
 
@@ -606,6 +618,7 @@ def _validate_prediction_response(
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=redaction_token,
             )
 
     sample_count_fields = _response_fields(
@@ -620,6 +633,7 @@ def _validate_prediction_response(
             category=KronosErrorCategory.PROTOCOL,
             code=KronosErrorCode.INVALID_RESPONSE,
             raw_response=response,
+            redaction_token=redaction_token,
         )
     for location, value in sample_count_fields:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -628,6 +642,7 @@ def _validate_prediction_response(
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
+                redaction_token=redaction_token,
             )
         if value != requested_sample_count:
             raise KronosClientError(
@@ -635,6 +650,7 @@ def _validate_prediction_response(
                 category=KronosErrorCategory.MODEL,
                 code=KronosErrorCode.MODEL_ERROR,
                 raw_response=response,
+                redaction_token=redaction_token,
             )
 
     for field_name in ("horizon", "forecast_horizon"):
@@ -650,6 +666,7 @@ def _validate_prediction_response(
                     category=KronosErrorCategory.PROTOCOL,
                     code=KronosErrorCode.INVALID_RESPONSE,
                     raw_response=response,
+                    redaction_token=redaction_token,
                 )
             if value != expected_horizon:
                 raise KronosClientError(
@@ -657,6 +674,7 @@ def _validate_prediction_response(
                     category=KronosErrorCategory.MODEL,
                     code=KronosErrorCode.MODEL_ERROR,
                     raw_response=response,
+                    redaction_token=redaction_token,
                 )
 
 
@@ -744,8 +762,6 @@ def _bounded_raw_body_excerpt(body: Any, *, token: str | None) -> str | None:
 
 def _try_clone_structured_response(
     response: Any,
-    *,
-    token: str | None,
 ) -> dict[str, Any] | None:
     try:
         raw_response = response.json()
@@ -757,10 +773,7 @@ def _try_clone_structured_response(
         return None
     if not isinstance(cloned_response, dict):
         return None
-    return _redact_sensitive_json_value(
-        cloned_response,
-        token=token,
-    )
+    return cloned_response
 
 
 def _redact_sensitive_json_value(value: Any, *, token: str | None) -> Any:
@@ -804,9 +817,22 @@ def _redact_sensitive_text(value: str, *, token: str | None) -> str:
     def replace_sensitive_assignment(match: re.Match[str]) -> str:
         key = match.group("key")
         if _is_sensitive_field_name(key):
-            quote = match.group("quote")
-            if quote is not None:
-                return f"{key}{match.group('separator')}{quote}{_REDACTED}{quote}"
+            if match.group("double_quote") is not None:
+                closing_quote = (
+                    '"' if match.group("double_close") == '"' else ""
+                )
+                return (
+                    f"{key}{match.group('separator')}"
+                    f'"{_REDACTED}{closing_quote}'
+                )
+            if match.group("single_quote") is not None:
+                closing_quote = (
+                    "'" if match.group("single_close") == "'" else ""
+                )
+                return (
+                    f"{key}{match.group('separator')}"
+                    f"'{_REDACTED}{closing_quote}"
+                )
             return f"{key}{match.group('separator')}{_REDACTED}"
         return match.group(0)
 
