@@ -73,6 +73,33 @@ class FakeResponse:
         return self._payload
 
 
+class TextAccessForbiddenResponse(FakeResponse):
+    def __init__(self, payload, *, status_code=200):
+        self.status_code = status_code
+        self._payload = payload
+        self.text_accesses = 0
+
+    @property
+    def text(self):
+        self.text_accesses += 1
+        raise AssertionError("successful responses must not read response.text")
+
+    def json(self):
+        return self._payload
+
+
+class SliceTrackingText(str):
+    def __new__(cls, value):
+        instance = super().__new__(cls, value)
+        instance.slice_stops = []
+        return instance
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            self.slice_stops.append(item.stop)
+        return super().__getitem__(item)
+
+
 class FakeSession:
     def __init__(
         self,
@@ -545,6 +572,116 @@ def test_non_200_preserves_bounded_redacted_excerpt_for_non_json_body():
     assert "secret-token" not in exc_info.value.raw_body_excerpt
     assert "secret-token" not in str(exc_info.value)
     assert "upstream detail" not in str(exc_info.value)
+
+
+def test_plaintext_excerpt_redacts_all_sensitive_key_value_forms():
+    sensitive_values = {
+        "private_key": "private-key-value",
+        "secret_key": "secret-key-value",
+        "passphrase": "passphrase-value",
+        "privatekey": "privatekey-value",
+        "accesskey": "accesskey-value",
+        "client_secret": "client-secret-value",
+        "refresh_token": "refresh-token-value",
+    }
+    body = "diagnostic=keep " + " ".join(
+        f"{key}={value}" for key, value in sensitive_values.items()
+    )
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert "diagnostic=keep" in exc_info.value.raw_body_excerpt
+    for value in sensitive_values.values():
+        assert value not in exc_info.value.raw_body_excerpt
+
+
+def test_nested_plaintext_values_are_redacted_in_structured_errors():
+    nested_text = (
+        'private_key="private-key-value" '
+        "secret_key: 'secret-key-value' "
+        "passphrase=passphrase-value "
+        "privatekey=privatekey-value "
+        "accesskey=accesskey-value"
+    )
+    structured_error = {
+        "error": "invalid request",
+        "details": {
+            "message": nested_text,
+            "items": [{"diagnostic": nested_text}],
+            "ordinary": "keep this diagnostic",
+        },
+    }
+    response = FakeResponse(structured_error, status_code=422)
+    client = KronosClient(
+        "http://kronos.test",
+        token="configured-token",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small")
+
+    raw_response = exc_info.value.raw_response
+    assert raw_response["details"]["ordinary"] == "keep this diagnostic"
+    serialized_response = json.dumps(raw_response)
+    for value in (
+        "private-key-value",
+        "secret-key-value",
+        "passphrase-value",
+        "privatekey-value",
+        "accesskey-value",
+    ):
+        assert value not in serialized_response
+
+
+def test_successful_200_response_does_not_read_response_text():
+    response = TextAccessForbiddenResponse(make_prediction_response())
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction_response=response,
+    )
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=session,
+    )
+
+    client.predict_daily(make_snapshot(), model="small")
+
+    assert response.text_accesses == 0
+
+
+def test_non_json_excerpt_bounds_input_before_redaction_scan():
+    body = SliceTrackingText("gateway failure " + ("upstream detail " * 10000))
+    response = FakeResponse(None, status_code=502, text=body)
+    client = KronosClient(
+        "http://kronos.test",
+        token="secret",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction_response=response,
+        ),
+    )
+
+    with pytest.raises(KronosClientError):
+        client.predict_daily(make_snapshot(), model="small")
+
+    assert body.slice_stops
+    assert body.slice_stops[0] < len(body)
+    assert body.slice_stops[0] <= 4096
 
 
 def test_http_200_malformed_json_preserves_bounded_redacted_excerpt():

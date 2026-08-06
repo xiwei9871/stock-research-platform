@@ -23,6 +23,7 @@ _MODEL_ALIASES = {
 }
 _MAX_RAW_BODY_EXCERPT = 512
 _REDACTED = "[REDACTED]"
+_MAX_RAW_BODY_SCAN = _MAX_RAW_BODY_EXCERPT * 4
 _SENSITIVE_FIELD_TERMS = frozenset(
     {
         "authorization",
@@ -38,6 +39,15 @@ _SENSITIVE_FIELD_TERMS = frozenset(
         "privatekey",
         "passphrase",
     }
+)
+_SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"(?ix)"
+    r"(?P<key>[a-z_][a-z0-9_.-]*)"
+    r"(?P<separator>\s*[\"']?\s*[:=]\s*(?:bearer\s+)?)"
+    r"(?:"
+    r"(?P<quote>[\"'])(?P<quoted_value>[^\"']*)(?P=quote)"
+    r"|(?P<unquoted_value>[^\s<>'\";,}]+)"
+    r")"
 )
 _PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
 _PREDICTION_FAILURE_STATUSES = frozenset({"failed", "error"})
@@ -418,10 +428,6 @@ class KronosClient:
                 redaction_token=self._headers.get("X-Kronos-Token"),
             )
 
-        raw_body_excerpt = _bounded_raw_body_excerpt(
-            getattr(response, "text", None),
-            token=self._headers.get("X-Kronos-Token"),
-        )
         try:
             raw_response = response.json()
         except (AttributeError, TypeError, ValueError) as exc:
@@ -429,7 +435,10 @@ class KronosClient:
                 f"Kronos {path} returned malformed JSON",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.MALFORMED_JSON,
-                raw_body_excerpt=raw_body_excerpt,
+                raw_body_excerpt=_bounded_raw_body_excerpt(
+                    getattr(response, "text", None),
+                    token=self._headers.get("X-Kronos-Token"),
+                ),
                 redaction_token=self._headers.get("X-Kronos-Token"),
             ) from exc
 
@@ -440,7 +449,10 @@ class KronosClient:
                 f"Kronos {path} returned invalid JSON: {exc}",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
-                raw_body_excerpt=raw_body_excerpt,
+                raw_body_excerpt=_bounded_raw_body_excerpt(
+                    getattr(response, "text", None),
+                    token=self._headers.get("X-Kronos-Token"),
+                ),
                 redaction_token=self._headers.get("X-Kronos-Token"),
             ) from exc
         if not isinstance(normalized_response, dict):
@@ -448,7 +460,10 @@ class KronosClient:
                 f"Kronos {path} response must be a JSON object",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
-                raw_body_excerpt=raw_body_excerpt,
+                raw_body_excerpt=_bounded_raw_body_excerpt(
+                    getattr(response, "text", None),
+                    token=self._headers.get("X-Kronos-Token"),
+                ),
                 redaction_token=self._headers.get("X-Kronos-Token"),
             )
         return normalized_response
@@ -718,31 +733,10 @@ def _clone_json_object(value: Mapping[str, Any]) -> dict[str, Any]:
 def _bounded_raw_body_excerpt(body: Any, *, token: str | None) -> str | None:
     if not isinstance(body, str):
         return None
-    excerpt = body.strip()
+    excerpt = body[:_MAX_RAW_BODY_SCAN].strip()
     if not excerpt:
         return None
-    if token:
-        excerpt = re.sub(
-            re.escape(token),
-            "[REDACTED]",
-            excerpt,
-            flags=re.IGNORECASE,
-        )
-    excerpt = re.sub(
-        r"(?i)(authorization\s*:\s*(?:bearer\s+)?)[^\s<>'\";,]+",
-        r"\1[REDACTED]",
-        excerpt,
-    )
-    excerpt = re.sub(
-        r"(?i)((?:authorization|x-kronos-token|token|secret|password|api[-_]?key|credential|cookie)\s*[:=]\s*(?:bearer\s+)?)[^\s<>'\";,]+",
-        r"\1[REDACTED]",
-        excerpt,
-    )
-    excerpt = re.sub(
-        r"(?i)(\b(?:bearer)\s+)[^\s<>'\";,]+",
-        r"\1[REDACTED]",
-        excerpt,
-    )
+    excerpt = _redact_sensitive_text(excerpt, token=token)
     if len(excerpt) > _MAX_RAW_BODY_EXCERPT:
         return excerpt[: _MAX_RAW_BODY_EXCERPT - 1] + "…"
     return excerpt
@@ -806,12 +800,17 @@ def _redact_sensitive_text(value: str, *, token: str | None) -> str:
         rf"\1{_REDACTED}",
         redacted,
     )
-    redacted = re.sub(
-        r"(?i)((?:authorization|token|secret|password|api[-_]?key)\s*[:=]\s*)[^\s<>'\";,]+",
-        rf"\1{_REDACTED}",
-        redacted,
-    )
-    return redacted
+
+    def replace_sensitive_assignment(match: re.Match[str]) -> str:
+        key = match.group("key")
+        if _is_sensitive_field_name(key):
+            quote = match.group("quote")
+            if quote is not None:
+                return f"{key}{match.group('separator')}{quote}{_REDACTED}{quote}"
+            return f"{key}{match.group('separator')}{_REDACTED}"
+        return match.group(0)
+
+    return _SENSITIVE_ASSIGNMENT_RE.sub(replace_sensitive_assignment, redacted)
 
 
 def _complete_raw_response(payload: Mapping[str, Any]) -> dict[str, Any] | None:
