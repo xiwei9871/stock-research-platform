@@ -1668,6 +1668,15 @@ def test_report_outputs_record_authenticated_artifact_generation(
     ).read_text(encoding="utf-8")
 
 
+def test_directory_only_fsync_failure_is_propagated(tmp_path, monkeypatch):
+    def fail_directory_fsync(_descriptor):
+        raise OSError("injected directory fsync failure")
+
+    monkeypatch.setattr(runner.os, "fsync", fail_directory_fsync)
+    with pytest.raises(OSError, match="directory fsync"):
+        runner._fsync_directory(tmp_path)
+
+
 def test_report_rejects_tampered_derived_generation_marker(
     prepared_experiment,
 ):
@@ -1693,6 +1702,33 @@ def test_report_rejects_tampered_derived_generation_marker(
         build_report(output_dir=output_dir)
 
 
+def test_report_rejects_tampered_derived_numeric_content(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+
+    metrics_path = output_dir / runner.METRICS_BY_MODEL_FILENAME
+    rows = read_csv_rows(metrics_path)
+    rows[0]["mean_absolute_return_error"] = "999999.0"
+    with metrics_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    with pytest.raises(ValueError, match="digest|content|derived|report"):
+        build_report(output_dir=output_dir)
+    with pytest.raises(ValueError, match="digest|content|derived|report"):
+        run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+
 def test_new_model_run_invalidates_derived_report_outputs(
     prepared_experiment,
 ):
@@ -1715,6 +1751,55 @@ def test_new_model_run_invalidates_derived_report_outputs(
     )
 
     assert not any(
+        (output_dir / filename).exists()
+        for filename in (
+            runner.METRICS_BY_STOCK_FILENAME,
+            runner.METRICS_BY_MODEL_FILENAME,
+            runner.MODEL_COMPARISON_FILENAME,
+            runner.REPORT_FILENAME,
+            runner.REPORT_DIGEST_FILENAME,
+        )
+    )
+
+
+def test_report_invalidation_recovers_after_mid_delete_hard_kill(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+
+    child_pid = os.fork()
+    if child_pid == 0:
+        try:
+            original_unlink = runner._unlink_report_invalidation_path
+
+            def kill_after_first_delete(path):
+                original_unlink(path)
+                os._exit(73)
+
+            runner._unlink_report_invalidation_path = kill_after_first_delete
+            runner._invalidate_derived_report_artifacts_locked(output_dir)
+        except BaseException:
+            os._exit(74)
+        os._exit(75)
+
+    _, status = os.waitpid(child_pid, 0)
+    assert os.WIFEXITED(status)
+    assert os.WEXITSTATUS(status) == 73
+    assert (output_dir / runner.REPORT_INVALIDATION_FILENAME).exists()
+
+    summary = build_report(output_dir=output_dir)
+
+    assert summary["generation"]
+    assert not (output_dir / runner.REPORT_INVALIDATION_FILENAME).exists()
+    assert all(
         (output_dir / filename).exists()
         for filename in (
             runner.METRICS_BY_STOCK_FILENAME,

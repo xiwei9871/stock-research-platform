@@ -8,6 +8,7 @@ and reporting read only the frozen experiment directory.
 from __future__ import annotations
 
 import csv
+import hashlib
 import inspect
 import json
 import math
@@ -66,13 +67,17 @@ MODEL_COMPARISON_FILENAME = "model_comparison.csv"
 REPORT_FILENAME = "report.md"
 TRANSACTION_FILENAME = ".kronos_transaction.json"
 REPORT_TRANSACTION_FILENAME = ".kronos_report_transaction.json"
+REPORT_INVALIDATION_FILENAME = ".kronos_report_invalidation.json"
+REPORT_DIGEST_FILENAME = ".kronos_report_digest.json"
 WRITER_LOCK_PREFIX = "."
 WRITER_LOCK_SUFFIX = ".kronos-writer.lock"
 _PREPARATION_OWNER_FILENAME = ".kronos_prepare_owner.json"
 _PREPARATION_JOURNAL_SCHEMA_VERSION = 1
 _EXPERIMENT_SCHEMA_VERSION = 3
 _TRANSACTION_SCHEMA_VERSION = 4
-_REPORT_TRANSACTION_SCHEMA_VERSION = 1
+_REPORT_TRANSACTION_SCHEMA_VERSION = 2
+_REPORT_INVALIDATION_SCHEMA_VERSION = 1
+_REPORT_DIGEST_SCHEMA_VERSION = 1
 
 _SUCCESS_RESPONSE_STATUSES = frozenset(
     {"ok", "partial", "complete", "completed", "success", "succeeded"}
@@ -104,6 +109,7 @@ _DERIVED_REPORT_FILENAMES = (
     MODEL_COMPARISON_FILENAME,
     REPORT_FILENAME,
 )
+_REPORT_PUBLISHED_FILENAMES = _DERIVED_REPORT_FILENAMES + (REPORT_DIGEST_FILENAME,)
 
 _WRITER_LOCK_STATE: dict[str, dict[str, Any]] = {}
 _WRITER_LOCK_STATE_GUARD = threading.RLock()
@@ -223,6 +229,7 @@ _DOCUMENTED_TOP_LEVEL_ENTRIES = frozenset(
         METRICS_BY_MODEL_FILENAME,
         MODEL_COMPARISON_FILENAME,
         REPORT_FILENAME,
+        REPORT_DIGEST_FILENAME,
     }
 )
 
@@ -493,6 +500,7 @@ def _prepare_experiment_locked(
 
     _cleanup_orphan_preparation_stages(normalized_output_dir)
     _recover_pending_transaction_locked(normalized_output_dir)
+    _recover_report_invalidation_locked(normalized_output_dir)
     _recover_report_transaction_locked(normalized_output_dir)
     if experiment_path.exists():
         _validate_top_level_entries(normalized_output_dir)
@@ -655,6 +663,7 @@ def _run_model_locked(
         raise ValueError(f"model {normalized_model!r} is not enabled in config.models")
     normalized_output_dir = Path(output_dir)
     _recover_pending_transaction_locked(normalized_output_dir)
+    _recover_report_invalidation_locked(normalized_output_dir)
     _recover_report_transaction_locked(normalized_output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
     snapshots, manifest = _validate_experiment_integrity(
@@ -682,6 +691,8 @@ def _run_model_locked(
         forecast_schema,
         realized_schema,
     )
+    artifact_generation = next(iter({str(row["generation"]) for row in manifest.values()}))
+    _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
     parameters_by_key = {
         snapshot.key: _prediction_parameters(config, snapshot)
         for snapshot in snapshots
@@ -925,6 +936,7 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
 
     normalized_output_dir = Path(output_dir)
     _recover_pending_transaction_locked(normalized_output_dir)
+    _recover_report_invalidation_locked(normalized_output_dir)
     _recover_report_transaction_locked(normalized_output_dir)
     metadata = _read_json(normalized_output_dir / EXPERIMENT_FILENAME)
     config_payload = metadata.get("config")
@@ -1415,8 +1427,10 @@ def _cleanup_known_atomic_temps(output_dir: Path) -> None:
         FORECAST_FILENAME,
         REALIZED_FILENAME,
         *(_DERIVED_REPORT_FILENAMES),
+        REPORT_DIGEST_FILENAME,
         TRANSACTION_FILENAME,
         REPORT_TRANSACTION_FILENAME,
+        REPORT_INVALIDATION_FILENAME,
     }
     for path in sorted(output_dir.iterdir(), key=lambda item: item.name):
         if not path.name.startswith(".") or not path.name.endswith(".tmp"):
@@ -1453,14 +1467,9 @@ def _copy_file_durable(source: Path, destination: Path) -> None:
 
 
 def _fsync_directory(path: Path) -> None:
-    try:
-        descriptor = os.open(path, os.O_RDONLY)
-    except OSError:
-        return
+    descriptor = os.open(path, os.O_RDONLY)
     try:
         os.fsync(descriptor)
-    except OSError:
-        pass
     finally:
         os.close(descriptor)
 
@@ -1864,7 +1873,7 @@ def _report_transaction_file_paths(
     stage_dir = output_dir / stage_dir_name
     _reject_symlink(stage_dir, "report transaction stage directory")
     raw_files = journal.get("files")
-    if not isinstance(raw_files, list) or len(raw_files) != len(_DERIVED_REPORT_FILENAMES):
+    if not isinstance(raw_files, list) or len(raw_files) != len(_REPORT_PUBLISHED_FILENAMES):
         raise ValueError("report transaction file set is invalid")
     paths: dict[str, Path] = {}
     for item in raw_files:
@@ -1872,19 +1881,19 @@ def _report_transaction_file_paths(
             raise ValueError("report transaction entry is invalid")
         final_name = item.get("final")
         stage_name = item.get("stage")
-        if final_name not in _DERIVED_REPORT_FILENAMES or final_name in paths:
+        if final_name not in _REPORT_PUBLISHED_FILENAMES or final_name in paths:
             raise ValueError("report transaction final set is invalid")
         if stage_name != final_name:
             raise ValueError("report transaction staged filename is invalid")
         paths[final_name] = stage_dir / stage_name
         _reject_symlink(paths[final_name], "report staged artifact")
-    if set(paths) != set(_DERIVED_REPORT_FILENAMES):
+    if set(paths) != set(_REPORT_PUBLISHED_FILENAMES):
         raise ValueError("report transaction final set is incomplete")
     return stage_dir, paths
 
 
 def _clear_report_transaction_outputs(output_dir: Path) -> None:
-    for filename in _DERIVED_REPORT_FILENAMES:
+    for filename in _REPORT_PUBLISHED_FILENAMES:
         path = output_dir / filename
         _reject_symlink(path, "derived report artifact")
         if path.exists():
@@ -1921,7 +1930,7 @@ def _recover_report_transaction_locked(output_dir: Path) -> None:
     stage_dir, staged_paths = _report_transaction_file_paths(output_dir, journal)
 
     committed_complete = state == "committed" and all(
-        (output_dir / filename).exists() for filename in _DERIVED_REPORT_FILENAMES
+        (output_dir / filename).exists() for filename in _REPORT_PUBLISHED_FILENAMES
     )
     if committed_complete:
         # A committed report set is already complete; only its journal/stage
@@ -1945,6 +1954,145 @@ def _recover_report_transaction_locked(output_dir: Path) -> None:
     _fsync_directory(output_dir)
 
 
+def _report_file_digest(path: Path) -> str:
+    _require_regular_file(path, "derived report artifact")
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _report_digest_payload(
+    paths: Mapping[str, Path],
+    artifact_generation: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": _REPORT_DIGEST_SCHEMA_VERSION,
+        "generation": artifact_generation,
+        "files": {
+            filename: _report_file_digest(paths[filename])
+            for filename in _DERIVED_REPORT_FILENAMES
+        },
+    }
+
+
+def _persist_report_invalidation_journal(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> None:
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("report invalidation transaction id is invalid")
+    expected_temp = f".{REPORT_INVALIDATION_FILENAME}.{transaction_id}.tmp"
+    if journal.get("journal_temp") != expected_temp:
+        raise ValueError("report invalidation journal temp is invalid")
+    path = output_dir / REPORT_INVALIDATION_FILENAME
+    _reject_symlink(path, "report invalidation journal")
+    _atomic_write_json(
+        path,
+        journal,
+        temporary_path=output_dir / expected_temp,
+    )
+    _fsync_directory(output_dir)
+
+
+def _report_invalidation_entries(
+    output_dir: Path,
+    journal: Mapping[str, Any],
+) -> list[tuple[dict[str, Any], Path]]:
+    if set(journal) != {
+        "schema_version",
+        "transaction_id",
+        "journal_temp",
+        "state",
+        "owner",
+        "files",
+    }:
+        raise ValueError("report invalidation journal fields are invalid")
+    transaction_id = journal.get("transaction_id")
+    if not isinstance(transaction_id, str) or not transaction_id:
+        raise ValueError("report invalidation transaction id is invalid")
+    if journal.get("journal_temp") != (
+        f".{REPORT_INVALIDATION_FILENAME}.{transaction_id}.tmp"
+    ):
+        raise ValueError("report invalidation journal temp is invalid")
+    state = journal.get("state")
+    if state not in {"prepared", "deleting", "committed", "cleaning"}:
+        raise ValueError("report invalidation journal state is invalid")
+    owner = journal.get("owner")
+    expected_output = str(output_dir.resolve(strict=False))
+    expected_lock = str(_writer_lock_path(output_dir).resolve(strict=False))
+    if not isinstance(owner, Mapping):
+        raise ValueError("report invalidation owner marker is missing")
+    if owner.get("owner_id") != transaction_id:
+        raise ValueError("report invalidation owner marker is invalid")
+    if owner.get("output_dir") != expected_output or owner.get("lock_path") != expected_lock:
+        raise ValueError("report invalidation owner path is invalid")
+    if isinstance(owner.get("pid"), bool) or not isinstance(owner.get("pid"), int):
+        raise ValueError("report invalidation owner pid is invalid")
+    raw_files = journal.get("files")
+    if not isinstance(raw_files, list) or len(raw_files) != len(_REPORT_PUBLISHED_FILENAMES):
+        raise ValueError("report invalidation file set is invalid")
+    entries: list[tuple[dict[str, Any], Path]] = []
+    seen: set[str] = set()
+    for raw in raw_files:
+        if not isinstance(raw, dict) or set(raw) != {"final", "state"}:
+            raise ValueError("report invalidation entry is invalid")
+        filename = raw.get("final")
+        if filename not in _REPORT_PUBLISHED_FILENAMES or filename in seen:
+            raise ValueError("report invalidation final set is invalid")
+        if raw.get("state") not in {"planned", "deleting", "deleted"}:
+            raise ValueError("report invalidation entry state is invalid")
+        seen.add(filename)
+        path = output_dir / filename
+        _reject_symlink(path, "report invalidation artifact")
+        entries.append((raw, path))
+    if seen != set(_REPORT_PUBLISHED_FILENAMES):
+        raise ValueError("report invalidation final set is incomplete")
+    return entries
+
+
+def _unlink_report_invalidation_path(path: Path) -> None:
+    _reject_symlink(path, "report invalidation artifact")
+    if not path.exists():
+        return
+    _require_regular_file(path, "report invalidation artifact")
+    path.unlink()
+
+
+def _recover_report_invalidation_locked(output_dir: Path) -> None:
+    path = output_dir / REPORT_INVALIDATION_FILENAME
+    temporary_paths = sorted(
+        output_dir.glob(f".{REPORT_INVALIDATION_FILENAME}.*.tmp"),
+        key=lambda item: item.name,
+    )
+    _reject_symlink(path, "report invalidation journal")
+    for temporary in temporary_paths:
+        _reject_symlink(temporary, "report invalidation journal temporary path")
+        _unlink_transaction_path(temporary)
+    if not path.exists():
+        return
+    journal = _read_json(path)
+    if journal.get("schema_version") != _REPORT_INVALIDATION_SCHEMA_VERSION:
+        raise ValueError("unsupported report invalidation journal schema")
+    entries = _report_invalidation_entries(output_dir, journal)
+    for raw, artifact_path in entries:
+        if artifact_path.exists():
+            raw["state"] = "deleting"
+            journal["state"] = "deleting"
+            _persist_report_invalidation_journal(output_dir, journal)
+            _unlink_report_invalidation_path(artifact_path)
+        raw["state"] = "deleted"
+        _persist_report_invalidation_journal(output_dir, journal)
+    journal["state"] = "committed"
+    _persist_report_invalidation_journal(output_dir, journal)
+    journal["state"] = "cleaning"
+    _persist_report_invalidation_journal(output_dir, journal)
+    _unlink_transaction_path(path)
+    _fsync_directory(output_dir)
+
+
 def _publish_report_artifacts_locked(
     output_dir: Path,
     *,
@@ -1954,6 +2102,7 @@ def _publish_report_artifacts_locked(
     comparisons: Sequence[Mapping[str, Any]],
     report_text: str,
 ) -> None:
+    _recover_report_invalidation_locked(output_dir)
     _recover_report_transaction_locked(output_dir)
     transaction_id = uuid.uuid4().hex
     stage_dir = output_dir / f".{REPORT_TRANSACTION_FILENAME}.{transaction_id}.stage"
@@ -1972,12 +2121,12 @@ def _publish_report_artifacts_locked(
         "stage_dir": stage_dir.name,
         "files": [
             {"final": filename, "stage": filename}
-            for filename in _DERIVED_REPORT_FILENAMES
+            for filename in _REPORT_PUBLISHED_FILENAMES
         ],
     }
     _persist_report_transaction(output_dir, journal)
     stage_dir.mkdir(parents=True, exist_ok=False)
-    staged = {filename: stage_dir / filename for filename in _DERIVED_REPORT_FILENAMES}
+    staged = {filename: stage_dir / filename for filename in _REPORT_PUBLISHED_FILENAMES}
     _atomic_write_csv(
         staged[METRICS_BY_STOCK_FILENAME],
         stock_output,
@@ -1994,9 +2143,13 @@ def _publish_report_artifacts_locked(
         _COMPARISON_OUTPUT_COLUMNS,
     )
     _atomic_write_text(staged[REPORT_FILENAME], report_text)
+    _atomic_write_json(
+        staged[REPORT_DIGEST_FILENAME],
+        _report_digest_payload(staged, artifact_generation),
+    )
     journal["state"] = "publishing"
     _persist_report_transaction(output_dir, journal)
-    for filename in _DERIVED_REPORT_FILENAMES:
+    for filename in _REPORT_PUBLISHED_FILENAMES:
         final_path = output_dir / filename
         _reject_symlink(final_path, "derived report artifact")
         os.replace(staged[filename], final_path)
@@ -2825,7 +2978,9 @@ def _validate_existing_report_artifacts(
     output_dir: Path,
     artifact_generation: str,
 ) -> None:
-    paths = [output_dir / filename for filename in _DERIVED_REPORT_FILENAMES]
+    paths = [output_dir / filename for filename in _REPORT_PUBLISHED_FILENAMES]
+    for path in paths:
+        _reject_symlink(path, "derived report artifact")
     existing = [path for path in paths if path.exists()]
     if not existing:
         return
@@ -2859,16 +3014,63 @@ def _validate_existing_report_artifacts(
     if marker not in report:
         raise ValueError("report.md generation is stale or missing")
 
+    digest_payload = _read_json(output_dir / REPORT_DIGEST_FILENAME)
+    if set(digest_payload) != {"schema_version", "generation", "files"}:
+        raise ValueError("report digest manifest fields are invalid")
+    if digest_payload.get("schema_version") != _REPORT_DIGEST_SCHEMA_VERSION:
+        raise ValueError("unsupported report digest manifest schema")
+    if digest_payload.get("generation") != artifact_generation:
+        raise ValueError("report digest manifest generation is stale")
+    stored_digests = digest_payload.get("files")
+    if not isinstance(stored_digests, Mapping) or set(stored_digests) != set(
+        _DERIVED_REPORT_FILENAMES
+    ):
+        raise ValueError("report digest manifest file set is invalid")
+    for filename in _DERIVED_REPORT_FILENAMES:
+        stored_digest = stored_digests.get(filename)
+        if (
+            not isinstance(stored_digest, str)
+            or len(stored_digest) != hashlib.sha256().digest_size * 2
+            or any(character not in "0123456789abcdef" for character in stored_digest)
+        ):
+            raise ValueError(f"report digest manifest entry {filename} is invalid")
+        actual_digest = _report_file_digest(output_dir / filename)
+        if actual_digest != stored_digest:
+            raise ValueError(f"derived report artifact {filename} content digest mismatch")
+
 
 def _invalidate_derived_report_artifacts_locked(output_dir: Path) -> None:
-    for filename in _DERIVED_REPORT_FILENAMES:
-        path = output_dir / filename
+    _recover_report_invalidation_locked(output_dir)
+    paths = [output_dir / filename for filename in _REPORT_PUBLISHED_FILENAMES]
+    for path in paths:
         _reject_symlink(path, "derived report artifact")
-        if not path.exists():
-            continue
-        if not path.is_file():
-            raise ValueError(f"derived report artifact is not a regular file: {path}")
-        path.unlink()
+    if not any(path.exists() for path in paths):
+        return
+
+    transaction_id = uuid.uuid4().hex
+    writer_owner = _active_writer_owner(output_dir) or {}
+    journal: dict[str, Any] = {
+        "schema_version": _REPORT_INVALIDATION_SCHEMA_VERSION,
+        "transaction_id": transaction_id,
+        "journal_temp": f".{REPORT_INVALIDATION_FILENAME}.{transaction_id}.tmp",
+        "state": "prepared",
+        "owner": {
+            "owner_id": transaction_id,
+            "writer_owner_id": writer_owner.get("owner_id", ""),
+            "pid": os.getpid(),
+            "output_dir": str(output_dir.resolve(strict=False)),
+            "lock_path": str(_writer_lock_path(output_dir).resolve(strict=False)),
+        },
+        "files": [
+            {
+                "final": filename,
+                "state": "planned" if (output_dir / filename).exists() else "deleted",
+            }
+            for filename in _REPORT_PUBLISHED_FILENAMES
+        ],
+    }
+    _persist_report_invalidation_journal(output_dir, journal)
+    _recover_report_invalidation_locked(output_dir)
 
 
 def _validate_report_success_identity(
