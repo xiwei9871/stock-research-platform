@@ -326,6 +326,21 @@ class ModelRunResult:
     status_counts: Mapping[str, int]
 
 
+@dataclass(frozen=True)
+class _DerivedReportArtifacts:
+    metric_rows: list[dict[str, Any]]
+    stock_output: list[dict[str, Any]]
+    model_output: list[dict[str, Any]]
+    comparisons: list[dict[str, Any]]
+    status_counts: dict[str, int]
+    model_status_counts: dict[str, dict[str, int]]
+    coverage: list[dict[str, Any]]
+    latency: dict[str, Any]
+    model_metadata: dict[str, Any]
+    conclusion: str
+    report_text: str
+
+
 class _RunnerFailure(RuntimeError):
     def __init__(
         self,
@@ -692,10 +707,40 @@ def _run_model_locked(
         realized_schema,
     )
     artifact_generation = next(iter({str(row["generation"]) for row in manifest.values()}))
+    config_payload = metadata.get("config")
+    if not isinstance(config_payload, Mapping):
+        raise ValueError("experiment.json is missing config metadata")
+
+    def validate_legacy_report() -> None:
+        _validate_report_artifacts(
+            snapshots,
+            manifest,
+            config,
+            forecast_rows,
+            realized_rows,
+        )
+        derived = _derive_report_artifacts(
+            metadata=metadata,
+            snapshots=snapshots,
+            manifest=manifest,
+            forecast_rows=forecast_rows,
+            realized_rows=realized_rows,
+            config_payload=config_payload,
+            artifact_generation=artifact_generation,
+        )
+        _validate_legacy_report_content(
+            normalized_output_dir,
+            stock_output=derived.stock_output,
+            model_output=derived.model_output,
+            comparisons=derived.comparisons,
+            report_text=derived.report_text,
+        )
+
     _prepare_report_artifacts_for_generation_locked(
         normalized_output_dir,
         artifact_generation,
         for_build=False,
+        legacy_validator=validate_legacy_report,
     )
     _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
     parameters_by_key = {
@@ -986,71 +1031,27 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
     if not legacy_report:
         _validate_existing_report_artifacts(normalized_output_dir, artifact_generation)
 
-    horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
-    raw_seed = config_payload.get("seed")
-    seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
-
-    metric_rows = _build_metric_rows(
-        snapshots,
-        manifest,
-        forecast_rows,
-        realized_rows,
-        horizons,
-        config_payload,
-    )
-    stock_summaries = aggregate_metrics(
-        metric_rows,
-        group_by=("asset_id", "model", "horizon"),
-    )
-    model_summaries = aggregate_metrics(
-        metric_rows,
-        group_by=("model", "horizon"),
-    )
-    stock_output = [
-        _metric_summary_row(row, generation=artifact_generation)
-        for row in stock_summaries
-    ]
-    model_output = [
-        _metric_summary_row(row, generation=artifact_generation)
-        for row in model_summaries
-    ]
-    comparisons = _build_comparisons(metric_rows, seed=seed)
-    comparisons = [
-        {**row, "generation": artifact_generation}
-        for row in comparisons
-    ]
-
-    status_counts = Counter(row.get("status", "") for row in manifest.values())
-    model_status_counts: dict[str, dict[str, int]] = defaultdict(lambda: Counter())
-    for row in manifest.values():
-        model_status_counts[row.get("model", "")] [row.get("status", "")] += 1
-    model_status_counts = {
-        model: dict(sorted(counts.items()))
-        for model, counts in sorted(model_status_counts.items())
-    }
-    coverage = _coverage_by_model_horizon(manifest, forecast_rows, horizons)
-    latency = _latency_summary(manifest)
-    model_metadata = _model_metadata_summary(manifest)
-    conclusion = _choose_conclusion(
-        comparisons,
-        model_summaries,
-        metric_rows,
-    )
-    if conclusion not in _CONCLUSIONS:  # pragma: no cover - defensive invariant.
-        raise ValueError(f"unsupported conclusion {conclusion!r}")
-
-    report_text = _render_report(
+    derived = _derive_report_artifacts(
         metadata=metadata,
-        conclusion=conclusion,
-        status_counts=dict(sorted(status_counts.items())),
-        model_status_counts=model_status_counts,
-        coverage=coverage,
-        model_summaries=model_output,
-        comparisons=comparisons,
-        latency=latency,
-        model_metadata=model_metadata,
+        snapshots=snapshots,
+        manifest=manifest,
+        forecast_rows=forecast_rows,
+        realized_rows=realized_rows,
+        config_payload=config_payload,
         artifact_generation=artifact_generation,
     )
+    metric_rows = derived.metric_rows
+    stock_output = derived.stock_output
+    model_output = derived.model_output
+    comparisons = derived.comparisons
+
+    status_counts = derived.status_counts
+    model_status_counts = derived.model_status_counts
+    coverage = derived.coverage
+    latency = derived.latency
+    model_metadata = derived.model_metadata
+    conclusion = derived.conclusion
+    report_text = derived.report_text
     if legacy_report:
         _validate_legacy_report_content(
             normalized_output_dir,
@@ -1103,6 +1104,95 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
         "model_metadata": model_metadata,
         "comparisons": comparisons,
     }
+
+
+def _derive_report_artifacts(
+    *,
+    metadata: Mapping[str, Any],
+    snapshots: Sequence[RollingSnapshot],
+    manifest: Mapping[str, Mapping[str, Any]],
+    forecast_rows: Sequence[Mapping[str, Any]],
+    realized_rows: Sequence[Mapping[str, Any]],
+    config_payload: Mapping[str, Any],
+    artifact_generation: str,
+) -> _DerivedReportArtifacts:
+    horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
+    raw_seed = config_payload.get("seed")
+    seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
+
+    metric_rows = _build_metric_rows(
+        snapshots,
+        manifest,
+        forecast_rows,
+        realized_rows,
+        horizons,
+        config_payload,
+    )
+    stock_summaries = aggregate_metrics(
+        metric_rows,
+        group_by=("asset_id", "model", "horizon"),
+    )
+    model_summaries = aggregate_metrics(
+        metric_rows,
+        group_by=("model", "horizon"),
+    )
+    stock_output = [
+        _metric_summary_row(row, generation=artifact_generation)
+        for row in stock_summaries
+    ]
+    model_output = [
+        _metric_summary_row(row, generation=artifact_generation)
+        for row in model_summaries
+    ]
+    comparisons = [
+        {**row, "generation": artifact_generation}
+        for row in _build_comparisons(metric_rows, seed=seed)
+    ]
+
+    status_counts = Counter(row.get("status", "") for row in manifest.values())
+    model_status_counts: dict[str, dict[str, int]] = defaultdict(lambda: Counter())
+    for row in manifest.values():
+        model_status_counts[row.get("model", "")][row.get("status", "")] += 1
+    model_status_counts = {
+        model: dict(sorted(counts.items()))
+        for model, counts in sorted(model_status_counts.items())
+    }
+    coverage = _coverage_by_model_horizon(manifest, forecast_rows, horizons)
+    latency = _latency_summary(manifest)
+    model_metadata = _model_metadata_summary(manifest)
+    conclusion = _choose_conclusion(
+        comparisons,
+        model_summaries,
+        metric_rows,
+    )
+    if conclusion not in _CONCLUSIONS:  # pragma: no cover - defensive invariant.
+        raise ValueError(f"unsupported conclusion {conclusion!r}")
+
+    report_text = _render_report(
+        metadata=metadata,
+        conclusion=conclusion,
+        status_counts=dict(sorted(status_counts.items())),
+        model_status_counts=model_status_counts,
+        coverage=coverage,
+        model_summaries=model_output,
+        comparisons=comparisons,
+        latency=latency,
+        model_metadata=model_metadata,
+        artifact_generation=artifact_generation,
+    )
+    return _DerivedReportArtifacts(
+        metric_rows=metric_rows,
+        stock_output=stock_output,
+        model_output=model_output,
+        comparisons=comparisons,
+        status_counts=dict(sorted(status_counts.items())),
+        model_status_counts=model_status_counts,
+        coverage=coverage,
+        latency=latency,
+        model_metadata=model_metadata,
+        conclusion=conclusion,
+        report_text=report_text,
+    )
 
 
 def _default_snapshot_loader(
@@ -3205,6 +3295,7 @@ def _prepare_report_artifacts_for_generation_locked(
     artifact_generation: str,
     *,
     for_build: bool,
+    legacy_validator: Callable[[], None] | None = None,
 ) -> bool:
     """Migrate or remove legacy report files before strict validation.
 
@@ -3246,6 +3337,9 @@ def _prepare_report_artifacts_for_generation_locked(
         _invalidate_derived_report_artifacts_locked(output_dir)
         return False
     if not for_build:
+        if legacy_validator is None:
+            raise ValueError("legacy report validator is required for run migration")
+        legacy_validator()
         _invalidate_derived_report_artifacts_locked(output_dir)
         return False
     return True

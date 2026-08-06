@@ -1822,6 +1822,40 @@ def test_run_model_migrates_legacy_report_bundle_without_build_report(
         assert not (output_dir / filename).exists()
 
 
+def test_run_model_rejects_tampered_legacy_report_bundle_without_digest(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=output_dir,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+    build_report(output_dir=output_dir)
+    (output_dir / runner.REPORT_DIGEST_FILENAME).unlink()
+    metrics_path = output_dir / runner.METRICS_BY_MODEL_FILENAME
+    rows = read_csv_rows(metrics_path)
+    rows[0]["mean_absolute_return_error"] = "999999.0"
+    with metrics_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    tampered_bytes = metrics_path.read_bytes()
+
+    with pytest.raises(ValueError, match="legacy|content|report"):
+        run_model(
+            config,
+            model="small",
+            output_dir=output_dir,
+            client=FakeClient(),
+        )
+
+    assert metrics_path.read_bytes() == tampered_bytes
+    assert not (output_dir / runner.REPORT_DIGEST_FILENAME).exists()
+
+
 def test_legacy_same_generation_report_tampering_is_not_overwritten(
     prepared_experiment,
 ):
