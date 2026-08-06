@@ -97,7 +97,10 @@ class KronosClientError(RuntimeError):
             if isinstance(raw_response, Mapping)
             else raw_response
         )
-        self.raw_body_excerpt = raw_body_excerpt
+        self.raw_body_excerpt = _bounded_raw_body_excerpt(
+            raw_body_excerpt,
+            token=redaction_token,
+        )
 
 
 class KronosClient:

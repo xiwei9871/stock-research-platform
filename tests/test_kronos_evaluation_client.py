@@ -605,6 +605,31 @@ def test_non_200_preserves_bounded_redacted_excerpt_for_non_json_body():
     assert "upstream detail" not in str(exc_info.value)
 
 
+def test_public_error_constructor_sanitizes_and_bounds_raw_body_excerpt():
+    token = "constructor-configured-token"
+    private_value = "constructor-private-key-value"
+    body = (
+        "diagnostic=keep "
+        f"private_key={private_value}, "
+        f"echo={token} "
+        + ("ordinary diagnostic " * 300)
+    )
+
+    error = KronosClientError(
+        "Kronos request failed",
+        category=KronosErrorCategory.HTTP,
+        code=KronosErrorCode.HTTP_ERROR,
+        raw_body_excerpt=body,
+        redaction_token=token,
+    )
+
+    assert error.raw_body_excerpt
+    assert len(error.raw_body_excerpt) <= 512
+    assert private_value not in error.raw_body_excerpt
+    assert token not in error.raw_body_excerpt
+    assert "diagnostic=keep" in error.raw_body_excerpt
+
+
 def test_plaintext_excerpt_redacts_all_sensitive_key_value_forms():
     sensitive_values = {
         "private_key": "private-key-value",
