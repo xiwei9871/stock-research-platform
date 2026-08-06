@@ -26,25 +26,19 @@
 
 ## 2. Base 安全预检与模型切换
 
-### 2.1 预检原则
+### 2.1 固定执行顺序
 
-1. 先确认生产 `8123` 健康且身份为 `Kronos-small`，保留生产服务不动。
-2. 优先在独立端口 `8124` 启动 base；只有确认 GPU 显存足够、回滚动作已准备好，才允许考虑串行切换。
-3. `/health` 返回的模型身份必须与请求模型完全一致。身份不一致时停止，不能 fallback 到当前活动模型。
-4. 正式评估前至少做一次单股票、单截止日预测，并记录 `sample_count=20`、输出时间戳完整性、GPU 显存和端到端延迟。
+严格按以下顺序执行，不能跳步：
 
-### 2.2 在 8124 启动 Kronos-base
+1. 在运行研究代码的 CLI 主机执行 2.2 的认证生产预检。命令必须成功，并输出规范化身份 `Kronos-small`；如果服务不可用、令牌未加载或身份不匹配，立即停止，**不得启动任何 8124 进程**。
+2. 只有 2.2 成功后，才在 187 的独立终端/会话执行 2.3，启动 8124；不得占用或停止 8123。
+3. 8124 启动后，执行 2.4 的认证 base health/identity 检查；通过后才可执行单股票预检和正式评估。
+4. `/health` 返回的模型身份必须与请求模型完全一致。身份不一致时停止，不能 fallback 到当前活动模型。
+5. 只有确认 GPU 显存足够、回滚动作已准备好，才允许考虑串行切换；正式评估前至少做一次单股票、单截止日预测，并记录 `sample_count=20`、输出时间戳完整性、GPU 显存和端到端延迟。
 
-在 187 的独立终端/会话执行以下命令，不要占用或停止 8123：
+### 2.2 启动 8124 前认证检查生产 Kronos-small
 
-```bash
-cd /home/mqkj/kronos
-KRONOS_MODEL_NAME=Kronos-base \
-/home/mqkj/miniconda3/envs/kronos/bin/python -m uvicorn service.app:app \
-  --host 0.0.0.0 --port 8124
-```
-
-认证 health/model 预检使用仓库现有的 `KronosClient`，从研究 CLI 主机执行。下面的 stdin 脚本只读取令牌环境变量并把认证请求交给客户端；输出只包含地址、状态和模型身份，绝不打印令牌值。它同时验证 8123/8124 的模型身份：
+**在执行任何启动 8124 的命令之前**，先在运行研究代码的 CLI 主机执行以下探针。它只访问 `192.168.3.187:8123`，使用仓库现有的 `KronosClient` 和 `assert_model()`；失败时以非零状态退出，不会打印异常详情或令牌，也不得继续执行 2.3。
 
 ```bash
 cd /path/to/stock_research
@@ -54,29 +48,95 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path("src").resolve()))
-from stock_research.kronos_evaluation_client import KronosClient
+from stock_research.kronos_evaluation_client import KronosClient, KronosClientError
 
-token = os.environ["KRONOS_INTERNAL_TOKEN"]
-for url, expected_model in (
-    ("http://192.168.3.187:8123", "small"),
-    ("http://192.168.3.187:8124", "base"),
-):
+url = "http://192.168.3.187:8123"
+expected_model = "small"  # KronosClient 的规范化身份，对外标记为 Kronos-small
+try:
+    token = os.environ["KRONOS_INTERNAL_TOKEN"]
+except KeyError:
+    raise SystemExit(
+        "STOP: KRONOS_INTERNAL_TOKEN is not loaded in the CLI host environment."
+    ) from None
+
+try:
     with KronosClient(url, token=token, timeout=30) as client:
         health = client.assert_model(expected_model)
-        print(f"{url} status=ok model={health['model']}")
+except KronosClientError:
+    raise SystemExit(
+        "STOP: authenticated 8123 health/model preflight failed; do not start 8124."
+    ) from None
+
+if health.get("model") != expected_model:
+    raise SystemExit(
+        "STOP: 8123 normalized identity is not Kronos-small; do not start 8124."
+    )
+
+print(f"{url} status=ok normalized_model=Kronos-small")
 PY
 ```
 
-如果 CLI 主机的安全环境尚未加载 `KRONOS_INTERNAL_TOKEN`，先按现有凭据管理流程加载，不要手工填写、回显或通过进程参数传递令牌值。
+如果 CLI 主机的安全环境尚未加载 `KRONOS_INTERNAL_TOKEN`，先按现有凭据管理流程加载；令牌只存在于安全环境变量中，不要手工填写、回显、写入日志或通过进程参数传递令牌值。
+
+### 2.3 在 8124 启动 Kronos-base
+
+仅在 2.2 成功后，在 187 的独立终端/会话执行以下命令，不要占用或停止 8123：
+
+```bash
+cd /home/mqkj/kronos
+KRONOS_MODEL_NAME=Kronos-base \
+/home/mqkj/miniconda3/envs/kronos/bin/python -m uvicorn service.app:app \
+  --host 0.0.0.0 --port 8124
+```
+
+### 2.4 启动后认证检查 8124 的 Kronos-base
+
+8124 启动后，从研究 CLI 主机执行以下认证检查。它是启动后的第二道门：只接受规范化身份 `base`（对外标记为 `Kronos-base`）；失败或 mismatch 时停止后续评估，不得 fallback：
+
+```bash
+cd /path/to/stock_research
+rtk python3 - <<'PY'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("src").resolve()))
+from stock_research.kronos_evaluation_client import KronosClient, KronosClientError
+
+url = "http://192.168.3.187:8124"
+expected_model = "base"  # KronosClient 的规范化身份，对外标记为 Kronos-base
+try:
+    token = os.environ["KRONOS_INTERNAL_TOKEN"]
+except KeyError:
+    raise SystemExit(
+        "STOP: KRONOS_INTERNAL_TOKEN is not loaded in the CLI host environment."
+    ) from None
+
+try:
+    with KronosClient(url, token=token, timeout=30) as client:
+        health = client.assert_model(expected_model)
+except KronosClientError:
+    raise SystemExit(
+        "STOP: authenticated 8124 health/model preflight failed; stop evaluation."
+    ) from None
+
+if health.get("model") != expected_model:
+    raise SystemExit(
+        "STOP: 8124 normalized identity is not Kronos-base; stop evaluation."
+    )
+
+print(f"{url} status=ok normalized_model=Kronos-base")
+PY
+```
 
 人工核对：
 
 - 8123 的 `model` 是 `Kronos-small`；
 - 8124 的 `model` 是 `Kronos-base`；
-- 没有把一个模型的健康响应当成另一个模型使用；
+- 8123 的预检在启动 8124 之前已成功，且没有把一个模型的健康响应当成另一个模型使用；
 - 服务状态、模型身份和权重身份均写入本次操作记录。
 
-### 2.3 单股票预测、显存和延迟
+### 2.5 单股票预测、显存和延迟
 
 用一个临时的单股票输入目录做预检；`--allow-smoke` 只允许用于此类预检，不可用于正式 20 股票结论。以下是本地研究 CLI 主机命令，可按实际日期替换占位路径和日期；该示例访问 187 上的 8124，不是 CLI 主机的 loopback 地址：
 
@@ -112,7 +172,7 @@ nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --for
 - GPU 型号、预测前/峰值/预测后显存和 GPU 利用率；
 - 服务日志中的加载错误、CUDA OOM、超时或异常响应。
 
-### 2.4 GPU 显存不足时的串行切换
+### 2.6 GPU 显存不足时的串行切换
 
 本仓库没有经过验证的 Kronos service-switch 脚本或 systemd unit，也不提供任何精确的切换命令。串行切换是硬前置条件，不是可以临时发挥的操作步骤。如果 8124 无法加载 base 或出现 CUDA OOM，只有在满足下面的前置条件后才能考虑串行切换：
 
