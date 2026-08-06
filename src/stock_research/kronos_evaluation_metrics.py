@@ -37,6 +37,15 @@ from numbers import Integral
 from typing import Any
 
 
+__all__ = (
+    "aggregate_metrics",
+    "build_baselines",
+    "compare_models",
+    "score_forecast",
+    "validate_comparison_seed",
+)
+
+
 _SUCCESS_STATUSES = frozenset(
     {
         "complete",
@@ -78,8 +87,32 @@ _NUMERIC_METRIC_FIELDS = (
     "pinball_loss_p90",
 )
 _BOOLEAN_METRIC_FIELDS = ("direction_hit", "interval_coverage")
+_NON_NEGATIVE_METRIC_FIELDS = frozenset(
+    {
+        "absolute_return_error",
+        "normalized_price_error",
+        "interval_width",
+        "pinball_loss_p10",
+        "pinball_loss_p50",
+        "pinball_loss_p90",
+    }
+)
 _HORIZON_KEY_RE = re.compile(r"^h([1-9][0-9]*)$")
 _LONG_VALUE_FIELDS = ("value", "metric_value", "score", "metric")
+
+
+def validate_comparison_seed(seed: Any) -> int:
+    """Validate the deterministic seed required by research comparisons.
+
+    The rolling-evaluation runner should call this before comparing model
+    results and reject ``config.seed=None``.  This research-only contract is
+    intentionally stricter than the HTTP client, which may pass ``seed=None``
+    to the service-level prediction endpoint.
+    """
+
+    if isinstance(seed, bool) or not isinstance(seed, Integral):
+        raise ValueError("seed must be an integer")
+    return int(seed)
 
 
 def score_forecast(
@@ -406,7 +439,7 @@ def compare_models(
     right_name = _model_name(right, "right")
     if left_name == right_name:
         raise ValueError("left and right models must be different")
-    normalized_seed = _validate_seed(seed)
+    normalized_seed = validate_comparison_seed(seed)
     normalized_bootstrap_samples = _positive_int(
         bootstrap_samples, "bootstrap_samples"
     )
@@ -488,19 +521,22 @@ def compare_models(
     for (block, _subkey), values_by_model in long_subgroups.items():
         left_values = values_by_model.get(left_name, [])
         right_values = values_by_model.get(right_name, [])
-        pair_count = min(len(left_values), len(right_values))
-        if pair_count == 0:
-            excluded_count += len(left_values) + len(right_values)
-            continue
-        for pair_index in range(pair_count):
+        if len(left_values) != len(right_values):
+            raise ValueError(
+                "long-form model rows must have equal cardinality for each horizon"
+            )
+        if len(left_values) > 1:
+            raise ValueError(
+                "ambiguous long-form pairing; provide one unique horizon per model row"
+            )
+        for pair_index in range(len(left_values)):
             block_deltas[block].append(
                 _finite_result(
                     right_values[pair_index] - left_values[pair_index],
                     "model_delta",
                 )
             )
-        paired_row_count += pair_count
-        excluded_count += len(left_values) + len(right_values) - 2 * pair_count
+        paired_row_count += len(left_values)
 
     complete_block_rows = [
         deltas
@@ -770,7 +806,10 @@ def _row_status(row: Mapping[str, Any]) -> str:
 def _optional_metric_float(row: Mapping[str, Any], field: str) -> float | None:
     if field not in row or row[field] is None:
         return None
-    return _finite_float(row[field], field)
+    value = _finite_float(row[field], field)
+    if field in _NON_NEGATIVE_METRIC_FIELDS and value < 0:
+        raise ValueError(f"{field} must be non-negative")
+    return value
 
 
 def _optional_metric_bool(row: Mapping[str, Any], field: str) -> bool | None:
@@ -834,12 +873,6 @@ def _model_name(value: Any, field_name: str) -> str:
     return value.strip()
 
 
-def _validate_seed(seed: Any) -> int:
-    if isinstance(seed, bool) or not isinstance(seed, Integral):
-        raise ValueError("seed must be an integer")
-    return int(seed)
-
-
 def _comparison_row_status(
     row: Mapping[str, Any], left: str, right: str
 ) -> str:
@@ -898,6 +931,10 @@ def _optional_numeric_value(
 def _optional_comparison_value(row: Mapping[str, Any], model: str) -> float | None:
     if model not in row or row[model] is None:
         return None
+    if isinstance(row[model], (list, tuple)):
+        raise ValueError(
+            "sequence-valued model fields require explicit horizon rows"
+        )
     return _finite_float(row[model], model)
 
 

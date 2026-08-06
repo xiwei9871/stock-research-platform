@@ -10,6 +10,7 @@ from stock_research.kronos_evaluation_metrics import (
     build_baselines,
     compare_models,
     score_forecast,
+    validate_comparison_seed,
 )
 
 
@@ -316,6 +317,25 @@ def test_aggregate_metrics_rejects_non_scalar_group_keys(bad_key):
         aggregate_metrics([row], group_by=("asset_id",))
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "absolute_return_error",
+        "normalized_price_error",
+        "interval_width",
+        "pinball_loss_p10",
+        "pinball_loss_p50",
+        "pinball_loss_p90",
+    ],
+)
+def test_aggregate_metrics_rejects_negative_non_negative_metrics(field):
+    row = _metric_row("A", "2025-01-02", 1)
+    row[field] = -0.001
+
+    with pytest.raises(ValueError, match=f"{field}.*non-negative"):
+        aggregate_metrics([row])
+
+
 def test_compare_models_bootstraps_complete_asset_origin_blocks_not_individual_rows():
     rows = [
         {"asset_id": "A", "origin_date": "2025-01-02", "horizon": 1, "small": 0.10, "base": 0.08},
@@ -414,6 +434,85 @@ def test_compare_models_rejects_non_scalar_block_keys(bad_key):
 
     with pytest.raises(ValueError, match="scalar"):
         compare_models(rows, seed=7)
+
+
+def test_compare_models_long_rows_pair_by_horizon_independent_of_input_order():
+    rows = [
+        {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "horizon": 1, "value": 0.10},
+        {"asset_id": "A", "origin_date": "2025-01-02", "model": "base", "horizon": 1, "value": 0.08},
+        {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "horizon": 3, "value": 0.20},
+        {"asset_id": "A", "origin_date": "2025-01-02", "model": "base", "horizon": 3, "value": 0.15},
+    ]
+    reordered = [rows[3], rows[0], rows[2], rows[1]]
+
+    first = compare_models(rows, seed=7)
+    second = compare_models(reordered, seed=7)
+
+    assert first == second
+    assert first["base_minus_small"] == pytest.approx((-0.02 - 0.05) / 2)
+
+
+def test_compare_models_rejects_ambiguous_or_unequal_long_pair_sequences():
+    with pytest.raises(ValueError, match="ambiguous.*horizon"):
+        compare_models(
+            [
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "value": 0.10},
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "base", "value": 0.08},
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "value": 0.20},
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "base", "value": 0.15},
+            ],
+            seed=7,
+        )
+
+    with pytest.raises(ValueError, match="equal cardinality"):
+        compare_models(
+            [
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "horizon": 1, "value": 0.10},
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "small", "horizon": 3, "value": 0.20},
+                {"asset_id": "A", "origin_date": "2025-01-02", "model": "base", "horizon": 1, "value": 0.08},
+            ],
+            seed=7,
+        )
+
+
+def test_compare_models_rejects_sequence_valued_wide_model_fields():
+    with pytest.raises(ValueError, match="sequence-valued"):
+        compare_models(
+            [
+                {
+                    "asset_id": "A",
+                    "origin_date": "2025-01-02",
+                    "small": [0.10, 0.20],
+                    "base": [0.08, 0.15],
+                }
+            ],
+            seed=7,
+        )
+
+
+def test_compare_models_seeded_multi_block_bootstrap_is_exact_and_row_weighted():
+    rows = [
+        {"asset_id": "A", "origin_date": "2025-01-02", "horizon": 1, "small": 0.0, "base": 0.0},
+        {"asset_id": "B", "origin_date": "2025-01-02", "horizon": 1, "small": 0.0, "base": 10.0},
+        {"asset_id": "B", "origin_date": "2025-01-02", "horizon": 3, "small": 0.0, "base": 10.0},
+        {"asset_id": "B", "origin_date": "2025-01-02", "horizon": 5, "small": 0.0, "base": 10.0},
+    ]
+
+    comparison = compare_models(rows, seed=7, bootstrap_samples=1000)
+
+    assert comparison["paired_count"] == 2
+    assert comparison["paired_row_count"] == 4
+    assert comparison["base_minus_small"] == pytest.approx(7.5)
+    assert comparison["ci_low"] == pytest.approx(0.0)
+    assert comparison["ci_high"] == pytest.approx(10.0)
+    assert comparison == compare_models(rows, seed=7, bootstrap_samples=1000)
+
+
+def test_validate_comparison_seed_is_exported_and_fail_closed():
+    assert validate_comparison_seed(7) == 7
+    for bad_seed in (None, True, 1.5):
+        with pytest.raises(ValueError, match="seed"):
+            validate_comparison_seed(bad_seed)
 
 
 def test_compare_models_accepts_long_model_rows():
