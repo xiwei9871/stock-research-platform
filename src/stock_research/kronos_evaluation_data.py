@@ -163,6 +163,26 @@ def prepare_rolling_snapshots(
         input_window,
         forecast_horizon,
         origin_dates=origin_dates,
+        asset_ids=asset_ids,
+    )
+
+
+def snapshot_to_json_payload(snapshot: RollingSnapshot) -> dict[str, Any]:
+    """Return an independent JSON-compatible payload for a frozen snapshot."""
+
+    if not isinstance(snapshot, RollingSnapshot):
+        raise TypeError("snapshot must be a RollingSnapshot")
+    return thaw_json_value(
+        {
+            "asset_id": snapshot.asset_id,
+            "origin_date": snapshot.origin_date,
+            "history": snapshot.history,
+            "future_timestamps": snapshot.future_timestamps,
+            "realized": snapshot.realized,
+            "input_fingerprint": snapshot.input_fingerprint,
+            "status": snapshot.status,
+            "reason": snapshot.reason,
+        }
     )
 
 
@@ -207,6 +227,7 @@ def build_rolling_snapshots(
     forecast_horizon: int,
     *,
     origin_dates: Iterable[str],
+    asset_ids: Sequence[str] | None = None,
 ) -> list[RollingSnapshot]:
     """Build immutable, point-in-time rolling snapshots without future leakage.
 
@@ -214,7 +235,9 @@ def build_rolling_snapshots(
     calendar.  It is never inferred from the asset-filtered frame.
     ``origin_dates`` is an explicit bounded evaluation window. Every origin
     must be contained in the full-market calendar, while all future
-    timestamps still come only from that calendar.
+    timestamps still come only from that calendar. When ``asset_ids`` is
+    provided, it is the requested universe and missing assets receive
+    explicit ``insufficient_input`` snapshots rather than disappearing.
     """
 
     _require_positive_int("input_window", input_window)
@@ -231,12 +254,22 @@ def build_rolling_snapshots(
         )
     _require_frame_columns(frame, REQUIRED_FRAME_COLUMNS)
     if frame.empty:
+        bars_by_asset: dict[str, tuple[_Bar, ...]] = {}
+        frame_asset_ids: set[str] = set()
+    else:
+        bars_by_asset, frame_asset_ids = _normalize_bars(frame)
+    if asset_ids is None:
+        evaluation_asset_ids = frame_asset_ids
+    else:
+        normalized_asset_ids = normalize_asset_ids(asset_ids)
+        if not normalized_asset_ids:
+            raise ValueError("asset_ids must not be empty")
+        evaluation_asset_ids = set(normalized_asset_ids)
+    if not evaluation_asset_ids:
         return []
-
-    bars_by_asset, asset_ids = _normalize_bars(frame)
     snapshots: list[RollingSnapshot] = []
 
-    for asset_id in sorted(asset_ids):
+    for asset_id in sorted(evaluation_asset_ids):
         bars = bars_by_asset.get(asset_id, ())
         bars_by_date: dict[str, tuple[_Bar, ...]] = {}
         for bar in bars:
@@ -247,6 +280,23 @@ def build_rolling_snapshots(
             future_timestamps = tuple(
                 calendar[future_start : future_start + forecast_horizon]
             )
+
+            if not bars:
+                snapshots.append(
+                    _make_snapshot(
+                        asset_id=asset_id,
+                        origin_date=origin,
+                        history=(),
+                        future_timestamps=future_timestamps,
+                        realized=(),
+                        status="insufficient_input",
+                        reason=(
+                            "no daily bars available for requested asset "
+                            f"{asset_id}"
+                        ),
+                    )
+                )
+                continue
 
             history_candidates = tuple(
                 bar for bar in bars if bar.timestamp <= origin
@@ -458,18 +508,23 @@ def _normalize_bars(
             row["trade_date"], f"frame row {index}.trade_date"
         )
 
-        error: str | None = None
-        try:
-            values = _normalize_history_values(row, asset_id, timestamp)
-        except ValueError as exc:
+        trade_status = row["trade_status"]
+        if _is_tradable_status(trade_status):
+            error: str | None = None
+            try:
+                values = _normalize_history_values(row, asset_id, timestamp)
+            except ValueError as exc:
+                values = None
+                error = str(exc)
+        else:
             values = None
-            error = str(exc)
+            error = None
         bars[asset_id].append(
             _Bar(
                 asset_id=asset_id,
                 timestamp=timestamp,
                 values=values,
-                trade_status=row["trade_status"],
+                trade_status=trade_status,
                 error=error,
             )
         )

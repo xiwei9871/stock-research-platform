@@ -336,6 +336,35 @@ def test_suspended_future_bar_is_insufficient_truth_without_realized_padding():
 
 
 @pytest.mark.parametrize(
+    ("origin_date", "input_window", "forecast_horizon", "expected_status"),
+    [
+        ("2024-01-03", 3, 3, "insufficient_truth"),
+        ("2024-01-05", 3, 1, "insufficient_input"),
+    ],
+)
+def test_non_tradable_bar_with_null_ohlcv_is_statused_before_numeric_validation(
+    origin_date, input_window, forecast_horizon, expected_status
+):
+    frame = make_daily_frame(periods=8)
+    target_date = pd.Timestamp("2024-01-04")
+    frame.loc[frame["trade_date"] == target_date, "trade_status"] = "0"
+    frame.loc[frame["trade_date"] == target_date, list(data.KRONOS_HISTORY_FIELDS)] = None
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=input_window,
+        forecast_horizon=forecast_horizon,
+        origin_dates=[origin_date],
+    )[0]
+
+    assert snapshot.status == expected_status
+    assert snapshot.status != "invalid_input"
+    assert snapshot.status != "ready"
+    assert "suspended" in snapshot.reason
+
+
+@pytest.mark.parametrize(
     ("trade_status", "expected_status"),
     [
         ("1", "ready"),
@@ -420,6 +449,47 @@ def test_origin_dates_are_required_and_non_empty():
             forecast_horizon=1,
             origin_dates=[],
         )
+
+
+def test_requested_asset_without_rows_emits_insufficient_input_snapshot():
+    frame = make_daily_frame(periods=8)
+
+    snapshots = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=2,
+        origin_dates=["2024-01-05"],
+        asset_ids=("CN:SH:600418", "CN:SZ:000001"),
+    )
+
+    missing = next(
+        snapshot for snapshot in snapshots if snapshot.asset_id == "CN:SZ:000001"
+    )
+    assert missing.status == "insufficient_input"
+    assert missing.history == ()
+    assert missing.realized == ()
+    assert "no daily bars" in missing.reason
+
+
+def test_empty_frame_preserves_requested_asset_universe():
+    frame = make_daily_frame(periods=0)
+
+    snapshots = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=2,
+        origin_dates=["2024-01-05", "2024-01-06"],
+        asset_ids=("CN:SH:600418",),
+    )
+
+    assert [snapshot.key for snapshot in snapshots] == [
+        "CN:SH:600418|2024-01-05",
+        "CN:SH:600418|2024-01-06",
+    ]
+    assert all(snapshot.status == "insufficient_input" for snapshot in snapshots)
+    assert all("no daily bars" in snapshot.reason for snapshot in snapshots)
 
 
 def test_missing_required_column_is_rejected():
@@ -545,6 +615,7 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
         forecast_horizon,
         *,
         origin_dates,
+        asset_ids,
     ):
         calls.append(
             (
@@ -554,6 +625,7 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
                 input_window,
                 forecast_horizon,
                 origin_dates,
+                asset_ids,
             )
         )
         return ["prepared"]
@@ -585,7 +657,36 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
     assert calls[2][0] == "build"
     assert calls[2][1] is frame
     assert calls[2][2] == global_calendar
-    assert calls[2][3:] == (3, 2, ["2024-01-03"])
+    assert calls[2][3:] == (3, 2, ["2024-01-03"], ("sh.600418",))
+
+
+def test_prepare_rolling_snapshots_surfaces_missing_requested_asset(monkeypatch):
+    monkeypatch.setattr(
+        data,
+        "load_daily_bars",
+        lambda asset_ids, max_date, adjust_type, service: make_daily_frame(periods=0),
+    )
+    monkeypatch.setattr(
+        data,
+        "load_global_trade_dates",
+        lambda adjust_type, start_date, max_date, service: make_trade_dates(8),
+    )
+
+    snapshots = data.prepare_rolling_snapshots(
+        ("sh.600418",),
+        "2024-01-01",
+        "2024-01-31",
+        "qfq",
+        "research",
+        3,
+        2,
+        origin_dates=["2024-01-05"],
+    )
+
+    assert len(snapshots) == 1
+    assert snapshots[0].asset_id == "CN:SH:600418"
+    assert snapshots[0].status == "insufficient_input"
+    assert "no daily bars" in snapshots[0].reason
 
 
 def test_source_metadata_is_json_ready_and_preserves_query_timestamp():
@@ -606,3 +707,25 @@ def test_source_metadata_is_json_ready_and_preserves_query_timestamp():
         "query_timestamp": "2026-08-06T05:00:00+00:00",
     }
     assert json.loads(json.dumps(metadata)) == metadata
+
+
+def test_snapshot_json_payload_thaws_frozen_values_without_mutating_snapshot():
+    snapshot = data.build_rolling_snapshots(
+        make_daily_frame(periods=8),
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=2,
+        origin_dates=["2024-01-05"],
+    )[0]
+
+    payload = data.snapshot_to_json_payload(snapshot)
+
+    assert json.loads(json.dumps(payload, sort_keys=True)) == payload
+    assert isinstance(payload["history"], list)
+    assert isinstance(payload["history"][0], dict)
+    original_close = snapshot.history[0]["close"]
+    payload["history"][0]["close"] = original_close + 999.0
+    payload["realized"][0]["close"] = original_close + 888.0
+
+    assert snapshot.history[0]["close"] == original_close
+    assert snapshot.realized[0]["close"] != payload["realized"][0]["close"]
