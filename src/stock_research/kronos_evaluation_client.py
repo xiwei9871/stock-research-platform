@@ -88,7 +88,7 @@ class KronosClientError(RuntimeError):
         raw_body_excerpt: str | None = None,
         redaction_token: str | None = None,
     ) -> None:
-        super().__init__(message)
+        super().__init__(_redact_sensitive_text(message, token=redaction_token))
         self.category = category
         self.code = code
         self.status_code = status_code
@@ -180,6 +180,7 @@ class KronosClient:
     def health(self) -> dict[str, Any]:
         """Return ready health data with the active model normalized."""
 
+        redaction_token = self._headers.get("X-Kronos-Token")
         response = self._request_json("GET", "/health")
         status = response.get("status")
         if not isinstance(status, str):
@@ -188,7 +189,7 @@ class KronosClient:
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             )
         if status != "ok":
             if status not in _HEALTH_NON_READY_STATUSES:
@@ -197,14 +198,14 @@ class KronosClient:
                     category=KronosErrorCategory.PROTOCOL,
                     code=KronosErrorCode.INVALID_RESPONSE,
                     raw_response=response,
-                    redaction_token=self._headers.get("X-Kronos-Token"),
+                    redaction_token=redaction_token,
                 )
             raise KronosClientError(
                 "Kronos service is not ready",
                 category=KronosErrorCategory.TRANSPORT,
                 code=KronosErrorCode.SERVICE_UNAVAILABLE,
                 raw_response=response,
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             )
 
         raw_model = response.get("model")
@@ -214,17 +215,20 @@ class KronosClient:
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             )
         try:
-            normalized_model = _normalize_model_name(raw_model)
+            normalized_model = _normalize_model_name(
+                raw_model,
+                redaction_token=redaction_token,
+            )
         except KronosClientError as exc:
             raise KronosClientError(
                 "Kronos health response has unsupported model",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_response=response,
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             ) from exc
 
         normalized = _clone_json_object(response)
@@ -234,7 +238,12 @@ class KronosClient:
     def assert_model(self, model: str) -> dict[str, Any]:
         """Ensure the ready service is running the requested model."""
 
-        requested_model = _normalize_model_name(model, label="requested model")
+        redaction_token = self._headers.get("X-Kronos-Token")
+        requested_model = _normalize_model_name(
+            model,
+            label="requested model",
+            redaction_token=redaction_token,
+        )
         health = self.health()
         active_model = health.get("model")
         if active_model != requested_model:
@@ -243,7 +252,7 @@ class KronosClient:
                 category=KronosErrorCategory.MODEL,
                 code=KronosErrorCode.MODEL_MISMATCH,
                 raw_response=_complete_raw_response(health),
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             )
         return health
 
@@ -262,17 +271,20 @@ class KronosClient:
         or pass ``None`` when the service should receive no seed.
         """
 
+        redaction_token = self._headers.get("X-Kronos-Token")
         if not isinstance(snapshot, RollingSnapshot):
             raise KronosClientError(
                 "snapshot must be a RollingSnapshot",
                 category=KronosErrorCategory.VALIDATION,
                 code=KronosErrorCode.INVALID_ARGUMENT,
+                redaction_token=redaction_token,
             )
         if snapshot.status != "ready":
             raise KronosClientError(
                 "Kronos snapshot is not ready",
                 category=KronosErrorCategory.VALIDATION,
                 code=KronosErrorCode.INVALID_ARGUMENT,
+                redaction_token=redaction_token,
             )
         if (
             isinstance(sample_count, bool)
@@ -283,6 +295,7 @@ class KronosClient:
                 "sample_count must be an integer between 1 and 100",
                 category=KronosErrorCategory.VALIDATION,
                 code=KronosErrorCode.INVALID_ARGUMENT,
+                redaction_token=redaction_token,
             )
         if seed is not None and (
             isinstance(seed, bool) or not isinstance(seed, int)
@@ -291,9 +304,14 @@ class KronosClient:
                 "seed must be an integer or None",
                 category=KronosErrorCategory.VALIDATION,
                 code=KronosErrorCode.INVALID_ARGUMENT,
+                redaction_token=redaction_token,
             )
 
-        requested_model = _normalize_model_name(model, label="requested model")
+        requested_model = _normalize_model_name(
+            model,
+            label="requested model",
+            redaction_token=redaction_token,
+        )
         self.assert_model(requested_model)
 
         serialized_snapshot = snapshot_to_json_payload(snapshot)
@@ -317,6 +335,7 @@ class KronosClient:
                 "frozen snapshot serialization produced inconsistent JSON",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
+                redaction_token=redaction_token,
             )
 
         result = self._request_json("POST", "/v1/predict", payload=payload)
@@ -324,7 +343,7 @@ class KronosClient:
             result,
             expected_horizon=len(snapshot.future_timestamps),
             requested_sample_count=sample_count,
-            redaction_token=self._headers.get("X-Kronos-Token"),
+            redaction_token=redaction_token,
         )
         return _attach_raw_response(result)
 
@@ -337,6 +356,7 @@ class KronosClient:
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = dict(self._headers)
+        redaction_token = self._headers.get("X-Kronos-Token")
         try:
             if method == "GET":
                 response = self.session.get(
@@ -356,24 +376,28 @@ class KronosClient:
                     f"unsupported Kronos HTTP method: {method}",
                     category=KronosErrorCategory.VALIDATION,
                     code=KronosErrorCode.INVALID_ARGUMENT,
+                    redaction_token=redaction_token,
                 )
         except requests.Timeout as exc:
             raise KronosClientError(
                 f"Kronos {path} request timed out",
                 category=KronosErrorCategory.TIMEOUT,
                 code=KronosErrorCode.TIMEOUT,
+                redaction_token=redaction_token,
             ) from exc
         except TimeoutError as exc:
             raise KronosClientError(
                 f"Kronos {path} request timed out",
                 category=KronosErrorCategory.TIMEOUT,
                 code=KronosErrorCode.TIMEOUT,
+                redaction_token=redaction_token,
             ) from exc
         except requests.RequestException as exc:
             raise KronosClientError(
                 f"Kronos {path} request failed",
                 category=KronosErrorCategory.TRANSPORT,
                 code=KronosErrorCode.TRANSPORT_ERROR,
+                redaction_token=redaction_token,
             ) from exc
 
         status_code = getattr(response, "status_code", None)
@@ -382,6 +406,7 @@ class KronosClient:
                 f"Kronos {path} returned an invalid HTTP response",
                 category=KronosErrorCategory.PROTOCOL,
                 code=KronosErrorCode.INVALID_RESPONSE,
+                redaction_token=redaction_token,
             )
         if status_code != 200:
             structured_response = _try_clone_structured_response(
@@ -399,7 +424,7 @@ class KronosClient:
                     code=KronosErrorCode.MODEL_ERROR,
                     status_code=status_code,
                     raw_response=structured_response,
-                    redaction_token=self._headers.get("X-Kronos-Token"),
+                    redaction_token=redaction_token,
                 )
             raise KronosClientError(
                 f"Kronos {path} returned HTTP {status_code}",
@@ -412,10 +437,10 @@ class KronosClient:
                     if structured_response is not None
                     else _bounded_raw_body_excerpt(
                         getattr(response, "text", None),
-                        token=self._headers.get("X-Kronos-Token"),
+                        token=redaction_token,
                     )
                 ),
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             )
 
         try:
@@ -427,9 +452,9 @@ class KronosClient:
                 code=KronosErrorCode.MALFORMED_JSON,
                 raw_body_excerpt=_bounded_raw_body_excerpt(
                     getattr(response, "text", None),
-                    token=self._headers.get("X-Kronos-Token"),
+                    token=redaction_token,
                 ),
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             ) from exc
 
         try:
@@ -441,9 +466,9 @@ class KronosClient:
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_body_excerpt=_bounded_raw_body_excerpt(
                     getattr(response, "text", None),
-                    token=self._headers.get("X-Kronos-Token"),
+                    token=redaction_token,
                 ),
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             ) from exc
         if not isinstance(normalized_response, dict):
             raise KronosClientError(
@@ -452,19 +477,25 @@ class KronosClient:
                 code=KronosErrorCode.INVALID_RESPONSE,
                 raw_body_excerpt=_bounded_raw_body_excerpt(
                     getattr(response, "text", None),
-                    token=self._headers.get("X-Kronos-Token"),
+                    token=redaction_token,
                 ),
-                redaction_token=self._headers.get("X-Kronos-Token"),
+                redaction_token=redaction_token,
             )
         return normalized_response
 
 
-def _normalize_model_name(value: Any, *, label: str = "model") -> str:
+def _normalize_model_name(
+    value: Any,
+    *,
+    label: str = "model",
+    redaction_token: str | None = None,
+) -> str:
     if not isinstance(value, str):
         raise KronosClientError(
             "Kronos model argument is invalid",
             category=KronosErrorCategory.VALIDATION,
             code=KronosErrorCode.INVALID_ARGUMENT,
+            redaction_token=redaction_token,
         )
     normalized = _MODEL_ALIASES.get(value.strip().lower())
     if normalized is None:
@@ -472,6 +503,7 @@ def _normalize_model_name(value: Any, *, label: str = "model") -> str:
             "Kronos model argument is invalid",
             category=KronosErrorCategory.VALIDATION,
             code=KronosErrorCode.INVALID_ARGUMENT,
+            redaction_token=redaction_token,
         )
     return normalized
 

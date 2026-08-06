@@ -1474,6 +1474,30 @@ def test_prediction_rejects_error_or_unavailable_daily_envelope(daily_status):
     assert exc_info.value.raw_response == prediction
 
 
+def test_prediction_semantic_error_message_redacts_configured_status_token():
+    prediction = {
+        "status": "partial",
+        "sample_count": 20,
+        "daily": {"status": "unavailable", "message": "daily failed"},
+        "intraday": None,
+    }
+    client = KronosClient(
+        "http://kronos.test",
+        token="unavailable",
+        session=FakeSession(
+            health={"status": "ok", "model": "Kronos-small"},
+            prediction=prediction,
+        ),
+    )
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(make_snapshot(), model="small", seed=7)
+
+    assert exc_info.value.category == KronosErrorCategory.MODEL
+    assert exc_info.value.code == KronosErrorCode.MODEL_ERROR
+    assert "unavailable" not in str(exc_info.value)
+
+
 def test_prediction_accepts_summary_close_quantile_layout():
     prediction = make_prediction_response(layout="summary_close")
     session = FakeSession(
