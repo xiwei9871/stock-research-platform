@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stock_research.config import SETTINGS
 from stock_research.runtime_provenance import runtime_provenance
@@ -49,6 +49,7 @@ from stock_research.dashboard.factors import (
     parse_factor_selection,
 )
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
+from stock_research.dashboard import kronos_proxy
 from stock_research.dashboard.market_overview_service import build_market_overview_payload
 from stock_research.dashboard.market_anomaly_context import (
     build_market_anomaly_context,
@@ -293,6 +294,13 @@ class ThemeResearchRollbackRequest(BaseModel):
     expected_theme_version: int
     comment: str
     idempotency_key: str
+
+
+class KronosPredictionPayload(BaseModel):
+    model: str = Field(default="small", min_length=1, max_length=64)
+    sample_count: int = Field(default=20, ge=1, le=100)
+    daily_horizon: int = Field(default=10, ge=1, le=10)
+    intraday_horizon: int = Field(default=48, ge=48, le=48)
 
 
 def _set_auth_cookies(response: JSONResponse, session_token: str, csrf_token: str) -> None:
@@ -1358,6 +1366,42 @@ def create_app() -> FastAPI:
                 source,
             ),
         }
+
+    def _kronos_proxy_http_error(exc: kronos_proxy.KronosProxyError) -> HTTPException:
+        return HTTPException(status_code=exc.status_code, detail=exc.message)
+
+    @app.post("/api/assets/{asset_id:path}/kronos/predictions", status_code=202)
+    def create_asset_kronos_prediction(
+        asset_id: str,
+        force: bool = False,
+        payload: KronosPredictionPayload | None = None,
+    ):
+        request = payload or KronosPredictionPayload()
+        try:
+            return kronos_proxy.create_prediction(
+                asset_id,
+                force=force,
+                model=request.model,
+                sample_count=request.sample_count,
+                daily_horizon=request.daily_horizon,
+                intraday_horizon=request.intraday_horizon,
+            )
+        except kronos_proxy.KronosProxyError as exc:
+            raise _kronos_proxy_http_error(exc) from exc
+
+    @app.get("/api/assets/{asset_id:path}/kronos/predictions/latest")
+    def latest_asset_kronos_prediction(asset_id: str):
+        try:
+            return kronos_proxy.get_latest(asset_id)
+        except kronos_proxy.KronosProxyError as exc:
+            raise _kronos_proxy_http_error(exc) from exc
+
+    @app.get("/api/kronos/runs/{run_id}")
+    def asset_kronos_prediction_run(run_id: str):
+        try:
+            return kronos_proxy.get_run(run_id)
+        except kronos_proxy.KronosProxyError as exc:
+            raise _kronos_proxy_http_error(exc) from exc
 
     @app.get("/api/assets/{asset_id}/scores")
     def asset_score(asset_id: str, trade_date: str, score_version: str = "manual_v1"):

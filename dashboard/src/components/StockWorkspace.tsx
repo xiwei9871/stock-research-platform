@@ -24,6 +24,7 @@ import { OperatorDecisionPanel } from './OperatorDecisionPanel';
 import { BusinessQualitySection } from './stock-workspace/BusinessQualitySection';
 import { CompanyBasicsSection } from './stock-workspace/CompanyBasicsSection';
 import { StockMarketContextHeatmap } from './stock-workspace/StockMarketContextHeatmap';
+import { KronosPredictionPanel } from './stock-workspace/KronosPredictionPanel';
 import { ThemeResearchContextSection } from './stock-workspace/ThemeResearchContextSection';
 import { readableTechBottleneckOptionLabel } from './techBottleneck/TechBottleneckFilterBar';
 import type { SectorType } from './market-monitor/mockData';
@@ -1329,6 +1330,13 @@ export function StockWorkspace({
               />
             ) : null}
             {!isChartLoading && !chartError && chartBars.length === 0 ? <p className="muted">No bars available.</p> : null}
+            {profile ? (
+              <KronosPredictionPanel
+                assetId={profile.canonical_asset_id}
+                historyBars={chartResolution === '1D' ? chartBars : []}
+                showHistory={chartResolution === '1D'}
+              />
+            ) : null}
           </section>
 
           <div className="stock-detail-layout">
