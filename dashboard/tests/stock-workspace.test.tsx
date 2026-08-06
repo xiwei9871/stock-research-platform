@@ -45,6 +45,10 @@ vi.mock('../src/charts/AssetChart', () => ({
   )
 }));
 
+vi.mock('../src/components/stock-workspace/KronosPredictionPanel', () => ({
+  KronosPredictionPanel: () => <div data-testid="kronos-prediction-panel" />
+}));
+
 function makeProfile(overrides: Partial<AssetProfile> = {}): AssetProfile {
   return {
     asset_id: '000001.SZ',

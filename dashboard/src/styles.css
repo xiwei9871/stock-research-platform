@@ -6534,3 +6534,79 @@ table.data-table td {
   font-weight: 650;
   text-decoration: none;
 }
+
+.kronos-panel {
+  margin-top: 14px;
+  background: linear-gradient(180deg, #fbfaff 0%, #ffffff 100%);
+}
+
+.kronos-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary-button {
+  min-height: 30px;
+  border: 1px solid #cfd8e3;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #263241;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: #8b5cf6;
+  background: #faf7ff;
+}
+
+.secondary-button:disabled,
+.segmented-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.kronos-period-control {
+  margin-top: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.kronos-period-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.kronos-diagnostic,
+.kronos-forecast-hint {
+  margin: 8px 0 0;
+}
+
+.kronos-diagnostic {
+  color: #a15c00;
+}
+
+.kronos-prediction-chart {
+  height: 340px;
+  margin-top: 4px;
+  min-height: 280px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .kronos-panel-actions {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .kronos-prediction-chart {
+    height: 300px;
+  }
+}
