@@ -1,3 +1,4 @@
+import json
 import math
 
 import pytest
@@ -7,6 +8,7 @@ from stock_research.kronos_evaluation_types import (
     RollingSnapshot,
     canonical_json_fingerprint,
     normalize_asset_ids,
+    thaw_json_value,
 )
 
 
@@ -299,6 +301,68 @@ def test_snapshot_defensively_copies_and_freezes_nested_bar_data():
         snapshot.history[0]["metadata"]["tags"] += ("caller-mutated",)
     with pytest.raises(TypeError):
         snapshot.realized[0]["close"] = 999.0
+
+
+def test_snapshot_freezes_extra_json_values_and_supports_thawing():
+    source_history = [
+        {
+            "timestamp": "2025-01-02",
+            "open": 100.0,
+            "high": 103.0,
+            "low": 99.0,
+            "close": 102.0,
+            "volume": 1200.0,
+            "amount": 121000.0,
+            "extra": {"nested": [{"labels": ["stable"]}]},
+        }
+    ]
+    snapshot = RollingSnapshot(
+        asset_id="CN:SH:600418",
+        origin_date="2025-01-02",
+        history=source_history,
+        future_timestamps=(),
+        realized=(),
+        input_fingerprint="0" * 64,
+        status="ready",
+    )
+
+    source_history[0]["extra"]["nested"][0]["labels"].append("caller-mutated")
+
+    assert snapshot.history[0]["extra"]["nested"][0]["labels"] == ("stable",)
+    thawed = thaw_json_value(snapshot.history[0])
+    assert thawed["extra"] == {"nested": [{"labels": ["stable"]}]}
+    assert json.loads(json.dumps(thawed, sort_keys=True)) == thawed
+
+    with pytest.raises(TypeError):
+        snapshot.history[0]["extra"] = {"changed": True}
+    with pytest.raises(TypeError):
+        snapshot.history[0]["extra"]["nested"][0]["labels"] = ("changed",)
+    with pytest.raises(TypeError):
+        snapshot.history[0]["extra"]["nested"][0]["labels"] += ("changed",)
+
+
+def test_snapshot_rejects_unsupported_nested_object_values():
+    unsupported_history = {
+        "timestamp": "2025-01-02",
+        "open": 100.0,
+        "high": 103.0,
+        "low": 99.0,
+        "close": 102.0,
+        "volume": 1200.0,
+        "amount": 121000.0,
+        "extra": {"unsupported": object()},
+    }
+
+    with pytest.raises(ValueError, match="unsupported"):
+        RollingSnapshot(
+            asset_id="CN:SH:600418",
+            origin_date="2025-01-02",
+            history=(unsupported_history,),
+            future_timestamps=(),
+            realized=(),
+            input_fingerprint="0" * 64,
+            status="invalid_input",
+        )
 
 
 def test_snapshot_rejects_missing_or_non_finite_history_values():

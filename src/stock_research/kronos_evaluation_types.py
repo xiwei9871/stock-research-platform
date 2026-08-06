@@ -7,6 +7,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
+from types import MappingProxyType
 from typing import Any
 
 from stock_research.assets import asset_id_from_baostock_code
@@ -298,37 +299,43 @@ def _require_non_empty_string(field_name: str, value: str) -> str:
     return value.strip()
 
 
-class _FrozenDict(dict[str, Any]):
-    """A dict-shaped recursive snapshot row whose mutation methods are disabled."""
-
-    __slots__ = ()
-
-    def _immutable(self, *_args: Any, **_kwargs: Any) -> None:
-        raise TypeError("snapshot mappings are immutable")
-
-    __setitem__ = _immutable
-    __delitem__ = _immutable
-    clear = _immutable
-    pop = _immutable
-    popitem = _immutable
-    setdefault = _immutable
-    update = _immutable
-
-    def __ior__(self, _other: Any) -> "_FrozenDict":
-        self._immutable()
-        return self
-
-
-def _freeze_value(value: Any) -> Any:
+def _freeze_json_value(value: Any, field_name: str) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{field_name} must contain finite JSON numbers")
+        return value
     if isinstance(value, Mapping):
-        return _FrozenDict(
-            (key, _freeze_value(item)) for key, item in value.items()
-        )
+        frozen_mapping: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{field_name} object keys must be strings")
+            frozen_mapping[key] = _freeze_json_value(
+                item, f"{field_name}.{key}"
+            )
+        return MappingProxyType(frozen_mapping)
     if isinstance(value, (list, tuple)):
-        return tuple(_freeze_value(item) for item in value)
-    if isinstance(value, (set, frozenset)):
-        return frozenset(_freeze_value(item) for item in value)
-    return value
+        return tuple(
+            _freeze_json_value(item, f"{field_name}[{index}]")
+            for index, item in enumerate(value)
+        )
+    raise ValueError(
+        f"{field_name} contains unsupported JSON value type "
+        f"{type(value).__name__}"
+    )
+
+
+def thaw_json_value(value: Any) -> Any:
+    """Convert frozen snapshot JSON values into ordinary JSON-serializable data."""
+
+    if isinstance(value, Mapping):
+        return {key: thaw_json_value(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [thaw_json_value(item) for item in value]
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    raise TypeError(f"unsupported frozen JSON value type: {type(value).__name__}")
 
 
 def _normalize_timestamp_sequence(
@@ -371,7 +378,7 @@ def _normalize_snapshot_rows(
     rows: Iterable[Mapping[str, Any]],
     *,
     required_numeric_fields: tuple[str, ...],
-) -> tuple[dict[str, Any], ...]:
+) -> tuple[Mapping[str, Any], ...]:
     if isinstance(rows, (str, bytes, Mapping)):
         raise ValueError(f"{field_name} must be an iterable of mapping rows")
     try:
@@ -379,7 +386,7 @@ def _normalize_snapshot_rows(
     except TypeError as exc:
         raise ValueError(f"{field_name} must be an iterable of mapping rows") from exc
 
-    normalized: list[dict[str, Any]] = []
+    normalized: list[Mapping[str, Any]] = []
     previous_timestamp: str | None = None
     for index, row in enumerate(raw_rows):
         if not isinstance(row, Mapping):
@@ -409,7 +416,7 @@ def _normalize_snapshot_rows(
             _require_finite_numeric(
                 f"{field_name}[{index}].{numeric_field}", row[numeric_field]
             )
-        normalized.append(_freeze_value(normalized_row))
+        normalized.append(_freeze_json_value(normalized_row, f"{field_name}[{index}]"))
     return tuple(normalized)
 
 
@@ -417,9 +424,9 @@ def _normalize_snapshot_rows(
 class RollingSnapshot:
     asset_id: str
     origin_date: str
-    history: tuple[dict[str, Any], ...]
+    history: tuple[Mapping[str, Any], ...]
     future_timestamps: tuple[str, ...]
-    realized: tuple[dict[str, Any], ...]
+    realized: tuple[Mapping[str, Any], ...]
     input_fingerprint: str
     status: str
     reason: str | None = None
