@@ -1,8 +1,10 @@
-# Kronos Small 模型：2026 年 7 月至今滚动日 K 评估设计
+# Kronos 可配置滚动评估引擎设计：2026 年 7 月 small 实验
 
 ## 目标
 
-评估 Kronos `small` 模型在最近市场阶段的实际预测表现：从 2026-07-01 开始，随机固定选取 20 只股票，按交易日滚动生成未来 10 根日 K 预测；准确性只以未来第 1 个交易日为主指标，同时保留未来第 1、3、5、10 根 K 的预测结果，供后续分析。
+本设计首先完成一个可复用的 Kronos 滚动评估引擎，再用一份参数配置评估 `small` 模型在最近市场阶段的实际预测表现：从 2026-07-01 开始，随机固定选取 20 只股票，按交易日滚动生成未来 10 根日 K 预测；准确性只以未来第 1 个交易日为主指标，同时保留未来第 1、3、5、10 根 K 的预测结果，供后续分析。
+
+以后相同类型的实验只修改 JSON 配置，不再为每次实验创建新的专用脚本或重新设计数据流。当前实验是通用引擎的第一份配置。
 
 本实验必须区分两类结果：
 
@@ -10,6 +12,24 @@
 2. **最新预测层**：使用最近一个可用交易日作为输入，生成未来 10 根日 K，但真实结果尚未全部出现，只标记为待验证，不能混入准确率。
 
 这样既能覆盖“2026 年 7 月至今”的滚动窗口，也不会为了等待完整 10 日真实数据而丢弃最近的预测。
+
+## 设计原则：固定引擎、参数驱动
+
+评估流程固定为：
+
+`加载配置 → 校验参数 → 冻结数据和股票池 → 建立滚动快照 → 调用模型 → 校验 OHLC → 计算指标 → 生成冻结报告`
+
+可调内容全部进入配置文件，包括模型、日期、频率、输入窗口、预测长度、采样路径数、股票池模式、随机种子、评分 horizon 和是否生成最新预测。引擎代码只负责稳定执行这条流程。
+
+只有在新增模型适配器、数据频率、指标或输出格式时才修改代码；改变某次实验的日期、股票数量、模型或评价窗口，不应修改代码。
+
+本项目不新增 YAML 依赖，首版使用 Python 标准库可解析的 JSON 配置；配置文件必须带 `schema_version`，运行时进行字段、类型、范围和组合约束校验。
+
+## 方案选择
+
+- **每次编写专用脚本**：短期最快，但会重复实现选股、滚动、评分和报告，容易再次出现规则漂移；不采用。
+- **一个通用引擎 + JSON 参数文件**：初始需要整理接口，但之后实验只改参数，结果结构统一、便于复现；本设计采用。
+- **实验管理页面或数据库注册表**：可进一步支持批量运行和网页比较，但会引入 UI、权限和状态管理，不作为本轮前置条件。
 
 ## 范围与不变项
 
@@ -29,6 +49,8 @@
 | 起始日期 | `2026-07-01` | 滚动预测起点 |
 | 截止日期 | 执行时查询 | 取数据库中实际可用的最新交易日，不把当前自然日硬编码为行情截止日 |
 | 复权 | `qfq` | 与现有 Kronos 工作台和历史评估保持一致 |
+
+上表是当前实验配置的值，不是写死在引擎中的常量。未来实验可通过同一配置结构替换这些值。
 
 每个滚动时点的输入都来自数据库中该时点以前的真实数据；绝不把前一次预测的 OHLC 作为下一次输入，避免递归误差和数据泄漏。
 
@@ -113,7 +135,9 @@
 
 实验输出根目录固定为：
 
-`outputs/research/kronos_rolling_eval/2026-07-small-rolling/`
+`outputs/research/kronos_rolling_eval/<experiment_id>/`
+
+当前实验使用 `experiment_id=2026-07-small-rolling`。每次运行必须使用独立的 experiment id，禁止覆盖已有结果。
 
 目录至少包含：
 
@@ -131,22 +155,74 @@
 
 所有输出都必须是一次运行的冻结快照。报告不能在生成后重新查询数据库或在线预测来补数据。
 
-## 实现方案
+## 通用引擎和配置
 
-复用现有 `KronosEvaluationConfig`、数据快照、模型调用、路径聚合和报告代码，增加一个面向本实验的编排入口：
+所有实验使用同一个入口：
 
-`scripts/run_kronos_recent_small_evaluation.py`
+`scripts/run_kronos_experiment.py --config configs/<experiment>.json`
 
-该入口负责：
+当前 C 实验的第一份配置为：
 
-1. 查询并冻结行情截止日和候选股票池；
-2. 按固定 universe seed 选出 20 只股票；
-3. 创建 2026-07-01 至行情截止日的逐日 rolling origins；
-4. 允许“h=1 已有真实数据但 h=3/5/10 尚未齐全”的 snapshot 正常预测；
-5. 单独创建 latest `forecast_only` snapshot；
-6. 调用 small 模型并保存 20 路原始路径、聚合结果、真实结果和健康信息；
-7. 只用已具备 h=1 truth 的 snapshot 计算主指标；
-8. 生成上述目录结构和报告。
+`configs/kronos_2026_07_small_rolling.json`
+
+配置采用以下结构，示例本身是合法 JSON：
+
+```json
+{
+  "schema_version": 1,
+  "experiment_id": "2026-07-small-rolling",
+  "model": {
+    "name": "small",
+    "fallback": false,
+    "seed": 20260806,
+    "sample_count": 20
+  },
+  "data": {
+    "frequency": "1d",
+    "adjust_type": "qfq",
+    "input_window": 250,
+    "start_date": "2026-07-01",
+    "end_date": "latest_available"
+  },
+  "universe": {
+    "mode": "random",
+    "count": 20,
+    "seed": 20260808,
+    "market": "CN_A",
+    "asset_ids": null
+  },
+  "prediction": {
+    "forecast_horizon": 10,
+    "report_horizons": [1, 3, 5, 10],
+    "include_latest_forecast": true
+  },
+  "evaluation": {
+    "primary_horizon": 1,
+    "baseline": "persistence"
+  }
+}
+```
+
+引擎分为以下职责清晰的阶段：
+
+1. **配置加载器**：读取 JSON、填充仅有明确文档的默认值、校验 schema 和参数组合，并把规范化后的配置写入 manifest；
+2. **股票池选择器**：支持冻结的 `asset_ids` 和带 seed 的随机候选池，输出选择过程、数量和哈希；
+3. **数据快照器**：按配置读取行情、冻结行情截止日和交易日历，建立只包含真实历史数据的 rolling origins；
+4. **模型适配器**：根据 `model.name` 调用 small/base 等已注册模型，核对实际模型身份，禁止未配置的 fallback；
+5. **结果校验器**：校验 20 路原始路径、聚合 OHLC 和错误状态；
+6. **评估器**：按照 `primary_horizon` 和 `report_horizons` 计算指标，严格排除 `forecast_only`；
+7. **报告器**：生成统一目录、manifest、预测文件、评分文件和可读报告。
+
+这些模块通过稳定的数据对象通信；日期、模型、股票数量和 horizon 的变化不应改变模块接口。
+
+配置校验至少包括：
+
+- `model.name` 必须是已注册模型；`fallback=false` 时实际模型不匹配必须失败；
+- `input_window`、`forecast_horizon`、`sample_count` 和 universe count 必须为正整数；
+- `primary_horizon` 必须出现在 `report_horizons` 中且不超过 `forecast_horizon`；
+- `end_date=latest_available` 时必须把数据库实际最大交易日写入 manifest；
+- `universe.mode=random` 必须有 seed，`asset_ids` 模式必须冻结并校验数量；
+- 输出目录已存在时拒绝覆盖，除非显式使用新的 experiment id。
 
 现有 snapshot 状态需要明确扩展或等价表达：
 
@@ -161,7 +237,7 @@
 
 实现和运行完成后，必须满足：
 
-1. 股票池恰好 20 只，随机选择可由 `universe_seed=20260808` 重现；
+1. 当前配置选出的股票池恰好 20 只，随机选择可由 `universe_seed=20260808` 重现；
 2. 每只股票从 2026-07-01 开始按交易日滚动，输入窗口为真实 qfq 日 K 的 250 根；
 3. 每个可运行 origin 都生成 h=1/3/5/10 预测，模型身份始终为 small，sample count 始终为 20；
 4. h=1 的历史评分不要求 h=3/5/10 truth 已齐全，且没有把 forecast-only 结果混入准确率；
@@ -170,7 +246,9 @@
 7. 任何滚动 origin 都没有使用模型前一次的预测作为输入；
 8. 报告包含 Kronos small 与 persistence baseline 的 h=1 对比；
 9. 运行结束后可仅凭输出目录复核股票池、数据边界、配置、模型身份、预测和评分，不需要重新访问数据库；
-10. 运行脚本的自动化测试覆盖：随机股票池可复现、部分 truth 可评分、forecast-only 排除评分、OHLC 校验、无 fallback 和结果冻结。
+10. 自动化测试覆盖：配置校验、随机股票池可复现、部分 truth 可评分、forecast-only 排除评分、OHLC 校验、无 fallback 和结果冻结；
+11. 使用同一引擎把当前配置中的日期、模型、股票数量或 horizon 改成另一组合法值时，不需要修改 Python 代码，输出结构仍然一致；
+12. 运行 manifest 保存规范化配置和配置文件哈希，能够复现一次实验所使用的全部参数。
 
 ## 不在本轮范围内
 
