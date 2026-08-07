@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT="${PLATFORM_READY_ROOT:-/Users/xiwei/stock_research}"
 PYTHON="${PLATFORM_READY_PYTHON:-$ROOT/.venv/bin/python}"
+STOCK_RESEARCH_RELEASE_ROOT="${STOCK_RESEARCH_RELEASE_ROOT:-/Users/xiwei/stock_research_release_20260801}"
+STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"
+STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"
+export STOCK_RESEARCH_RELEASE_ROOT STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT
+PYTHONPATH="$STOCK_RESEARCH_RELEASE_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
 LOG_DIR="${PLATFORM_READY_LOG_DIR:-$ROOT/logs}"
 RUN_LOG="${PLATFORM_READY_RUN_LOG:-$LOG_DIR/platform_ready_build.host.log}"
 TRADE_DATE="${PLATFORM_READY_TRADE_DATE:-}"
@@ -160,9 +166,26 @@ run_required_step finalize_health "$PYTHON" -m scripts.daily_pipeline \
   --date "$TRADE_DATE" \
   --stage health
 
-run_required_step strategy_daily_eod "$PYTHON" -m stock_research.cli run-strategy-daily-eod \
-  --trade-date "$TRADE_DATE" \
-  --output-root "$OUTPUT_DIR/strategy_daily_eod"
+run_official_strategy_daily_eod() {
+  "$PYTHON" - "run-strategy-daily-eod" "$TRADE_DATE" "$OUTPUT_DIR/strategy_daily_eod" <<'PY'
+import sys
+
+from stock_research.strategy_daily_eod import run_strategy_daily_eod
+
+result = run_strategy_daily_eod(
+    trade_date=sys.argv[2],
+    output_root=sys.argv[3],
+)
+print(f"strategy_daily_eod|status|{result.get('status')}")
+print(f"strategy_daily_eod|trade_date|{result.get('trade_date')}")
+print(f"strategy_daily_eod|review_rows|{result.get('review_rows')}")
+print(f"strategy_daily_eod|summary_path|{result.get('summary_path')}")
+if result.get("status") != "success":
+    raise SystemExit(1)
+PY
+}
+
+run_required_step strategy_daily_eod run_official_strategy_daily_eod
 
 run_required_step platform_ready_check "$PYTHON" -m stock_research.platform_ready \
   --trade-date "$TRADE_DATE" \

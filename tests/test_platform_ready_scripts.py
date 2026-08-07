@@ -12,6 +12,15 @@ def test_platform_ready_cron_pins_runtime_data_roots() -> None:
 
     assert 'STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"' in script
     assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
+    assert 'STOCK_RESEARCH_RELEASE_ROOT="${STOCK_RESEARCH_RELEASE_ROOT:-/Users/xiwei/stock_research_release_20260801}"' in script
+    assert 'PYTHONPATH="$STOCK_RESEARCH_RELEASE_ROOT/src' in script
+
+
+def test_platform_ready_build_pins_report_root_for_official_runtime() -> None:
+    script = (Path(__file__).resolve().parents[1] / "scripts/run_platform_ready_build_cron.sh").read_text()
+
+    assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
+    assert 'export STOCK_RESEARCH_RELEASE_ROOT STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT' in script
 
 
 def _prepare_fake_guard(fake_root: Path) -> None:
@@ -96,15 +105,15 @@ exit 0
     assert "-m scripts.daily_pipeline --date 2026-06-18 --stage market_monitor" in calls
     assert "-m scripts.daily_pipeline --date 2026-06-18 --stage deps" in calls
     assert "-m scripts.daily_pipeline --date 2026-06-18 --stage health" in calls
-    assert "-m stock_research.cli run-strategy-daily-eod --trade-date 2026-06-18" in calls
+    assert "- run-strategy-daily-eod 2026-06-18" in calls
     assert "-m stock_research.platform_ready --trade-date 2026-06-18" in calls
     assert calls.index("-m stock_research.cli watchlist-build") < calls.index(
         "-m scripts.daily_pipeline --date 2026-06-18 --stage market_monitor"
     )
     assert calls.index("-m scripts.daily_pipeline --date 2026-06-18 --stage health") < calls.index(
-        "-m stock_research.cli run-strategy-daily-eod"
+        "- run-strategy-daily-eod 2026-06-18"
     )
-    assert calls.index("-m stock_research.cli run-strategy-daily-eod") < calls.index("-m stock_research.platform_ready")
+    assert calls.index("- run-strategy-daily-eod 2026-06-18") < calls.index("-m stock_research.platform_ready")
     assert "平台就绪构建完成" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout
     assert "详细日志:" in result.stdout
@@ -212,8 +221,8 @@ exit 3
     assert "--output-dir" in call
     assert "eod_auto_repair/2026-06-18" in call
     assert "--mode loop" in call
-    assert "--include-pending-dates" in call
-    assert "--pending-date-limit" in call
+    assert "--include-pending-dates" not in call
+    assert "--pending-date-limit" not in call
     assert "-m stock_research.platform_ready" not in call
     assert "EOD自动修复失败" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout

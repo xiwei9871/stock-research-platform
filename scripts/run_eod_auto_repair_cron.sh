@@ -3,9 +3,12 @@ set -euo pipefail
 
 ROOT="${STOCK_RESEARCH_ROOT:-/Users/xiwei/stock_research}"
 PYTHON="${STOCK_RESEARCH_PYTHON:-$ROOT/.venv/bin/python}"
+STOCK_RESEARCH_RELEASE_ROOT="${STOCK_RESEARCH_RELEASE_ROOT:-/Users/xiwei/stock_research_release_20260801}"
 STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"
 STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"
-export STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT
+export STOCK_RESEARCH_RELEASE_ROOT STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT
+PYTHONPATH="$STOCK_RESEARCH_RELEASE_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
 TRADE_DATE="${1:-$(date +%F)}"
 LOG_DIR="$ROOT/logs/eod_auto_repair"
 OUTPUT_DIR="$ROOT/outputs/research/eod_auto_repair/$TRADE_DATE"
@@ -137,8 +140,6 @@ run_repair() {
     --output-dir "$OUTPUT_DIR" \
     --output-root "$ROOT/outputs" \
     --mode loop \
-    --include-pending-dates \
-    --pending-date-limit "$PENDING_DATE_LIMIT" \
     --action-timeout-seconds "$ACTION_TIMEOUT_SECONDS" >>"$DETAIL_LOG" 2>&1
   rc=$?
   echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json" >>"$DETAIL_LOG"

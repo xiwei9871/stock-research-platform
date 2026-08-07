@@ -5,6 +5,12 @@ ROOT="${STRATEGY_DAILY_EOD_ROOT:-/Users/xiwei/stock_research}"
 cd "$ROOT"
 
 PYTHON_BIN="${STRATEGY_DAILY_EOD_PYTHON:-$ROOT/.venv/bin/python}"
+STOCK_RESEARCH_RELEASE_ROOT="${STOCK_RESEARCH_RELEASE_ROOT:-/Users/xiwei/stock_research_release_20260801}"
+STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"
+STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"
+export STOCK_RESEARCH_RELEASE_ROOT STOCK_RESEARCH_OUTPUT_ROOT STOCK_RESEARCH_REPORTS_ROOT
+PYTHONPATH="$STOCK_RESEARCH_RELEASE_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
 TRADE_DATE="${STRATEGY_DAILY_EOD_TRADE_DATE:-${TRADE_DATE:-}}"
 OUTPUT_ROOT="${STRATEGY_DAILY_EOD_OUTPUT_ROOT:-$ROOT/outputs/research/strategy_daily_eod}"
 LOG_DIR="${STRATEGY_DAILY_EOD_LOG_DIR:-$ROOT/logs/cron}"
@@ -42,9 +48,27 @@ print_summary() {
 }
 
 set +e
-PYTHONPATH=src "$PYTHON_BIN" -m stock_research.cli run-strategy-daily-eod \
-  --trade-date "$TRADE_DATE" \
-  --output-root "$OUTPUT_ROOT" >>"$DETAIL_LOG" 2>&1
+"$PYTHON_BIN" - "run-strategy-daily-eod" "$TRADE_DATE" "$OUTPUT_ROOT" >>"$DETAIL_LOG" 2>&1 <<'PY'
+import sys
+
+from stock_research.strategy_daily_eod import run_strategy_daily_eod
+
+trade_date = sys.argv[2]
+output_root = sys.argv[3]
+result = run_strategy_daily_eod(trade_date=trade_date, output_root=output_root)
+print(f"strategy_daily_eod|status|{result.get('status')}")
+print(f"strategy_daily_eod|trade_date|{result.get('trade_date')}")
+print(f"strategy_daily_eod|output_dir|{result.get('output_dir')}")
+print(f"strategy_daily_eod|review_rows|{result.get('review_rows')}")
+print(f"strategy_daily_eod|summary_path|{result.get('summary_path')}")
+for strategy_name in ("lhb_shortline", "mid_trend", "tech_bottleneck"):
+    print(
+        f"strategy_daily_eod|{strategy_name}_status|"
+        f"{(result.get('strategy_status') or {}).get(strategy_name)}"
+    )
+if result.get("status") != "success":
+    raise SystemExit(1)
+PY
 rc=$?
 set -e
 

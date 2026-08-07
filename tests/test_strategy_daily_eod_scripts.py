@@ -71,11 +71,19 @@ exit 0
 
     assert result.returncode == 0
     calls = calls_file.read_text(encoding="utf-8")
-    assert "-m stock_research.cli run-strategy-daily-eod --trade-date 2026-06-24" in calls
+    assert "- run-strategy-daily-eod 2026-06-24" in calls
     assert "策略日终完成" in result.stdout
     assert "交易日: 2026-06-24" in result.stdout
     assert "详细日志:" in result.stdout
     assert "strategy_daily_eod|" not in result.stdout
+
+
+def test_run_strategy_daily_eod_cron_pins_official_release_runtime() -> None:
+    script = (Path(__file__).resolve().parents[1] / "scripts/run_strategy_daily_eod_cron.sh").read_text()
+
+    assert 'STOCK_RESEARCH_RELEASE_ROOT="${STOCK_RESEARCH_RELEASE_ROOT:-/Users/xiwei/stock_research_release_20260801}"' in script
+    assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
+    assert 'PYTHONPATH="$STOCK_RESEARCH_RELEASE_ROOT/src' in script
 
 
 def test_run_strategy_daily_eod_cron_exits_nonzero_when_business_status_failed(tmp_path: Path) -> None:
@@ -86,7 +94,7 @@ def test_run_strategy_daily_eod_cron_exits_nonzero_when_business_status_failed(t
 
     fake_python.write_text(
         """#!/usr/bin/env bash
-if [[ "$*" == *"run-strategy-daily-eod"* ]]; then
+        if [[ "$*" == *"run-strategy-daily-eod"* ]]; then
   echo "strategy_daily_eod|status|failed"
   echo "strategy_daily_eod|summary_path|/tmp/summary.json"
   exit 0

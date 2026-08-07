@@ -96,6 +96,8 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_portable_lock():
     assert 'ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"' in script
     assert 'STOCK_RESEARCH_OUTPUT_ROOT="${STOCK_RESEARCH_OUTPUT_ROOT:-$ROOT/outputs}"' in script
     assert 'STOCK_RESEARCH_REPORTS_ROOT="${STOCK_RESEARCH_REPORTS_ROOT:-$ROOT/reports}"' in script
+    assert 'STOCK_RESEARCH_RELEASE_ROOT="${STOCK_RESEARCH_RELEASE_ROOT:-/Users/xiwei/stock_research_release_20260801}"' in script
+    assert 'PYTHONPATH="$STOCK_RESEARCH_RELEASE_ROOT/src' in script
     assert "logs/eod_auto_repair" in script
     assert "run_summary.json" in script
     assert "run_report.md" in script
