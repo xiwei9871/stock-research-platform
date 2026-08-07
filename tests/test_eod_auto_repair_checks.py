@@ -1,5 +1,6 @@
 from stock_research.eod_auto_repair_checks import (
     build_check_plan,
+    check_review_queue,
     check_factor_daily,
     check_lhb_features,
     check_dashboard_surface_freshness,
@@ -305,6 +306,52 @@ def test_check_dashboard_surface_freshness_degrades_when_dashboard_has_advanced_
     assert "readiness:market_monitor:missing_data" in result.metrics["degraded_issues"]
 
 
+def test_check_dashboard_surface_freshness_does_not_block_historical_date_on_future_strategy_signal():
+    result = check_dashboard_surface_freshness(
+        "2026-07-23",
+        readiness_loader=lambda trade_date: {
+            "display_trade_date": trade_date,
+            "latest_trade_date": trade_date,
+            "latest_market_date": trade_date,
+            "health_groups": [],
+        },
+        ops_snapshot_loader=lambda trade_date: {
+            "run_window": {
+                "requested_trade_date": trade_date,
+                "status_trade_date": trade_date,
+            },
+            "readiness": {"ready_status": "ready", "blocking_issue_count": 0},
+        },
+        score_audit_loader=lambda trade_date: {
+            "trade_date": trade_date,
+            "anomaly_row_count": 0,
+        },
+        strategies_loader=lambda: [
+            {
+                "strategy_id": "lhb_shortline",
+                "latest_metrics": {"signal_as_of_date": "2026-08-05"},
+            },
+            {
+                "strategy_id": "mid_trend",
+                "latest_metrics": {"signal_as_of_date": "2026-08-05"},
+            },
+            {
+                "strategy_id": "tech_bottleneck",
+                "latest_metrics": {"signal_as_of_date": "2026-08-05"},
+            },
+        ],
+    )
+
+    assert result.status == RepairStatus.DEGRADED
+    assert result.blocker is False
+    assert result.metrics["issues"] == []
+    assert result.metrics["degraded_issues"] == [
+        "backtests:lhb_shortline:signal_as_of_date=2026-08-05",
+        "backtests:mid_trend:signal_as_of_date=2026-08-05",
+        "backtests:tech_bottleneck:signal_as_of_date=2026-08-05",
+    ]
+
+
 def test_evaluate_review_queue_groups_fails_identical_lhb_and_midtrend_assets():
     payload = {
         "trade_date": "2026-06-29",
@@ -336,6 +383,60 @@ def test_evaluate_review_queue_groups_fails_zero_tech_bottleneck_count():
 
     assert result.status == RepairStatus.FAILED
     assert "tech_bottleneck" in result.message
+
+
+def test_evaluate_review_queue_groups_allows_underfilled_lhb_as_degraded():
+    payload = {
+        "trade_date": "2026-08-06",
+        "groups": [
+            {
+                "bucket": "strategy:lhb_shortline",
+                "count": 3,
+                "items": [{"asset_id": "A"}, {"asset_id": "B"}, {"asset_id": "C"}],
+            },
+            {
+                "bucket": "strategy:mid_trend",
+                "count": 5,
+                "items": [{"asset_id": f"M{index}"} for index in range(5)],
+            },
+            {
+                "bucket": "strategy:tech_bottleneck",
+                "count": 5,
+                "items": [{"asset_id": f"T{index}"} for index in range(5)],
+            },
+        ],
+    }
+
+    result = evaluate_review_queue_groups(payload, trade_date="2026-08-06")
+
+    assert result.status == RepairStatus.DEGRADED
+    assert result.blocker is False
+    assert result.metrics["degraded_buckets"] == ["strategy:lhb_shortline"]
+
+
+def test_check_review_queue_propagates_underfilled_lhb_as_degraded(tmp_path):
+    path = tmp_path / "research" / "strategy_daily_eod" / "2026-08-06"
+    path.mkdir(parents=True)
+    rows = []
+    for strategy_id, count in (("lhb_shortline", 3), ("mid_trend", 5), ("tech_bottleneck", 5)):
+        for rank in range(1, count + 1):
+            rows.append(
+                {
+                    "trade_date": "2026-08-06",
+                    "strategy_id": strategy_id,
+                    "asset_id": f"{strategy_id}-{rank}",
+                    "score_total": 1.0,
+                }
+            )
+    import pandas as pd
+
+    pd.DataFrame(rows).to_csv(path / "review_queue_strategy_manifest.csv", index=False)
+
+    result = check_review_queue("2026-08-06", output_root=tmp_path)
+
+    assert result.status == RepairStatus.DEGRADED
+    assert result.blocker is False
+    assert result.metrics["degraded_buckets"] == ["strategy:lhb_shortline"]
 
 
 def test_evaluate_strategy_review_scores_fails_null_scores():

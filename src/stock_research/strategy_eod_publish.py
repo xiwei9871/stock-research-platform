@@ -50,6 +50,13 @@ EXPECTED_STRATEGY_REVIEW_COUNTS = {
     "mid_trend": 5,
     "tech_bottleneck": 5,
 }
+STRATEGY_REVIEW_COUNT_BOUNDS = {
+    # The LHB policy is explicitly top-5-then-eligibility-without-refill, so
+    # fewer than five rows is a valid outcome when the gate removes names.
+    "lhb_shortline": (1, 5),
+    "mid_trend": (5, 5),
+    "tech_bottleneck": (5, 5),
+}
 BASE_CHECKS = {
     "daily_bars": {
         "source": "market_daily_bar",
@@ -281,11 +288,11 @@ def publish_strategy_eod(
     strategy_counts, strategy_row_counts = _strategy_review_counts(review_rows)
     if (
         not _strategy_review_rows_valid(review_rows, expected_trade_date=selected_trade_date)
-        or strategy_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
-        or strategy_row_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
+        or not _strategy_review_counts_valid(strategy_counts, strategy_row_counts)
     ):
         error = (
-            "strategy review contract requires exactly 5 rows per strategy: "
+            "strategy review contract requires exactly 5 rows per strategy except "
+            "LHB may publish 1-5 after the eligibility gate: "
             f"unique_assets={strategy_counts}, rows={strategy_row_counts}, total_rows={len(review_rows)}"
         )
         _replace_official_strategy_entries_with_failures(
@@ -1500,13 +1507,25 @@ def _strategy_review_counts(
     return unique_counts, row_counts
 
 
+def _strategy_review_counts_valid(
+    unique_counts: dict[str, int],
+    row_counts: dict[str, int],
+) -> bool:
+    for strategy_id, (minimum, maximum) in STRATEGY_REVIEW_COUNT_BOUNDS.items():
+        unique_count = int(unique_counts.get(strategy_id) or 0)
+        row_count = int(row_counts.get(strategy_id) or 0)
+        if not minimum <= unique_count <= maximum or unique_count != row_count:
+            return False
+    return set(unique_counts) == set(STRATEGY_REVIEW_COUNT_BOUNDS) and set(row_counts) == set(
+        STRATEGY_REVIEW_COUNT_BOUNDS
+    )
+
+
 def _strategy_review_rows_valid(
     review_rows: list[dict[str, Any]],
     *,
     expected_trade_date: str,
 ) -> bool:
-    if len(review_rows) != sum(EXPECTED_STRATEGY_REVIEW_COUNTS.values()):
-        return False
     frame = pd.DataFrame(review_rows)
     required_columns = {"trade_date", "strategy_id", "rank", "review_tier"}
     if not required_columns.issubset(frame.columns):
@@ -1531,10 +1550,11 @@ def _strategy_review_rows_valid(
         and ranks.mod(1).eq(0).all()
     ):
         return False
-    expected_ranks = {1, 2, 3, 4, 5}
-    for strategy_id in EXPECTED_STRATEGY_REVIEW_COUNTS:
+    for strategy_id, (minimum, maximum) in STRATEGY_REVIEW_COUNT_BOUNDS.items():
         strategy_ranks = ranks[strategy_ids.eq(strategy_id)]
-        if len(strategy_ranks) != 5 or set(strategy_ranks.astype(int)) != expected_ranks:
+        count = len(strategy_ranks)
+        expected_ranks = set(range(1, count + 1))
+        if not minimum <= count <= maximum or set(strategy_ranks.astype(int)) != expected_ranks:
             return False
     return True
 

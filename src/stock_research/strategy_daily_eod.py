@@ -27,7 +27,10 @@ from stock_research.strategy_daily_eod_store import (
     upsert_strategy_daily_eod_status,
     upsert_strategy_daily_eod_status_with_connection,
 )
-from stock_research.strategy_eod_publish import publish_strategy_eod
+from stock_research.strategy_eod_publish import (
+    STRATEGY_REVIEW_COUNT_BOUNDS,
+    publish_strategy_eod,
+)
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
     get_publication_contract,
@@ -109,9 +112,8 @@ def run_strategy_daily_eod(
 
     dependency_reason = _dependency_failure_reason(dependency_check)
     expected_counts = {
-        "lhb_shortline": 5,
-        "mid_trend": 5,
-        "tech_bottleneck": 5,
+        strategy_id: maximum
+        for strategy_id, (_minimum, maximum) in STRATEGY_REVIEW_COUNT_BOUNDS.items()
     }
     manifest_entries: list[dict[str, Any]] = []
     publisher_summary: dict[str, Any] = {}
@@ -156,8 +158,10 @@ def run_strategy_daily_eod(
                 for name in expected_counts
             }
             strategy_status = {
-                name: "success" if strategy_counts[name] == expected else "failed"
-                for name, expected in expected_counts.items()
+                name: "success"
+                if _strategy_review_count_valid(name, strategy_counts[name])
+                else "failed"
+                for name in expected_counts
             }
             strategy_status["midtrend_artifacts"] = (
                 "success"
@@ -165,7 +169,11 @@ def run_strategy_daily_eod(
                 else "failed"
             )
             strategy_errors = {
-                name: f"expected 5 review rows, got {strategy_counts[name]}"
+                name: (
+                    "expected "
+                    f"{STRATEGY_REVIEW_COUNT_BOUNDS[name][0]}..{STRATEGY_REVIEW_COUNT_BOUNDS[name][1]} "
+                    f"review rows, got {strategy_counts[name]}"
+                )
                 for name in expected_counts
                 if strategy_status[name] != "success"
             }
@@ -199,10 +207,10 @@ def run_strategy_daily_eod(
     contract_valid = (
         not dependency_blocked
         and publication_error is None
-        and strategy_counts == expected_counts
+        and _strategy_review_counts_valid(strategy_counts)
         and strategy_status.get("midtrend_artifacts") == "success"
         and publisher_summary.get("publishable") is True
-        and int(publisher_summary.get("review_rows") or 0) == 15
+        and int(publisher_summary.get("review_rows") or 0) == sum(strategy_counts.values())
         and (publisher_summary.get("score_audit") or {}).get("status") == "success"
         and not required_manifest_errors
         and _staged_release_valid(output_dir, trade_date=trade_date)
@@ -555,7 +563,11 @@ def _staged_release_valid(staging: Path, *, trade_date: str) -> bool:
     }
     try:
         manifest = pd.read_csv(staging / "review_queue_strategy_manifest.csv", low_memory=False)
-        if len(manifest) != 15:
+        expected_rows = sum(
+            len(pd.read_csv(staging / filename, low_memory=False))
+            for filename in expected_files.values()
+        )
+        if len(manifest) != expected_rows:
             return False
         for strategy_id, filename in expected_files.items():
             frame = pd.read_csv(staging / filename, low_memory=False)
@@ -575,15 +587,17 @@ def _staged_release_valid(staging: Path, *, trade_date: str) -> bool:
 
 def _review_frame_valid(frame: pd.DataFrame, *, strategy_id: str, trade_date: str) -> bool:
     required = {"trade_date", "strategy_id", "asset_id", "rank", "review_tier"}
-    if len(frame) != 5 or not required.issubset(frame.columns):
+    minimum, maximum = STRATEGY_REVIEW_COUNT_BOUNDS[strategy_id]
+    if not minimum <= len(frame) <= maximum or not required.issubset(frame.columns):
         return False
+    expected_ranks = list(range(1, len(frame) + 1))
     return (
         set(frame["trade_date"].astype(str)) == {trade_date}
         and set(frame["strategy_id"].astype(str)) == {strategy_id}
-        and sorted(frame["rank"].astype(int).tolist()) == [1, 2, 3, 4, 5]
+        and sorted(frame["rank"].astype(int).tolist()) == expected_ranks
         and frame["review_tier"].astype(str).eq("top5_focus").all()
         and frame["asset_id"].astype(str).str.strip().ne("").all()
-        and frame["asset_id"].astype(str).nunique() == 5
+        and frame["asset_id"].astype(str).nunique() == len(frame)
     )
 
 
@@ -1403,6 +1417,18 @@ def _normalize_mid_trend_review(
     normalized["rank"] = range(1, len(normalized) + 1)
     normalized["source_rank"] = normalized["rank"]
     return normalized
+
+
+def _strategy_review_count_valid(strategy_id: str, count: int) -> bool:
+    minimum, maximum = STRATEGY_REVIEW_COUNT_BOUNDS[strategy_id]
+    return minimum <= int(count) <= maximum
+
+
+def _strategy_review_counts_valid(counts: dict[str, int]) -> bool:
+    return all(
+        _strategy_review_count_valid(strategy_id, int(counts.get(strategy_id) or 0))
+        for strategy_id in STRATEGY_REVIEW_COUNT_BOUNDS
+    )
 
 
 def _write_review_manifest(output_dir: Path) -> dict[str, int]:

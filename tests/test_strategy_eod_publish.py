@@ -650,12 +650,35 @@ def test_publish_strategy_eod_returns_exact_review_counts_and_collected_entries(
     assert "manifest_entries" not in summary
 
 
+def test_publish_strategy_eod_allows_lhb_underfilled_after_eligibility_gate(monkeypatch, tmp_path):
+    strategy_assets = {
+        "lhb_shortline": [f"CN:SH:{index:06d}" for index in range(1, 4)],
+        "mid_trend": [f"CN:SH:{index:06d}" for index in range(101, 106)],
+        "tech_bottleneck": [f"CN:SH:{index:06d}" for index in range(201, 206)],
+    }
+    _install_publish_contract_fakes(monkeypatch, tmp_path, strategy_assets=strategy_assets)
+
+    summary = strategy_eod_publish.publish_strategy_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+        manifest_upsert=lambda entry: None,
+    )
+
+    assert summary["strategy_counts"] == {
+        "lhb_shortline": 3,
+        "mid_trend": 5,
+        "tech_bottleneck": 5,
+    }
+    assert summary["review_rows"] == 13
+    assert summary["publishable"] is True
+
+
 @pytest.mark.parametrize(
     "lhb_assets",
     [
         [],
         ["CN:SH:000001"] * 5,
-        [f"CN:SH:{index:06d}" for index in range(1, 5)],
         [f"CN:SH:{index:06d}" for index in range(1, 6)] + ["CN:SH:000005"],
     ],
 )

@@ -160,6 +160,40 @@ def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
                 assert str(value).startswith(str(tmp_path / "2026-07-24"))
 
 
+def test_official_runner_allows_lhb_underfilled_after_eligibility_gate(tmp_path, monkeypatch):
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda entry, **_kwargs: persisted.append(entry))
+
+    def publisher(**kwargs):
+        summary = _write_complete_mature_release(
+            counts={"lhb_shortline": 3, "mid_trend": 5, "tech_bottleneck": 5},
+            **kwargs,
+        )
+        summary["publishable"] = True
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-08-06",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "success", summary
+    assert summary["publishable"] is True
+    assert summary["review_rows"] == 13
+    assert summary["strategy_status"] == {
+        "lhb_shortline": "success",
+        "mid_trend": "success",
+        "midtrend_artifacts": "success",
+        "tech_bottleneck": "success",
+    }
+    assert persisted
+
+
 def test_official_runner_rejects_tampered_identity_before_transaction(tmp_path, monkeypatch):
     transactions = []
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
