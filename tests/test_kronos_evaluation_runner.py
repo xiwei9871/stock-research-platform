@@ -119,6 +119,32 @@ def make_config() -> KronosEvaluationConfig:
     )
 
 
+def test_config_from_payload_accepts_legacy_metadata_without_new_fields():
+    config = make_config()
+    payload = {
+        field.name: runner._jsonable(getattr(config, field.name))
+        for field in runner.fields(config)
+        if field.name
+        not in {
+            "frequency",
+            "primary_horizon",
+            "include_latest_forecast",
+            "fallback",
+            "experiment_id",
+            "config_fingerprint",
+        }
+    }
+
+    restored = runner._config_from_payload(payload)
+
+    assert restored.frequency == "1d"
+    assert restored.primary_horizon == 1
+    assert restored.include_latest_forecast is False
+    assert restored.fallback is False
+    assert restored.experiment_id == ""
+    assert restored.config_fingerprint == ""
+
+
 def make_loader(snapshots):
     def loader(config):
         assert tuple(snapshot.asset_id for snapshot in snapshots) == config.asset_ids

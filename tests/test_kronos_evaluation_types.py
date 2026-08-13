@@ -198,6 +198,26 @@ def test_config_rejects_invalid_dates():
             end_date="2025-03-01",
         )
 
+
+@pytest.mark.parametrize(
+    "overrides, message",
+    [
+        ({"frequency": "5m"}, "frequency"),
+        ({"fallback": True}, "fallback"),
+        ({"primary_horizon": 3}, "primary_horizon"),
+    ],
+)
+def test_config_rejects_invalid_new_contract_fields(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        KronosEvaluationConfig(
+            asset_ids=("CN:SH:600418",),
+            start_date="2025-01-02",
+            end_date="2025-01-31",
+            forecast_horizon=2,
+            evaluation_horizons=(1, 2),
+            **overrides,
+        )
+
     with pytest.raises(ValueError, match="start_date"):
         KronosEvaluationConfig(
             asset_ids=("CN:SH:600418",),

@@ -5181,7 +5181,24 @@ def _config_payload(config: KronosEvaluationConfig) -> dict[str, Any]:
 
 def _config_from_payload(payload: Mapping[str, Any]) -> KronosEvaluationConfig:
     try:
-        values = {field.name: payload[field.name] for field in fields(KronosEvaluationConfig)}
+        values = {
+            field.name: payload[field.name]
+            for field in fields(KronosEvaluationConfig)
+            if field.name in payload
+        }
+        values.setdefault("frequency", "1d")
+        values.setdefault("primary_horizon", 1)
+        values.setdefault("include_latest_forecast", False)
+        values.setdefault("fallback", False)
+        values.setdefault("experiment_id", "")
+        values.setdefault("config_fingerprint", "")
+        missing = {
+            field.name
+            for field in fields(KronosEvaluationConfig)
+            if field.name not in values
+        }
+        if missing:
+            raise KeyError(f"missing config metadata fields: {sorted(missing)}")
         return KronosEvaluationConfig(**values)
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("experiment config metadata is invalid") from exc

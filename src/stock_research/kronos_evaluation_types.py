@@ -223,14 +223,19 @@ class KronosEvaluationConfig:
         ):
             raise ValueError("seed must be an integer or None")
 
-        object.__setattr__(self, "frequency", _require_non_empty_string("frequency", self.frequency))
+        normalized_frequency = _require_non_empty_string("frequency", self.frequency)
+        if normalized_frequency != "1d":
+            raise ValueError("frequency must be 1d")
+        object.__setattr__(self, "frequency", normalized_frequency)
         _require_int_in_range(
             "primary_horizon", self.primary_horizon, 1, self.forecast_horizon
         )
+        if self.primary_horizon not in self.evaluation_horizons:
+            raise ValueError("primary_horizon must be in evaluation_horizons")
         if not isinstance(self.include_latest_forecast, bool):
             raise ValueError("include_latest_forecast must be a boolean")
-        if not isinstance(self.fallback, bool):
-            raise ValueError("fallback must be a boolean")
+        if self.fallback is not False:
+            raise ValueError("fallback must be false")
         if not isinstance(self.experiment_id, str):
             raise ValueError("experiment_id must be a string")
         if not isinstance(self.config_fingerprint, str):
