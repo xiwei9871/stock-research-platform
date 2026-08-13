@@ -491,9 +491,16 @@ def _config_from_metadata(metadata: Mapping[str, Any]) -> KronosEvaluationConfig
         values = {
             field.name: payload[field.name]
             for field in dataclass_fields(KronosEvaluationConfig)
+            if field.name in payload
         }
     except KeyError as exc:
         raise ValueError("experiment.json config metadata is incomplete") from exc
+    values.setdefault("frequency", "1d")
+    values.setdefault("primary_horizon", 1)
+    values.setdefault("include_latest_forecast", False)
+    values.setdefault("fallback", False)
+    values.setdefault("experiment_id", "")
+    values.setdefault("config_fingerprint", "")
     return KronosEvaluationConfig(**values)
 
 
