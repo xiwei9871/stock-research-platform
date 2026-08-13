@@ -78,6 +78,7 @@ def test_latest_end_date_is_represented_in_canonical_payload(tmp_path):
     "mutate, message",
     [
         (lambda p: p.update(schema_version=2), "schema_version"),
+        (lambda p: p.update(schema_version=True), "schema_version"),
         (lambda p: p["model"].update(name="large"), "model"),
         (lambda p: p["model"].update(fallback=True), "fallback"),
         (lambda p: p.update(experiment_id="  "), "experiment_id"),

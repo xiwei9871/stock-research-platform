@@ -78,7 +78,11 @@ def load_experiment_spec(path: Path) -> KronosExperimentSpec:
     if not isinstance(payload, dict):
         raise ValueError("experiment JSON must contain an object")
     _require_keys(payload, _TOP_LEVEL_KEYS, "experiment")
-    if payload["schema_version"] != 1:
+    if (
+        isinstance(payload["schema_version"], bool)
+        or not isinstance(payload["schema_version"], int)
+        or payload["schema_version"] != 1
+    ):
         raise ValueError("schema_version must be 1")
 
     model = _mapping(payload["model"], "model")
