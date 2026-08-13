@@ -67,6 +67,37 @@ def test_load_valid_spec_normalizes_and_builds_low_level_config(tmp_path):
     assert config.config_fingerprint == spec.config_fingerprint
 
 
+@pytest.mark.parametrize(
+    "field, value, message",
+    [
+        ("sample_count", 101, "sample_count"),
+        ("forecast_horizon", 11, "forecast_horizon"),
+    ],
+)
+def test_load_rejects_values_outside_low_level_config_ranges(
+    tmp_path, field, value, message
+):
+    payload = json.loads(json.dumps(VALID_PAYLOAD))
+    if field == "sample_count":
+        payload["model"][field] = value
+    else:
+        payload["prediction"][field] = value
+
+    with pytest.raises(ValueError, match=message):
+        load_experiment_spec(write_spec(tmp_path, payload))
+
+
+def test_load_accepts_low_level_config_range_boundaries(tmp_path):
+    payload = json.loads(json.dumps(VALID_PAYLOAD))
+    payload["model"]["sample_count"] = 100
+    payload["prediction"].update(forecast_horizon=10, report_horizons=[1, 10])
+
+    spec = load_experiment_spec(write_spec(tmp_path, payload))
+
+    assert spec.sample_count == 100
+    assert spec.forecast_horizon == 10
+
+
 def test_latest_end_date_is_represented_in_canonical_payload(tmp_path):
     payload = json.loads(json.dumps(VALID_PAYLOAD))
     payload["data"]["end_date"] = "latest_available"

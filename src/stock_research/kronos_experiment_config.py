@@ -107,7 +107,7 @@ def load_experiment_spec(path: Path) -> KronosExperimentSpec:
     if model["fallback"] is not False:
         raise ValueError("fallback must be false")
     model_seed = _optional_int(model["seed"], "model.seed")
-    sample_count = _positive_int(model["sample_count"], "model.sample_count")
+    sample_count = _int_in_range(model["sample_count"], "model.sample_count", 1, 100)
     frequency = _non_empty_string(data["frequency"], "frequency")
     if frequency != "1d":
         raise ValueError("frequency must be 1d")
@@ -135,7 +135,9 @@ def load_experiment_spec(path: Path) -> KronosExperimentSpec:
     if universe_mode == "explicit" and len(asset_ids) != universe_count:
         raise ValueError("universe.count must match asset_ids")
 
-    forecast_horizon = _positive_int(prediction["forecast_horizon"], "forecast_horizon")
+    forecast_horizon = _int_in_range(
+        prediction["forecast_horizon"], "forecast_horizon", 1, 10
+    )
     report_horizons = _positive_int_tuple(prediction["report_horizons"], "report_horizons")
     if report_horizons != tuple(sorted(report_horizons)) or len(set(report_horizons)) != len(report_horizons):
         raise ValueError("report_horizons must be strictly increasing")
@@ -215,6 +217,17 @@ def _non_empty_string(value: Any, field_name: str) -> str:
 def _positive_int(value: Any, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError(f"{field_name} must be a positive integer")
+    return value
+
+
+def _int_in_range(value: Any, field_name: str, minimum: int, maximum: int) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < minimum
+        or value > maximum
+    ):
+        raise ValueError(f"{field_name} must be between {minimum} and {maximum}")
     return value
 
 
