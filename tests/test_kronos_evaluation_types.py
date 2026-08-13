@@ -32,6 +32,12 @@ def test_config_accepts_confirmed_defaults():
     assert config.token_env == "KRONOS_INTERNAL_TOKEN"
     assert config.timeout_seconds == 60.0
     assert config.seed == 20260806
+    assert config.frequency == "1d"
+    assert config.primary_horizon == 1
+    assert config.include_latest_forecast is False
+    assert config.fallback is False
+    assert config.experiment_id == ""
+    assert config.config_fingerprint == ""
 
 
 def test_normalize_asset_ids_accepts_local_forms_and_explicit_bare_resolver():

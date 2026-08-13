@@ -174,6 +174,12 @@ class KronosEvaluationConfig:
     token_env: str = "KRONOS_INTERNAL_TOKEN"
     timeout_seconds: float = 60.0
     seed: int | None = DEFAULT_KRONOS_SEED
+    frequency: str = "1d"
+    primary_horizon: int = 1
+    include_latest_forecast: bool = False
+    fallback: bool = False
+    experiment_id: str = ""
+    config_fingerprint: str = ""
 
     def __post_init__(self) -> None:
         normalized_asset_ids = normalize_asset_ids(self.asset_ids)
@@ -216,6 +222,19 @@ class KronosEvaluationConfig:
             isinstance(self.seed, bool) or not isinstance(self.seed, int)
         ):
             raise ValueError("seed must be an integer or None")
+
+        object.__setattr__(self, "frequency", _require_non_empty_string("frequency", self.frequency))
+        _require_int_in_range(
+            "primary_horizon", self.primary_horizon, 1, self.forecast_horizon
+        )
+        if not isinstance(self.include_latest_forecast, bool):
+            raise ValueError("include_latest_forecast must be a boolean")
+        if not isinstance(self.fallback, bool):
+            raise ValueError("fallback must be a boolean")
+        if not isinstance(self.experiment_id, str):
+            raise ValueError("experiment_id must be a string")
+        if not isinstance(self.config_fingerprint, str):
+            raise ValueError("config_fingerprint must be a string")
 
 
 def _normalize_date(field_name: str, value: str) -> str:
