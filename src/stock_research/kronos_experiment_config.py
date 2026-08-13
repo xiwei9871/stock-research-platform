@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -19,6 +20,7 @@ _DATA_KEYS = {"frequency", "adjust_type", "input_window", "start_date", "end_dat
 _UNIVERSE_KEYS = {"mode", "count", "seed", "market", "asset_ids"}
 _PREDICTION_KEYS = {"forecast_horizon", "report_horizons", "include_latest_forecast"}
 _EVALUATION_KEYS = {"primary_horizon", "baseline"}
+_EXPERIMENT_ID_RE = re.compile(r"^[A-Za-z0-9_-](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?$")
 
 
 @dataclass(frozen=True)
@@ -97,6 +99,8 @@ def load_experiment_spec(path: Path) -> KronosExperimentSpec:
     _require_keys(evaluation, _EVALUATION_KEYS, "evaluation")
 
     experiment_id = _non_empty_string(payload["experiment_id"], "experiment_id")
+    if len(experiment_id) > 128 or not _EXPERIMENT_ID_RE.fullmatch(experiment_id):
+        raise ValueError("experiment_id must use safe path-compatible characters")
     model_name = _non_empty_string(model["name"], "model.name").lower()
     if model_name not in {"small", "base"}:
         raise ValueError("model must be small or base")

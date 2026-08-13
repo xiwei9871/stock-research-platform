@@ -85,6 +85,15 @@ def test_random_universe_rejects_non_empty_asset_ids(tmp_path):
         load_experiment_spec(write_spec(tmp_path, payload))
 
 
+@pytest.mark.parametrize("experiment_id", ["../escape", "a/b", r"a\b", ".", "..", ".hidden", "trailing."])
+def test_experiment_id_rejects_path_escape_forms(tmp_path, experiment_id):
+    payload = json.loads(json.dumps(VALID_PAYLOAD))
+    payload["experiment_id"] = experiment_id
+
+    with pytest.raises(ValueError, match="experiment_id"):
+        load_experiment_spec(write_spec(tmp_path, payload))
+
+
 @pytest.mark.parametrize(
     "section, key, value",
     [
