@@ -53,7 +53,10 @@ def test_load_valid_spec_normalizes_and_builds_low_level_config(tmp_path):
         write_spec(tmp_path, VALID_PAYLOAD)
     ).config_fingerprint
 
-    config = spec.to_evaluation_config(("600418.SH",), "2025-02-01")
+    config = spec.to_evaluation_config(
+        asset_ids=("600418.SH",),
+        end_date="2025-02-01",
+    )
     assert config.asset_ids == ("CN:SH:600418",)
     assert config.end_date == "2025-02-01"
     assert config.models == ("small",)
@@ -72,6 +75,71 @@ def test_latest_end_date_is_represented_in_canonical_payload(tmp_path):
     assert spec.end_date is None
     assert spec.end_date_latest is True
     assert canonical_spec_payload(spec)["data"]["end_date"] == "latest_available"
+
+
+def test_random_universe_rejects_non_empty_asset_ids(tmp_path):
+    payload = json.loads(json.dumps(VALID_PAYLOAD))
+    payload["universe"].update(mode="random", count=2, seed=7)
+
+    with pytest.raises(ValueError, match="random.*asset_ids"):
+        load_experiment_spec(write_spec(tmp_path, payload))
+
+
+@pytest.mark.parametrize(
+    "section, key, value",
+    [
+        ("model", "seed", "7"),
+        ("data", "input_window", "3"),
+        ("universe", "count", "2"),
+        ("prediction", "report_horizons", "1,2"),
+        ("evaluation", "primary_horizon", "1"),
+    ],
+)
+def test_load_rejects_wrong_nested_field_types(tmp_path, section, key, value):
+    payload = json.loads(json.dumps(VALID_PAYLOAD))
+    payload[section][key] = value
+
+    with pytest.raises(ValueError):
+        load_experiment_spec(write_spec(tmp_path, payload))
+
+
+@pytest.mark.parametrize(
+    "section, key",
+    [
+        ("model", "seed"),
+        ("data", "input_window"),
+        ("universe", "asset_ids"),
+        ("prediction", "report_horizons"),
+        ("evaluation", "baseline"),
+    ],
+)
+def test_load_rejects_missing_nested_fields(tmp_path, section, key):
+    payload = json.loads(json.dumps(VALID_PAYLOAD))
+    del payload[section][key]
+
+    with pytest.raises(ValueError):
+        load_experiment_spec(write_spec(tmp_path, payload))
+
+
+def test_canonical_payload_serializes_new_fields_and_fingerprint_changes(tmp_path):
+    spec = load_experiment_spec(write_spec(tmp_path, VALID_PAYLOAD))
+    canonical = canonical_spec_payload(spec)
+
+    assert canonical["model"]["seed"] == 7
+    assert canonical["prediction"]["include_latest_forecast"] is False
+    assert canonical["evaluation"]["primary_horizon"] == 1
+
+    primary_changed = json.loads(json.dumps(VALID_PAYLOAD))
+    primary_changed["evaluation"]["primary_horizon"] = 2
+    seed_changed = json.loads(json.dumps(VALID_PAYLOAD))
+    seed_changed["model"]["seed"] = 8
+
+    assert load_experiment_spec(
+        write_spec(tmp_path, primary_changed)
+    ).config_fingerprint != spec.config_fingerprint
+    assert load_experiment_spec(
+        write_spec(tmp_path, seed_changed)
+    ).config_fingerprint != spec.config_fingerprint
 
 
 @pytest.mark.parametrize(

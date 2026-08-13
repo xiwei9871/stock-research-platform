@@ -48,7 +48,7 @@ class KronosExperimentSpec:
     config_fingerprint: str
 
     def to_evaluation_config(
-        self, asset_ids: Any, end_date: str
+        self, *, asset_ids: tuple[str, ...], end_date: str
     ) -> KronosEvaluationConfig:
         return KronosEvaluationConfig(
             asset_ids=asset_ids,
@@ -123,6 +123,8 @@ def load_experiment_spec(path: Path) -> KronosExperimentSpec:
         raise ValueError("random universe requires seed")
     market = _non_empty_string(universe["market"], "universe.market")
     raw_asset_ids = universe["asset_ids"]
+    if universe_mode == "random" and raw_asset_ids:
+        raise ValueError("random universe must not specify asset_ids")
     if universe_mode == "explicit" and not raw_asset_ids:
         raise ValueError("explicit universe requires asset_ids")
     asset_ids = normalize_asset_ids(raw_asset_ids or ())
