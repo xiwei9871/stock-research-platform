@@ -238,8 +238,11 @@ class KronosEvaluationConfig:
             raise ValueError("fallback must be false")
         if not isinstance(self.experiment_id, str):
             raise ValueError("experiment_id must be a string")
-        if not isinstance(self.config_fingerprint, str):
-            raise ValueError("config_fingerprint must be a string")
+        if not isinstance(self.config_fingerprint, str) or (
+            self.config_fingerprint
+            and not _FINGERPRINT_RE.fullmatch(self.config_fingerprint)
+        ):
+            raise ValueError("config_fingerprint must be an empty string or 64 hex characters")
 
 
 def _normalize_date(field_name: str, value: str) -> str:

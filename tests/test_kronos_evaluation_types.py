@@ -40,6 +40,28 @@ def test_config_accepts_confirmed_defaults():
     assert config.config_fingerprint == ""
 
 
+@pytest.mark.parametrize("fingerprint", ["short", "g" * 64, "0" * 63, "0" * 65])
+def test_config_rejects_invalid_config_fingerprint(fingerprint):
+    with pytest.raises(ValueError, match="config_fingerprint"):
+        KronosEvaluationConfig(
+            asset_ids=("CN:SH:600418",),
+            start_date="2025-01-02",
+            end_date="2025-01-31",
+            config_fingerprint=fingerprint,
+        )
+
+
+def test_config_accepts_legacy_empty_config_fingerprint():
+    config = KronosEvaluationConfig(
+        asset_ids=("CN:SH:600418",),
+        start_date="2025-01-02",
+        end_date="2025-01-31",
+        config_fingerprint="",
+    )
+
+    assert config.config_fingerprint == ""
+
+
 def test_normalize_asset_ids_accepts_local_forms_and_explicit_bare_resolver():
     resolver_calls = []
 
