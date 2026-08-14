@@ -243,28 +243,65 @@ outputs/research/kronos_rolling_eval/2026-07-small-rolling/
 
 ### 3.3 small/base 切换和无 fallback 约束
 
-切换逻辑模型只改 JSON 的 `model.name`，例如：
+单模型配置驱动实验可以把复制后的完整 JSON 中的 `model.name` 从 `small` 改为 `base`，同时使用新的
+`experiment_id`，再执行同一入口。运行时会先调用服务 `/health`，并要求实际 model identity 与配置完全一致；
+`fallback=true`、多模型配置、身份 mismatch、非法 OHLC、模型/GPU/网络失败都必须停止或记录为失败，不能用另一个模型补齐。
 
-```json
-"model": {
-  "name": "base",
-  "fallback": false,
-  "seed": 20260806,
-  "sample_count": 20
-}
+但当前 `KronosEvaluationConfig` 的默认预测地址是 `http://192.168.3.187:8123`，新 JSON schema 没有
+`predict_url` 字段。因此，配置驱动的 base 命令只有在**8123 已按批准的服务运维流程部署并对外提供 base**、且
+第 2 节 health 检查通过时才可执行：
+
+```bash
+cd /path/to/stock_research
+# configs/<new-base>.json 必须是完整合法 JSON：model.name=base、fallback=false、experiment_id 为新值。
+rtk python3 scripts/run_kronos_experiment.py \
+  --config configs/<new-base>.json \
+  --stage run
 ```
 
-然后为新的冻结结果使用新的 `experiment_id`，再执行同一入口。运行时会先调用服务 `/health`，并要求实际
-model identity 与配置完全一致；`fallback=true`、多模型配置、身份 mismatch、非法 OHLC、模型/GPU/网络失败
-都必须停止或记录为失败，不能用另一个模型补齐。
+不要在配置 JSON 中填写 8124，也不要假设新入口会自动切换到 8124。如果 base 只运行在 8124，使用下一节
+说明的 legacy 同一快照流程；不要通过 fallback 绕过 mismatch。small 是默认安全模型，base 的端口/进程切换
+仍属于服务运维动作，不在本 Task 修改代码。
 
-当前 `KronosEvaluationConfig` 的默认预测地址是 `http://192.168.3.187:8123`。因此 base 实验除了改 JSON，
-还必须先按本 runbook 第 2 节完成 base 服务身份、显存和回滚预检，并确保配置驱动 CLI 访问的地址实际提供
-`base`。当前 JSON schema 没有预测 URL 字段，不能把 8124 直接写进 JSON；如果 base 只临时运行在 8124，
-不要假设新入口会自动切换端口，也不要通过 fallback 绕过 mismatch。small 是默认安全模型，base 的端口/进程
-切换仍属于服务运维动作，不在本 Task 修改代码。
+### 3.4 small/base 配对比较：一次 prepare，共用冻结快照
 
-### 3.4 stage 和执行命令
+small/base 的配对比较不能通过两个不同 `experiment_id` 的配置驱动实验来完成；那样会分别解析日期、重新选择股票池，
+不具备严格可比性。正确做法是使用 legacy staged CLI，只执行一次 `prepare`，再在同一个输出目录上分别执行两个模型的
+`predict`，最后只执行一次 `report`：
+
+```bash
+cd /path/to/stock_research
+PAIR_DIR=outputs/research/kronos_rolling_eval/2026-07-small-base-paired
+UNIVERSE_FILE=/absolute/path/to/evaluation_universe_20.csv
+
+# 只执行一次：冻结同一批 20 只股票、日期边界、交易日历和 input snapshots。
+rtk python3 scripts/run_kronos_rolling_evaluation.py prepare \
+  --universe-file "$UNIVERSE_FILE" \
+  --start-date 2026-07-01 \
+  --end-date YYYY-MM-DD \
+  --output-dir "$PAIR_DIR"
+
+# 两次 predict 必须使用同一个 PAIR_DIR；仅模型和已验证的服务地址不同。
+rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
+  --model small \
+  --output-dir "$PAIR_DIR" \
+  --predict-url http://192.168.3.187:8123
+
+rtk python3 scripts/run_kronos_rolling_evaluation.py predict \
+  --model base \
+  --output-dir "$PAIR_DIR" \
+  --predict-url http://192.168.3.187:8124
+
+rtk python3 scripts/run_kronos_rolling_evaluation.py report \
+  --output-dir "$PAIR_DIR"
+```
+
+执行前必须完成第 2 节的 small/base health、显存和回滚检查。验收时核对两个模型的 `snapshot_key` 集合和
+`input_fingerprint` 完全一致；如果必须更换日期、股票池或 input window，创建新的配对目录并重新 prepare 一次，
+不能让两个模型各自新建 experiment_id 后再做 paired comparison。配置驱动入口适合单模型冻结评估；上述 legacy
+流程是当前代码下 8123/8124 双模型共用一次 prepare 的可执行路径。
+
+### 3.5 stage 和执行命令
 
 `prepare`、`predict`、`report` 和 `run` 都是合法 stage。首次执行时，完整 `run` 与分阶段流程二选一：
 
@@ -299,7 +336,7 @@ rtk python3 scripts/run_kronos_experiment.py \
 `predict` 只从冻结 snapshots 调用配置模型；`report` 只从冻结目录生成指标、基准、比较表和报告。两者都不
 重新查询 live universe 或 dashboard endpoint。
 
-### 3.5 `--resume`、fingerprint 和覆盖保护
+### 3.6 `--resume`、fingerprint 和覆盖保护
 
 - 第一次运行不加 `--resume`；输出目录已存在时，任何会写入 artifacts 的 stage 都会拒绝执行。
 - `--resume` 只允许继续同一个 `experiment_id` 且配置 fingerprint 完全相同的实验；fingerprint 不匹配立即失败。
@@ -309,7 +346,7 @@ rtk python3 scripts/run_kronos_experiment.py \
 - 改日期、模型、股票池、输入窗口、预测长度、sample count、report horizons 或 primary horizon 时，先复制 JSON，
   修改参数并换一个新的 `experiment_id`；不要对旧目录使用 `--resume` 试图“改参数续跑”。
 
-### 3.6 输出目录和 sidecar
+### 3.7 输出目录和 sidecar
 
 每次实验独立写入 `outputs/research/kronos_rolling_eval/<experiment_id>/`，主要文件如下：
 
@@ -333,23 +370,24 @@ report.md                    # 可读报告
 `latest_forecast.json` 只从冻结 snapshots、manifest 和 forecast artifacts 生成，不回查数据库。所有输出应作为一次
 运行的冻结快照归档。
 
-### 3.7 报告状态和评分口径
+### 3.8 报告状态和评分口径
 
-| 状态 | 含义 | 是否进入准确率 |
-|---|---|---|
-| `ready` | 预测窗口和完整 truth 可用。 | 是，按已有 horizon 评分。 |
-| `partial_truth` | h=1 truth 已有，但 h=3/5/10 等后续 truth 尚未全部到齐。 | h=1 可评分；未到齐的 horizon 标为 pending。 |
-| `forecast_only` | 最新 origin 有完整未来交易日历但尚无真实 future bar。 | 否，只展示预测。 |
-| `pending_truth` | 指标行级状态，目标 horizon 的真实 bar 尚未到齐。 | 否。 |
-| `pending_calendar` | 未来交易日历不足以构造完整预测窗口。 | 否，不能用自然日补齐。 |
-| `insufficient_input` | origin 前可用真实历史少于 input window。 | 否。 |
-| `insufficient_truth` | h=1 所需真实 truth 不可用，且不满足 partial/forecast-only 条件。 | 否。 |
-| `invalid_input` | 重复日期、NaN/无穷或非法 OHLC。 | 否，保留错误原因。 |
-| `model_error` / `unavailable` / `timeout` / `transport_error` / `protocol_error` | 模型、服务、GPU、网络或响应契约失败。 | 否，不当作准确率为零。 |
+| 状态 | 含义 | accuracy | model comparison |
+|---|---|---|---|
+| `ready` | 预测窗口和完整 truth 可用。 | 仅对应 `scored=true` 的 horizon 进入。 | 仅对应 `scored=true` 且两模型快照匹配的行进入。 |
+| `partial_truth` | h=1 truth 已有，但 h=3/5/10 等后续 truth 尚未全部到齐。 | h=1 可评分；其他 horizon 必须等 truth 到齐且 scored。 | 只比较已 scored 的 horizon，不能把 pending 行当作失败。 |
+| `forecast_only` | 最新 origin 有完整未来交易日历但尚无真实 future bar。 | 否，只展示预测。 | 否。 |
+| `pending_truth` | 指标行级状态，目标 horizon 的真实 bar 尚未到齐。 | 否。 | 否。 |
+| `pending_calendar` | 未来交易日历不足以构造完整预测窗口。 | 否，不能用自然日补齐。 | 否。 |
+| `insufficient_input` | origin 前可用真实历史少于 input window。 | 否。 | 否。 |
+| `insufficient_truth` | h=1 所需真实 truth 不可用，且不满足 partial/forecast-only 条件。 | 否。 | 否。 |
+| `invalid_input` | 重复日期、NaN/无穷或非法 OHLC。 | 否，保留错误原因。 | 否。 |
+| `model_error` / `unavailable` / `timeout` / `transport_error` / `protocol_error` | 模型、服务、GPU、网络或响应契约失败。 | 否，不当作准确率为零。 | 否。 |
 
-本实验 `primary_horizon=1`：准确率、方向命中率、绝对收益误差和 persistence baseline 只使用 h=1 的已实现
-真实值。h=3/5/10 仍保存预测和覆盖/待验证数量，但 `forecast_only`、`pending_truth`、`pending_calendar` 不得
-混入准确率或模型比较的分母。报告中的 primary coverage 会同时列出 scored、pending 和 failed 数量。
+本实验 `primary_horizon=1` 是主结论口径：准确率、方向命中率、绝对收益误差和 persistence baseline 只使用
+h=1 的已实现且 `scored=true` 的真实值。h=3/5/10 只是辅助分析，只有对应 truth 已全部到齐、指标行被标记为
+`scored=true` 时才可进入辅助 accuracy 或 comparison；仅有预测值不代表已评分。报告中的 primary coverage 会同时列出
+scored、pending 和 failed 数量。
 
 ## 4. 安全测试与聚焦回归（不连接真实 DB/GPU）
 
@@ -435,7 +473,7 @@ rtk python3 scripts/run_kronos_rolling_evaluation.py report \
 - small/base 必须复用相同 `snapshot_key` 和 `input_fingerprint`；模型、权重、参数和 seed 单独记录。
 - 每次请求的 20 条采样路径不是 20 个股票；报告同时保留代表路径、P10/P50/P90 和真实未来 bars。
 
-## 6. Legacy 产物保存、失败、恢复与续跑
+## 6. 产物保存、失败、恢复与状态
 
 每个实验目录必须整体保留，不手工编辑或删除其中的隐藏恢复文件：
 
@@ -463,15 +501,18 @@ report.md
 
 ### 状态解释
 
-| 状态/信号 | 含义与处理 |
-|---|---|
-| `success` | 该股票、截止日、模型运行成功，可进入对应 horizon 指标。 |
-| `insufficient_input` | 历史不足 250 根；不补数据，不算作模型准确率。 |
-| `insufficient_truth` | 当前 data builder 会把整个 snapshot 标为 `insufficient_truth`；该 snapshot 在所有 horizon 上都排除出评分和基线。补齐完整未来真实行情后，必须重新 `prepare`，才能重新纳入评估。 |
-| `invalid_input` | 重复日期、NaN 或非法 OHLC；停止该单元并查数据源。 |
-| `model_error` / `unavailable` | 模型、GPU、服务加载或健康检查失败；不是预测得分为零。 |
-| `timeout` / `transport_error` / `protocol_error` | 网络、超时或响应契约问题；保留原始错误，不 fallback。 |
-| `partial` | 仍有成功和失败单元；报告可生成，但必须披露覆盖率和失败分布。 |
+| 状态/信号 | 含义与处理 | accuracy/comparison |
+|---|---|---|
+| `success` / `ready` | 该股票、origin、模型运行成功；按 horizon 检查真实值和 `scored` 标记。 | 只有已实现且 `scored=true` 的行进入。 |
+| `partial_truth` | h=1 truth 已有，较远 horizon truth 尚未全部到齐；不要等待 h=10 才评分 h=1。 | h=1 可进入；h=3/5/10 仅在 truth 到齐且 scored 后进入。 |
+| `forecast_only` | 最新 origin 尚无真实 future bar，只能保留展示预测。 | 不进入。 |
+| `pending_truth` | 目标 horizon 的真实 bar 尚未到齐的指标行。 | 不进入。 |
+| `pending_calendar` | 未来交易日历不足以构造完整 horizon；不得用自然日补齐。 | 不进入。 |
+| `insufficient_input` | 历史不足 250 根；不补数据。 | 不进入。 |
+| `insufficient_truth` | h=1 所需真实 truth 不可用，且不满足 partial/forecast-only 条件。 | 不进入。 |
+| `invalid_input` | 重复日期、NaN/无穷或非法 OHLC；停止该单元并查数据源。 | 不进入。 |
+| `model_error` / `unavailable` / `timeout` / `transport_error` / `protocol_error` | 模型、GPU、服务、网络或响应契约失败；不 fallback。 | 不进入，不能当作准确率为零。 |
+| `partial` | 总体运行仍有成功和失败单元；报告可生成但必须披露覆盖率。 | 由其中已 scored 的明细行决定，不能把整体 `partial` 当作指标。 |
 
 ## 7. Legacy 验收
 
@@ -484,7 +525,8 @@ rtk git diff --check
 
 ### 7.2 真实实验验收清单
 
-在 small/base 两份 manifest（或同一 manifest 中的两个 model 分组）上确认：
+对 small/base 配对实验，必须在同一个 `PAIR_DIR` 中核对两个 model 分组；该目录由一次 `prepare` 产生，不能拿两个
+各自重新 prepare、各自重新选股的 experiment 目录充当 paired comparison：
 
 - `snapshot_key` 集合完全相同；
 - 每个相同 `snapshot_key` 的 `input_fingerprint` 完全相同；
@@ -497,7 +539,7 @@ rtk git diff --check
 
 ### 7.3 结果解释边界
 
-- **预测准确性**：看 1/3/5/10 日的收益误差、方向命中、P10–P90 覆盖率和分位数损失，并与 persistence、drift 同时比较；单票或单日不能代表整体能力。
+- **预测准确性**：`primary_horizon=1` 是主结论；h=3/5/10 只有在对应 truth 到齐且明细行 `scored=true` 时才作为辅助分析，并与 persistence、drift 比较。单票或单日不能代表整体能力。
 - **模型能力**：small/base 只有在相同快照、相同 seed、相同运行单元下的配对差异才可比较；结论使用 `small_preferred`、`base_preferred`、`no_clear_winner` 或 `not_proven`。
 - **延迟与工程成本**：GPU 显存、推理延迟、失败率是独立维度。base 即使某些 accuracy 指标较好，也不能忽略显存/延迟/可用性成本。
 - **数据失败**：输入不足、真实行情不足和非法数据不能混入准确率分母；模型/GPU/网络失败不能被当成模型能力差，也不能由另一个模型 fallback 补齐。
