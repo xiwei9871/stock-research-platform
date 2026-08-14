@@ -118,13 +118,14 @@ LOOP_REPAIR_ORDER = [
     "score_topn",
     "watchlist",
     "market_monitor",
+    "ops_health",
     "strategy_publish",
     "review_queue",
     "strategy_score_audit",
-    "ops_health",
     "dashboard_surface_freshness",
 ]
 LOOP_DEPENDENT_REPAIRS: dict[str, list[str]] = {
+    "minute5_bars": ["ops_health"],
     "factor_daily": ["score_topn", "watchlist", "market_monitor", "strategy_publish"],
     "score_topn": ["watchlist", "market_monitor", "strategy_publish"],
     "watchlist": ["market_monitor", "strategy_publish"],
