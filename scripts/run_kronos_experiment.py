@@ -14,10 +14,13 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import sys
 import tempfile
+import uuid
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -66,6 +69,8 @@ except ModuleNotFoundError:  # pragma: no cover - allows parser-only environment
 KronosClient: Any = _KronosClient
 OUTPUT_ROOT = REPO_ROOT / "outputs" / "research" / "kronos_rolling_eval"
 _STAGES = ("prepare", "predict", "report", "run")
+_CLI_LOCK_SUFFIX = ".kronos-cli.lock"
+_STAGING_PREFIX = ".staging-"
 
 
 class _JsonArgumentParser(argparse.ArgumentParser):
@@ -127,6 +132,24 @@ def run_experiment(
     output_dir = _output_dir(spec)
     _validate_output_target(output_dir)
 
+    with _experiment_output_lock(output_dir):
+        return _run_experiment_locked(
+            spec,
+            output_dir,
+            stage=stage,
+            resume=resume,
+        )
+
+
+def _run_experiment_locked(
+    spec: KronosExperimentSpec,
+    output_dir: Path,
+    *,
+    stage: str,
+    resume: bool,
+) -> dict[str, Any]:
+    """Run a stage while holding the per-experiment creation/write lock."""
+
     exists = output_dir.exists()
     if exists and not resume:
         raise FileExistsError(
@@ -145,21 +168,15 @@ def run_experiment(
 
     preparation: Any = None
     if stage in {"prepare", "run"}:
-        preparation = prepare_experiment(
-            context["config"],
-            output_dir=output_dir,
-            snapshot_loader=context["snapshot_loader"],
-        )
-        output_dir.mkdir(parents=True, exist_ok=True)
-        if not exists:
-            _write_experiment_sidecars(
-                spec,
-                context,
-                output_dir,
-                resume=resume,
+        if exists:
+            preparation = prepare_experiment(
+                context["config"],
+                output_dir=output_dir,
+                snapshot_loader=context["snapshot_loader"],
             )
-        else:
             _validate_sidecars(spec, context, output_dir)
+        else:
+            preparation = _prepare_new_experiment(spec, context, output_dir)
 
     if stage == "prepare":
         return _preparation_summary(spec, context, preparation, output_dir)
@@ -194,6 +211,76 @@ def run_experiment(
         }
     )
     return combined
+
+
+def _prepare_new_experiment(
+    spec: KronosExperimentSpec,
+    context: Mapping[str, Any],
+    output_dir: Path,
+) -> Any:
+    """Prepare runner artifacts and sidecars in a hidden tree, then publish it."""
+
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = output_dir.parent / (
+        f".{output_dir.name}{_STAGING_PREFIX}{uuid.uuid4().hex}"
+    )
+    published = False
+    try:
+        preparation = prepare_experiment(
+            context["config"],
+            output_dir=staging_dir,
+            snapshot_loader=context["snapshot_loader"],
+        )
+        if not staging_dir.is_dir():
+            raise FileNotFoundError(
+                f"prepare stage did not create an output directory: {staging_dir}"
+            )
+        _write_experiment_sidecars(
+            spec,
+            context,
+            staging_dir,
+            resume=False,
+        )
+        _validate_sidecars(spec, context, staging_dir)
+        if output_dir.exists():
+            raise FileExistsError(
+                f"experiment output appeared during prepare: {output_dir}"
+            )
+        os.replace(staging_dir, output_dir)
+        published = True
+        return preparation
+    finally:
+        if not published:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+@contextmanager
+def _experiment_output_lock(output_dir: Path):
+    """Acquire an O_EXCL lock covering first publication and all sidecar writes."""
+
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = output_dir.parent / f".{output_dir.name}{_CLI_LOCK_SUFFIX}"
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        file_descriptor = os.open(lock_path, flags, 0o600)
+    except FileExistsError as exc:
+        raise FileExistsError(
+            f"experiment output is locked by another run: {output_dir}"
+        ) from exc
+
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            json.dump(
+                {"pid": os.getpid(), "output_dir": str(output_dir)},
+                handle,
+                sort_keys=True,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        yield
+    finally:
+        lock_path.unlink(missing_ok=True)
 
 
 def _new_context(spec: KronosExperimentSpec, output_dir: Path) -> dict[str, Any]:
@@ -246,8 +333,12 @@ def _load_existing_context(
 ) -> dict[str, Any]:
     config_sidecar = _read_json_object(output_dir / EXPERIMENT_CONFIG_FILENAME)
     selection_sidecar = _read_json_object(output_dir / UNIVERSE_SELECTION_FILENAME)
-    _require_matching_fingerprint(config_sidecar, spec.config_fingerprint, "experiment_config.json")
-    _require_matching_fingerprint(selection_sidecar, spec.config_fingerprint, "universe_selection.json")
+    _require_matching_fingerprint(
+        config_sidecar, spec.config_fingerprint, "experiment_config.json"
+    )
+    _require_matching_fingerprint(
+        selection_sidecar, spec.config_fingerprint, "universe_selection.json"
+    )
 
     resolved_end_date = config_sidecar.get("resolved", {}).get("end_date")
     if not isinstance(resolved_end_date, str):
@@ -271,6 +362,16 @@ def _load_existing_context(
     experiment_path = output_dir / EXPERIMENT_FILENAME
     if not experiment_path.is_file():
         raise FileNotFoundError(f"prepared experiment metadata is missing: {experiment_path}")
+    metadata = _read_json_object(experiment_path)
+    _validate_frozen_consistency(
+        spec,
+        config,
+        config_sidecar,
+        selection_sidecar,
+        metadata,
+        resolved_end_date=resolved_end_date,
+    )
+    _validate_latest_forecast_sidecar(output_dir, spec, config)
     return {
         "config": config,
         "selection": selection_sidecar,
@@ -288,10 +389,179 @@ def _validate_sidecars(
 ) -> None:
     config_sidecar = _read_json_object(output_dir / EXPERIMENT_CONFIG_FILENAME)
     selection_sidecar = _read_json_object(output_dir / UNIVERSE_SELECTION_FILENAME)
-    _require_matching_fingerprint(config_sidecar, spec.config_fingerprint, "experiment_config.json")
-    _require_matching_fingerprint(selection_sidecar, spec.config_fingerprint, "universe_selection.json")
-    if config_sidecar.get("resolved", {}).get("end_date") != context["resolved_end_date"]:
+    metadata = _read_json_object(output_dir / EXPERIMENT_FILENAME)
+    _require_matching_fingerprint(
+        config_sidecar, spec.config_fingerprint, "experiment_config.json"
+    )
+    _require_matching_fingerprint(
+        selection_sidecar, spec.config_fingerprint, "universe_selection.json"
+    )
+    _validate_frozen_consistency(
+        spec,
+        context["config"],
+        config_sidecar,
+        selection_sidecar,
+        metadata,
+        resolved_end_date=context["resolved_end_date"],
+    )
+    _validate_latest_forecast_sidecar(output_dir, spec, context["config"])
+
+
+def _validate_frozen_consistency(
+    spec: KronosExperimentSpec,
+    config: KronosEvaluationConfig,
+    config_sidecar: Mapping[str, Any],
+    selection_sidecar: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    *,
+    resolved_end_date: str,
+) -> None:
+    if config_sidecar.get("experiment_id") != spec.experiment_id:
+        raise ValueError("experiment_config.json experiment_id mismatch")
+    if config_sidecar.get("spec") != canonical_spec_payload(spec):
+        raise ValueError("experiment_config.json spec mismatch")
+
+    resolved = config_sidecar.get("resolved")
+    if not isinstance(resolved, Mapping):
+        raise ValueError("experiment_config.json resolved provenance is missing")
+    if resolved.get("end_date") != resolved_end_date:
         raise ValueError("experiment_config.json resolved end_date is incompatible")
+    cutoff_date = (
+        date.fromisoformat(spec.start_date) - timedelta(days=1)
+    ).isoformat()
+    if resolved.get("universe_cutoff_date") != cutoff_date:
+        raise ValueError("experiment_config.json universe cutoff date mismatch")
+
+    if selection_sidecar.get("experiment_id") != spec.experiment_id:
+        raise ValueError("universe_selection.json experiment_id mismatch")
+    if selection_sidecar.get("resolved_end_date") != resolved_end_date:
+        raise ValueError("universe_selection.json resolved end date mismatch")
+    if selection_sidecar.get("universe_cutoff_date") != cutoff_date:
+        raise ValueError("universe_selection.json cutoff date mismatch")
+
+    raw_asset_ids = selection_sidecar.get("asset_ids")
+    if raw_asset_ids is None and isinstance(selection_sidecar.get("selection"), Mapping):
+        raw_asset_ids = selection_sidecar["selection"].get("asset_ids")
+    selection_asset_ids = normalize_asset_ids(raw_asset_ids or ())
+    if selection_asset_ids != config.asset_ids:
+        raise ValueError(
+            "universe_selection.json asset pool does not match experiment_config.json"
+        )
+
+    provenance = config_sidecar.get("provenance")
+    if not isinstance(provenance, Mapping):
+        raise ValueError("experiment_config.json provenance is missing")
+    expected_provenance = {
+        "asset_ids": list(config.asset_ids),
+        "frequency": config.frequency,
+        "adjust_type": config.adjust_type,
+        "model": spec.model_name,
+        "fallback": False,
+        "sample_count": config.sample_count,
+        "input_window": config.input_window,
+        "forecast_horizon": config.forecast_horizon,
+        "report_horizons": list(config.evaluation_horizons),
+        "primary_horizon": config.primary_horizon,
+    }
+    for field_name, expected in expected_provenance.items():
+        actual = provenance.get(field_name)
+        if field_name == "asset_ids":
+            try:
+                actual = list(normalize_asset_ids(actual or ()))
+            except ValueError as exc:
+                raise ValueError(
+                    "experiment_config.json provenance asset pool is invalid"
+                ) from exc
+        if actual != expected:
+            raise ValueError(
+                f"experiment_config.json provenance {field_name} mismatch"
+            )
+
+    filters = selection_sidecar.get("filters")
+    if not isinstance(filters, Mapping):
+        raise ValueError("universe_selection.json filters are missing")
+    expected_filters = {
+        "mode": spec.universe_mode,
+        "count": spec.universe_count,
+        "market": spec.market,
+        "adjust_type": config.adjust_type,
+        "input_window": config.input_window,
+        "cutoff_date": cutoff_date,
+    }
+    for field_name, expected in expected_filters.items():
+        if filters.get(field_name) != expected:
+            raise ValueError(
+                f"universe_selection.json filter {field_name} mismatch"
+            )
+
+    selected_rows = selection_sidecar.get("selected_rows")
+    if not isinstance(selected_rows, list):
+        raise ValueError("universe_selection.json selected_rows are missing")
+    try:
+        selected_asset_ids = tuple(
+            normalize_asset_ids((row["asset_id"],))[0]
+            for row in selected_rows
+            if isinstance(row, Mapping) and "asset_id" in row
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("universe_selection.json selected_rows are invalid") from exc
+    if selected_asset_ids != config.asset_ids:
+        raise ValueError(
+            "universe_selection.json selected rows do not match the frozen asset pool"
+        )
+
+    metadata_config = metadata.get("config")
+    if not isinstance(metadata_config, Mapping):
+        raise ValueError("frozen experiment metadata config is missing")
+    expected_config = _jsonable(asdict(config))
+    for field_name, expected in expected_config.items():
+        if metadata_config.get(field_name) != expected:
+            raise ValueError(
+                f"frozen experiment metadata config {field_name} mismatch"
+            )
+    raw_metadata_assets = metadata.get("universe")
+    try:
+        metadata_assets = normalize_asset_ids(raw_metadata_assets or ())
+    except ValueError as exc:
+        raise ValueError("frozen experiment metadata universe is invalid") from exc
+    if metadata_assets != config.asset_ids:
+        raise ValueError("frozen experiment metadata universe mismatch")
+
+
+def _validate_latest_forecast_sidecar(
+    output_dir: Path,
+    spec: KronosExperimentSpec,
+    config: KronosEvaluationConfig,
+) -> None:
+    path = output_dir / LATEST_FORECAST_FILENAME
+    if not path.exists():
+        return
+    payload = _read_json_object(path)
+    _require_matching_fingerprint(payload, spec.config_fingerprint, LATEST_FORECAST_FILENAME)
+    if payload.get("experiment_id") != spec.experiment_id:
+        raise ValueError("latest_forecast.json experiment_id mismatch")
+    if payload.get("model") != spec.model_name:
+        raise ValueError("latest_forecast.json model mismatch")
+    latest_origin = payload.get("latest_origin")
+    if latest_origin is not None:
+        try:
+            normalized_origin = date.fromisoformat(str(latest_origin)).isoformat()
+        except ValueError as exc:
+            raise ValueError("latest_forecast.json latest_origin is invalid") from exc
+        if not config.start_date <= normalized_origin <= config.end_date:
+            raise ValueError("latest_forecast.json latest_origin is out of range")
+    entries = payload.get("snapshots", [])
+    if not isinstance(entries, list):
+        raise ValueError("latest_forecast.json snapshots are invalid")
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            raise ValueError("latest_forecast.json snapshot entry is invalid")
+        try:
+            asset_id = normalize_asset_ids((entry["asset_id"],))[0]
+        except (KeyError, ValueError) as exc:
+            raise ValueError("latest_forecast.json asset pool is invalid") from exc
+        if asset_id not in config.asset_ids:
+            raise ValueError("latest_forecast.json asset pool mismatch")
 
 
 def _write_experiment_sidecars(
@@ -367,7 +637,7 @@ def _write_sidecar(
         if not resume:
             raise FileExistsError(f"refusing to overwrite existing sidecar: {path}")
         return
-    _atomic_write_json(path, payload)
+    _atomic_create_json(path, payload)
 
 
 def _predict_stage(
@@ -446,6 +716,7 @@ def _report_stage(
         config_fingerprint=spec.config_fingerprint,
         model=spec.model_name,
     )
+    _validate_latest_forecast_sidecar(output_dir, spec, context["config"])
     paths = dict(report.get("paths", {})) if isinstance(report.get("paths"), Mapping) else {}
     paths.update(
         {
@@ -712,6 +983,33 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
         os.replace(temporary_path, path)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def _atomic_create_json(path: Path, payload: Mapping[str, Any]) -> None:
+    """Create a JSON sidecar exactly once; callers publish its parent atomically."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        file_descriptor = os.open(path, flags, 0o600)
+    except FileExistsError as exc:
+        raise FileExistsError(f"sidecar appeared during publication: {path}") from exc
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            json.dump(
+                _jsonable(payload),
+                handle,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+                allow_nan=False,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
 
 
 def _read_snapshot_payloads(output_dir: Path) -> list[dict[str, Any]]:

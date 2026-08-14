@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from dataclasses import replace
+import time
+import threading
+from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -75,7 +77,14 @@ def fake_selection() -> UniverseSelection:
         ),
         candidate_count=2,
         selection_seed=None,
-        filters={"market": "CN_A"},
+        filters={
+            "mode": "explicit",
+            "count": 2,
+            "market": "CN_A",
+            "adjust_type": "qfq",
+            "input_window": 3,
+            "cutoff_date": "2025-01-02",
+        },
         candidate_fingerprint="a" * 64,
         selection_fingerprint="b" * 64,
     )
@@ -86,7 +95,17 @@ def install_prepare_seams(cli, monkeypatch, *, calls):
 
     def fake_select_universe(**kwargs):
         calls["selection"] = kwargs
-        return selection
+        return replace(
+            selection,
+            filters={
+                "mode": kwargs["mode"],
+                "count": kwargs["count"],
+                "market": kwargs["market"],
+                "adjust_type": kwargs["adjust_type"],
+                "input_window": kwargs["input_window"],
+                "cutoff_date": kwargs["cutoff_date"],
+            },
+        )
 
     def fake_prepare(config, *, output_dir, snapshot_loader):
         calls["prepare"] = {
@@ -95,12 +114,47 @@ def install_prepare_seams(cli, monkeypatch, *, calls):
             "snapshot_loader": snapshot_loader,
         }
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / cli.EXPERIMENT_FILENAME).write_text("{}", encoding="utf-8")
+        metadata = {
+            "schema_version": 3,
+            "config": {
+                field.name: cli._jsonable(getattr(config, field.name))
+                for field in fields(config)
+            },
+            "universe": list(config.asset_ids),
+        }
+        (output_dir / cli.EXPERIMENT_FILENAME).write_text(
+            json.dumps(metadata), encoding="utf-8"
+        )
         return SimpleNamespace(snapshot_count=4, status_counts={"ready": 4})
 
     monkeypatch.setattr(cli, "select_universe", fake_select_universe)
     monkeypatch.setattr(cli, "prepare_experiment", fake_prepare)
     monkeypatch.setattr(cli, "resolve_latest_market_date", lambda **_: "2025-01-31")
+
+
+def install_prediction_seams(cli, monkeypatch):
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def assert_model(self, model):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "KronosClient", FakeClient)
+    monkeypatch.setenv("KRONOS_INTERNAL_TOKEN", "test-token")
+    monkeypatch.setattr(
+        cli,
+        "run_model",
+        lambda config, *, model, output_dir, client: SimpleNamespace(
+            status_counts={"success": 1},
+            attempted_count=1,
+            cache_hit_count=0,
+            skipped_count=0,
+        ),
+    )
 
 
 def test_parser_accepts_all_configured_stages_and_resume():
@@ -417,6 +471,197 @@ def test_existing_write_stage_resume_fingerprint_mismatch_fails(
 
     with pytest.raises(ValueError, match="fingerprint mismatch"):
         cli.run_experiment(config_path, stage=stage, resume=True)
+
+
+def test_first_concurrent_prepare_cannot_bypass_output_lock(tmp_path, monkeypatch):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    selection = fake_selection()
+    monkeypatch.setattr(cli, "select_universe", lambda **kwargs: selection)
+    monkeypatch.setattr(cli, "resolve_latest_market_date", lambda **_: "2025-01-31")
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocking_prepare(config, *, output_dir, snapshot_loader):
+        entered.set()
+        assert release.wait(5), "blocking prepare was not released"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        metadata = {
+            "schema_version": 3,
+            "config": {
+                field.name: cli._jsonable(getattr(config, field.name))
+                for field in fields(config)
+            },
+            "universe": list(config.asset_ids),
+        }
+        (output_dir / cli.EXPERIMENT_FILENAME).write_text(
+            json.dumps(metadata), encoding="utf-8"
+        )
+        return SimpleNamespace(snapshot_count=1, status_counts={"ready": 1})
+
+    monkeypatch.setattr(cli, "prepare_experiment", blocking_prepare)
+    result: list[object] = []
+
+    def first_runner():
+        try:
+            result.append(cli.run_experiment(config_path, stage="prepare"))
+        except Exception as exc:  # pragma: no cover - assertion below reports it.
+            result.append(exc)
+
+    thread = threading.Thread(target=first_runner)
+    thread.start()
+    assert entered.wait(5), "first prepare did not reach the protected section"
+    second_result: list[object] = []
+
+    def second_runner():
+        try:
+            second_result.append(cli.run_experiment(config_path, stage="prepare"))
+        except Exception as exc:  # pragma: no cover - assertion below reports it.
+            second_result.append(exc)
+
+    second_thread = threading.Thread(target=second_runner)
+    second_thread.start()
+    time.sleep(0.1)
+    release.set()
+    thread.join(timeout=5)
+    second_thread.join(timeout=5)
+
+    assert not thread.is_alive()
+    assert not second_thread.is_alive()
+    assert len(result) == 1
+    assert not isinstance(result[0], Exception)
+    assert len(second_result) == 1
+    assert isinstance(second_result[0], FileExistsError)
+    assert "locked" in str(second_result[0])
+    assert (tmp_path / "outputs" / "test-cli" / cli.EXPERIMENT_CONFIG_FILENAME).is_file()
+
+
+def test_sidecar_write_failure_does_not_publish_resumeable_directory(
+    tmp_path, monkeypatch
+):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    original_atomic_create = cli._atomic_create_json
+
+    def fail_on_universe(path, payload):
+        if path.name == cli.UNIVERSE_SELECTION_FILENAME:
+            raise OSError("simulated sidecar publication failure")
+        return original_atomic_create(path, payload)
+
+    monkeypatch.setattr(cli, "_atomic_create_json", fail_on_universe)
+
+    with pytest.raises(OSError, match="simulated sidecar"):
+        cli.run_experiment(config_path, stage="prepare")
+
+    output_root = tmp_path / "outputs"
+    assert not (output_root / "test-cli").exists()
+    assert not list(output_root.glob(".test-cli.staging-*"))
+    assert not list(output_root.glob(".test-cli.kronos-cli.lock"))
+
+
+def test_resume_rejects_universe_sidecar_asset_mismatch(tmp_path, monkeypatch):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+    selection_path = tmp_path / "outputs" / "test-cli" / cli.UNIVERSE_SELECTION_FILENAME
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selection["asset_ids"] = list(reversed(selection["asset_ids"]))
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    install_prediction_seams(cli, monkeypatch)
+
+    with pytest.raises(ValueError, match="asset|universe"):
+        cli.run_experiment(config_path, stage="predict", resume=True)
+
+
+def test_resume_rejects_universe_sidecar_date_mismatch(tmp_path, monkeypatch):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+    selection_path = tmp_path / "outputs" / "test-cli" / cli.UNIVERSE_SELECTION_FILENAME
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selection["resolved_end_date"] = "2025-01-30"
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    install_prediction_seams(cli, monkeypatch)
+
+    with pytest.raises(ValueError, match="date"):
+        cli.run_experiment(config_path, stage="predict", resume=True)
+
+
+def test_resume_rejects_config_sidecar_provenance_mismatch(tmp_path, monkeypatch):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+    config_sidecar_path = tmp_path / "outputs" / "test-cli" / cli.EXPERIMENT_CONFIG_FILENAME
+    config_sidecar = json.loads(config_sidecar_path.read_text(encoding="utf-8"))
+    config_sidecar["provenance"]["asset_ids"] = ["CN:SH:600418"]
+    config_sidecar_path.write_text(json.dumps(config_sidecar), encoding="utf-8")
+    install_prediction_seams(cli, monkeypatch)
+
+    with pytest.raises(ValueError, match="provenance|asset"):
+        cli.run_experiment(config_path, stage="predict", resume=True)
+
+
+def test_resume_rejects_frozen_experiment_metadata_universe_mismatch(
+    tmp_path, monkeypatch
+):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+    metadata_path = tmp_path / "outputs" / "test-cli" / cli.EXPERIMENT_FILENAME
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["universe"] = ["CN:SH:600418"]
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    install_prediction_seams(cli, monkeypatch)
+
+    with pytest.raises(ValueError, match="experiment metadata|universe"):
+        cli.run_experiment(config_path, stage="predict", resume=True)
+
+
+def test_resume_rejects_latest_forecast_sidecar_mismatch(tmp_path, monkeypatch):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+    output_dir = tmp_path / "outputs" / "test-cli"
+    config_sidecar = json.loads(
+        (output_dir / cli.EXPERIMENT_CONFIG_FILENAME).read_text(encoding="utf-8")
+    )
+    (output_dir / cli.LATEST_FORECAST_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "experiment_id": "test-cli",
+                "config_fingerprint": config_sidecar["config_fingerprint"],
+                "model": "base",
+                "latest_origin": "2025-01-31",
+                "snapshots": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    install_prediction_seams(cli, monkeypatch)
+
+    with pytest.raises(ValueError, match="latest_forecast"):
+        cli.run_experiment(config_path, stage="predict", resume=True)
 
 
 def test_cli_validation_errors_emit_exactly_one_json_line(tmp_path, capsys):
