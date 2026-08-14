@@ -9,9 +9,11 @@ import threading
 import time
 import types
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import pytest
 
 
@@ -23,6 +25,18 @@ except ModuleNotFoundError:
     requests_stub.RequestException = Exception
     requests_stub.Timeout = TimeoutError
     sys.modules["requests"] = requests_stub
+
+try:
+    import psycopg  # noqa: F401
+except ModuleNotFoundError:
+    psycopg_stub = types.ModuleType("psycopg")
+    psycopg_stub.Connection = object
+    psycopg_stub.connect = lambda *args, **kwargs: None
+    psycopg_rows_stub = types.ModuleType("psycopg.rows")
+    psycopg_rows_stub.dict_row = object()
+    psycopg_stub.rows = psycopg_rows_stub
+    sys.modules["psycopg"] = psycopg_stub
+    sys.modules["psycopg.rows"] = psycopg_rows_stub
 
 from stock_research import kronos_evaluation_runner as runner
 from stock_research.kronos_evaluation_types import (
@@ -1234,6 +1248,70 @@ def test_report_rejects_nonterminal_manifest_status(prepared_experiment):
 
     with pytest.raises(ValueError, match="terminal|status"):
         build_report(output_dir=output_dir)
+
+
+@pytest.mark.parametrize("snapshot_status", ["partial_truth", "forecast_only", "pending_calendar"])
+def test_task3_snapshot_statuses_are_terminal_for_report_validation(tmp_path, snapshot_status):
+    config = make_config()
+    snapshots = [
+        replace(make_snapshot("CN:SH:600418"), status=snapshot_status),
+        replace(make_snapshot("CN:SZ:000001", close_offset=10.0), status=snapshot_status),
+    ]
+    prepare_experiment(
+        config,
+        output_dir=tmp_path,
+        snapshot_loader=make_loader(snapshots),
+    )
+
+    manifest = {
+        row["run_key"]: row
+        for row in read_csv_rows(tmp_path / runner.MANIFEST_FILENAME)
+    }
+    runner._validate_report_artifacts(config=config, snapshots=snapshots, manifest=manifest, forecast_rows=[], realized_rows=[])
+
+
+def test_default_snapshot_loader_returns_complete_source_metadata_without_duplicate_queries(
+    monkeypatch,
+):
+    config = make_config()
+    calls = {"bars": 0, "calendar": 0, "build": 0}
+    frame = pd.DataFrame({"trade_date": ["2025-01-01", "2025-01-05"]})
+    trade_dates = ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05"]
+    snapshots = [
+        replace(make_snapshot("CN:SH:600418"), status="partial_truth"),
+        replace(make_snapshot("CN:SZ:000001", close_offset=10.0), status="forecast_only"),
+    ]
+
+    def fake_load_daily_bars(asset_ids, max_date, adjust_type, service):
+        calls["bars"] += 1
+        assert max_date == "2025-01-17"
+        return frame
+
+    def fake_load_global_trade_dates(adjust_type, start_date, max_date, service):
+        calls["calendar"] += 1
+        assert max_date == "2025-01-17"
+        return trade_dates
+
+    def fake_build(*args, **kwargs):
+        calls["build"] += 1
+        assert kwargs["origin_dates"] == ["2025-01-03"]
+        return snapshots
+
+    monkeypatch.setattr("stock_research.kronos_evaluation_data.load_daily_bars", fake_load_daily_bars)
+    monkeypatch.setattr("stock_research.kronos_evaluation_data.load_global_trade_dates", fake_load_global_trade_dates)
+    monkeypatch.setattr("stock_research.kronos_evaluation_data.build_rolling_snapshots", fake_build)
+
+    loaded_snapshots, source_metadata = runner._default_snapshot_loader(config)
+
+    assert loaded_snapshots == snapshots
+    assert calls == {"bars": 1, "calendar": 1, "build": 1}
+    assert source_metadata["calendar_min_date"] == "2025-01-01"
+    assert source_metadata["calendar_max_date"] == "2025-01-05"
+    assert source_metadata["minimum_truth_horizon"] == config.forecast_horizon
+    assert source_metadata["status_counts"] == {
+        "forecast_only": 1,
+        "partial_truth": 1,
+    }
 
 
 def test_missing_health_identity_fails_preflight_without_synthesizing_requested_model(

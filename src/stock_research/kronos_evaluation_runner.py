@@ -100,6 +100,9 @@ _TERMINAL_MANIFEST_STATUSES = frozenset(
         "insufficient_input",
         "insufficient_truth",
         "invalid_input",
+        "partial_truth",
+        "forecast_only",
+        "pending_calendar",
     }
 )
 _CLIENT_RAW_RESPONSE_SLOT_MARKER = "__kronos_client_raw_response_slot__"
@@ -1235,7 +1238,13 @@ def _default_snapshot_loader(
         origin_dates=origin_dates,
         asset_ids=config.asset_ids,
     )
-    return snapshots, data.build_source_metadata(frame, adjust_type=config.adjust_type)
+    return snapshots, data.build_source_metadata(
+        frame,
+        adjust_type=config.adjust_type,
+        trade_dates=trade_dates,
+        minimum_truth_horizon=config.forecast_horizon,
+        snapshots=snapshots,
+    )
 
 
 def _invoke_snapshot_loader(loader: SnapshotLoader, config: KronosEvaluationConfig) -> Any:
