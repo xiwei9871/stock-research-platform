@@ -273,12 +273,18 @@ small/base 的配对比较不能通过两个不同 `experiment_id` 的配置驱�
 cd /path/to/stock_research
 PAIR_DIR=outputs/research/kronos_rolling_eval/2026-07-small-base-paired
 UNIVERSE_FILE=/absolute/path/to/evaluation_universe_20.csv
+END_DATE=2026-08-14
+
+test -f "$UNIVERSE_FILE" || {
+  echo "universe file does not exist: $UNIVERSE_FILE" >&2
+  exit 1
+}
 
 # 只执行一次：冻结同一批 20 只股票、日期边界、交易日历和 input snapshots。
 rtk python3 scripts/run_kronos_rolling_evaluation.py prepare \
   --universe-file "$UNIVERSE_FILE" \
   --start-date 2026-07-01 \
-  --end-date YYYY-MM-DD \
+  --end-date "$END_DATE" \
   --output-dir "$PAIR_DIR"
 
 # 两次 predict 必须使用同一个 PAIR_DIR；仅模型和已验证的服务地址不同。
@@ -372,10 +378,10 @@ report.md                    # 可读报告
 
 ### 3.8 报告状态和评分口径
 
-| 状态 | 含义 | accuracy | model comparison |
+| 状态 | 含义 | accuracy/coverage | `model_comparison.csv` |
 |---|---|---|---|
-| `ready` | 预测窗口和完整 truth 可用。 | 仅对应 `scored=true` 的 horizon 进入。 | 仅对应 `scored=true` 且两模型快照匹配的行进入。 |
-| `partial_truth` | h=1 truth 已有，但 h=3/5/10 等后续 truth 尚未全部到齐。 | h=1 可评分；其他 horizon 必须等 truth 到齐且 scored。 | 只比较已 scored 的 horizon，不能把 pending 行当作失败。 |
+| `ready` | 预测窗口和完整 truth 可用。 | 仅对应 `scored=true` 的 horizon 进入。 | 只比较 `primary_horizon=1` 且两模型快照匹配的行。 |
+| `partial_truth` | h=1 truth 已有，但 h=3/5/10 等后续 truth 尚未全部到齐。 | h=1 可评分；其他 horizon 必须等 truth 到齐且 scored。 | 只比较已 scored 的 primary h=1；h=3/5/10 不进入模型比较。 |
 | `forecast_only` | 最新 origin 有完整未来交易日历但尚无真实 future bar。 | 否，只展示预测。 | 否。 |
 | `pending_truth` | 指标行级状态，目标 horizon 的真实 bar 尚未到齐。 | 否。 | 否。 |
 | `pending_calendar` | 未来交易日历不足以构造完整预测窗口。 | 否，不能用自然日补齐。 | 否。 |
@@ -385,9 +391,10 @@ report.md                    # 可读报告
 | `model_error` / `unavailable` / `timeout` / `transport_error` / `protocol_error` | 模型、服务、GPU、网络或响应契约失败。 | 否，不当作准确率为零。 | 否。 |
 
 本实验 `primary_horizon=1` 是主结论口径：准确率、方向命中率、绝对收益误差和 persistence baseline 只使用
-h=1 的已实现且 `scored=true` 的真实值。h=3/5/10 只是辅助分析，只有对应 truth 已全部到齐、指标行被标记为
-`scored=true` 时才可进入辅助 accuracy 或 comparison；仅有预测值不代表已评分。报告中的 primary coverage 会同时列出
-scored、pending 和 failed 数量。
+h=1 的已实现且 `scored=true` 的真实值。h=3/5/10 只做辅助 accuracy/coverage，只有对应 truth 已全部到齐、指标行
+被标记为 `scored=true` 时才可统计；它们即使 scored 也**不进入** `model_comparison.csv`。`model_comparison.csv` 只比较
+`primary_horizon=1` 的配对结果；仅有预测值不代表已评分。报告中的 primary coverage 会同时列出 scored、pending 和
+failed 数量。
 
 ## 4. 安全测试与聚焦回归（不连接真实 DB/GPU）
 
@@ -492,10 +499,34 @@ report.md
 
 同时保留运行日志、命令记录、模型 health 响应、GPU/延迟采样和 runner 产生的 transaction/report journal。参数、股票池或日期改变时使用新的实验目录；同一目录只用于同一 generation 的恢复。
 
-### 可恢复运行
+### 配置驱动 CLI 恢复
 
-- `predict` 中断：确认服务健康和模型身份后，重新执行同一 model 的 predict 命令；已完成单元复用，未完成单元继续执行。
-- `report` 中断：重新执行同一 output directory 的 report 命令；runner 会先恢复 journal，再校验 generation 和 Parquet/manifest 一致性。
+配置驱动入口恢复时必须使用原 JSON、原 `experiment_id` 和匹配的 fingerprint；确认服务健康后执行对应命令：
+
+```bash
+cd /path/to/stock_research
+
+rtk python3 scripts/run_kronos_experiment.py \
+  --config configs/kronos_2026_07_small_rolling.json \
+  --stage predict \
+  --resume
+
+rtk python3 scripts/run_kronos_experiment.py \
+  --config configs/kronos_2026_07_small_rolling.json \
+  --stage report \
+  --resume
+```
+
+`predict` 中断时只恢复同一配置模型；`report` 中断时只从同一冻结目录重建报告。两者都会校验 sidecar、generation
+和 Parquet/manifest 一致性；不要修改 JSON 后使用 `--resume`。
+
+### Legacy CLI 恢复
+
+以下是 legacy `scripts/run_kronos_rolling_evaluation.py` 的恢复语义，不要与上面的配置驱动入口混用：
+
+- legacy `predict` 中断：确认服务健康和模型身份后，在原 `output-dir` 重新执行同一 model 的 legacy `predict` 命令；已完成单元复用，未完成单元继续执行。
+- legacy `report` 中断：在原 `output-dir` 重新执行 legacy `report`；runner 会先恢复 journal，再校验 generation 和 Parquet/manifest 一致性。
+
 - 恢复时不要删除 `.kronos_transaction.json`、report journal、stage 或 backup 文件；它们是恢复证据。
 - 发现同一 generation 的产物被篡改、模型身份不一致、snapshot fingerprint 不一致或服务 fallback 时，应停止并保留现场，另建目录重跑。
 
