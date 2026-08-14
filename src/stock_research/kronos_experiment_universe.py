@@ -93,10 +93,18 @@ def resolve_latest_market_date(*, adjust_type: str, service: str) -> str:
     """
     with _db(service) as conn:
         rows = fetch_all(conn, sql, {"adjust_type": adjust_type})
-    dates = [str(row["trade_date"]) for row in rows if row.get("trade_date") is not None]
+    dates = []
+    for row in rows:
+        value = row.get("trade_date")
+        if value is None:
+            continue
+        try:
+            dates.append(_parse_iso_date(value, field="market date"))
+        except ValueError as exc:
+            raise ValueError(f"invalid market date: {value!r}") from exc
     if not dates:
-        raise ValueError("no market dates available")
-    return max(dates)
+        raise ValueError("no market date available")
+    return max(dates).isoformat()
 
 
 def _eligible_candidates(*, market: str, adjust_type: str, input_window: int, cutoff_date: str, service: str):

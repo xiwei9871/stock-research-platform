@@ -150,6 +150,19 @@ def test_latest_market_date_is_maximum(fake_db):
     assert universe.resolve_latest_market_date(adjust_type="qfq", service="test") == "2025-01-08"
 
 
+@pytest.mark.parametrize("bad_date", ["2025-1-8", "not-a-date"])
+def test_latest_market_date_rejects_noncanonical_or_invalid_dates(fake_db, bad_date):
+    fake_db.rows["latest"] = [{"trade_date": bad_date}]
+    with pytest.raises(ValueError, match="market date"):
+        universe.resolve_latest_market_date(adjust_type="qfq", service="test")
+
+
+def test_latest_market_date_rejects_empty_result(fake_db):
+    fake_db.rows["latest"] = [{"trade_date": None}]
+    with pytest.raises(ValueError, match="market date"):
+        universe.resolve_latest_market_date(adjust_type="qfq", service="test")
+
+
 def test_calendar_uses_exchange_rows_then_daily_bar_fallback(fake_db):
     assert universe.load_trade_calendar_dates("qfq", "2025-01-01", "2025-01-05", "test") == ["2025-01-02"]
     fake_db.rows["calendar"] = []
