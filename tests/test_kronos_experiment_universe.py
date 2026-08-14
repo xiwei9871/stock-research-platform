@@ -37,7 +37,8 @@ class FakeDB:
                 _bar("b", "2025-01-03"),
             ],
             "calendar": [{"trade_date": "2025-01-02", "exchange": "SH", "is_open": True}],
-            "fallback": [{"trade_date": "2025-01-03"}, {"trade_date": "2025-01-02"}],
+            "observed": [{"trade_date": "2025-01-02"}, {"trade_date": "2025-01-03"}],
+            "fallback": [{"trade_date": "2025-01-03"}, {"trade_date": "2025-01-02"}, {"trade_date": "2025-01-04"}],
         }
 
     def fetch_all(self, _conn, sql, params=None):
@@ -48,8 +49,10 @@ class FakeDB:
             return self.rows["candidates"]
         if "FROM market.trading_calendar" in sql:
             return self.rows["calendar"]
-        if "FROM market_daily_bar" in sql and "trade_date >=" in sql:
-            return self.rows["fallback"]
+        if "SELECT DISTINCT trade_date" in sql and "ANY" not in sql:
+            return self.rows["observed"]
+        if "FROM market_daily_bar" in sql and "ANY" in sql:
+            return [row for row in self.rows["fallback"] if row["trade_date"] in params["observed_dates"]]
         if "FROM market_daily_bar" in sql:
             return self.rows["bars"]
         raise AssertionError(sql)
@@ -89,22 +92,44 @@ def test_random_selection_is_deterministic_and_uses_sorted_sampling(fake_db):
 
 
 def test_explicit_mode_normalizes_ids_preserves_order_and_requires_matching_count(fake_db):
+    fake_db.rows["candidates"] = [
+        {"asset_id": "CN:SH:600418", "market": "CN_A", "status": "listed", "delist_date": None, "name": "Shanghai"},
+        {"asset_id": "CN:SZ:000001", "market": "CN_A", "status": "listed", "delist_date": None, "name": "Shenzhen"},
+    ]
+    fake_db.rows["bars"] = [
+        _bar("CN:SH:600418", "2025-01-02"), _bar("CN:SH:600418", "2025-01-03"),
+        _bar("CN:SZ:000001", "2025-01-02"), _bar("CN:SZ:000001", "2025-01-03"),
+    ]
     selected = universe.select_universe(
-        mode="explicit", count=2, seed=None, market="CN_A", asset_ids=[" b ", "A"],
+        mode="explicit", count=2, seed=None, market="CN_A", asset_ids=[" sh.600418 ", "000001.SZ"],
         adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
     )
-    assert selected.asset_ids == ("b", "a")
+    assert selected.asset_ids == ("CN:SH:600418", "CN:SZ:000001")
     with pytest.raises(ValueError, match="count"):
         universe.select_universe(
-            mode="explicit", count=1, seed=None, market="CN_A", asset_ids=["a", "b"],
+            mode="explicit", count=1, seed=None, market="CN_A", asset_ids=["CN:SH:600418", "CN:SZ:000001"],
             adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
         )
 
 
+def test_explicit_mode_uses_canonical_asset_normalization(fake_db):
+    fake_db.rows["candidates"] = [
+        {"asset_id": "CN:SH:600418", "market": "CN_A", "status": "listed", "delist_date": None, "name": "Canonical"},
+    ]
+    fake_db.rows["bars"] = [
+        _bar("CN:SH:600418", "2025-01-02"), _bar("CN:SH:600418", "2025-01-03"),
+    ]
+    selected = universe.select_universe(
+        mode="explicit", count=1, seed=None, market="CN_A", asset_ids=[" sh.600418 "],
+        adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
+    )
+    assert selected.asset_ids == ("CN:SH:600418",)
+
+
 def test_explicit_mode_rejects_duplicate_normalized_ids(fake_db):
-    with pytest.raises(ValueError, match="duplicate"):
+    with pytest.raises(ValueError, match="unique"):
         universe.select_universe(
-            mode="explicit", count=2, seed=None, market="CN_A", asset_ids=[" A ", "a"],
+            mode="explicit", count=2, seed=None, market="CN_A", asset_ids=[" sh.600418 ", "CN:SH:600418"],
             adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
         )
 
@@ -119,6 +144,22 @@ def test_calendar_uses_exchange_rows_then_daily_bar_fallback(fake_db):
     assert universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test") == ["2025-01-02", "2025-01-03"]
     fallback_call = next((params for sql, params in fake_db.calls if "SELECT DISTINCT trade_date" in sql), None)
     assert fallback_call["adjust_type"] == "qfq"
+
+
+def test_calendar_fallback_returns_only_observed_qfq_dates(fake_db):
+    fake_db.rows["calendar"] = []
+    fake_db.rows["observed"] = [{"trade_date": "2025-01-02"}, {"trade_date": "2025-01-03"}]
+    fake_db.rows["fallback"] = [
+        {"trade_date": "2025-01-02"}, {"trade_date": "2025-01-03"}, {"trade_date": "2025-01-04"},
+    ]
+    assert universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test") == [
+        "2025-01-02", "2025-01-03",
+    ]
+    fallback_sql, fallback_params = next(
+        (sql, params) for sql, params in fake_db.calls if "observed_dates" in sql
+    )
+    assert "adjust_type = 'qfq'" in fallback_sql
+    assert fallback_params["observed_dates"] == ["2025-01-02", "2025-01-03"]
 
 
 def test_candidates_exclude_nonlisted_delisted_and_other_markets(fake_db):

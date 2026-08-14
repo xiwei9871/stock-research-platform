@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from stock_research.kronos_evaluation_types import normalize_asset_ids
+
 try:
     from stock_research.db import connect, fetch_all
 except ModuleNotFoundError as exc:  # pragma: no cover - permits isolated seam tests
@@ -138,11 +140,9 @@ def select_universe(*, mode: str, count: int, seed: int | None, market: str,
         raise ValueError("count and input_window must be positive")
     if mode == "random" and (asset_ids is not None or seed is None):
         raise ValueError("random mode requires asset_ids=None and a seed")
-    normalized = tuple(str(asset_id).strip().lower() for asset_id in asset_ids or ())
+    normalized = normalize_asset_ids(asset_ids or ()) if mode == "explicit" else ()
     if mode == "explicit" and len(normalized) != count:
         raise ValueError("count must match explicit asset_ids")
-    if mode == "explicit" and len(set(normalized)) != len(normalized):
-        raise ValueError("duplicate explicit asset_ids after normalization")
     candidates = _eligible_candidates(
         market=market, adjust_type=adjust_type, input_window=input_window,
         cutoff_date=cutoff_date, service=service,
@@ -186,14 +186,25 @@ def load_trade_calendar_dates(adjust_type: str, start_date: str, end_date: str, 
     with _db(service) as conn:
         rows = fetch_all(conn, calendar_sql, params)
         if not rows:
-            fallback_sql = """
+            observed_sql = """
                 SELECT DISTINCT trade_date
                 FROM market_daily_bar
                 WHERE adjust_type = 'qfq'
                   AND trade_date >= %(start_date)s AND trade_date <= %(end_date)s
                 ORDER BY trade_date
             """
-            rows = fetch_all(conn, fallback_sql, {**params, "adjust_type": "qfq"})
+            observed_rows = fetch_all(conn, observed_sql, {**params, "adjust_type": "qfq"})
+            observed_dates = sorted({str(row["trade_date"]) for row in observed_rows if row.get("trade_date") is not None})
+            if not observed_dates:
+                return []
+            fallback_sql = """
+                SELECT DISTINCT trade_date
+                FROM market_daily_bar
+                  WHERE adjust_type = 'qfq'
+                  AND trade_date = ANY(%(observed_dates)s)
+                ORDER BY trade_date
+            """
+            rows = fetch_all(conn, fallback_sql, {"observed_dates": observed_dates})
     return sorted({str(row["trade_date"]) for row in rows if row.get("trade_date") is not None})
 
 
