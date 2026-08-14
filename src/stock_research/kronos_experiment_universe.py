@@ -59,6 +59,13 @@ def _fingerprint(value: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _is_finite_number(value: Any) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
 @contextmanager
 def _db(service: str):
     with connect(service) as conn:
@@ -118,7 +125,7 @@ def _eligible_candidates(*, market: str, adjust_type: str, input_window: int, cu
             st_assets.add(asset_id)
         if row.get("trade_status") != "1" or row.get("is_st") is True:
             continue
-        if not all(isinstance(row.get(field), (int, float)) and math.isfinite(row[field]) for field in _OHLC):
+        if not all(_is_finite_number(row.get(field)) for field in _OHLC):
             continue
         grouped.setdefault(asset_id, []).append(row)
     eligible = []

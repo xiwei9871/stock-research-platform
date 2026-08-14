@@ -1,5 +1,6 @@
 import json
 import re
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -266,6 +267,23 @@ def test_invalid_st_bar_is_still_excluded_and_queries_are_qfq(fake_db):
     bar_calls = [(sql, params) for sql, params in fake_db.calls if "FROM market_daily_bar" in sql]
     assert any("adjust_type = 'qfq'" in sql and "NOT EXISTS" not in sql for sql, _ in bar_calls)
     assert any("NOT EXISTS" in sql and "adjust_type = 'qfq'" in sql for sql, _ in fake_db.calls)
+
+
+def test_decimal_ohlc_bars_count_toward_candidate_history(fake_db):
+    fake_db.rows["candidates"] = [
+        {"asset_id": "decimal", "market": "CN_A", "status": "listed", "delist_date": None, "name": "Decimal"},
+    ]
+    fake_db.rows["bars"] = [
+        _bar("decimal", "2025-01-02"), _bar("decimal", "2025-01-03"),
+    ]
+    for row in fake_db.rows["bars"]:
+        for field in ("open", "high", "low", "close"):
+            row[field] = Decimal(str(row[field]))
+    selection = universe.select_universe(
+        mode="random", count=1, seed=1, market="CN_A", asset_ids=None,
+        adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
+    )
+    assert selection.asset_ids == ("decimal",)
 
 
 def test_fingerprints_and_json_are_stable(fake_db, tmp_path: Path):
