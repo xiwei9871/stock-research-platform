@@ -2177,9 +2177,79 @@ def test_single_model_report_describes_actual_paired_deltas(tmp_path):
     assert "base-minus-small" not in report
     assert "small_minus_persistence" in report
     assert "small_minus_drift" in report
+    assert "status=`ok` and use block-bootstrap confidence intervals" in report
     assert "block-bootstrap confidence intervals" in report
     assert "Primary-horizon paired deltas" in report
     assert "Primary horizon coverage" in report
+
+
+def render_report_for_comparisons(comparisons):
+    return runner._render_report(
+        metadata={},
+        conclusion="not_proven",
+        status_counts={},
+        model_status_counts={},
+        coverage=[],
+        primary_coverage=[],
+        metric_status_counts={},
+        pending_counts={},
+        model_summaries=[],
+        comparisons=comparisons,
+        latency={},
+        model_metadata={},
+        artifact_generation="test-generation",
+    )
+
+
+@pytest.mark.parametrize("status", ["empty", "no_complete_pairs"])
+def test_report_comparison_note_rejects_missing_pairs(status):
+    report = render_report_for_comparisons(
+        [
+            {
+                "comparison": "small_minus_persistence",
+                "status": status,
+                "ci_method": "none",
+                "paired_count": 0,
+                "delta_mean": None,
+                "ci_low": None,
+                "ci_high": None,
+            }
+        ]
+    )
+
+    assert f"status=`{status}`" in report
+    assert "No valid primary-horizon paired result is available" in report
+    assert "no delta or confidence interval is reported" in report
+    assert "block-bootstrap confidence intervals" not in report
+
+
+def test_report_comparison_note_with_no_comparisons_is_explicit():
+    report = render_report_for_comparisons([])
+
+    assert "No valid primary-horizon paired comparison results are available" in report
+    assert "no delta or confidence interval is reported" in report
+    assert "block-bootstrap confidence intervals" not in report
+
+
+def test_report_comparison_note_describes_single_block_ci():
+    report = render_report_for_comparisons(
+        [
+            {
+                "comparison": "small_minus_persistence",
+                "status": "single_block",
+                "ci_method": "degenerate_single_block",
+                "paired_count": 1,
+                "delta_mean": -0.01,
+                "ci_low": -0.01,
+                "ci_high": -0.01,
+            }
+        ]
+    )
+
+    assert "status=`single_block`" in report
+    assert "ci_method=`degenerate_single_block`" in report
+    assert "single-point (degenerate) confidence interval" in report
+    assert "block-bootstrap confidence intervals" not in report
 
 
 def test_report_outputs_record_authenticated_artifact_generation(

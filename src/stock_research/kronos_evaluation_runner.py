@@ -4743,6 +4743,60 @@ def _metric_summary_row(
     return row
 
 
+def _comparison_note(comparisons: Sequence[Mapping[str, Any]]) -> str:
+    if not comparisons:
+        return (
+            "No valid primary-horizon paired comparison results are available; "
+            "no delta or confidence interval is reported."
+        )
+
+    block_bootstrap_names: list[str] = []
+    single_block_details: list[str] = []
+    no_pair_details: list[str] = []
+    other_details: list[str] = []
+    for row in comparisons:
+        name = f"`{str(row.get('comparison') or 'unnamed comparison')}`"
+        status = str(row.get("status") or "unknown")
+        ci_method = str(row.get("ci_method") or "none")
+        if status == "ok" and ci_method == "block_bootstrap":
+            block_bootstrap_names.append(name)
+        elif status == "single_block":
+            single_block_details.append(f"{name} (ci_method=`{ci_method}`)")
+        elif status in {"empty", "no_complete_pairs"}:
+            no_pair_details.append(f"{name} (status=`{status}`)")
+        else:
+            other_details.append(
+                f"{name} (status=`{status}`, ci_method=`{ci_method}`)"
+            )
+
+    notes: list[str] = []
+    if block_bootstrap_names:
+        notes.append(
+            "Primary-horizon paired deltas for "
+            f"{', '.join(block_bootstrap_names)} have status=`ok` and use "
+            "block-bootstrap confidence intervals."
+        )
+    if single_block_details:
+        notes.append(
+            "Primary-horizon paired deltas for "
+            f"{', '.join(single_block_details)} have status=`single_block` "
+            "and use a single-point (degenerate) confidence interval."
+        )
+    if no_pair_details:
+        notes.append(
+            "No valid primary-horizon paired result is available for "
+            f"{', '.join(no_pair_details)}; no delta or confidence interval "
+            "is reported."
+        )
+    if other_details:
+        notes.append(
+            "Other primary-horizon comparison records are reported as "
+            f"{', '.join(other_details)}; no standard confidence-interval "
+            "interpretation is asserted."
+        )
+    return " ".join(notes)
+
+
 def _render_report(
     *,
     metadata: Mapping[str, Any],
@@ -4851,22 +4905,7 @@ def _render_report(
         )
         for row in comparisons
     )
-    comparison_names = [
-        str(row["comparison"])
-        for row in comparisons
-        if row.get("comparison")
-    ]
-    if comparison_names:
-        comparison_note = (
-            "Primary-horizon paired deltas are reported above for "
-            f"{', '.join(f'`{name}`' for name in comparison_names)} "
-            "with block-bootstrap confidence intervals."
-        )
-    else:
-        comparison_note = (
-            "Primary-horizon paired deltas use block-bootstrap confidence intervals."
-        )
-    lines.extend(["", comparison_note, ""])
+    lines.extend(["", _comparison_note(comparisons), ""])
     lines.extend(["## Latency and model metadata", ""])
     lines.append(f"Latency: `{_canonical_json(latency)}`")
     lines.append("")
