@@ -120,6 +120,34 @@ def make_snapshot(asset_id: str, *, close_offset: float = 0.0) -> RollingSnapsho
     )
 
 
+def make_long_snapshot(
+    asset_id: str,
+    *,
+    status: str,
+    realized_count: int,
+) -> RollingSnapshot:
+    base = make_snapshot(asset_id)
+    future_timestamps = tuple(f"2025-01-{day:02d}" for day in range(4, 14))
+    realized = tuple(
+        {
+            "timestamp": timestamp,
+            "open": 102.0 + index,
+            "high": 104.0 + index,
+            "low": 101.0 + index,
+            "close": 103.0 + index,
+            "volume": 1_003.0 + index,
+            "amount": 100_300.0 + index,
+        }
+        for index, timestamp in enumerate(future_timestamps[:realized_count])
+    )
+    return replace(
+        base,
+        future_timestamps=future_timestamps,
+        realized=realized,
+        status=status,
+    )
+
+
 def make_config() -> KronosEvaluationConfig:
     return KronosEvaluationConfig(
         asset_ids=("CN:SH:600418", "CN:SZ:000001"),
@@ -269,9 +297,9 @@ class FakeClient:
             for index, timestamp in enumerate(snapshot.future_timestamps)
         ]
         daily = {
-            "p10": [102.0, 103.0],
-            "p50": [103.0, 104.0],
-            "p90": [104.0, 105.0],
+            "p10": [102.0 + index for index in range(len(snapshot.future_timestamps))],
+            "p50": [103.0 + index for index in range(len(snapshot.future_timestamps))],
+            "p90": [104.0 + index for index in range(len(snapshot.future_timestamps))],
         }
         if self.include_representative_path:
             daily["representative_path"] = representative_path
@@ -474,6 +502,81 @@ def test_prediction_eligible_snapshot_statuses_write_forecasts_and_realized_pref
     assert manifest["CN:SH:600418|2025-01-03"]["status"] == "success"
     assert manifest["CN:SZ:000001|2025-01-03"]["status"] == "success"
     assert manifest["CN:SH:600519|2025-01-03"]["status"] == "pending_calendar"
+
+
+def test_build_report_scores_partial_truth_by_available_horizon_and_preserves_coverage(
+    tmp_path,
+):
+    config = replace(
+        make_config(),
+        asset_ids=("CN:SH:600418", "CN:SZ:000001", "CN:SH:600519"),
+        forecast_horizon=10,
+        evaluation_horizons=(1, 3, 5, 10),
+    )
+    snapshots = [
+        make_long_snapshot("CN:SH:600418", status="partial_truth", realized_count=1),
+        make_long_snapshot("CN:SZ:000001", status="forecast_only", realized_count=0),
+        make_long_snapshot("CN:SH:600519", status="pending_calendar", realized_count=0),
+    ]
+    prepare_experiment(config, output_dir=tmp_path, snapshot_loader=make_loader(snapshots))
+    run_model(config, model="small", output_dir=tmp_path, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=tmp_path,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+
+    summary = build_report(output_dir=tmp_path)
+    metric_rows = read_csv_rows(tmp_path / runner.METRICS_BY_STOCK_FILENAME)
+    partial_rows = [
+        row
+        for row in metric_rows
+        if row["asset_id"] == "CN:SH:600418" and row["model"] == "small"
+    ]
+    forecast_only_rows = [
+        row
+        for row in metric_rows
+        if row["asset_id"] == "CN:SZ:000001" and row["model"] == "small"
+    ]
+    pending_rows = [
+        row
+        for row in metric_rows
+        if row["asset_id"] == "CN:SH:600519" and row["model"] == "small"
+    ]
+
+    assert json.loads(
+        next(row for row in partial_rows if row["horizon"] == "1")["status_counts_json"]
+    ) == {"success": 1}
+    assert all(
+        json.loads(
+            next(row for row in partial_rows if row["horizon"] == horizon)[
+                "status_counts_json"
+            ]
+        )
+        == {"pending_truth": 1}
+        for horizon in ("3", "5", "10")
+    )
+    assert all(
+        json.loads(row["status_counts_json"]) == {"forecast_only": 1}
+        for row in forecast_only_rows
+    )
+    assert all(
+        json.loads(row["status_counts_json"]) == {"pending_calendar": 1}
+        for row in pending_rows
+    )
+    assert all(row["mean_absolute_return_error"] == "" for row in forecast_only_rows)
+
+    coverage = summary["coverage_by_model_horizon"]
+    assert all(
+        row["successful"] == 2
+        for row in coverage
+        if row["model"] == "small"
+    )
+    comparison = next(
+        row for row in summary["comparisons"] if row["comparison"] == "base_minus_small"
+    )
+    assert comparison["paired_row_count"] == 1
 
 
 def test_runner_accepts_documented_sidecar_files(prepared_experiment):

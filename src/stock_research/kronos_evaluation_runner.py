@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 from stock_research.kronos_evaluation_metrics import (
     aggregate_metrics,
+    available_horizons,
     build_baselines,
     compare_models,
     score_forecast,
@@ -4182,25 +4183,59 @@ def _build_metric_rows(
                 key=lambda row: _as_int(row.get("horizon")) or 0,
             )
             scores: Mapping[str, Mapping[str, Any]] = {}
-            if status == _SUCCESS_MANIFEST_STATUS:
+            score_status = status
+            if (
+                status == _SUCCESS_MANIFEST_STATUS
+                and snapshot.status in {"forecast_only", "pending_calendar"}
+            ):
+                score_status = snapshot.status
+            if (
+                status == _SUCCESS_MANIFEST_STATUS
+                and snapshot.status not in {"forecast_only", "pending_calendar"}
+            ):
                 try:
-                    scores = score_forecast(
-                        _last_close(snapshot),
-                        [_required_float(row.get("close"), "realized close") for row in realized],
-                        [_required_float(row.get("p10"), "forecast p10") for row in forecast],
-                        [_required_float(row.get("p50"), "forecast p50") for row in forecast],
-                        [_required_float(row.get("p90"), "forecast p90") for row in forecast],
-                        horizons=horizons,
+                    available = available_horizons(
+                        horizons,
+                        actual_count=len(realized),
+                        forecast_count=len(forecast),
                     )
+                    if available:
+                        available_count = min(len(realized), len(forecast))
+                        scores = score_forecast(
+                            _last_close(snapshot),
+                            [
+                                _required_float(row.get("close"), "realized close")
+                                for row in realized[:available_count]
+                            ],
+                            [
+                                _required_float(row.get("p10"), "forecast p10")
+                                for row in forecast[:available_count]
+                            ],
+                            [
+                                _required_float(row.get("p50"), "forecast p50")
+                                for row in forecast[:available_count]
+                            ],
+                            [
+                                _required_float(row.get("p90"), "forecast p90")
+                                for row in forecast[:available_count]
+                            ],
+                            horizons=available,
+                        )
+                    if snapshot.status == "partial_truth":
+                        score_status = "pending_truth"
                 except (ValueError, TypeError):
-                    status = "insufficient_artifact"
+                    score_status = "insufficient_artifact"
             for horizon in horizons:
                 row: dict[str, Any] = {
                     "asset_id": snapshot.asset_id,
                     "origin_date": snapshot.origin_date,
                     "model": model,
                     "horizon": horizon,
-                    "status": status,
+                    "status": (
+                        _SUCCESS_MANIFEST_STATUS
+                        if f"h{horizon}" in scores
+                        else score_status
+                    ),
                 }
                 if f"h{horizon}" in scores:
                     row.update(scores[f"h{horizon}"])

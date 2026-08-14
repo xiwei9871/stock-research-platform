@@ -7,11 +7,20 @@ import pytest
 
 from stock_research.kronos_evaluation_metrics import (
     aggregate_metrics,
+    available_horizons,
     build_baselines,
     compare_models,
     score_forecast,
     validate_comparison_seed,
 )
+
+
+def test_available_horizons_respects_actual_and_forecast_lengths():
+    assert available_horizons((1, 3, 5, 10), actual_count=3, forecast_count=10) == (
+        1,
+        3,
+    )
+    assert available_horizons((1, 3, 5, 10), actual_count=0, forecast_count=10) == ()
 
 
 def test_score_forecast_matches_the_plan_formulas_for_requested_horizons():

@@ -39,6 +39,7 @@ from typing import Any
 
 __all__ = (
     "aggregate_metrics",
+    "available_horizons",
     "build_baselines",
     "compare_models",
     "score_forecast",
@@ -68,12 +69,15 @@ _FAILED_STATUSES = frozenset(
 )
 _MISSING_STATUSES = frozenset(
     {
+        "forecast_only",
         "",
         "insufficient_input",
         "insufficient_truth",
         "invalid_input",
         "missing",
         "not_available",
+        "pending_calendar",
+        "pending_truth",
     }
 )
 _NUMERIC_METRIC_FIELDS = (
@@ -113,6 +117,47 @@ def validate_comparison_seed(seed: Any) -> int:
     if isinstance(seed, bool) or not isinstance(seed, Integral):
         raise ValueError("seed must be an integer")
     return int(seed)
+
+
+def available_horizons(
+    horizons: Iterable[int],
+    *,
+    actual_count: int,
+    forecast_count: int,
+) -> tuple[int, ...]:
+    """Return requested horizons backed by both actual and forecast prefixes."""
+
+    if (
+        isinstance(actual_count, bool)
+        or not isinstance(actual_count, Integral)
+        or actual_count < 0
+    ):
+        raise ValueError("actual_count must be a non-negative integer")
+    if (
+        isinstance(forecast_count, bool)
+        or not isinstance(forecast_count, Integral)
+        or forecast_count < 0
+    ):
+        raise ValueError("forecast_count must be a non-negative integer")
+    if isinstance(horizons, (str, bytes, Mapping)):
+        raise ValueError("horizons must be a strictly increasing iterable of integers")
+    try:
+        raw_horizons = tuple(horizons)
+    except TypeError as exc:
+        raise ValueError(
+            "horizons must be a strictly increasing iterable of integers"
+        ) from exc
+    normalized: list[int] = []
+    for horizon in raw_horizons:
+        if isinstance(horizon, bool) or not isinstance(horizon, Integral):
+            raise ValueError("horizons must contain integers")
+        normalized.append(int(horizon))
+    if any(horizon <= 0 for horizon in normalized):
+        raise ValueError("horizons must contain positive integers")
+    if normalized != sorted(normalized) or len(set(normalized)) != len(normalized):
+        raise ValueError("horizons must be strictly increasing")
+    available_limit = min(int(actual_count), int(forecast_count))
+    return tuple(horizon for horizon in normalized if horizon <= available_limit)
 
 
 def score_forecast(
