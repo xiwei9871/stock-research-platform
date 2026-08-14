@@ -285,6 +285,46 @@ def test_aggregate_metrics_keeps_status_counts_but_excludes_missing_and_failed_r
     json.dumps(overall, sort_keys=True)
 
 
+def test_aggregate_metrics_excludes_all_non_scoring_truth_statuses_even_with_fields():
+    rows = [
+        _metric_row(
+            "A",
+            f"2025-01-0{index}",
+            1,
+            status=status,
+        )
+        for index, status in enumerate(
+            ("partial_truth", "forecast_only", "pending_calendar", "pending_truth"),
+            start=2,
+        )
+    ]
+
+    summary = aggregate_metrics(rows, group_by=())
+
+    assert summary[0]["status_counts"] == {
+        "forecast_only": 1,
+        "partial_truth": 1,
+        "pending_calendar": 1,
+        "pending_truth": 1,
+    }
+    assert summary[0]["success_count"] == 0
+    assert summary[0]["missing_count"] == 4
+    assert summary[0]["metric_count"] == 0
+    assert summary[0]["excluded_count"] == 4
+
+
+def test_aggregate_metrics_honors_explicit_scored_false_audit_flag():
+    row = _metric_row("A", "2025-01-02", 1)
+    row["scored"] = False
+
+    summary = aggregate_metrics([row], group_by=())[0]
+
+    assert summary["success_count"] == 1
+    assert summary["metric_count"] == 0
+    assert summary["excluded_count"] == 1
+    assert summary["metric_denominators"]["absolute_return_error"] == 0
+
+
 def test_aggregate_metrics_rejects_invalid_group_by_or_rows():
     with pytest.raises(ValueError, match="group_by"):
         aggregate_metrics([], group_by="")

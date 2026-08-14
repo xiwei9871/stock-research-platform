@@ -578,6 +578,71 @@ def test_build_report_scores_partial_truth_by_available_horizon_and_preserves_co
     )
     assert comparison["paired_row_count"] == 1
 
+    manifest = {
+        row["run_key"]: row
+        for row in read_csv_rows(tmp_path / runner.MANIFEST_FILENAME)
+    }
+    forecast_rows = read_table_rows(tmp_path / runner.FORECAST_FILENAME)
+    realized_rows = read_table_rows(tmp_path / runner.REALIZED_FILENAME)
+    metric_rows = runner._build_metric_rows(
+        snapshots,
+        manifest,
+        forecast_rows,
+        realized_rows,
+        config.evaluation_horizons,
+        runner._config_payload(config),
+    )
+    partial_small = [
+        row
+        for row in metric_rows
+        if row["asset_id"] == "CN:SH:600418" and row["model"] == "small"
+    ]
+    assert all(row["primary_horizon"] == 1 for row in partial_small)
+    assert next(row for row in partial_small if row["horizon"] == 1)["scored"] is True
+    assert all(
+        row["scored"] is False
+        for row in partial_small
+        if row["horizon"] in (3, 5, 10)
+    )
+    assert all(
+        row["status"] == "pending_truth"
+        for row in partial_small
+        if row["horizon"] in (3, 5, 10)
+    )
+    assert not any(
+        row["model"] in {"persistence", "drift"}
+        and row["asset_id"] in {"CN:SZ:000001", "CN:SH:600519"}
+        for row in metric_rows
+    )
+    assert any(
+        row["model"] == "persistence"
+        and row["asset_id"] == "CN:SH:600418"
+        and row["horizon"] == 1
+        and row["scored"] is True
+        for row in metric_rows
+    )
+
+    primary_small = next(
+        row for row in summary["primary_coverage"] if row["model"] == "small"
+    )
+    assert primary_small["total"] == 3
+    assert primary_small["scored"] == 1
+    assert primary_small["forecast_only"] == 1
+    assert primary_small["pending_calendar"] == 1
+    assert primary_small["coverage_rate"] == pytest.approx(1 / 3)
+    assert summary["pending_counts"]["small"]["pending_truth"] == 0
+    assert "forecast_only" in summary["metric_status_counts"]
+    assert "pending_calendar" in summary["metric_status_counts"]
+
+    with (tmp_path / runner.METRICS_BY_STOCK_FILENAME).open(
+        newline="", encoding="utf-8"
+    ) as handle:
+        header = next(handle)
+    assert header.strip().split(",") == list(runner._METRIC_OUTPUT_COLUMNS)
+    report = (tmp_path / runner.REPORT_FILENAME).read_text(encoding="utf-8")
+    assert "Primary horizon coverage" in report
+    assert "Pending and forecast-only metric counts" in report
+
 
 def test_runner_accepts_documented_sidecar_files(prepared_experiment):
     output_dir, config, _, _ = prepared_experiment
@@ -591,6 +656,62 @@ def test_runner_accepts_documented_sidecar_files(prepared_experiment):
     result = run_model(config, model="small", output_dir=output_dir, client=FakeClient())
 
     assert result.attempted_count == len(config.asset_ids)
+
+
+def test_non_default_primary_horizon_controls_baseline_and_comparison(tmp_path):
+    config = replace(
+        make_config(),
+        forecast_horizon=2,
+        evaluation_horizons=(1, 2),
+        primary_horizon=2,
+    )
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    prepare_experiment(config, output_dir=tmp_path, snapshot_loader=make_loader(snapshots))
+    run_model(config, model="small", output_dir=tmp_path, client=FakeClient())
+    run_model(
+        config,
+        model="base",
+        output_dir=tmp_path,
+        client=FakeClient(model="base", model_identity="base-v1"),
+    )
+
+    summary = build_report(output_dir=tmp_path)
+    manifest = {
+        row["run_key"]: row
+        for row in read_csv_rows(tmp_path / runner.MANIFEST_FILENAME)
+    }
+    metric_rows = runner._build_metric_rows(
+        snapshots,
+        manifest,
+        read_table_rows(tmp_path / runner.FORECAST_FILENAME),
+        read_table_rows(tmp_path / runner.REALIZED_FILENAME),
+        config.evaluation_horizons,
+        runner._config_payload(config),
+    )
+
+    assert all(row["primary_horizon"] == 2 for row in metric_rows)
+    assert all(
+        row["scored"] is True
+        for row in metric_rows
+        if row["model"] in {"small", "base", "persistence", "drift"}
+    )
+    baseline_horizons = {
+        row["horizon"]
+        for row in metric_rows
+        if row["model"] == "persistence"
+    }
+    assert baseline_horizons == {1, 2}
+    comparison = next(
+        row for row in summary["comparisons"] if row["comparison"] == "base_minus_small"
+    )
+    assert comparison["paired_count"] == 2
+    assert comparison["paired_row_count"] == 2
+    assert next(
+        row for row in summary["primary_coverage"] if row["model"] == "small"
+    )["horizon"] == 2
 
 
 def test_existing_experiment_accepts_legacy_config_fields_with_defaults(

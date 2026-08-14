@@ -69,6 +69,7 @@ _FAILED_STATUSES = frozenset(
 )
 _MISSING_STATUSES = frozenset(
     {
+        "partial_truth",
         "forecast_only",
         "",
         "insufficient_input",
@@ -355,9 +356,10 @@ def aggregate_metrics(
 
     Successful rows contribute independently to each metric denominator.  A
     missing or failed row contributes to ``row_count`` and ``status_counts``
-    but not to metric means.  ``coverage_count`` and ``coverage_rate`` use
-    only rows with a valid ``interval_coverage`` value; their denominator is
-    exposed as ``metric_denominators['interval_coverage']``.
+    but not to metric means.  An explicit ``scored=False`` audit flag also
+    excludes a row from metric denominators.  ``coverage_count`` and
+    ``coverage_rate`` use only rows with a valid ``interval_coverage`` value;
+    their denominator is exposed as ``metric_denominators['interval_coverage']``.
     """
 
     normalized_group_by = _normalize_group_by(group_by)
@@ -395,10 +397,13 @@ def aggregate_metrics(
                 success_count += 1
             elif status in _FAILED_STATUSES:
                 failed_count += 1
+            elif status in _MISSING_STATUSES:
+                missing_count += 1
             else:
+                # Unknown statuses are conservatively excluded as missing.
                 missing_count += 1
 
-            if status not in _SUCCESS_STATUSES:
+            if status not in _SUCCESS_STATUSES or not _row_is_scored(row):
                 continue
             row_has_metric = False
             for field in _NUMERIC_METRIC_FIELDS:
@@ -882,6 +887,24 @@ def _row_status(row: Mapping[str, Any]) -> str:
     if not normalized:
         return "missing"
     return normalized
+
+
+def _row_is_scored(row: Mapping[str, Any]) -> bool:
+    """Return the explicit audit flag when present, otherwise infer scoring.
+
+    Older callers do not provide ``scored``; their successful rows retain the
+    historical behavior.  New runner rows always set it so pending and
+    forecast-only horizons cannot be aggregated accidentally.
+    """
+
+    if "scored" not in row:
+        return True
+    value = row["scored"]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, Integral) and value in (0, 1):
+        return bool(value)
+    raise ValueError("row scored must be a boolean")
 
 
 def _optional_metric_float(row: Mapping[str, Any], field: str) -> float | None:

@@ -348,6 +348,9 @@ class _DerivedReportArtifacts:
     status_counts: dict[str, int]
     model_status_counts: dict[str, dict[str, int]]
     coverage: list[dict[str, Any]]
+    primary_coverage: list[dict[str, Any]]
+    metric_status_counts: dict[str, int]
+    pending_counts: dict[str, dict[str, int]]
     latency: dict[str, Any]
     model_metadata: dict[str, Any]
     conclusion: str
@@ -1096,6 +1099,18 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
         "forecast_rows": len(forecast_rows),
         "realized_rows": len(realized_rows),
         "metric_rows": len(metric_rows),
+        "primary_scored_rows": sum(
+            1
+            for row in metric_rows
+            if row.get("is_primary") and row.get("scored") is True
+        ),
+        "primary_pending_rows": sum(
+            1
+            for row in metric_rows
+            if row.get("is_primary")
+            and row.get("status")
+            in {"pending_truth", "forecast_only", "pending_calendar"}
+        ),
     }
     paths = {
         "metrics_by_stock_horizon": str(normalized_output_dir / METRICS_BY_STOCK_FILENAME),
@@ -1112,6 +1127,9 @@ def _build_report_locked(*, output_dir: Path) -> dict[str, Any]:
         "status_counts": dict(sorted(status_counts.items())),
         "model_status_counts": model_status_counts,
         "coverage_by_model_horizon": coverage,
+        "primary_coverage": derived.primary_coverage,
+        "metric_status_counts": derived.metric_status_counts,
+        "pending_counts": derived.pending_counts,
         "latency": latency,
         "model_metadata": model_metadata,
         "comparisons": comparisons,
@@ -1129,6 +1147,9 @@ def _derive_report_artifacts(
     artifact_generation: str,
 ) -> _DerivedReportArtifacts:
     horizons = _integer_sequence(config_payload.get("evaluation_horizons"), "evaluation_horizons")
+    primary_horizon = _as_int(config_payload.get("primary_horizon", 1))
+    if primary_horizon is None or primary_horizon not in horizons:
+        raise ValueError("primary_horizon must be one of evaluation_horizons")
     raw_seed = config_payload.get("seed")
     seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
 
@@ -1158,7 +1179,11 @@ def _derive_report_artifacts(
     ]
     comparisons = [
         {**row, "generation": artifact_generation}
-        for row in _build_comparisons(metric_rows, seed=seed)
+        for row in _build_comparisons(
+            metric_rows,
+            seed=seed,
+            primary_horizon=primary_horizon,
+        )
     ]
 
     status_counts = Counter(row.get("status", "") for row in manifest.values())
@@ -1170,6 +1195,14 @@ def _derive_report_artifacts(
         for model, counts in sorted(model_status_counts.items())
     }
     coverage = _coverage_by_model_horizon(manifest, forecast_rows, horizons)
+    primary_coverage = _primary_coverage(metric_rows, primary_horizon=primary_horizon)
+    metric_status_counts = dict(
+        sorted(Counter(str(row.get("status", "")) for row in metric_rows).items())
+    )
+    pending_counts = _pending_counts(
+        metric_rows,
+        primary_horizon=primary_horizon,
+    )
     latency = _latency_summary(manifest)
     model_metadata = _model_metadata_summary(manifest)
     conclusion = _choose_conclusion(
@@ -1186,6 +1219,9 @@ def _derive_report_artifacts(
         status_counts=dict(sorted(status_counts.items())),
         model_status_counts=model_status_counts,
         coverage=coverage,
+        primary_coverage=primary_coverage,
+        metric_status_counts=metric_status_counts,
+        pending_counts=pending_counts,
         model_summaries=model_output,
         comparisons=comparisons,
         latency=latency,
@@ -1200,6 +1236,9 @@ def _derive_report_artifacts(
         status_counts=dict(sorted(status_counts.items())),
         model_status_counts=model_status_counts,
         coverage=coverage,
+        primary_coverage=primary_coverage,
+        metric_status_counts=metric_status_counts,
+        pending_counts=pending_counts,
         latency=latency,
         model_metadata=model_metadata,
         conclusion=conclusion,
@@ -4169,7 +4208,21 @@ def _build_metric_rows(
     configured_models = tuple(
         str(model) for model in config_payload.get("models", ("small", "base"))
     )
+    primary_horizon = _as_int(config_payload.get("primary_horizon", 1))
+    if primary_horizon is None or primary_horizon not in horizons:
+        raise ValueError("primary_horizon must be one of evaluation_horizons")
+    non_scoring_snapshot_statuses = frozenset(
+        {
+            "forecast_only",
+            "pending_calendar",
+            "pending_truth",
+            "insufficient_input",
+            "insufficient_truth",
+            "invalid_input",
+        }
+    )
     for snapshot in snapshots:
+        snapshot_status = str(snapshot.status or "").strip().lower()
         for model in configured_models:
             run_key = f"{snapshot.key}|{model}"
             manifest_row = manifest.get(run_key, {})
@@ -4186,13 +4239,10 @@ def _build_metric_rows(
             score_status = status
             if (
                 status == _SUCCESS_MANIFEST_STATUS
-                and snapshot.status in {"forecast_only", "pending_calendar"}
+                and snapshot_status in non_scoring_snapshot_statuses
             ):
-                score_status = snapshot.status
-            if (
-                status == _SUCCESS_MANIFEST_STATUS
-                and snapshot.status not in {"forecast_only", "pending_calendar"}
-            ):
+                score_status = snapshot_status
+            elif status == _SUCCESS_MANIFEST_STATUS:
                 try:
                     available = available_horizons(
                         horizons,
@@ -4221,27 +4271,27 @@ def _build_metric_rows(
                             ],
                             horizons=available,
                         )
-                    if snapshot.status == "partial_truth":
+                    if snapshot_status == "partial_truth" or not available:
                         score_status = "pending_truth"
                 except (ValueError, TypeError):
                     score_status = "insufficient_artifact"
             for horizon in horizons:
+                scored = f"h{horizon}" in scores
                 row: dict[str, Any] = {
                     "asset_id": snapshot.asset_id,
                     "origin_date": snapshot.origin_date,
                     "model": model,
                     "horizon": horizon,
-                    "status": (
-                        _SUCCESS_MANIFEST_STATUS
-                        if f"h{horizon}" in scores
-                        else score_status
-                    ),
+                    "primary_horizon": primary_horizon,
+                    "scored": scored,
+                    "is_primary": horizon == primary_horizon,
+                    "status": _SUCCESS_MANIFEST_STATUS if scored else score_status,
                 }
-                if f"h{horizon}" in scores:
+                if scored:
                     row.update(scores[f"h{horizon}"])
                 metric_rows.append(row)
 
-        if snapshot.status != "ready" or len(snapshot.realized) < max(horizons):
+        if snapshot_status in non_scoring_snapshot_statuses:
             continue
         try:
             history_closes = [
@@ -4252,7 +4302,12 @@ def _build_metric_rows(
                 _required_float(row.get("close"), "realized close")
                 for row in snapshot.realized
             ]
-            baseline_horizon = max(horizons)
+            available_baseline_horizons = tuple(
+                horizon for horizon in horizons if horizon <= len(actual_closes)
+            )
+            if primary_horizon not in available_baseline_horizons:
+                continue
+            baseline_horizon = max(available_baseline_horizons)
             baselines = build_baselines(
                 history_closes,
                 horizon=baseline_horizon,
@@ -4261,19 +4316,22 @@ def _build_metric_rows(
             for baseline_name, forecast in baselines.items():
                 scores = score_forecast(
                     history_closes[-1],
-                    actual_closes,
+                    actual_closes[:baseline_horizon],
                     forecast,
                     forecast,
                     forecast,
-                    horizons=horizons,
+                    horizons=available_baseline_horizons,
                 )
-                for horizon in horizons:
+                for horizon in available_baseline_horizons:
                     metric_rows.append(
                         {
                             "asset_id": snapshot.asset_id,
                             "origin_date": snapshot.origin_date,
                             "model": baseline_name,
                             "horizon": horizon,
+                            "primary_horizon": primary_horizon,
+                            "scored": True,
+                            "is_primary": horizon == primary_horizon,
                             "status": _SUCCESS_MANIFEST_STATUS,
                             **scores[f"h{horizon}"],
                         }
@@ -4287,6 +4345,7 @@ def _build_comparisons(
     metric_rows: Sequence[Mapping[str, Any]],
     *,
     seed: int | None,
+    primary_horizon: int = 1,
 ) -> list[dict[str, Any]]:
     comparison_rows: list[dict[str, Any]] = []
     model_names = sorted(
@@ -4311,7 +4370,11 @@ def _build_comparisons(
 
     wide: dict[tuple[str, str, int], dict[str, Any]] = defaultdict(dict)
     for row in metric_rows:
-        if row.get("status") != _SUCCESS_MANIFEST_STATUS:
+        if (
+            row.get("status") != _SUCCESS_MANIFEST_STATUS
+            or row.get("scored") is False
+            or _as_int(row.get("horizon")) != primary_horizon
+        ):
             continue
         value = _finite_number(row.get("absolute_return_error"))
         if value is None:
@@ -4394,10 +4457,21 @@ def _choose_conclusion(
         return "not_proven"
     if (_as_int(base_small.get("paired_count")) or 0) < 2:
         return "not_proven"
+    primary_horizon = _as_int(
+        next(
+            (
+                row.get("primary_horizon")
+                for row in metric_rows
+                if row.get("primary_horizon") is not None
+            ),
+            1,
+        )
+    ) or 1
     paired_assets_by_model: dict[str, set[str]] = defaultdict(set)
     for row in metric_rows:
         if (
             row.get("model") in {"small", "base"}
+            and _as_int(row.get("horizon")) == primary_horizon
             and row.get("status") == _SUCCESS_MANIFEST_STATUS
             and _finite_number(row.get("absolute_return_error")) is not None
         ):
@@ -4416,7 +4490,13 @@ def _choose_conclusion(
         by_label.get("base_minus_persistence"),
         by_label.get("base_minus_drift"),
     )
-    coverage = _mean_coverage_by_model(model_summaries)
+    coverage = _mean_coverage_by_model(
+        [
+            row
+            for row in model_summaries
+            if _as_int(row.get("horizon")) == primary_horizon
+        ]
+    )
     small_coverage = coverage.get("small")
     base_coverage = coverage.get("base")
     delta_low = _finite_number(base_small.get("ci_low"))
@@ -4499,6 +4579,86 @@ def _coverage_by_model_horizon(
                 }
             )
     return output
+
+
+def _primary_coverage(
+    metric_rows: Sequence[Mapping[str, Any]],
+    *,
+    primary_horizon: int,
+) -> list[dict[str, Any]]:
+    """Summarize auditable h=primary coverage without counting pending rows."""
+
+    by_model: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in metric_rows:
+        if _as_int(row.get("horizon")) == primary_horizon:
+            by_model[str(row.get("model", ""))].append(row)
+
+    output: list[dict[str, Any]] = []
+    for model, rows in sorted(by_model.items()):
+        status_counts = Counter(str(row.get("status", "")) for row in rows)
+        scored = sum(
+            1
+            for row in rows
+            if row.get("status") == _SUCCESS_MANIFEST_STATUS
+            and row.get("scored") is not False
+        )
+        pending_truth = status_counts.get("pending_truth", 0)
+        forecast_only = status_counts.get("forecast_only", 0)
+        pending_calendar = status_counts.get("pending_calendar", 0)
+        failed = sum(
+            count
+            for status, count in status_counts.items()
+            if status
+            in {
+                "model_error",
+                "timeout",
+                "transport_error",
+                "protocol_error",
+                "unavailable",
+                "insufficient_input",
+                "insufficient_truth",
+                "invalid_input",
+                "insufficient_artifact",
+            }
+        )
+        total = len(rows)
+        output.append(
+            {
+                "model": model,
+                "horizon": primary_horizon,
+                "total": total,
+                "scored": scored,
+                "pending_truth": pending_truth,
+                "forecast_only": forecast_only,
+                "pending_calendar": pending_calendar,
+                "failed": failed,
+                "coverage_rate": scored / total if total else None,
+                "status_counts": {
+                    status: status_counts[status]
+                    for status in sorted(status_counts)
+                },
+            }
+        )
+    return output
+
+
+def _pending_counts(
+    metric_rows: Sequence[Mapping[str, Any]],
+    *,
+    primary_horizon: int,
+) -> dict[str, dict[str, int]]:
+    pending_statuses = ("pending_truth", "forecast_only", "pending_calendar")
+    by_model: dict[str, Counter[str]] = defaultdict(Counter)
+    for row in metric_rows:
+        if _as_int(row.get("horizon")) != primary_horizon:
+            continue
+        status = str(row.get("status", ""))
+        if status in pending_statuses:
+            by_model[str(row.get("model", ""))][status] += 1
+    return {
+        model: {status: counts[status] for status in pending_statuses}
+        for model, counts in sorted(by_model.items())
+    }
 
 
 def _latency_summary(manifest: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -4590,6 +4750,9 @@ def _render_report(
     status_counts: Mapping[str, int],
     model_status_counts: Mapping[str, Mapping[str, int]],
     coverage: Sequence[Mapping[str, Any]],
+    primary_coverage: Sequence[Mapping[str, Any]],
+    metric_status_counts: Mapping[str, int],
+    pending_counts: Mapping[str, Mapping[str, int]],
     model_summaries: Sequence[Mapping[str, Any]],
     comparisons: Sequence[Mapping[str, Any]],
     latency: Mapping[str, Any],
@@ -4629,6 +4792,39 @@ def _render_report(
             coverage=_format_number(row.get("coverage_rate")),
         )
         for row in coverage
+    )
+    lines.extend(
+        [
+            "",
+            "## Primary horizon coverage",
+            "",
+            "| model | horizon | total | scored | pending truth | forecast only | pending calendar | failed | coverage |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    lines.extend(
+        "| {model} | {horizon} | {total} | {scored} | {pending_truth} | {forecast_only} | {pending_calendar} | {failed} | {coverage} |".format(
+            model=row.get("model"),
+            horizon=row.get("horizon"),
+            total=row.get("total"),
+            scored=row.get("scored"),
+            pending_truth=row.get("pending_truth"),
+            forecast_only=row.get("forecast_only"),
+            pending_calendar=row.get("pending_calendar"),
+            failed=row.get("failed"),
+            coverage=_format_number(row.get("coverage_rate")),
+        )
+        for row in primary_coverage
+    )
+    lines.extend(
+        [
+            "",
+            "## Pending and forecast-only metric counts",
+            "",
+            f"All metric row statuses: `{_canonical_json(metric_status_counts)}`",
+            "",
+            f"Primary-horizon pending statuses by model: `{_canonical_json(pending_counts)}`",
+        ]
     )
     lines.extend(["", "## Metrics by model/horizon", "", "| model | horizon | count | absolute return error | direction hit | interval coverage |", "|---|---:|---:|---:|---:|---:|"])
     lines.extend(
