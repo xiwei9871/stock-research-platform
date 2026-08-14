@@ -57,6 +57,9 @@ from stock_research.kronos_evaluation_types import (
 
 EXPERIMENT_FILENAME = "experiment.json"
 UNIVERSE_FILENAME = "universe.csv"
+EXPERIMENT_CONFIG_FILENAME = "experiment_config.json"
+UNIVERSE_SELECTION_FILENAME = "universe_selection.json"
+LATEST_FORECAST_FILENAME = "latest_forecast.json"
 SNAPSHOT_DIRECTORY = "input_snapshots"
 MANIFEST_FILENAME = "run_manifest.csv"
 FORECAST_FILENAME = "forecast_bars.parquet"
@@ -86,6 +89,9 @@ _FAILURE_RESPONSE_STATUSES = frozenset(
     {"error", "failed", "model_error", "unavailable", "timeout"}
 )
 _SUCCESS_MANIFEST_STATUS = "success"
+_PREDICTION_ELIGIBLE_SNAPSHOT_STATUSES = frozenset(
+    {"ready", "partial_truth", "forecast_only"}
+)
 _CONCLUSIONS = frozenset(
     {"small_preferred", "base_preferred", "no_clear_winner", "not_proven"}
 )
@@ -224,6 +230,9 @@ _DOCUMENTED_TOP_LEVEL_ENTRIES = frozenset(
     {
         EXPERIMENT_FILENAME,
         UNIVERSE_FILENAME,
+        EXPERIMENT_CONFIG_FILENAME,
+        UNIVERSE_SELECTION_FILENAME,
+        LATEST_FORECAST_FILENAME,
         SNAPSHOT_DIRECTORY,
         MANIFEST_FILENAME,
         FORECAST_FILENAME,
@@ -768,7 +777,7 @@ def _run_model_locked(
         row = manifest[run_key]
         parameters = parameters_by_key[snapshot.key]
 
-        if snapshot.status != "ready":
+        if snapshot.status not in _PREDICTION_ELIGIBLE_SNAPSHOT_STATUSES:
             skipped_count += 1
             continue
 
@@ -1345,7 +1354,23 @@ def _validate_existing_experiment_config(
 ) -> None:
     existing_config = metadata.get("config")
     expected_config = _config_payload(config)
-    if _jsonable(existing_config) != expected_config:
+    if not isinstance(existing_config, Mapping):
+        raise FileExistsError(
+            "prepared experiment metadata is incompatible with the requested config"
+        )
+    if set(existing_config) - set(expected_config):
+        raise FileExistsError(
+            "prepared experiment metadata is incompatible with the requested config"
+        )
+    try:
+        normalized_existing_config = _config_payload(
+            _config_from_payload(existing_config)
+        )
+    except ValueError as exc:
+        raise FileExistsError(
+            "prepared experiment metadata is incompatible with the requested config"
+        ) from exc
+    if normalized_existing_config != expected_config:
         raise FileExistsError(
             "prepared experiment metadata is incompatible with the requested config"
         )
@@ -1549,6 +1574,9 @@ def _cleanup_known_atomic_temps(output_dir: Path) -> None:
     base_names = {
         EXPERIMENT_FILENAME,
         UNIVERSE_FILENAME,
+        EXPERIMENT_CONFIG_FILENAME,
+        UNIVERSE_SELECTION_FILENAME,
+        LATEST_FORECAST_FILENAME,
         MANIFEST_FILENAME,
         FORECAST_FILENAME,
         REALIZED_FILENAME,
@@ -2540,8 +2568,22 @@ def _load_and_validate_manifest(
             or _optional_int(source.get("seed")) != config.seed
         ):
             raise ValueError(f"run_manifest.csv row {run_key} is inconsistent with experiment")
-        if snapshot.status != "ready" and source.get("status") != snapshot.status:
-            raise ValueError(f"run_manifest.csv row {run_key} has an invalid snapshot status")
+        source_status = source.get("status")
+        if snapshot.status in _PREDICTION_ELIGIBLE_SNAPSHOT_STATUSES:
+            allowed_statuses = {
+                "pending",
+                "running",
+                snapshot.status,
+                *_TERMINAL_MANIFEST_STATUSES,
+            }
+            if source_status not in allowed_statuses:
+                raise ValueError(
+                    f"run_manifest.csv row {run_key} has an invalid snapshot status"
+                )
+        elif snapshot.status != "ready" and source_status != snapshot.status:
+            raise ValueError(
+                f"run_manifest.csv row {run_key} has an invalid snapshot status"
+            )
         manifest[run_key] = source
     return manifest
 

@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 import types
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -316,6 +317,54 @@ def test_predict_daily_posts_exact_frozen_snapshot_payload_and_token_header():
 
     request["json"]["daily"]["history"][0]["close"] = -1.0
     assert snapshot.history[0]["close"] == 102.0
+
+
+@pytest.mark.parametrize("snapshot_status", ["partial_truth", "forecast_only"])
+def test_predict_daily_accepts_prediction_eligible_snapshot_statuses(snapshot_status):
+    snapshot = replace(make_snapshot(), status=snapshot_status)
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=make_prediction_response(),
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    client.predict_daily(snapshot, model="small")
+
+    assert [request["method"] for request in session.requests] == ["GET", "POST"]
+
+
+@pytest.mark.parametrize(
+    "snapshot_status",
+    ["pending_calendar", "insufficient_input", "insufficient_truth", "invalid_input"],
+)
+def test_predict_daily_rejects_ineligible_snapshot_status_before_http(snapshot_status):
+    snapshot = replace(make_snapshot(), status=snapshot_status)
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=make_prediction_response(),
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError) as exc_info:
+        client.predict_daily(snapshot, model="small")
+
+    assert exc_info.value.category == KronosErrorCategory.VALIDATION
+    assert exc_info.value.code == KronosErrorCode.INVALID_ARGUMENT
+    assert session.requests == []
+
+
+def test_predict_daily_rejects_empty_future_timestamps_before_http():
+    snapshot = replace(make_snapshot(), future_timestamps=())
+    session = FakeSession(
+        health={"status": "ok", "model": "Kronos-small"},
+        prediction=make_prediction_response(),
+    )
+    client = KronosClient("http://kronos.test", token="secret", session=session)
+
+    with pytest.raises(KronosClientError, match="future_timestamps"):
+        client.predict_daily(snapshot, model="small")
+
+    assert session.requests == []
 
 
 @pytest.mark.parametrize(

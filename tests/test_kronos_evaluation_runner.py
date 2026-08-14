@@ -256,7 +256,18 @@ class FakeClient:
                 "sample_count": sample_count,
                 "daily": {"p50": [103.0, 104.0]},
             }
-        representative_path = [dict(row) for row in snapshot.realized]
+        representative_path = [
+            {
+                "timestamp": timestamp,
+                "open": 102.0 + index,
+                "high": 104.0 + index,
+                "low": 101.0 + index,
+                "close": 103.0 + index,
+                "volume": 1_003.0 + index,
+                "amount": 100_300.0 + index,
+            }
+            for index, timestamp in enumerate(snapshot.future_timestamps)
+        ]
         daily = {
             "p10": [102.0, 103.0],
             "p50": [103.0, 104.0],
@@ -426,6 +437,109 @@ def test_prediction_persists_rows_and_manifest_after_each_attempt(prepared_exper
     assert all(json.loads(row["raw_response_json"])["status"] == "succeeded" for row in small_rows)
     assert len(read_table_rows(output_dir / "forecast_bars.parquet")) == 4
     assert len(read_table_rows(output_dir / "realized_bars.parquet")) == 4
+
+
+def test_prediction_eligible_snapshot_statuses_write_forecasts_and_realized_prefixes(
+    tmp_path,
+):
+    config = replace(
+        make_config(),
+        asset_ids=("CN:SH:600418", "CN:SZ:000001", "CN:SH:600519"),
+    )
+    partial_snapshot = make_snapshot("CN:SH:600418")
+    snapshots = [
+        replace(
+            partial_snapshot,
+            realized=partial_snapshot.realized[:1],
+            status="partial_truth",
+        ),
+        replace(make_snapshot("CN:SZ:000001"), realized=(), status="forecast_only"),
+        replace(make_snapshot("CN:SH:600519"), status="pending_calendar"),
+    ]
+    prepare_experiment(config, output_dir=tmp_path, snapshot_loader=make_loader(snapshots))
+
+    client = FakeClient()
+    result = run_model(config, model="small", output_dir=tmp_path, client=client)
+
+    assert result.attempted_count == 2
+    assert result.skipped_count == 1
+    assert len(client.calls) == 2
+    assert len(read_table_rows(tmp_path / runner.FORECAST_FILENAME)) == 4
+    assert len(read_table_rows(tmp_path / runner.REALIZED_FILENAME)) == 1
+    manifest = {
+        row["snapshot_key"]: row
+        for row in read_csv_rows(tmp_path / runner.MANIFEST_FILENAME)
+        if row["model"] == "small"
+    }
+    assert manifest["CN:SH:600418|2025-01-03"]["status"] == "success"
+    assert manifest["CN:SZ:000001|2025-01-03"]["status"] == "success"
+    assert manifest["CN:SH:600519|2025-01-03"]["status"] == "pending_calendar"
+
+
+def test_runner_accepts_documented_sidecar_files(prepared_experiment):
+    output_dir, config, _, _ = prepared_experiment
+    for filename in (
+        runner.EXPERIMENT_CONFIG_FILENAME,
+        runner.UNIVERSE_SELECTION_FILENAME,
+        runner.LATEST_FORECAST_FILENAME,
+    ):
+        (output_dir / filename).write_text("{}", encoding="utf-8")
+
+    result = run_model(config, model="small", output_dir=output_dir, client=FakeClient())
+
+    assert result.attempted_count == len(config.asset_ids)
+
+
+def test_existing_experiment_accepts_legacy_config_fields_with_defaults(
+    prepared_experiment,
+):
+    output_dir, config, _, _ = prepared_experiment
+    metadata_path = output_dir / runner.EXPERIMENT_FILENAME
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    for field_name in (
+        "frequency",
+        "primary_horizon",
+        "include_latest_forecast",
+        "fallback",
+        "experiment_id",
+        "config_fingerprint",
+    ):
+        metadata["config"].pop(field_name, None)
+    immutable = {
+        key: value
+        for key, value in metadata.items()
+        if key not in {"created_at", "experiment_fingerprint"}
+    }
+    metadata["experiment_fingerprint"] = canonical_json_fingerprint(immutable)
+    metadata_path.write_text(json.dumps(metadata, sort_keys=True), encoding="utf-8")
+
+    result = prepare_experiment(
+        config,
+        output_dir=output_dir,
+        snapshot_loader=make_loader([make_snapshot(asset_id) for asset_id in config.asset_ids]),
+    )
+
+    assert result.snapshot_count == len(config.asset_ids)
+
+
+@pytest.mark.parametrize(
+    "changed_config",
+    [
+        lambda config: replace(config, primary_horizon=2),
+        lambda config: replace(config, config_fingerprint="a" * 64),
+    ],
+)
+def test_existing_experiment_rejects_primary_horizon_or_config_fingerprint_change(
+    prepared_experiment, changed_config
+):
+    output_dir, config, _, _ = prepared_experiment
+
+    with pytest.raises(FileExistsError, match="incompatible"):
+        prepare_experiment(
+            changed_config(config),
+            output_dir=output_dir,
+            snapshot_loader=make_loader([make_snapshot(asset_id) for asset_id in config.asset_ids]),
+        )
 
 
 def test_resume_skips_completed_keys_with_matching_fingerprint_identity_and_parameters(

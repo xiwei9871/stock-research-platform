@@ -50,6 +50,9 @@ _SENSITIVE_FIELD_TERMS = frozenset(
 )
 _PREDICTION_SUCCESS_STATUSES = frozenset({"partial", "complete", "succeeded"})
 _PREDICTION_FAILURE_STATUSES = frozenset({"failed", "error"})
+_PREDICTION_ELIGIBLE_SNAPSHOT_STATUSES = frozenset(
+    {"ready", "partial_truth", "forecast_only"}
+)
 _DAILY_FAILURE_STATUSES = frozenset({"error", "unavailable", "failed"})
 _HEALTH_NON_READY_STATUSES = frozenset({"degraded", "error", "unavailable"})
 _DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -289,7 +292,7 @@ class KronosClient:
         sample_count: int = 20,
         seed: int | None = DEFAULT_KRONOS_SEED,
     ) -> dict[str, Any]:
-        """Predict one ready snapshot with deterministic evaluation defaults.
+        """Predict one eligible snapshot with deterministic evaluation defaults.
 
         The default seed is shared with ``KronosEvaluationConfig``. Callers may
         pass an explicit seed such as ``7`` from the approved smoke example,
@@ -304,9 +307,16 @@ class KronosClient:
                 code=KronosErrorCode.INVALID_ARGUMENT,
                 redaction_token=redaction_token,
             )
-        if snapshot.status != "ready":
+        if snapshot.status not in _PREDICTION_ELIGIBLE_SNAPSHOT_STATUSES:
             raise KronosClientError(
-                "Kronos snapshot is not ready",
+                f"Kronos snapshot status {snapshot.status!r} is not prediction-eligible",
+                category=KronosErrorCategory.VALIDATION,
+                code=KronosErrorCode.INVALID_ARGUMENT,
+                redaction_token=redaction_token,
+            )
+        if not snapshot.future_timestamps:
+            raise KronosClientError(
+                "Kronos snapshot future_timestamps must not be empty",
                 category=KronosErrorCategory.VALIDATION,
                 code=KronosErrorCode.INVALID_ARGUMENT,
                 redaction_token=redaction_token,
