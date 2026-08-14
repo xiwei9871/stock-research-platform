@@ -101,6 +101,14 @@ def test_explicit_mode_normalizes_ids_preserves_order_and_requires_matching_coun
         )
 
 
+def test_explicit_mode_rejects_duplicate_normalized_ids(fake_db):
+    with pytest.raises(ValueError, match="duplicate"):
+        universe.select_universe(
+            mode="explicit", count=2, seed=None, market="CN_A", asset_ids=[" A ", "a"],
+            adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
+        )
+
+
 def test_latest_market_date_is_maximum(fake_db):
     assert universe.resolve_latest_market_date(adjust_type="qfq", service="test") == "2025-01-08"
 
@@ -108,7 +116,29 @@ def test_latest_market_date_is_maximum(fake_db):
 def test_calendar_uses_exchange_rows_then_daily_bar_fallback(fake_db):
     assert universe.load_trade_calendar_dates("qfq", "2025-01-01", "2025-01-05", "test") == ["2025-01-02"]
     fake_db.rows["calendar"] = []
-    assert universe.load_trade_calendar_dates("qfq", "2025-01-01", "2025-01-05", "test") == ["2025-01-02", "2025-01-03"]
+    assert universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test") == ["2025-01-02", "2025-01-03"]
+    fallback_call = next((params for sql, params in fake_db.calls if "SELECT DISTINCT trade_date" in sql), None)
+    assert fallback_call["adjust_type"] == "qfq"
+
+
+def test_candidates_exclude_nonlisted_delisted_and_other_markets(fake_db):
+    fake_db.rows["candidates"] = [
+        {"asset_id": "listed", "market": "CN_A", "status": "listed", "delist_date": None, "name": "Listed"},
+        {"asset_id": "unlisted", "market": "CN_A", "status": "pending", "delist_date": None, "name": "Pending"},
+        {"asset_id": "delisted", "market": "CN_A", "status": "listed", "delist_date": "2024-01-01", "name": "Gone"},
+        {"asset_id": "other-market", "market": "US", "status": "listed", "delist_date": None, "name": "Other"},
+    ]
+    fake_db.rows["bars"] = [
+        _bar("listed", "2025-01-02"), _bar("listed", "2025-01-03"),
+        _bar("unlisted", "2025-01-02"), _bar("unlisted", "2025-01-03"),
+        _bar("delisted", "2025-01-02"), _bar("delisted", "2025-01-03"),
+        _bar("other-market", "2025-01-02"), _bar("other-market", "2025-01-03"),
+    ]
+    selection = universe.select_universe(
+        mode="random", count=1, seed=1, market="CN_A", asset_ids=None,
+        adjust_type="qfq", input_window=2, cutoff_date="2025-01-04", service="test",
+    )
+    assert selection.asset_ids == ("listed",)
 
 
 def test_filters_st_and_bad_or_insufficient_bars(fake_db):

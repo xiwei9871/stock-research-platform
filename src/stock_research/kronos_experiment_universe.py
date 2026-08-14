@@ -114,7 +114,13 @@ def _eligible_candidates(*, market: str, adjust_type: str, input_window: int, cu
     eligible = []
     for row in candidates:
         asset_id = str(row["asset_id"]).strip()
-        if not asset_id or _ST_NAME.match(str(row.get("name") or "")):
+        if (
+            not asset_id
+            or str(row.get("market") or "") != market
+            or str(row.get("status") or "") != "listed"
+            or row.get("delist_date") is not None
+            or _ST_NAME.match(str(row.get("name") or ""))
+        ):
             continue
         if asset_id in st_assets or len(grouped.get(asset_id, ())) < input_window:
             continue
@@ -135,6 +141,8 @@ def select_universe(*, mode: str, count: int, seed: int | None, market: str,
     normalized = tuple(str(asset_id).strip().lower() for asset_id in asset_ids or ())
     if mode == "explicit" and len(normalized) != count:
         raise ValueError("count must match explicit asset_ids")
+    if mode == "explicit" and len(set(normalized)) != len(normalized):
+        raise ValueError("duplicate explicit asset_ids after normalization")
     candidates = _eligible_candidates(
         market=market, adjust_type=adjust_type, input_window=input_window,
         cutoff_date=cutoff_date, service=service,
@@ -181,11 +189,11 @@ def load_trade_calendar_dates(adjust_type: str, start_date: str, end_date: str, 
             fallback_sql = """
                 SELECT DISTINCT trade_date
                 FROM market_daily_bar
-                WHERE adjust_type = %(adjust_type)s
+                WHERE adjust_type = 'qfq'
                   AND trade_date >= %(start_date)s AND trade_date <= %(end_date)s
                 ORDER BY trade_date
             """
-            rows = fetch_all(conn, fallback_sql, params)
+            rows = fetch_all(conn, fallback_sql, {**params, "adjust_type": "qfq"})
     return sorted({str(row["trade_date"]) for row in rows if row.get("trade_date") is not None})
 
 
