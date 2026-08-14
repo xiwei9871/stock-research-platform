@@ -153,9 +153,17 @@ def test_latest_market_date_is_maximum(fake_db):
 def test_calendar_uses_exchange_rows_then_daily_bar_fallback(fake_db):
     assert universe.load_trade_calendar_dates("qfq", "2025-01-01", "2025-01-05", "test") == ["2025-01-02"]
     fake_db.rows["calendar"] = []
-    assert universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test", observed_asset_ids=["a"]) == ["2025-01-02", "2025-01-03"]
-    fallback_sql, fallback_call = next((sql, params) for sql, params in fake_db.calls if "SELECT DISTINCT trade_date" in sql)
-    assert "adjust_type = 'qfq'" in fallback_sql
+    with pytest.raises(ValueError, match="observed_dates"):
+        universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test")
+
+
+def test_calendar_fallback_uses_explicit_observed_dates_only(fake_db):
+    fake_db.rows["calendar"] = []
+    dates = ("2025-01-02", "2025-01-03")
+    assert universe.load_trade_calendar_dates(
+        "hfq", "2025-01-01", "2025-01-05", "test", observed_dates=dates
+    ) == ["2025-01-02", "2025-01-03"]
+    assert not any("market_daily_bar" in sql for sql, _ in fake_db.calls)
 
 
 def test_calendar_fallback_returns_only_observed_qfq_dates(fake_db):
@@ -164,30 +172,20 @@ def test_calendar_fallback_returns_only_observed_qfq_dates(fake_db):
     fake_db.rows["fallback"] = [
         {"trade_date": "2025-01-02"}, {"trade_date": "2025-01-03"}, {"trade_date": "2025-01-04"},
     ]
-    assert universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test", observed_asset_ids=["a"]) == [
+    assert universe.load_trade_calendar_dates("hfq", "2025-01-01", "2025-01-05", "test", observed_dates=["2025-01-02", "2025-01-03"]) == [
         "2025-01-02", "2025-01-03",
     ]
-    fallback_sql, fallback_params = next(
-        (sql, params) for sql, params in fake_db.calls if "observed_dates" in sql
-    )
-    assert "adjust_type = 'qfq'" in fallback_sql
-    assert fallback_params["observed_dates"] == ["2025-01-02", "2025-01-03"]
 
 
-def test_calendar_fallback_excludes_unrelated_asset_observed_dates(fake_db):
+def test_calendar_fallback_excludes_unobserved_dates(fake_db):
     fake_db.rows["calendar"] = []
     fake_db.rows["observed"] = [{"trade_date": "2025-01-02"}, {"trade_date": "2025-01-03"}]
     fake_db.rows["fallback"] = [
         {"trade_date": "2025-01-02"}, {"trade_date": "2025-01-03"}, {"trade_date": "2025-01-04"},
     ]
     assert universe.load_trade_calendar_dates(
-        "qfq", "2025-01-01", "2025-01-05", "test", observed_asset_ids=["a"]
+        "qfq", "2025-01-01", "2025-01-05", "test", observed_dates=["2025-01-02", "2025-01-03"]
     ) == ["2025-01-02", "2025-01-03"]
-    observed_sql, observed_params = next(
-        (sql, params) for sql, params in fake_db.calls if "adjust_type = 'qfq'" in sql and "observed_dates" not in sql
-    )
-    assert "asset_id = ANY" in observed_sql
-    assert observed_params["observed_asset_ids"] == ["a"]
 
 
 def test_candidates_exclude_nonlisted_delisted_and_other_markets(fake_db):

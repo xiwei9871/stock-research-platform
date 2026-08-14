@@ -7,7 +7,7 @@ import json
 import math
 import random
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -196,10 +196,22 @@ def load_trade_calendar_dates(
     start_date: str,
     end_date: str,
     service: str,
+    observed_dates: Iterable[str] | None = None,
     observed_asset_ids: Sequence[str] | None = None,
 ) -> list[str]:
+    """Load open calendar dates, or filter a caller-provided frozen bar date set.
+
+    ``observed_dates`` must come from the same frozen qfq bar query as the
+    universe. It is the only evidence allowed for the calendar fallback.
+    ``observed_asset_ids`` remains accepted for compatibility but is never
+    used as fallback evidence.
+    """
     if adjust_type != "qfq":
         adjust_type = "qfq"
+    frozen_observed_dates = {
+        str(value) for value in (observed_dates or ())
+        if value is not None and start_date <= str(value) <= end_date
+    }
     calendar_sql = """
         SELECT trade_date
         FROM market.trading_calendar
@@ -211,32 +223,9 @@ def load_trade_calendar_dates(
     with _db(service) as conn:
         rows = fetch_all(conn, calendar_sql, params)
         if not rows:
-            if not observed_asset_ids:
-                return []
-            observed_sql = """
-                SELECT DISTINCT trade_date
-                FROM market_daily_bar
-                WHERE adjust_type = 'qfq'
-                  AND asset_id = ANY(%(observed_asset_ids)s)
-                  AND trade_date >= %(start_date)s AND trade_date <= %(end_date)s
-                ORDER BY trade_date
-            """
-            observed_rows = fetch_all(
-                conn,
-                observed_sql,
-                {"observed_asset_ids": list(observed_asset_ids), "start_date": start_date, "end_date": end_date},
-            )
-            observed_dates = sorted({str(row["trade_date"]) for row in observed_rows if row.get("trade_date") is not None})
-            if not observed_dates:
-                return []
-            fallback_sql = """
-                SELECT DISTINCT trade_date
-                FROM market_daily_bar
-                  WHERE adjust_type = 'qfq'
-                  AND trade_date = ANY(%(observed_dates)s)
-                ORDER BY trade_date
-            """
-            rows = fetch_all(conn, fallback_sql, {"observed_dates": observed_dates})
+            if not frozen_observed_dates:
+                raise ValueError("observed_dates are required when trading calendar has no open rows")
+            return sorted(frozen_observed_dates)
     return sorted({str(row["trade_date"]) for row in rows if row.get("trade_date") is not None})
 
 
