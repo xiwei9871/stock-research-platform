@@ -155,7 +155,7 @@ def prepare_rolling_snapshots(
     minimum_truth_horizon: int | None = None,
     forecast_only_origins: Iterable[str] = (),
 ) -> list[RollingSnapshot]:
-    """Load bars and the full-market calendar before building snapshots."""
+    """Load and build snapshots, preserving the legacy list return shape."""
 
     frame = load_daily_bars(asset_ids, max_date, adjust_type, service)
     trade_dates = load_global_trade_dates(
@@ -174,6 +174,53 @@ def prepare_rolling_snapshots(
         minimum_truth_horizon=minimum_truth_horizon,
         forecast_only_origins=forecast_only_origins,
     )
+
+
+def prepare_rolling_snapshot_bundle(
+    asset_ids: Sequence[str],
+    start_date: str,
+    max_date: str,
+    adjust_type: str,
+    service: str,
+    input_window: int,
+    forecast_horizon: int,
+    *,
+    origin_dates: Iterable[str],
+    minimum_truth_horizon: int | None = None,
+    forecast_only_origins: Iterable[str] = (),
+) -> tuple[list[RollingSnapshot], dict[str, Any]]:
+    """Load once and return snapshots plus provenance for that same load."""
+
+    frame = load_daily_bars(asset_ids, max_date, adjust_type, service)
+    trade_dates = load_global_trade_dates(
+        adjust_type,
+        start_date,
+        max_date,
+        service,
+    )
+    effective_minimum_truth_horizon = (
+        forecast_horizon
+        if minimum_truth_horizon is None
+        else minimum_truth_horizon
+    )
+    snapshots = build_rolling_snapshots(
+        frame,
+        trade_dates,
+        input_window,
+        forecast_horizon,
+        origin_dates=origin_dates,
+        asset_ids=asset_ids,
+        minimum_truth_horizon=minimum_truth_horizon,
+        forecast_only_origins=forecast_only_origins,
+    )
+    metadata = build_source_metadata(
+        frame,
+        adjust_type=adjust_type,
+        trade_dates=trade_dates,
+        minimum_truth_horizon=effective_minimum_truth_horizon,
+        snapshots=snapshots,
+    )
+    return snapshots, metadata
 
 
 def build_source_metadata(

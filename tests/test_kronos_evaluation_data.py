@@ -2,6 +2,8 @@ import json
 import sys
 import types
 from contextlib import contextmanager
+from datetime import date, datetime
+from decimal import Decimal
 
 import pandas as pd
 import pytest
@@ -736,6 +738,111 @@ def test_prepare_rolling_snapshots_forwards_partial_truth_options(monkeypatch):
     assert result == ["prepared"]
     assert calls["kwargs"]["minimum_truth_horizon"] == 1
     assert calls["kwargs"]["forecast_only_origins"] == ["2024-01-03"]
+
+
+def test_prepare_rolling_snapshot_bundle_returns_metadata_from_same_load(monkeypatch):
+    calls = {"bars": 0, "calendar": 0, "build": 0}
+    frame = make_daily_frame(periods=5)
+    calendar = make_trade_dates(5)
+    real_build = data.build_rolling_snapshots
+
+    def fake_load_daily_bars(asset_ids, max_date, adjust_type, service):
+        calls["bars"] += 1
+        assert max_date == "2024-01-31"
+        return frame
+
+    def fake_load_global_trade_dates(adjust_type, start_date, max_date, service):
+        calls["calendar"] += 1
+        assert max_date == "2024-01-31"
+        return calendar
+
+    def fake_build(*args, **kwargs):
+        calls["build"] += 1
+        return real_build(*args, **kwargs)
+
+    monkeypatch.setattr(data, "load_daily_bars", fake_load_daily_bars)
+    monkeypatch.setattr(data, "load_global_trade_dates", fake_load_global_trade_dates)
+    monkeypatch.setattr(data, "build_rolling_snapshots", fake_build)
+
+    snapshots, metadata = data.prepare_rolling_snapshot_bundle(
+        ("sh.600418",),
+        "2024-01-01",
+        "2024-01-31",
+        "qfq",
+        "research",
+        2,
+        2,
+        origin_dates=["2024-01-02"],
+        minimum_truth_horizon=1,
+    )
+
+    assert calls == {"bars": 1, "calendar": 1, "build": 1}
+    assert len(snapshots) == 1
+    assert metadata["calendar_min_date"] == "2024-01-01"
+    assert metadata["calendar_max_date"] == "2024-01-05"
+    assert metadata["minimum_truth_horizon"] == 1
+    assert metadata["status_counts"] == {"ready": 1}
+
+
+@pytest.mark.parametrize("trade_status", ["0", None])
+def test_forecast_only_preserves_future_suspended_semantics(trade_status):
+    frame = make_daily_frame(periods=7)
+    future_date = pd.Timestamp("2024-01-04")
+    frame.loc[frame["trade_date"] == future_date, "trade_status"] = trade_status
+    if trade_status is None:
+        frame.loc[frame["trade_date"] == future_date, list(data.KRONOS_HISTORY_FIELDS)] = None
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(7),
+        input_window=3,
+        forecast_horizon=3,
+        forecast_only_origins=["2024-01-03"],
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "insufficient_truth"
+    assert "suspended" in snapshot.reason
+
+
+def test_forecast_only_preserves_future_invalid_input_priority():
+    frame = make_daily_frame(periods=7)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-04"), "high"] = 1.0
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(7),
+        input_window=3,
+        forecast_horizon=3,
+        forecast_only_origins=["2024-01-03"],
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "invalid_input"
+    assert "OHLC" in snapshot.reason
+
+
+@pytest.mark.parametrize(
+    "date_value",
+    [date(2024, 1, 1), datetime(2024, 1, 1, 15, 30)],
+)
+def test_postgres_style_date_datetime_decimal_bars_are_normalized(date_value):
+    frame = make_daily_frame(periods=4).astype(object)
+    frame.loc[0, "trade_date"] = date_value
+    for column in data.KRONOS_HISTORY_FIELDS:
+        frame[column] = frame[column].map(lambda value: Decimal(str(value)))
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(4),
+        input_window=2,
+        forecast_horizon=1,
+        origin_dates=["2024-01-02"],
+    )[0]
+
+    assert snapshot.status == "ready"
+    assert snapshot.history[0]["timestamp"] == "2024-01-01"
+    assert isinstance(snapshot.history[0]["close"], float)
 
 
 def test_source_metadata_is_json_ready_and_preserves_query_timestamp():
