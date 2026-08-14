@@ -80,25 +80,33 @@ def resolve_latest_market_date(*, adjust_type: str, service: str) -> str:
 
 
 def _eligible_candidates(*, market: str, adjust_type: str, input_window: int, cutoff_date: str, service: str):
+    if adjust_type != "qfq":
+        raise ValueError("adjust_type must be qfq for frozen universe selection")
     candidate_sql = r"""
-        SELECT asset_id, market, status, symbol, name, exchange, delist_date
-        FROM public.asset_master
-        WHERE market = %(market)s
-          AND status = 'listed'
-          AND delist_date IS NULL
-          AND name !~* '^(\*?ST|S\*ST)'
+        SELECT a.asset_id, a.market, a.status, a.symbol, a.name, a.exchange, a.delist_date
+        FROM public.asset_master a
+        WHERE a.market = %(market)s
+          AND a.status = 'listed'
+          AND a.delist_date IS NULL
+          AND a.name !~* '^(\*?ST|S\*ST)'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM market_daily_bar st
+              WHERE st.asset_id = a.asset_id
+                AND st.adjust_type = 'qfq'
+                AND st.trade_date <= %(cutoff_date)s
+                AND st.is_st IS TRUE
+          )
         ORDER BY asset_id
     """
     bar_sql = """
         SELECT asset_id, trade_date, trade_status, is_st, open, high, low, close
         FROM market_daily_bar
-        WHERE adjust_type = %(adjust_type)s
+        WHERE adjust_type = 'qfq'
           AND trade_date <= %(cutoff_date)s
-          AND trade_status = '1'
-          AND isfinite(open) AND isfinite(high) AND isfinite(low) AND isfinite(close)
         ORDER BY asset_id, trade_date
     """
-    params = {"market": market, "adjust_type": adjust_type, "cutoff_date": cutoff_date, "input_window": input_window}
+    params = {"market": market, "cutoff_date": cutoff_date, "input_window": input_window}
     with _db(service) as conn:
         candidates = fetch_all(conn, candidate_sql, params)
         bars = fetch_all(conn, bar_sql, params)
@@ -136,6 +144,8 @@ def select_universe(*, mode: str, count: int, seed: int | None, market: str,
                     input_window: int, cutoff_date: str, service: str) -> UniverseSelection:
     if mode not in {"random", "explicit"}:
         raise ValueError("mode must be random or explicit")
+    if adjust_type != "qfq":
+        raise ValueError("adjust_type must be qfq for frozen universe selection")
     if count <= 0 or input_window <= 0:
         raise ValueError("count and input_window must be positive")
     if mode == "random" and (asset_ids is not None or seed is None):
@@ -174,7 +184,15 @@ def select_universe(*, mode: str, count: int, seed: int | None, market: str,
     )
 
 
-def load_trade_calendar_dates(adjust_type: str, start_date: str, end_date: str, service: str) -> list[str]:
+def load_trade_calendar_dates(
+    adjust_type: str,
+    start_date: str,
+    end_date: str,
+    service: str,
+    observed_asset_ids: Sequence[str] | None = None,
+) -> list[str]:
+    if adjust_type != "qfq":
+        adjust_type = "qfq"
     calendar_sql = """
         SELECT trade_date
         FROM market.trading_calendar
@@ -186,14 +204,21 @@ def load_trade_calendar_dates(adjust_type: str, start_date: str, end_date: str, 
     with _db(service) as conn:
         rows = fetch_all(conn, calendar_sql, params)
         if not rows:
+            if not observed_asset_ids:
+                return []
             observed_sql = """
                 SELECT DISTINCT trade_date
                 FROM market_daily_bar
                 WHERE adjust_type = 'qfq'
+                  AND asset_id = ANY(%(observed_asset_ids)s)
                   AND trade_date >= %(start_date)s AND trade_date <= %(end_date)s
                 ORDER BY trade_date
             """
-            observed_rows = fetch_all(conn, observed_sql, {**params, "adjust_type": "qfq"})
+            observed_rows = fetch_all(
+                conn,
+                observed_sql,
+                {"observed_asset_ids": list(observed_asset_ids), "start_date": start_date, "end_date": end_date},
+            )
             observed_dates = sorted({str(row["trade_date"]) for row in observed_rows if row.get("trade_date") is not None})
             if not observed_dates:
                 return []
