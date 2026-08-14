@@ -188,6 +188,23 @@ def test_calendar_fallback_excludes_unobserved_dates(fake_db):
     ) == ["2025-01-02", "2025-01-03"]
 
 
+def test_calendar_rejects_invalid_observed_dates_and_normalizes_bounds(fake_db):
+    fake_db.rows["calendar"] = []
+    with pytest.raises(ValueError, match="observed_dates"):
+        universe.load_trade_calendar_dates(
+            "qfq", "2025-01-01", "2025-01-05", "test", observed_dates=["2025-01-02", "not-a-date"]
+        )
+    assert universe.load_trade_calendar_dates(
+        "qfq", "2025-01-01", "2025-01-05", "test", observed_dates=["2025-01-03", "2025-01-02", "2025-01-02"]
+    ) == ["2025-01-02", "2025-01-03"]
+
+
+def test_calendar_rejects_non_iso_db_calendar_date(fake_db):
+    fake_db.rows["calendar"] = [{"trade_date": "2025-1-2", "exchange": "SH", "is_open": True}]
+    with pytest.raises(ValueError, match="calendar"):
+        universe.load_trade_calendar_dates("qfq", "2025-01-01", "2025-01-05", "test")
+
+
 def test_candidates_exclude_nonlisted_delisted_and_other_markets(fake_db):
     fake_db.rows["candidates"] = [
         {"asset_id": "listed", "market": "CN_A", "status": "listed", "delist_date": None, "name": "Listed"},

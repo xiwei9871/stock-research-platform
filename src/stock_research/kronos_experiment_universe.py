@@ -10,6 +10,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -64,6 +65,18 @@ def _is_finite_number(value: Any) -> bool:
         return math.isfinite(float(value))
     except (TypeError, ValueError, OverflowError):
         return False
+
+
+def _parse_iso_date(value: Any, *, field: str) -> date:
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be an ISO date string")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field} must be an ISO date string: {value!r}") from exc
+    if parsed.isoformat() != value:
+        raise ValueError(f"{field} must be an ISO date string: {value!r}")
+    return parsed
 
 
 @contextmanager
@@ -208,9 +221,15 @@ def load_trade_calendar_dates(
     """
     if adjust_type != "qfq":
         adjust_type = "qfq"
+    start = _parse_iso_date(start_date, field="start_date")
+    end = _parse_iso_date(end_date, field="end_date")
+    if start > end:
+        raise ValueError("start_date must be on or before end_date")
     frozen_observed_dates = {
-        str(value) for value in (observed_dates or ())
-        if value is not None and start_date <= str(value) <= end_date
+        parsed
+        for value in (observed_dates or ())
+        for parsed in (_parse_iso_date(value, field="observed_dates"),)
+        if start <= parsed <= end
     }
     calendar_sql = """
         SELECT trade_date
@@ -219,14 +238,22 @@ def load_trade_calendar_dates(
           AND exchange IN ('SH', 'SZ', 'BJ') AND is_open = TRUE
         ORDER BY trade_date
     """
-    params = {"adjust_type": adjust_type, "start_date": start_date, "end_date": end_date}
+    params = {"adjust_type": adjust_type, "start_date": start.isoformat(), "end_date": end.isoformat()}
     with _db(service) as conn:
         rows = fetch_all(conn, calendar_sql, params)
         if not rows:
             if not frozen_observed_dates:
                 raise ValueError("observed_dates are required when trading calendar has no open rows")
-            return sorted(frozen_observed_dates)
-    return sorted({str(row["trade_date"]) for row in rows if row.get("trade_date") is not None})
+            return [value.isoformat() for value in sorted(frozen_observed_dates)]
+    calendar_dates = set()
+    for row in rows:
+        value = row.get("trade_date")
+        if value is None:
+            continue
+        parsed = _parse_iso_date(str(value), field="calendar trade_date")
+        if start <= parsed <= end:
+            calendar_dates.add(parsed)
+    return [value.isoformat() for value in sorted(calendar_dates)]
 
 
 def write_universe_selection(path: Path, selection: UniverseSelection) -> None:
