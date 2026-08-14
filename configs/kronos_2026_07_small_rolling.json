@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment_id": "2026-07-small-rolling",
+  "model": {
+    "name": "small",
+    "fallback": false,
+    "seed": 20260806,
+    "sample_count": 20
+  },
+  "data": {
+    "frequency": "1d",
+    "adjust_type": "qfq",
+    "input_window": 250,
+    "start_date": "2026-07-01",
+    "end_date": "latest_available"
+  },
+  "universe": {
+    "mode": "random",
+    "count": 20,
+    "seed": 20260808,
+    "market": "CN_A",
+    "asset_ids": null
+  },
+  "prediction": {
+    "forecast_horizon": 10,
+    "report_horizons": [1, 3, 5, 10],
+    "include_latest_forecast": true
+  },
+  "evaluation": {
+    "primary_horizon": 1,
+    "baseline": "persistence"
+  }
+}
