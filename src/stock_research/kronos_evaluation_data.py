@@ -447,26 +447,34 @@ def build_rolling_snapshots(
             missing_truth: str | None = None
             suspended_truth: str | None = None
             invalid_truth: str | None = None
+            truth_prefix_open = True
             for timestamp in future_timestamps:
                 timestamp_bars = bars_by_date.get(timestamp, ())
                 if not timestamp_bars:
-                    missing_truth = timestamp
-                    break
+                    if missing_truth is None:
+                        missing_truth = timestamp
+                    truth_prefix_open = False
+                    continue
                 invalid_bar = next(
                     (bar for bar in timestamp_bars if bar.error is not None),
                     None,
                 )
                 if invalid_bar is not None:
-                    invalid_truth = invalid_bar.error
-                    break
+                    if invalid_truth is None:
+                        invalid_truth = invalid_bar.error
+                    truth_prefix_open = False
+                    continue
                 suspended_bar = next(
                     (bar for bar in timestamp_bars if not bar.is_tradable),
                     None,
                 )
                 if suspended_bar is not None:
-                    suspended_truth = timestamp
-                    break
-                realized_rows.append(timestamp_bars[0].snapshot_row())
+                    if suspended_truth is None:
+                        suspended_truth = timestamp
+                    truth_prefix_open = False
+                    continue
+                if truth_prefix_open:
+                    realized_rows.append(timestamp_bars[0].snapshot_row())
 
             if invalid_truth is not None:
                 snapshots.append(

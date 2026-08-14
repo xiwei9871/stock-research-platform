@@ -822,6 +822,48 @@ def test_forecast_only_preserves_future_invalid_input_priority():
     assert "OHLC" in snapshot.reason
 
 
+@pytest.mark.parametrize("leading_gap", ["missing", "suspended"])
+def test_future_scan_keeps_invalid_priority_after_leading_gap(leading_gap):
+    frame = make_daily_frame(periods=7)
+    leading_gap_date = pd.Timestamp("2024-01-04")
+    invalid_date = pd.Timestamp("2024-01-05")
+    if leading_gap == "missing":
+        frame = frame[frame["trade_date"] != leading_gap_date]
+    else:
+        frame.loc[frame["trade_date"] == leading_gap_date, "trade_status"] = "0"
+    frame.loc[frame["trade_date"] == invalid_date, "high"] = 1.0
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(7),
+        input_window=3,
+        forecast_horizon=3,
+        forecast_only_origins=["2024-01-03"],
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "invalid_input"
+    assert "OHLC" in snapshot.reason
+    assert snapshot.realized == ()
+
+
+def test_future_scan_does_not_append_non_contiguous_truth_after_missing():
+    frame = make_daily_frame(periods=8)
+    frame = frame[frame["trade_date"] != pd.Timestamp("2024-01-05")]
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=4,
+        minimum_truth_horizon=1,
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "partial_truth"
+    assert [row["timestamp"] for row in snapshot.realized] == ["2024-01-04"]
+
+
 @pytest.mark.parametrize(
     "date_value",
     [date(2024, 1, 1), datetime(2024, 1, 1, 15, 30)],
