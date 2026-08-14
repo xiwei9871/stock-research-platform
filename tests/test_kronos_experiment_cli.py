@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import time
+import os
+import subprocess
+import sys
 import threading
+import time
 from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -538,6 +541,54 @@ def test_first_concurrent_prepare_cannot_bypass_output_lock(tmp_path, monkeypatc
     assert (tmp_path / "outputs" / "test-cli" / cli.EXPERIMENT_CONFIG_FILENAME).is_file()
 
 
+def test_process_death_releases_experiment_lock(tmp_path):
+    cli = load_cli_module()
+    if cli._LOCK_BACKEND == "exclusive":
+        pytest.skip("platform has no process-lifetime file-lock primitive")
+    output_dir = tmp_path / "outputs" / "process-lifecycle"
+    marker = tmp_path / "lock-acquired"
+    child_code = """
+import importlib.util
+import pathlib
+import sys
+import time
+
+module_path = pathlib.Path(sys.argv[1])
+output_dir = pathlib.Path(sys.argv[2])
+marker = pathlib.Path(sys.argv[3])
+spec = importlib.util.spec_from_file_location("run_kronos_experiment_child", module_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+with module._experiment_output_lock(output_dir):
+    marker.write_text("ready", encoding="utf-8")
+    time.sleep(30)
+"""
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            child_code,
+            str(SCRIPT_PATH),
+            str(output_dir),
+            str(marker),
+        ],
+        env={**os.environ, "PYTHONPATH": str(SCRIPT_PATH.parents[1] / "src")},
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert marker.exists(), "child did not acquire the experiment lock"
+        child.kill()
+        child.wait(timeout=5)
+        with cli._experiment_output_lock(output_dir):
+            pass
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait(timeout=5)
+
+
 def test_sidecar_write_failure_does_not_publish_resumeable_directory(
     tmp_path, monkeypatch
 ):
@@ -561,7 +612,7 @@ def test_sidecar_write_failure_does_not_publish_resumeable_directory(
     output_root = tmp_path / "outputs"
     assert not (output_root / "test-cli").exists()
     assert not list(output_root.glob(".test-cli.staging-*"))
-    assert not list(output_root.glob(".test-cli.kronos-cli.lock"))
+    assert (output_root / ".test-cli.kronos-cli.lock").is_file()
 
 
 def test_resume_rejects_universe_sidecar_asset_mismatch(tmp_path, monkeypatch):

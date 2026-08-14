@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import errno
 import json
 import os
 import shutil
@@ -25,6 +26,16 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+try:  # POSIX/Linux and macOS: released automatically when the process exits.
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - exercised on Windows only.
+    _fcntl = None
+
+try:  # Windows fallback: the CRT releases byte-range locks on process exit.
+    import msvcrt as _msvcrt
+except ImportError:  # pragma: no cover - exercised on POSIX only.
+    _msvcrt = None
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
@@ -71,6 +82,9 @@ OUTPUT_ROOT = REPO_ROOT / "outputs" / "research" / "kronos_rolling_eval"
 _STAGES = ("prepare", "predict", "report", "run")
 _CLI_LOCK_SUFFIX = ".kronos-cli.lock"
 _STAGING_PREFIX = ".staging-"
+_LOCK_BACKEND = "fcntl" if _fcntl is not None else (
+    "msvcrt" if _msvcrt is not None else "exclusive"
+)
 
 
 class _JsonArgumentParser(argparse.ArgumentParser):
@@ -256,31 +270,100 @@ def _prepare_new_experiment(
 
 @contextmanager
 def _experiment_output_lock(output_dir: Path):
-    """Acquire an O_EXCL lock covering first publication and all sidecar writes."""
+    """Acquire a process-lifetime lock for first publication and sidecar writes.
+
+    The lock path is deliberately persistent.  On POSIX, ``flock`` protects
+    the inode and the kernel releases it after SIGKILL, process crash, or power
+    loss; deleting the path is neither necessary nor safe.  Windows uses a
+    CRT byte-range lock with the same process-lifetime property.  The final
+    O_EXCL branch is only for platforms without either primitive and therefore
+    reports that stale recovery requires an operator to verify no run is live.
+    """
 
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     lock_path = output_dir.parent / f".{output_dir.name}{_CLI_LOCK_SUFFIX}"
+    if _fcntl is not None:
+        with lock_path.open("a+", encoding="utf-8") as handle:
+            try:
+                _fcntl.flock(handle.fileno(), _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno in (errno.EACCES, errno.EAGAIN):
+                    raise FileExistsError(
+                        f"experiment output is locked by another run: {output_dir}"
+                    ) from exc
+                raise
+            try:
+                _write_lock_metadata(handle, output_dir)
+                yield
+            finally:
+                _fcntl.flock(handle.fileno(), _fcntl.LOCK_UN)
+        return
+
+    if _msvcrt is not None:  # pragma: no cover - exercised on Windows only.
+        file_descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(file_descriptor, "r+b") as handle:
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            try:
+                _msvcrt.locking(handle.fileno(), _msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                raise FileExistsError(
+                    f"experiment output is locked by another run: {output_dir}"
+                ) from exc
+            try:
+                _write_windows_lock_metadata(handle, output_dir)
+                yield
+            finally:
+                handle.seek(0)
+                _msvcrt.locking(handle.fileno(), _msvcrt.LK_UNLCK, 1)
+        return
+
+    # This branch is intentionally conservative.  There is no reliable way to
+    # distinguish a stale O_EXCL file from a live owner on such a platform, so
+    # never delete a conflicting lock automatically.
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:
         file_descriptor = os.open(lock_path, flags, 0o600)
     except FileExistsError as exc:
         raise FileExistsError(
-            f"experiment output is locked by another run: {output_dir}"
+            "experiment output is locked by another run or has a stale lock "
+            f"on this platform without process-lifetime locking: {output_dir}; "
+            f"remove {lock_path} only after confirming no run is active"
         ) from exc
-
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
-            json.dump(
-                {"pid": os.getpid(), "output_dir": str(output_dir)},
-                handle,
-                sort_keys=True,
-            )
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+            _write_lock_metadata(handle, output_dir)
         yield
     finally:
         lock_path.unlink(missing_ok=True)
+
+
+def _write_lock_metadata(handle: Any, output_dir: Path) -> None:
+    handle.seek(0)
+    handle.truncate()
+    json.dump(
+        {"pid": os.getpid(), "output_dir": str(output_dir)},
+        handle,
+        sort_keys=True,
+    )
+    handle.write("\n")
+    handle.flush()
+    os.fsync(handle.fileno())
+
+
+def _write_windows_lock_metadata(handle: Any, output_dir: Path) -> None:
+    handle.seek(1)
+    handle.truncate()
+    payload = json.dumps(
+        {"pid": os.getpid(), "output_dir": str(output_dir)},
+        sort_keys=True,
+    ).encode("utf-8") + b"\n"
+    handle.write(payload)
+    handle.flush()
+    os.fsync(handle.fileno())
 
 
 def _new_context(spec: KronosExperimentSpec, output_dir: Path) -> dict[str, Any]:
