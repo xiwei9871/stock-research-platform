@@ -128,7 +128,7 @@ def run_experiment(
     _validate_output_target(output_dir)
 
     exists = output_dir.exists()
-    if exists and stage in {"prepare", "run"} and not resume:
+    if exists and not resume:
         raise FileExistsError(
             f"experiment directory already exists: {output_dir}; "
             "use --resume only with the same config fingerprint"

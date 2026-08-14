@@ -208,7 +208,8 @@ def test_changed_config_is_parameter_substitution_not_a_new_code_path(
     assert config.sample_count == 11
 
 
-def test_existing_directory_requires_resume(tmp_path, monkeypatch):
+@pytest.mark.parametrize("stage", ["prepare", "run"])
+def test_existing_directory_requires_resume(tmp_path, monkeypatch, stage):
     cli = load_cli_module()
     config_path = write_config(tmp_path)
     monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
@@ -216,8 +217,20 @@ def test_existing_directory_requires_resume(tmp_path, monkeypatch):
     install_prepare_seams(cli, monkeypatch, calls=calls)
 
     cli.run_experiment(config_path, stage="prepare")
+    output_dir = tmp_path / "outputs" / "test-cli"
+    before = {
+        path.relative_to(output_dir): path.read_bytes()
+        for path in output_dir.rglob("*")
+        if path.is_file()
+    }
     with pytest.raises(FileExistsError, match="use --resume"):
-        cli.run_experiment(config_path, stage="prepare")
+        cli.run_experiment(config_path, stage=stage)
+    after = {
+        path.relative_to(output_dir): path.read_bytes()
+        for path in output_dir.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
 
 
 def test_resume_fingerprint_mismatch_fails_before_prepare(tmp_path, monkeypatch):
@@ -267,9 +280,143 @@ def test_prediction_requires_single_model_and_never_falls_back(tmp_path, monkeyp
         ),
     )
 
-    summary = cli.run_experiment(config_path, stage="predict")
+    summary = cli.run_experiment(config_path, stage="predict", resume=True)
     assert summary["status"] == "ok"
     assert calls["assert_models"] == ["small"]
+
+
+@pytest.mark.parametrize("stage", ["predict", "report"])
+def test_existing_write_stage_requires_resume_and_does_not_touch_files(
+    tmp_path, monkeypatch, stage
+):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+
+    output_dir = tmp_path / "outputs" / "test-cli"
+    sentinel = output_dir / "sentinel.txt"
+    sentinel.write_text("before", encoding="utf-8")
+    before = {
+        path.relative_to(output_dir): path.read_bytes()
+        for path in output_dir.rglob("*")
+        if path.is_file()
+    }
+    monkeypatch.setenv("KRONOS_INTERNAL_TOKEN", "test-token")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            calls["client_called"] = True
+
+        def assert_model(self, model):
+            calls["assert_model_called"] = True
+
+        def close(self):
+            calls["client_closed"] = True
+
+    monkeypatch.setattr(cli, "KronosClient", FakeClient)
+    monkeypatch.setattr(
+        cli,
+        "run_model",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_model must not run without --resume")
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "build_report",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("build_report must not run without --resume")
+        ),
+    )
+
+    with pytest.raises(FileExistsError, match="--resume"):
+        cli.run_experiment(config_path, stage=stage)
+
+    assert sentinel.read_text(encoding="utf-8") == "before"
+    after = {
+        path.relative_to(output_dir): path.read_bytes()
+        for path in output_dir.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    assert "client_called" not in calls
+    assert "assert_model_called" not in calls
+
+
+@pytest.mark.parametrize("stage", ["predict", "report"])
+def test_existing_write_stage_resume_matching_fingerprint_succeeds(
+    tmp_path, monkeypatch, stage
+):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+    output_dir = tmp_path / "outputs" / "test-cli"
+    monkeypatch.setenv("KRONOS_INTERNAL_TOKEN", "test-token")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def assert_model(self, model):
+            calls.setdefault("assert_models", []).append(model)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(cli, "KronosClient", FakeClient)
+    monkeypatch.setattr(
+        cli,
+        "run_model",
+        lambda config, *, model, output_dir, client: SimpleNamespace(
+            status_counts={"success": 1},
+            attempted_count=1,
+            cache_hit_count=0,
+            skipped_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "build_report",
+        lambda *, output_dir: {"paths": {"report": str(output_dir / "report.md")}},
+    )
+    monkeypatch.setattr(
+        cli,
+        "write_latest_forecast",
+        lambda output_dir, **kwargs: output_dir / cli.LATEST_FORECAST_FILENAME,
+    )
+
+    summary = cli.run_experiment(config_path, stage=stage, resume=True)
+
+    assert summary["status"] == "ok"
+    if stage == "predict":
+        assert calls["assert_models"] == ["small"]
+    else:
+        assert summary["stage"] == "report"
+
+
+@pytest.mark.parametrize("stage", ["predict", "report"])
+def test_existing_write_stage_resume_fingerprint_mismatch_fails(
+    tmp_path, monkeypatch, stage
+):
+    cli = load_cli_module()
+    config_path = write_config(tmp_path)
+    monkeypatch.setattr(cli, "OUTPUT_ROOT", tmp_path / "outputs")
+    calls: dict[str, object] = {}
+    install_prepare_seams(cli, monkeypatch, calls=calls)
+    cli.run_experiment(config_path, stage="prepare")
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    payload["model"]["seed"] = 8
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="fingerprint mismatch"):
+        cli.run_experiment(config_path, stage=stage, resume=True)
 
 
 def test_cli_validation_errors_emit_exactly_one_json_line(tmp_path, capsys):
