@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -147,6 +148,12 @@ def test_explicit_mode_rejects_duplicate_normalized_ids(fake_db):
 
 
 def test_latest_market_date_is_maximum(fake_db):
+    assert universe.resolve_latest_market_date(adjust_type="qfq", service="test") == "2025-01-08"
+
+
+@pytest.mark.parametrize("db_date", [date(2025, 1, 8), datetime(2025, 1, 8, 15, 30)])
+def test_latest_market_date_accepts_db_date_objects(fake_db, db_date):
+    fake_db.rows["latest"] = [{"trade_date": db_date}]
     assert universe.resolve_latest_market_date(adjust_type="qfq", service="test") == "2025-01-08"
 
 

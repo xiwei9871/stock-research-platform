@@ -10,7 +10,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,8 +68,12 @@ def _is_finite_number(value: Any) -> bool:
 
 
 def _parse_iso_date(value: Any, *, field: str) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
     if not isinstance(value, str):
-        raise ValueError(f"{field} must be an ISO date string")
+        raise ValueError(f"{field} must be an ISO date or date-like value")
     try:
         parsed = date.fromisoformat(value)
     except ValueError as exc:
