@@ -4851,7 +4851,22 @@ def _render_report(
         )
         for row in comparisons
     )
-    lines.extend(["", "The base-minus-small paired delta is reported above with block-bootstrap confidence intervals.", ""])
+    comparison_names = [
+        str(row["comparison"])
+        for row in comparisons
+        if row.get("comparison")
+    ]
+    if comparison_names:
+        comparison_note = (
+            "Primary-horizon paired deltas are reported above for "
+            f"{', '.join(f'`{name}`' for name in comparison_names)} "
+            "with block-bootstrap confidence intervals."
+        )
+    else:
+        comparison_note = (
+            "Primary-horizon paired deltas use block-bootstrap confidence intervals."
+        )
+    lines.extend(["", comparison_note, ""])
     lines.extend(["## Latency and model metadata", ""])
     lines.append(f"Latency: `{_canonical_json(latency)}`")
     lines.append("")

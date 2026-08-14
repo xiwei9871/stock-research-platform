@@ -2150,10 +2150,36 @@ def test_report_combines_models_metrics_baselines_coverage_latency_and_fixed_con
     report = (output_dir / "report.md").read_text(encoding="utf-8")
     assert "persistence" in report
     assert "drift" in report
-    assert "base-minus-small" in report
+    assert "base_minus_small" in report
+    assert "Primary-horizon paired deltas" in report
+    assert "block-bootstrap confidence intervals" in report
     assert "coverage" in report.lower()
     assert "latency" in report.lower()
     assert "not_proven" in report
+
+
+def test_single_model_report_describes_actual_paired_deltas(tmp_path):
+    config = replace(make_config(), models=("small",))
+    snapshots = [
+        make_snapshot("CN:SH:600418"),
+        make_snapshot("CN:SZ:000001", close_offset=10.0),
+    ]
+    prepare_experiment(
+        config,
+        output_dir=tmp_path,
+        snapshot_loader=make_loader(snapshots),
+    )
+    run_model(config, model="small", output_dir=tmp_path, client=FakeClient())
+
+    build_report(output_dir=tmp_path)
+
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "base-minus-small" not in report
+    assert "small_minus_persistence" in report
+    assert "small_minus_drift" in report
+    assert "block-bootstrap confidence intervals" in report
+    assert "Primary-horizon paired deltas" in report
+    assert "Primary horizon coverage" in report
 
 
 def test_report_outputs_record_authenticated_artifact_generation(
