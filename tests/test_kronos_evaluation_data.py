@@ -616,6 +616,8 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
         *,
         origin_dates,
         asset_ids,
+        minimum_truth_horizon,
+        forecast_only_origins,
     ):
         calls.append(
             (
@@ -626,6 +628,8 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
                 forecast_horizon,
                 origin_dates,
                 asset_ids,
+                minimum_truth_horizon,
+                forecast_only_origins,
             )
         )
         return ["prepared"]
@@ -657,7 +661,14 @@ def test_prepare_rolling_snapshots_loads_and_passes_global_calendar(monkeypatch)
     assert calls[2][0] == "build"
     assert calls[2][1] is frame
     assert calls[2][2] == global_calendar
-    assert calls[2][3:] == (3, 2, ["2024-01-03"], ("sh.600418",))
+    assert calls[2][3:] == (
+        3,
+        2,
+        ["2024-01-03"],
+        ("sh.600418",),
+        None,
+        (),
+    )
 
 
 def test_prepare_rolling_snapshots_surfaces_missing_requested_asset(monkeypatch):
@@ -689,6 +700,44 @@ def test_prepare_rolling_snapshots_surfaces_missing_requested_asset(monkeypatch)
     assert "no daily bars" in snapshots[0].reason
 
 
+def test_prepare_rolling_snapshots_forwards_partial_truth_options(monkeypatch):
+    calls = {}
+
+    monkeypatch.setattr(
+        data,
+        "load_daily_bars",
+        lambda asset_ids, max_date, adjust_type, service: make_daily_frame(periods=8),
+    )
+    monkeypatch.setattr(
+        data,
+        "load_global_trade_dates",
+        lambda adjust_type, start_date, max_date, service: make_trade_dates(8),
+    )
+
+    def fake_build(*args, **kwargs):
+        calls["kwargs"] = kwargs
+        return ["prepared"]
+
+    monkeypatch.setattr(data, "build_rolling_snapshots", fake_build)
+
+    result = data.prepare_rolling_snapshots(
+        ("sh.600418",),
+        "2024-01-01",
+        "2024-01-31",
+        "qfq",
+        "research",
+        3,
+        2,
+        origin_dates=["2024-01-03"],
+        minimum_truth_horizon=1,
+        forecast_only_origins=["2024-01-03"],
+    )
+
+    assert result == ["prepared"]
+    assert calls["kwargs"]["minimum_truth_horizon"] == 1
+    assert calls["kwargs"]["forecast_only_origins"] == ["2024-01-03"]
+
+
 def test_source_metadata_is_json_ready_and_preserves_query_timestamp():
     frame = make_daily_frame(periods=3)
 
@@ -707,6 +756,133 @@ def test_source_metadata_is_json_ready_and_preserves_query_timestamp():
         "query_timestamp": "2026-08-06T05:00:00+00:00",
     }
     assert json.loads(json.dumps(metadata)) == metadata
+
+
+def test_partial_truth_uses_configured_minimum_truth_horizon():
+    frame = make_daily_frame(periods=8)
+    frame = frame[frame["trade_date"] != pd.Timestamp("2024-01-06")]
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=3,
+        minimum_truth_horizon=1,
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "partial_truth"
+    assert [row["timestamp"] for row in snapshot.realized] == [
+        "2024-01-04",
+        "2024-01-05",
+    ]
+
+
+def test_forecast_only_and_pending_calendar_are_distinguished():
+    frame = make_daily_frame(periods=8)
+    frame = frame[frame["trade_date"] <= pd.Timestamp("2024-01-03")]
+
+    snapshots = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=3,
+        forecast_only_origins=[pd.Timestamp("2024-01-03"), "2024-01-07"],
+        origin_dates=[pd.Timestamp("2024-01-03"), "2024-01-07"],
+    )
+
+    assert [snapshot.status for snapshot in snapshots] == [
+        "forecast_only",
+        "pending_calendar",
+    ]
+    assert snapshots[0].realized == ()
+    assert snapshots[1].future_timestamps == ("2024-01-08",)
+
+
+def test_default_truth_horizon_keeps_insufficient_truth_semantics():
+    frame = make_daily_frame(periods=8)
+    frame = frame[frame["trade_date"] != pd.Timestamp("2024-01-06")]
+
+    snapshot = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=3,
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert snapshot.status == "insufficient_truth"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"minimum_truth_horizon": 0},
+        {"minimum_truth_horizon": 4},
+        {"minimum_truth_horizon": True},
+        {"forecast_only_origins": ["2024-01-04"]},
+    ],
+)
+def test_new_snapshot_parameters_are_validated(kwargs):
+    with pytest.raises(ValueError):
+        data.build_rolling_snapshots(
+            make_daily_frame(periods=8),
+            trade_dates=make_trade_dates(8),
+            input_window=3,
+            forecast_horizon=3,
+            origin_dates=["2024-01-03"],
+            **kwargs,
+        )
+
+
+def test_forecast_only_cannot_override_invalid_input_or_insufficient_input():
+    frame = make_daily_frame(periods=8)
+    frame.loc[frame["trade_date"] == pd.Timestamp("2024-01-03"), "close"] = float("nan")
+
+    invalid = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=2,
+        forecast_only_origins=["2024-01-03"],
+        origin_dates=["2024-01-03"],
+    )[0]
+    insufficient = data.build_rolling_snapshots(
+        frame.iloc[:2],
+        trade_dates=make_trade_dates(8),
+        input_window=3,
+        forecast_horizon=2,
+        forecast_only_origins=["2024-01-03"],
+        origin_dates=["2024-01-03"],
+    )[0]
+
+    assert invalid.status == "invalid_input"
+    assert insufficient.status == "insufficient_input"
+
+
+def test_source_metadata_includes_calendar_and_snapshot_status_counts():
+    frame = make_daily_frame(periods=5)
+    snapshots = data.build_rolling_snapshots(
+        frame,
+        trade_dates=make_trade_dates(5),
+        input_window=2,
+        forecast_horizon=2,
+        origin_dates=["2024-01-02"],
+    )
+
+    metadata = data.build_source_metadata(
+        frame,
+        adjust_type="qfq",
+        trade_dates=make_trade_dates(5),
+        minimum_truth_horizon=1,
+        snapshots=snapshots,
+        query_timestamp="2026-08-06T05:00:00+00:00",
+    )
+
+    assert metadata["calendar_min_date"] == "2024-01-01"
+    assert metadata["calendar_max_date"] == "2024-01-05"
+    assert metadata["minimum_truth_horizon"] == 1
+    assert metadata["status_counts"] == {"ready": 1}
 
 
 def test_snapshot_json_payload_thaws_frozen_values_without_mutating_snapshot():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_right
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
@@ -41,7 +42,10 @@ REQUIRED_FRAME_COLUMNS = (
     "trade_status",
 )
 SNAPSHOT_STATUSES = frozenset(
-    {"ready", "insufficient_input", "insufficient_truth", "invalid_input"}
+    {
+        "ready", "partial_truth", "forecast_only", "pending_calendar",
+        "insufficient_input", "insufficient_truth", "invalid_input",
+    }
 )
 _ZERO_FINGERPRINT = "0" * 64
 
@@ -148,6 +152,8 @@ def prepare_rolling_snapshots(
     forecast_horizon: int,
     *,
     origin_dates: Iterable[str],
+    minimum_truth_horizon: int | None = None,
+    forecast_only_origins: Iterable[str] = (),
 ) -> list[RollingSnapshot]:
     """Load bars and the full-market calendar before building snapshots."""
 
@@ -165,6 +171,8 @@ def prepare_rolling_snapshots(
         forecast_horizon,
         origin_dates=origin_dates,
         asset_ids=asset_ids,
+        minimum_truth_horizon=minimum_truth_horizon,
+        forecast_only_origins=forecast_only_origins,
     )
 
 
@@ -173,6 +181,9 @@ def build_source_metadata(
     *,
     adjust_type: str,
     query_timestamp: str | datetime | pd.Timestamp | None = None,
+    trade_dates: Iterable[str] | None = None,
+    minimum_truth_horizon: int | None = None,
+    snapshots: Iterable[RollingSnapshot] | None = None,
 ) -> dict[str, Any]:
     """Return JSON-ready provenance fields for an experiment manifest."""
 
@@ -199,6 +210,21 @@ def build_source_metadata(
         "max_date": max(dates) if dates else None,
         "query_timestamp": normalized_query_timestamp,
     }
+    if trade_dates is not None:
+        calendar = _normalize_date_sequence("trade_dates", trade_dates)
+        metadata.update(
+            {
+                "calendar_min_date": calendar[0] if calendar else None,
+                "calendar_max_date": calendar[-1] if calendar else None,
+            }
+        )
+    if minimum_truth_horizon is not None:
+        _require_positive_int("minimum_truth_horizon", minimum_truth_horizon)
+        metadata["minimum_truth_horizon"] = minimum_truth_horizon
+    if snapshots is not None:
+        metadata["status_counts"] = dict(
+            sorted(Counter(snapshot.status for snapshot in snapshots).items())
+        )
     return thaw_json_value(metadata)
 
 
@@ -210,6 +236,8 @@ def build_rolling_snapshots(
     *,
     origin_dates: Iterable[str],
     asset_ids: Sequence[str] | None = None,
+    minimum_truth_horizon: int | None = None,
+    forecast_only_origins: Iterable[str] = (),
 ) -> list[RollingSnapshot]:
     """Build immutable, point-in-time rolling snapshots without future leakage.
 
@@ -224,6 +252,15 @@ def build_rolling_snapshots(
 
     _require_positive_int("input_window", input_window)
     _require_positive_int("forecast_horizon", forecast_horizon)
+    if minimum_truth_horizon is None:
+        normalized_minimum_truth_horizon = forecast_horizon
+    else:
+        _require_positive_int("minimum_truth_horizon", minimum_truth_horizon)
+        if minimum_truth_horizon > forecast_horizon:
+            raise ValueError(
+                "minimum_truth_horizon must not exceed forecast_horizon"
+            )
+        normalized_minimum_truth_horizon = minimum_truth_horizon
     calendar = _normalize_date_sequence("trade_dates", trade_dates)
     origins = _normalize_date_sequence("origin_dates", origin_dates)
     if not origins:
@@ -234,6 +271,18 @@ def build_rolling_snapshots(
             "origin_dates must be contained in trade_dates: "
             + ", ".join(missing_origins)
         )
+    normalized_forecast_only_origins = _normalize_date_sequence(
+        "forecast_only_origins", forecast_only_origins
+    )
+    invalid_forecast_only_origins = sorted(
+        set(normalized_forecast_only_origins) - set(origins)
+    )
+    if invalid_forecast_only_origins:
+        raise ValueError(
+            "forecast_only_origins must be contained in origin_dates: "
+            + ", ".join(invalid_forecast_only_origins)
+        )
+    forecast_only_origin_set = set(normalized_forecast_only_origins)
     _require_frame_columns(frame, REQUIRED_FRAME_COLUMNS)
     if frame.empty:
         bars_by_asset: dict[str, tuple[_Bar, ...]] = {}
@@ -403,6 +452,27 @@ def build_rolling_snapshots(
                         )
                     )
                 )
+                if suspended_truth is not None:
+                    status = "insufficient_truth"
+                elif (
+                    origin in forecast_only_origin_set
+                    and len(future_timestamps) < forecast_horizon
+                ):
+                    status = "pending_calendar"
+                elif (
+                    origin in forecast_only_origin_set
+                    and len(future_timestamps) == forecast_horizon
+                    and not realized_rows
+                    and missing_truth is not None
+                ):
+                    status = "forecast_only"
+                elif (
+                    len(future_timestamps) == forecast_horizon
+                    and len(realized_rows) >= normalized_minimum_truth_horizon
+                ):
+                    status = "partial_truth"
+                else:
+                    status = "insufficient_truth"
                 snapshots.append(
                     _make_snapshot(
                         asset_id=asset_id,
@@ -410,7 +480,7 @@ def build_rolling_snapshots(
                         history=history_rows,
                         future_timestamps=future_timestamps,
                         realized=tuple(realized_rows),
-                        status="insufficient_truth",
+                        status=status,
                         reason=reason,
                     )
                 )
