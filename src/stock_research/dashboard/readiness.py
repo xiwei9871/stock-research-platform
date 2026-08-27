@@ -616,7 +616,7 @@ def _manifest_checks(
             "Platform summary available" if latest_market_date and topn_preview else UNAVAILABLE_WARNINGS["platform_summary"],
         )
     ]
-    review = by_module.get("review_queue")
+    review = by_module.get("review_queue") or by_module.get("review_queue_strategy_manifest")
     checks.append(
         _check(
             "review_queue",
