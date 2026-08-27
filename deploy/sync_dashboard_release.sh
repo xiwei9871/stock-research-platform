@@ -49,6 +49,9 @@ DASHBOARD_LOGIN_USERNAME="${dashboard_login_username_override:-${DASHBOARD_LOGIN
 DASHBOARD_LOGIN_PASSWORD="${dashboard_login_password_override:-${DASHBOARD_LOGIN_PASSWORD:-}}"
 REMOTE_CONTAINER_RELEASE_ROOT="${container_root_override:-${REMOTE_CONTAINER_RELEASE_ROOT:-/app}}"
 STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$ROOT/outputs/research}}"
+DOCLING_ARTIFACT_BATCH_ID="data_to_brief_docling_90_stock_full_cold_parse_batch_v1"
+DOCLING_ARTIFACT_ROOT="$ROOT/outputs/research/$DOCLING_ARTIFACT_BATCH_ID"
+DOCLING_ARTIFACT_DIRS=(reports_html reports_md reports_pdf evidence)
 LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http://127.0.0.1:8765/api/platform/readiness}}"
 DASHBOARD_REMOTE_ENV_FILE="${remote_env_file_override:-${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}}"
 DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVICE_FILE:-.pg_service.conf}}"
@@ -243,6 +246,12 @@ if [[ ! -d "$strategy_output" ]]; then
   echo "Missing strategy release artifacts: $strategy_output" >&2
   exit 2
 fi
+for artifact_dir in "${DOCLING_ARTIFACT_DIRS[@]}"; do
+  if [[ ! -d "$DOCLING_ARTIFACT_ROOT/$artifact_dir" ]]; then
+    echo "Missing Docling release artifacts: $DOCLING_ARTIFACT_ROOT/$artifact_dir" >&2
+    exit 2
+  fi
+done
 "$STOCK_RESEARCH_PYTHON" "$ROOT/deploy/validate_strategy_release.py" \
   --output-dir "$strategy_output" \
   --trade-date "$EXPECTED_TRADE_DATE"
@@ -430,7 +439,7 @@ echo "Preparing remote release directories"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
+  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE} ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_html ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_md ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_pdf ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/evidence"
 
 echo "Syncing backend source"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
@@ -454,6 +463,12 @@ rsync -az --delete -e "$rsync_rsh" -- "$ROOT/dashboard/dist/" "$remote:$REMOTE_D
 echo "Syncing strategy artifacts for ${EXPECTED_TRADE_DATE}"
 rsync -az --delete -e "$rsync_rsh" -- "$strategy_output/" \
   "$remote:$REMOTE_DIR/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}/"
+
+echo "Syncing Docling review artifacts"
+for artifact_dir in "${DOCLING_ARTIFACT_DIRS[@]}"; do
+  rsync -az --delete -e "$rsync_rsh" -- "$DOCLING_ARTIFACT_ROOT/$artifact_dir/" \
+    "$remote:$REMOTE_DIR/outputs/research/$DOCLING_ARTIFACT_BATCH_ID/$artifact_dir/"
+done
 
 echo "Restarting Docker Compose API and dashboard services"
 ssh "${ssh_opts[@]}" -- "$remote" \
