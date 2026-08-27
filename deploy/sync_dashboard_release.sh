@@ -15,6 +15,8 @@ dashboard_login_username_override="${DASHBOARD_LOGIN_USERNAME:-}"
 dashboard_login_password_override="${DASHBOARD_LOGIN_PASSWORD:-}"
 container_root_override="${REMOTE_CONTAINER_RELEASE_ROOT:-}"
 strategy_output_root_override="${STRATEGY_OUTPUT_ROOT:-}"
+docling_artifact_root_override="${STOCK_RESEARCH_DOCLING_ARTIFACT_ROOT:-}"
+docling_review_output_root_override="${STOCK_RESEARCH_DOCLING_REVIEW_OUTPUT_ROOT:-}"
 local_readiness_url_override="${LOCAL_READINESS_URL:-}"
 remote_env_file_override="${DASHBOARD_REMOTE_ENV_FILE:-}"
 remote_pgservice_file_override="${DASHBOARD_PGSERVICE_FILE:-}"
@@ -50,8 +52,10 @@ DASHBOARD_LOGIN_PASSWORD="${dashboard_login_password_override:-${DASHBOARD_LOGIN
 REMOTE_CONTAINER_RELEASE_ROOT="${container_root_override:-${REMOTE_CONTAINER_RELEASE_ROOT:-/app}}"
 STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$ROOT/outputs/research}}"
 DOCLING_ARTIFACT_BATCH_ID="data_to_brief_docling_90_stock_full_cold_parse_batch_v1"
-DOCLING_ARTIFACT_ROOT="$ROOT/outputs/research/$DOCLING_ARTIFACT_BATCH_ID"
+DOCLING_ARTIFACT_ROOT="${docling_artifact_root_override:-${STOCK_RESEARCH_DOCLING_ARTIFACT_ROOT:-$ROOT/outputs/research/$DOCLING_ARTIFACT_BATCH_ID}}"
 DOCLING_ARTIFACT_DIRS=(reports_html reports_md reports_pdf evidence)
+DOCLING_REVIEW_OUTPUT_DIR_NAME="data_to_brief_docling_90_stock_review_and_dashboard_integration_v1"
+DOCLING_REVIEW_OUTPUT_ROOT="${docling_review_output_root_override:-${STOCK_RESEARCH_DOCLING_REVIEW_OUTPUT_ROOT:-$ROOT/outputs/research/$DOCLING_REVIEW_OUTPUT_DIR_NAME}}"
 LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http://127.0.0.1:8765/api/platform/readiness}}"
 DASHBOARD_REMOTE_ENV_FILE="${remote_env_file_override:-${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}}"
 DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVICE_FILE:-.pg_service.conf}}"
@@ -252,6 +256,10 @@ for artifact_dir in "${DOCLING_ARTIFACT_DIRS[@]}"; do
     exit 2
   fi
 done
+if [[ ! -f "$DOCLING_REVIEW_OUTPUT_ROOT/dashboard_payload.json" ]]; then
+  echo "Missing Docling dashboard payload: $DOCLING_REVIEW_OUTPUT_ROOT/dashboard_payload.json" >&2
+  exit 2
+fi
 "$STOCK_RESEARCH_PYTHON" "$ROOT/deploy/validate_strategy_release.py" \
   --output-dir "$strategy_output" \
   --trade-date "$EXPECTED_TRADE_DATE"
@@ -439,7 +447,7 @@ echo "Preparing remote release directories"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE} ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_html ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_md ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_pdf ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/evidence"
+  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE} ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_html ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_md ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/reports_pdf ${remote_dir_q}/outputs/research/${DOCLING_ARTIFACT_BATCH_ID}/evidence ${remote_dir_q}/outputs/research/${DOCLING_REVIEW_OUTPUT_DIR_NAME}"
 
 echo "Syncing backend source"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
@@ -469,6 +477,8 @@ for artifact_dir in "${DOCLING_ARTIFACT_DIRS[@]}"; do
   rsync -az --delete -e "$rsync_rsh" -- "$DOCLING_ARTIFACT_ROOT/$artifact_dir/" \
     "$remote:$REMOTE_DIR/outputs/research/$DOCLING_ARTIFACT_BATCH_ID/$artifact_dir/"
 done
+rsync -az --delete -e "$rsync_rsh" -- "$DOCLING_REVIEW_OUTPUT_ROOT/" \
+  "$remote:$REMOTE_DIR/outputs/research/$DOCLING_REVIEW_OUTPUT_DIR_NAME/"
 
 echo "Restarting Docker Compose API and dashboard services"
 ssh "${ssh_opts[@]}" -- "$remote" \
