@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,10 @@ from typing import Any
 import pandas as pd
 
 
-PROJECT_ROOT = Path("/Users/xiwei/stock_research")
+PROJECT_ROOT = Path(
+    os.environ.get("STOCK_RESEARCH_RELEASE_ROOT")
+    or Path(__file__).resolve().parents[2]
+).expanduser()
 SOURCE_DIR = PROJECT_ROOT / "outputs/research/data_to_brief_docling_90_stock_full_cold_parse_batch_v1"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research/data_to_brief_docling_90_stock_review_and_dashboard_integration_v1"
 BATCH_ID = "data_to_brief_docling_90_stock_full_cold_parse_batch_v1"
