@@ -2093,9 +2093,19 @@ def test_default_watchlist_action_persists_diagnostics_snapshot(monkeypatch, tmp
         watchlist_workflow,
         "build_watchlist_diagnostics_snapshot",
         lambda **kwargs: {
+            "full": pd.DataFrame(
+                [
+                    {
+                        "trade_date": kwargs["trade_date"],
+                        "asset_id": "B",
+                        "watch_group": "risk_watch",
+                        "score_total": 12.5,
+                    }
+                ]
+            ),
             "risk": pd.DataFrame(
-                [{"watchlist_id": "diagnostics", "trade_date": kwargs["trade_date"], "asset_id": "B"}]
-            )
+                [{"trade_date": kwargs["trade_date"], "asset_id": "B", "watch_group": "risk_watch"}]
+            ),
         },
     )
     monkeypatch.setattr(
@@ -2110,6 +2120,7 @@ def test_default_watchlist_action_persists_diagnostics_snapshot(monkeypatch, tmp
     assert result.metrics == {"default_rows": 1, "diagnostics_rows": 1}
     assert len(stored) == 1
     assert stored[0]["watchlist_id"].tolist() == ["diagnostics"]
+    assert stored[0]["primary_signal"].tolist() == ["risk_watch"]
 
 
 def test_default_reports_action_generates_daily_research_reports_before_manifest_refresh(monkeypatch, tmp_path):

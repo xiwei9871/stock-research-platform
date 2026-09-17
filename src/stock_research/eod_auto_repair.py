@@ -1614,7 +1614,7 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
     from stock_research.watchlist.workflow import (
         build_watchlist_diagnostics_snapshot,
         build_watchlist_snapshot,
-        store_watchlist_daily_signals,
+        store_watchlist_diagnostics_signals,
     )
 
     def lhb_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
@@ -1756,13 +1756,10 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
             watchlist_id = str(kwargs["watchlist_id"])
             if watchlist_id == "diagnostics":
                 diagnostics = build_watchlist_diagnostics_snapshot(trade_date=kwargs["trade_date"])
-                frames = [frame for frame in diagnostics.values() if not frame.empty]
-                if not frames:
+                frame = diagnostics.get("full")
+                if frame is None or frame.empty:
                     return {"row_count": 0}
-                import pandas as pd
-
-                frame = pd.concat(frames, ignore_index=True)
-                return {"row_count": int(store_watchlist_daily_signals(frame))}
+                return {"row_count": int(store_watchlist_diagnostics_signals(frame))}
             frame = build_watchlist_snapshot(trade_date=kwargs["trade_date"], watchlist_id=watchlist_id)
             return {"row_count": int(len(frame))}
 

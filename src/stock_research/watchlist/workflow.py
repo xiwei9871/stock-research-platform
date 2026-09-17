@@ -196,6 +196,103 @@ def _fill_diagnostics_identity(frame: pd.DataFrame, asset_identity: pd.DataFrame
     return result
 
 
+def store_watchlist_diagnostics_signals(diagnostics: pd.DataFrame) -> int:
+    if diagnostics.empty:
+        return 0
+
+    rows: list[dict[str, object]] = []
+    for record in diagnostics.to_dict("records"):
+        watch_group = str(record.get("watch_group") or "candidate")
+        risk_note = str(record.get("risk_note") or "").strip()
+        rows.append(
+            {
+                "watchlist_id": "diagnostics",
+                "trade_date": record.get("trade_date"),
+                "asset_id": record.get("asset_id"),
+                "stock_code": record.get("ts_code") or record.get("stock_code"),
+                "stock_name": record.get("stock_name"),
+                "priority": _diagnostics_priority(record),
+                "signal_score": record.get("score_total") or 0.0,
+                "primary_signal": watch_group,
+                "signal_tags": [watch_group],
+                "risk_tags": [risk_note] if risk_note else [],
+                "must_watch": bool(watch_group in {"risk_watch", "opportunity_watch"} or record.get("opportunity_flag")),
+                "reason_json": _json_safe_diagnostics_reason(record),
+                "output_version": record.get("diagnostics_rule_version") or "watchlist_diagnostics",
+            }
+        )
+    return store_watchlist_daily_signals(pd.DataFrame(rows))
+
+
+def _diagnostics_priority(record: dict[str, object]) -> int:
+    for key in ("watch_priority", "score_rank"):
+        value = record.get(key)
+        try:
+            if pd.isna(value):
+                continue
+        except Exception:
+            pass
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return 999
+
+
+def _json_safe_diagnostics_reason(record: dict[str, object]) -> dict[str, object]:
+    keys = [
+        "score_rank",
+        "score_total",
+        "watch_group",
+        "watch_reason",
+        "diagnostic_reason",
+        "risk_note",
+        "opportunity_note",
+        "exit_signal",
+        "exit_reason",
+        "lhb_shortline_watch_group",
+        "lhb_shortline_watch_reason",
+        "event_structure",
+        "failure_flag",
+        "case_event_type",
+        "industry_code",
+        "industry_name",
+        "market_regime",
+        "market_risk_level",
+        "entry_allowed",
+        "diagnostics_rule_version",
+    ]
+    return {key: _json_safe_scalar(record.get(key)) for key in keys if not _is_json_missing(record.get(key))}
+
+
+def _json_safe_scalar(value: object) -> object:
+    if _is_json_missing(value):
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_safe_scalar(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_scalar(item) for item in value]
+    if isinstance(value, (int, float, bool, str)):
+        return value
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _is_json_missing(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (list, tuple, dict)):
+        return False
+    try:
+        return bool(pd.isna(value))
+    except Exception:
+        return False
+
+
 def build_watchlist_snapshot(
     *,
     trade_date: str,
