@@ -23,6 +23,21 @@ DASHBOARD_AUTH="${DASHBOARD_AUTH:-}"
 LOG_DIR="${ARTIFACT_SYNC_LOG_DIR:-$ROOT/logs}"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/dashboard_artifact_sync.log"
+LOCK_DIR="${ARTIFACT_SYNC_LOCK_DIR:-$LOG_DIR/dashboard_artifact_sync.lock.d}"
+
+lock_acquired=0
+for _ in $(seq 1 360); do
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    lock_acquired=1
+    break
+  fi
+  sleep 5
+done
+if [[ "$lock_acquired" -ne 1 ]]; then
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "artifact-sync FAIL: lock wait timed out" >>"$LOG_FILE"
+  exit 1
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" | tee -a "$LOG_FILE"; }
 
