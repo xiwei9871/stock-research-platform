@@ -234,13 +234,23 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
       2>/dev/null || true
   )"
 fi
+if [[ -z "$EXPECTED_TRADE_DATE" && -z "$trade_date_override" ]]; then
+  EXPECTED_TRADE_DATE="$(
+    ls -1 "${STRATEGY_OUTPUT_ROOT%/}/strategy_daily_eod" 2>/dev/null \
+      | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
+      | sort | tail -n 1 || true
+  )"
+  if [[ -n "$EXPECTED_TRADE_DATE" ]]; then
+    echo "Readiness-derived trade date unavailable; falling back to latest on-disk strategy artifacts: ${EXPECTED_TRADE_DATE}" >&2
+  fi
+fi
 if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
   || ! valid_iso_date "$EXPECTED_TRADE_DATE"; then
   if [[ -n "$trade_date_override" ]]; then
     echo "Invalid EXPECTED_TRADE_DATE: expected a real YYYY-MM-DD calendar date" >&2
     exit 2
   fi
-  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or the current release platform loader" >&2
+  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, the current release platform loader, or on-disk strategy artifacts" >&2
   exit 2
 fi
 echo "Resolved EXPECTED_TRADE_DATE=${EXPECTED_TRADE_DATE}"
@@ -468,9 +478,19 @@ rsync -az -e "$rsync_rsh" -- \
 echo "Syncing canonical frontend build"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
 
-echo "Syncing strategy artifacts for ${EXPECTED_TRADE_DATE}"
-rsync -az --delete -e "$rsync_rsh" -- "$strategy_output/" \
-  "$remote:$REMOTE_DIR/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}/"
+echo "Syncing all strategy daily EOD artifacts (latest: ${EXPECTED_TRADE_DATE})"
+rsync -az -e "$rsync_rsh" -- \
+  "${STRATEGY_OUTPUT_ROOT%/}/strategy_daily_eod/" \
+  "$remote:$REMOTE_DIR/outputs/research/strategy_daily_eod/"
+
+echo "Syncing reports and theme decomposition artifacts"
+rsync -az -e "$rsync_rsh" -- \
+  "$ROOT/reports/" "$remote:$REMOTE_DIR/reports/"
+if [[ -d "$ROOT/artifacts/theme_decomposition" ]]; then
+  rsync -az -e "$rsync_rsh" -- \
+    "$ROOT/artifacts/theme_decomposition/" \
+    "$remote:$REMOTE_DIR/artifacts/theme_decomposition/"
+fi
 
 echo "Syncing Docling review artifacts"
 for artifact_dir in "${DOCLING_ARTIFACT_DIRS[@]}"; do

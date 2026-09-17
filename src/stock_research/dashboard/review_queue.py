@@ -26,6 +26,7 @@ BUCKET_LABELS = {
 CANONICAL_STRATEGY_OUTPUT_SUFFIX = ("outputs", "research", "strategy_daily_eod")
 LEGACY_STRATEGY_OUTPUT_ROOTS = (
     Path("/Users/xiwei/stock_research/outputs/research/strategy_daily_eod"),
+    Path("/app/outputs/research/strategy_daily_eod"),
 )
 
 

@@ -90,3 +90,9 @@ if grep -Eq '^strategy_daily_eod\|status\|(failed|partial)$' "$DETAIL_LOG"; then
 fi
 
 print_summary "策略日终完成" 0
+
+ARTIFACT_SYNC_SCRIPT="$ROOT/deploy/sync_dashboard_artifacts.sh"
+if [[ -x "$ARTIFACT_SYNC_SCRIPT" || -f "$ARTIFACT_SYNC_SCRIPT" ]]; then
+  nohup /bin/bash "$ARTIFACT_SYNC_SCRIPT" >>"$LOG_DIR/dashboard_artifact_sync.trigger.log" 2>&1 &
+  echo "已触发外网 artifact 同步（后台）: $ARTIFACT_SYNC_SCRIPT"
+fi

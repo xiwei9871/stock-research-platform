@@ -25,6 +25,12 @@ services:
       - "127.0.0.1:${DASHBOARD_API_BIND_PORT:-8765}:8765"
     volumes:
       - ../outputs/research:/app/outputs/research:ro
+      - type: bind
+        source: ../reports
+        target: /app/reports
+        read_only: true
+        bind:
+          create_host_path: false
       - ${DASHBOARD_PGSERVICE_FILE:-./.pg_service.conf}:/app/.pg_service.conf:ro
       - type: bind
         source: ../artifacts/theme_decomposition

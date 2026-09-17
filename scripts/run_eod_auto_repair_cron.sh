@@ -103,5 +103,12 @@ forward_signal() {
 }
 trap forward_signal TERM INT HUP
 
-run_repair
-exit "$?"
+rc=0
+run_repair || rc=$?
+
+ARTIFACT_SYNC_SCRIPT="$ROOT/deploy/sync_dashboard_artifacts.sh"
+if [[ "$rc" -eq 0 && -f "$ARTIFACT_SYNC_SCRIPT" ]]; then
+  nohup /bin/bash "$ARTIFACT_SYNC_SCRIPT" >>"$LOG_DIR/dashboard_artifact_sync.trigger.log" 2>&1 &
+fi
+
+exit "$rc"
