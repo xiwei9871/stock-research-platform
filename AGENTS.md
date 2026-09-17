@@ -32,9 +32,10 @@ Prefer targeted reads over full-file reads.
 - `/Users/xiwei/stock_research` on branch `main` is the single canonical checkout.
   All crontab and launchd jobs point here. Do not create or use parallel
   release/runtime checkouts for scheduled work.
-- `origin/main` on GitHub is stale (pre-2026-07-13); local `main` was rebased
-  onto `release/theme-research-reports-20260801` (2944a750), the commit that
-  actually ran production. Coordinate before pushing `main` to origin.
+- `main` was rebased onto `release/theme-research-reports-20260801` (2944a750),
+  the commit that actually ran production, and force-pushed to origin on
+  2026-09-17. The pre-consolidation remote history is preserved at
+  `backup/main-pre-consolidation-20260917`.
 - Historical checkouts live under `/Users/xiwei/stock_research_archive/`
   (still registered git worktrees; branches preserved).
 - Internal dashboard: launchd `com.stockresearch.dashboard-local-api`
