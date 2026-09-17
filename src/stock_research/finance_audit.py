@@ -4,21 +4,37 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
 
+# Unknown asset IDs remain auditable; only statements before a known listing date
+# are excluded because they cannot be valid post-listing coverage keys.
+
+
 def summarize_finance_coverage(
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
+    """Audit every income key, excluding only known pre-listing report periods."""
     checks = [
         (
             "missing_balance_sheet",
             "blocked",
             """
             SELECT count(*) AS rows
-            FROM finance.income_statement i
-            LEFT JOIN finance.balance_sheet b
-              ON b.asset_id = i.asset_id
-             AND b.report_period = i.report_period
-             AND b.report_type = i.report_type
-            WHERE b.asset_id IS NULL
+            FROM (
+                SELECT DISTINCT i.asset_id, i.report_period, i.report_type
+                FROM finance.income_statement i
+                LEFT JOIN core.asset_master a ON a.asset_id = i.asset_id
+                WHERE (
+                    a.asset_id IS NULL
+                    OR a.list_date IS NULL
+                    OR i.report_period >= a.list_date
+                )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM finance.balance_sheet b
+                    WHERE b.asset_id = i.asset_id
+                      AND b.report_period = i.report_period
+                      AND b.report_type = i.report_type
+                )
+            ) missing_keys
             """,
         ),
         (
@@ -26,12 +42,23 @@ def summarize_finance_coverage(
             "blocked",
             """
             SELECT count(*) AS rows
-            FROM finance.income_statement i
-            LEFT JOIN finance.cash_flow c
-              ON c.asset_id = i.asset_id
-             AND c.report_period = i.report_period
-             AND c.report_type = i.report_type
-            WHERE c.asset_id IS NULL
+            FROM (
+                SELECT DISTINCT i.asset_id, i.report_period, i.report_type
+                FROM finance.income_statement i
+                LEFT JOIN core.asset_master a ON a.asset_id = i.asset_id
+                WHERE (
+                    a.asset_id IS NULL
+                    OR a.list_date IS NULL
+                    OR i.report_period >= a.list_date
+                )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM finance.cash_flow c
+                    WHERE c.asset_id = i.asset_id
+                      AND c.report_period = i.report_period
+                      AND c.report_type = i.report_type
+                )
+            ) missing_keys
             """,
         ),
         (

@@ -64,7 +64,99 @@ def test_compute_p0_features_for_asset_empty_input_returns_empty_dataframe():
     assert features.empty
 
 
-def test_load_bars_for_features_uses_latest_rows_per_asset(monkeypatch):
+def test_compute_and_store_p0_features_batches_assets_into_one_upsert(monkeypatch):
+    pending = {
+        "CN:SH:600000": make_bars(),
+        "CN:SZ:000001": make_bars(),
+    }
+    upserts = []
+    monkeypatch.setattr(features_module, "load_bars_for_features", lambda *args, **kwargs: pending)
+    monkeypatch.setattr(
+        features_module,
+        "replace_feature_snapshot",
+        lambda trade_date, frame: upserts.append((trade_date, frame)) or len(frame),
+    )
+
+    count = features_module.compute_and_store_p0_features("2026-03-11")
+
+    assert len(upserts) == 1
+    assert upserts[0][0] == "2026-03-11"
+    assert len(upserts[0][1]) == 16
+    assert set(upserts[0][1]["asset_id"]) == set(pending)
+    assert count == 16
+
+
+def test_load_complete_feature_dates_requires_per_feature_asset_coverage(monkeypatch):
+    captured = {}
+
+    class FakeConnection:
+        pass
+
+    class FakeConnect:
+        def __enter__(self):
+            return FakeConnection()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_connect(service):
+        captured["service"] = service
+        return FakeConnect()
+
+    def fake_fetch_all(conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(features_module, "connect", fake_connect)
+    monkeypatch.setattr(features_module, "fetch_all", fake_fetch_all)
+
+    assert features_module.load_complete_feature_dates("2026-03-01", "2026-03-11") == set()
+
+    normalized_sql = " ".join(captured["sql"].split()).lower()
+    assert "market_daily_bar" in normalized_sql
+    assert "min(asset_count)" in normalized_sql
+    assert "expected_assets" in normalized_sql
+    assert "feature_name = any" in normalized_sql
+    assert "join market_daily_bar" in normalized_sql
+    assert captured["params"][-3] == features_module.FEATURE_NAMES
+    assert captured["params"][-1] == pytest.approx(0.99)
+
+
+def test_compute_and_store_p0_features_replaces_stale_rows_for_trade_date(monkeypatch):
+    pending = {"CN:SH:600000": make_bars()}
+    replacements = []
+    monkeypatch.setattr(features_module, "load_bars_for_features", lambda *args, **kwargs: pending)
+    monkeypatch.setattr(
+        features_module,
+        "replace_feature_snapshot",
+        lambda trade_date, frame: replacements.append((trade_date, frame)) or len(frame),
+    )
+
+    count = features_module.compute_and_store_p0_features("2026-03-11")
+
+    assert len(replacements) == 1
+    assert replacements[0][0] == "2026-03-11"
+    assert count == len(replacements[0][1])
+
+
+def test_feature_snapshot_coverage_rejects_partial_replacement():
+    snapshot = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:600000", "feature_name": feature_name}
+            for feature_name in features_module.FEATURE_NAMES
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="refusing to replace incomplete"):
+        features_module._validate_feature_snapshot_coverage(
+            snapshot,
+            trade_date="2026-03-11",
+            expected_asset_count=100,
+        )
+
+
+def test_load_bars_for_features_limits_source_scan_to_lookback_dates(monkeypatch):
     captured = {}
 
     class FakeConnection:
@@ -101,9 +193,10 @@ def test_load_bars_for_features_uses_latest_rows_per_asset(monkeypatch):
 
     bars = load_bars_for_features("2026-03-11", lookback_bars=120)
 
-    assert "row_number() over (partition by asset_id order by trade_date desc)" in (
-        " ".join(captured["sql"].split()).lower()
-    )
+    normalized_sql = " ".join(captured["sql"].split()).lower()
+    assert "with lookback_dates as" in normalized_sql
+    assert "join lookback_dates" in normalized_sql
+    assert "row_number() over (partition by asset_id order by trade_date desc)" not in normalized_sql
     assert captured["params"] == ["2026-03-11", 120]
     assert list(bars) == ["CN:SH:600000"]
 

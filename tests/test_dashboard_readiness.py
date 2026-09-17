@@ -808,6 +808,23 @@ def test_manifest_readiness_reports_display_trade_date_run_when_recent_manifest_
     assert health_groups["strategy_execution"]["ready_count"] == 3
 
 
+def test_manifest_checks_accept_strategy_manifest_as_review_queue():
+    checks = readiness._manifest_checks(
+        [
+            {
+                "module": "review_queue_strategy_manifest",
+                "status": "success",
+            }
+        ],
+        "2026-08-27",
+        [{"asset_id": "CN:SH:600000"}],
+    )
+
+    review_check = next(item for item in checks if item["key"] == "review_queue")
+    assert review_check["status"] == "ready"
+    assert review_check["detail"] == "Review Queue available"
+
+
 def test_display_gate_accepts_degraded_daily_bars_when_core_run_is_ready(monkeypatch):
     modules = [
         {"run_id": "r1", "trade_date": "2026-07-06", "module": "daily_bars", "status": "partial"},

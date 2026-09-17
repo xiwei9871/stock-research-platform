@@ -86,6 +86,14 @@ def test_docling_90_stock_review_dashboard_api_and_strategy_diff() -> None:
     assert all(row["allowed_for_signal"] is False for row in payload["per_stock"])
     assert all(row["allowed_for_admission"] is False for row in payload["per_stock"])
 
+    first_row = payload["per_stock"][0]
+    assert first_row["report_html_path"].startswith(
+        "/api/research/data-to-brief/docling-90/artifacts/"
+    )
+    artifact_response = client.get(first_row["report_html_path"])
+    assert artifact_response.status_code == 200
+    assert "html" in artifact_response.headers["content-type"]
+
     diff = subprocess.run(
         ["git", "diff", "--", *FORMAL_STRATEGY_FILES],
         cwd=PROJECT_ROOT,

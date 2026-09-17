@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from inspect import signature
 import os
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
@@ -208,7 +209,9 @@ from stock_research.dashboard.user_admin import (
     set_dashboard_user_active,
 )
 from stock_research.data_to_brief_docling_90_stock_review_dashboard_integration import (
+    dashboard_payload_for_api,
     load_dashboard_payload as load_data_to_brief_docling_90_dashboard_payload,
+    resolve_docling_artifact,
 )
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.operator_decision.write_service import create_operator_decision
@@ -559,7 +562,21 @@ def create_app() -> FastAPI:
 
     @app.get("/api/research/data-to-brief/docling-90")
     def data_to_brief_docling_90_review():
-        return load_data_to_brief_docling_90_dashboard_payload()
+        return dashboard_payload_for_api(load_data_to_brief_docling_90_dashboard_payload())
+
+    @app.get("/api/research/data-to-brief/docling-90/artifacts/{artifact_path:path}")
+    def data_to_brief_docling_90_artifact(artifact_path: str):
+        release_root = Path(
+            os.environ.get("STOCK_RESEARCH_RELEASE_ROOT") or SETTINGS.repo_root
+        )
+        resolved = resolve_docling_artifact(release_root, artifact_path)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="docling artifact not found")
+        return FileResponse(
+            path=resolved,
+            filename=resolved.name,
+            content_disposition_type="inline",
+        )
 
     @app.get("/api/research/theme-decomposition/themes")
     def theme_research_themes():

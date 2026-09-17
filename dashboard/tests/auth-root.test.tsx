@@ -12,8 +12,19 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock('../src/api/client', () => apiMocks);
 vi.mock('../src/components/AppShell', () => ({
-  AppShell: ({ currentUser }: { currentUser?: { username: string } }) => (
-    <div>Official Dashboard {currentUser?.username}</div>
+  AppShell: ({
+    currentUser,
+    onLogout
+  }: {
+    currentUser?: { username: string };
+    onLogout?: () => Promise<void>;
+  }) => (
+    <div>
+      Official Dashboard {currentUser?.username}
+      <button type="button" onClick={() => void onLogout?.()}>
+        退出登录
+      </button>
+    </div>
   )
 }));
 
@@ -58,5 +69,20 @@ describe('DashboardAuthRoot', () => {
     window.dispatchEvent(new CustomEvent('dashboard-auth-expired'));
 
     expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
+  });
+
+  it('revokes the session and returns to login after logout succeeds', async () => {
+    apiMocks.fetchCurrentUser.mockResolvedValueOnce({
+      user: { user_id: 'user:1', username: 'xiwei', display_name: 'Xiwei', role: 'user', is_active: true }
+    });
+    apiMocks.logoutDashboardUser.mockResolvedValueOnce({ status: 'logged_out' });
+
+    render(<DashboardAuthRoot />);
+
+    expect(await screen.findByText('Official Dashboard xiwei')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
+    expect(apiMocks.logoutDashboardUser).toHaveBeenCalledTimes(1);
   });
 });

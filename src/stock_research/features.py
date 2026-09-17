@@ -1,5 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date, datetime
+from math import ceil
 from typing import Any
 
 import pandas as pd
@@ -27,6 +28,9 @@ FEATURE_NAMES = [
     "ma20_deviation",
     "max_drawdown_20d",
 ]
+# A small number of source rows can be non-tradable or lack amount/turnover;
+# the guard is for interrupted/partial jobs, not for fabricating those values.
+MIN_COMPLETE_ASSET_COVERAGE_RATIO = 0.99
 
 
 def max_drawdown(series: pd.Series) -> float | None:
@@ -108,24 +112,27 @@ def load_bars_for_features(
     lookback_bars: int = 120,
 ) -> dict[str, pd.DataFrame]:
     sql = """
-    WITH ranked AS (
-        SELECT
-            asset_id,
-            trade_date,
-            close,
-            amount,
-            turnover_rate,
-            is_st,
-            trade_status,
-            row_number() over (partition by asset_id order by trade_date desc) AS row_num
+    WITH lookback_dates AS (
+        SELECT DISTINCT trade_date
         FROM market_daily_bar
         WHERE adjust_type = 'hfq'
           AND trade_date <= %s
+        ORDER BY trade_date DESC
+        LIMIT %s
     )
-    SELECT asset_id, trade_date, close, amount, turnover_rate, is_st, trade_status
-    FROM ranked
-    WHERE row_num <= %s
-    ORDER BY asset_id, trade_date
+    SELECT
+        bars.asset_id,
+        bars.trade_date,
+        bars.close,
+        bars.amount,
+        bars.turnover_rate,
+        bars.is_st,
+        bars.trade_status
+    FROM market_daily_bar bars
+    JOIN lookback_dates dates
+      ON dates.trade_date = bars.trade_date
+    WHERE bars.adjust_type = 'hfq'
+    ORDER BY bars.asset_id, bars.trade_date
     """
     with connect(SETTINGS.research_service) as conn:
         rows = fetch_all(conn, sql, [trade_date, lookback_bars])
@@ -139,7 +146,6 @@ def load_bars_for_features(
         asset_id: group.drop(columns=["asset_id"]).reset_index(drop=True).copy()
         for asset_id, group in grouped
     }
-
 
 def upsert_feature_snapshot(features: pd.DataFrame) -> int:
     if features.empty:
@@ -167,18 +173,96 @@ def upsert_feature_snapshot(features: pd.DataFrame) -> int:
     return len(rows)
 
 
+def replace_feature_snapshot(trade_date: str, features: pd.DataFrame) -> int:
+    """Replace the p0 snapshot for one date in a single database transaction."""
+    insert_sql = """
+    INSERT INTO feature_snapshot (
+        asset_id, trade_date, feature_set, feature_version, feature_name,
+        feature_value, source_data_version
+    )
+    VALUES (
+        %(asset_id)s, %(trade_date)s, %(feature_set)s, %(feature_version)s,
+        %(feature_name)s, %(feature_value)s, %(source_data_version)s
+    )
+    ON CONFLICT (asset_id, trade_date, feature_set, feature_version, feature_name)
+    DO UPDATE SET
+        feature_value = EXCLUDED.feature_value,
+        source_data_version = EXCLUDED.source_data_version,
+        computed_at = now()
+    """
+    delete_sql = """
+    DELETE FROM feature_snapshot
+    WHERE trade_date = %s
+      AND feature_set = %s
+      AND feature_version = %s
+    """
+    rows = features.to_dict("records") if not features.empty else []
+    with connect(SETTINGS.research_service) as conn:
+        with conn.cursor() as cur:
+            cur.execute(delete_sql, [trade_date, FEATURE_SET, FEATURE_VERSION])
+            if rows:
+                cur.executemany(insert_sql, rows)
+    return len(rows)
+
+
+def _validate_feature_snapshot_coverage(
+    features: pd.DataFrame,
+    *,
+    trade_date: str,
+    expected_asset_count: int,
+) -> None:
+    """Prevent a partial computation from deleting a previously good snapshot."""
+    expected_minimum = ceil(
+        expected_asset_count * MIN_COMPLETE_ASSET_COVERAGE_RATIO
+    )
+    counts = (
+        features.groupby("feature_name")["asset_id"].nunique()
+        if not features.empty
+        else pd.Series(dtype="int64")
+    )
+    missing = [
+        name
+        for name in FEATURE_NAMES
+        if int(counts.get(name, 0)) < expected_minimum
+    ]
+    if missing:
+        raise RuntimeError(
+            "refusing to replace incomplete feature snapshot "
+            f"for {trade_date}: expected at least {expected_minimum} assets per "
+            f"feature, missing coverage for {', '.join(missing)}"
+        )
+
+
 def compute_and_store_p0_features(trade_date: str, lookback_bars: int = 120) -> int:
-    total = 0
-    for asset_id, bars in load_bars_for_features(
+    pending: list[pd.DataFrame] = []
+    bars_by_asset = load_bars_for_features(
         trade_date,
         lookback_bars=lookback_bars,
-    ).items():
+    )
+    if not bars_by_asset:
+        return 0
+    for asset_id, bars in bars_by_asset.items():
         features = features_for_trade_date(
             compute_p0_features_for_asset(asset_id, bars),
             trade_date,
         )
-        total += upsert_feature_snapshot(features)
-    return total
+        if not features.empty:
+            pending.append(features)
+    snapshot = pd.concat(pending, ignore_index=True) if pending else pd.DataFrame()
+    requested_trade_date = _trade_date_string(trade_date)
+    expected_asset_count = sum(
+        requested_trade_date
+        in {_trade_date_string(value) for value in bars["trade_date"]}
+        for bars in bars_by_asset.values()
+    )
+    if expected_asset_count <= 0:
+        return 0
+    _validate_feature_snapshot_coverage(
+        snapshot,
+        trade_date=requested_trade_date,
+        expected_asset_count=expected_asset_count,
+    )
+    return replace_feature_snapshot(trade_date, snapshot)
 
 
 def derive_feature_backfill_window(
@@ -208,20 +292,56 @@ def load_complete_feature_dates(
 ) -> set[str]:
     expected = expected_feature_count or len(FEATURE_NAMES)
     sql = """
-    SELECT trade_date
-    FROM feature_snapshot
-    WHERE trade_date BETWEEN %s AND %s
-      AND feature_set = %s
-      AND feature_version = %s
-    GROUP BY trade_date
-    HAVING count(DISTINCT feature_name) >= %s
-    ORDER BY trade_date
+    WITH market_assets AS (
+        SELECT trade_date, count(DISTINCT asset_id)::int AS expected_assets
+        FROM market_daily_bar
+        WHERE trade_date BETWEEN %s AND %s
+          AND adjust_type = 'hfq'
+        GROUP BY trade_date
+    ),
+    feature_asset_counts AS (
+        SELECT f.trade_date, f.feature_name, count(DISTINCT f.asset_id)::int AS asset_count
+        FROM feature_snapshot f
+        JOIN market_daily_bar m
+          ON m.trade_date = f.trade_date
+         AND m.asset_id = f.asset_id
+         AND m.adjust_type = 'hfq'
+        WHERE f.trade_date BETWEEN %s AND %s
+          AND f.feature_set = %s
+          AND f.feature_version = %s
+          AND f.feature_name = ANY(%s)
+        GROUP BY f.trade_date, f.feature_name
+    ),
+    date_coverage AS (
+        SELECT
+            trade_date,
+            count(DISTINCT feature_name)::int AS feature_count,
+            min(asset_count)::int AS min_asset_count
+        FROM feature_asset_counts
+        GROUP BY trade_date
+    )
+    SELECT coverage.trade_date
+    FROM date_coverage coverage
+    JOIN market_assets market ON market.trade_date = coverage.trade_date
+    WHERE coverage.feature_count >= %s
+      AND coverage.min_asset_count >= CEIL(market.expected_assets * %s)
+    ORDER BY coverage.trade_date
     """
     with connect(SETTINGS.research_service) as conn:
         rows = fetch_all(
             conn,
             sql,
-            [start_date, end_date, FEATURE_SET, FEATURE_VERSION, expected],
+            [
+                start_date,
+                end_date,
+                start_date,
+                end_date,
+                FEATURE_SET,
+                FEATURE_VERSION,
+                FEATURE_NAMES,
+                expected,
+                MIN_COMPLETE_ASSET_COVERAGE_RATIO,
+            ],
         )
     return {str(row["trade_date"])[:10] for row in rows}
 

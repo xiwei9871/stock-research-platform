@@ -44,10 +44,32 @@ def test_summarize_finance_coverage_flags_missing_statement_rows(monkeypatch):
         {"check": "announcement_before_report_period", "status": "warning", "rows": 3},
     ]
     queries = [sql for sql, _params in conn.calls]
-    assert any("LEFT JOIN finance.balance_sheet" in sql for sql in queries)
-    assert any("LEFT JOIN finance.cash_flow" in sql for sql in queries)
+    assert any("NOT EXISTS" in sql and "finance.balance_sheet" in sql for sql in queries)
+    assert any("NOT EXISTS" in sql and "finance.cash_flow" in sql for sql in queries)
     assert any("announcement_date IS NULL" in sql for sql in queries)
     assert any("announcement_date < report_period" in sql for sql in queries)
+
+
+def test_missing_statement_checks_use_distinct_exists_keys(monkeypatch):
+    conn = FakeConnection(
+        [
+            [{"rows": 0}],
+            [{"rows": 0}],
+            [{"rows": 0}],
+            [{"rows": 0}],
+        ]
+    )
+    monkeypatch.setattr(finance_audit, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(finance_audit, "fetch_all", fake_fetch_all)
+
+    finance_audit.summarize_finance_coverage()
+
+    missing_queries = [sql for sql, _params in conn.calls[:2]]
+    assert all("NOT EXISTS" in sql for sql in missing_queries)
+    assert all("SELECT DISTINCT" in sql for sql in missing_queries)
+    assert all("core.asset_master" in sql and "list_date" in sql for sql in missing_queries)
+    assert all("LEFT JOIN" in sql for sql in missing_queries)
+    assert all("a.asset_id IS NULL" in sql for sql in missing_queries)
 
 
 def test_format_finance_audit_line_is_stable():

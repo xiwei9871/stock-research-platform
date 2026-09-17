@@ -516,6 +516,76 @@ def test_run_eod_auto_repair_loop_finalizes_ops_health_after_market_monitor_repa
     assert summary.actions[-1].validation_result["component"] == "ops_health"
 
 
+def test_run_eod_auto_repair_loop_finalizes_ops_health_before_strategy_publish_after_minute5_repair(tmp_path):
+    state = {
+        "minute5_bars": RepairStatus.FAILED,
+        "ops_health": RepairStatus.FAILED,
+        "strategy_publish": RepairStatus.FAILED,
+    }
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="minute5_bars",
+                run=lambda: RepairCheckResult(
+                    "minute5_bars",
+                    state["minute5_bars"],
+                    "ready" if state["minute5_bars"] == RepairStatus.SUCCESS else "missing",
+                    blocker=state["minute5_bars"] != RepairStatus.SUCCESS,
+                ),
+            ),
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult(
+                    "strategy_publish",
+                    state["strategy_publish"],
+                    "ready" if state["strategy_publish"] == RepairStatus.SUCCESS else "missing",
+                    blocker=state["strategy_publish"] != RepairStatus.SUCCESS,
+                ),
+            ),
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult(
+                    "ops_health",
+                    state["ops_health"],
+                    "ready" if state["ops_health"] == RepairStatus.SUCCESS else "not ready",
+                    metrics={
+                        "pipeline_status": "READY"
+                        if state["ops_health"] == RepairStatus.SUCCESS
+                        else "NOT_READY"
+                    },
+                    blocker=state["ops_health"] != RepairStatus.SUCCESS,
+                ),
+            ),
+        ]
+
+    def action_for(check_name):
+        def action(trade_date, output_dir):
+            calls.append(check_name)
+            state[check_name] = RepairStatus.SUCCESS
+            return RepairActionResult(f"repair_{check_name}", RepairStatus.SUCCESS, "fixed")
+
+        return action
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-08-11",
+        output_dir=tmp_path,
+        mode="loop",
+        max_cycles=3,
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "minute5_bars": action_for("minute5_bars"),
+            "ops_health": action_for("ops_health"),
+            "strategy_publish": action_for("strategy_publish"),
+        },
+    )
+
+    assert calls == ["minute5_bars", "ops_health", "strategy_publish"]
+    assert summary.remaining_blockers == []
+    assert summary.loop_stop_reason == "ready_with_no_blockers"
+
+
 def test_run_eod_auto_repair_loop_stops_after_repeated_action_failures(tmp_path):
     calls = []
 
@@ -1088,9 +1158,20 @@ def test_default_watchlist_action_persists_diagnostics_snapshot(monkeypatch, tmp
         watchlist_workflow,
         "build_watchlist_diagnostics_snapshot",
         lambda **kwargs: {
-            "risk": pd.DataFrame(
+            "full": pd.DataFrame(
+                [
+                    {
+                        "watchlist_id": "diagnostics",
+                        "trade_date": kwargs["trade_date"],
+                        "asset_id": "B",
+                        "watch_group": "risk_watch",
+                        "score_total": 12.5,
+                    }
+                ]
+            ),
+            "must_watch": pd.DataFrame(
                 [{"watchlist_id": "diagnostics", "trade_date": kwargs["trade_date"], "asset_id": "B"}]
-            )
+            ),
         },
     )
     monkeypatch.setattr(
@@ -1105,6 +1186,7 @@ def test_default_watchlist_action_persists_diagnostics_snapshot(monkeypatch, tmp
     assert result.metrics == {"default_rows": 1, "diagnostics_rows": 1}
     assert len(stored) == 1
     assert stored[0]["watchlist_id"].tolist() == ["diagnostics"]
+    assert stored[0]["primary_signal"].tolist() == ["risk_watch"]
 
 
 def test_default_reports_action_generates_daily_research_reports_before_manifest_refresh(monkeypatch, tmp_path):

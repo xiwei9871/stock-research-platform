@@ -1,6 +1,20 @@
 import pandas as pd
+import pytest
 
 from stock_research.loaders import akshare_finance_statements
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, " ", "NaN", pd.NA, pd.NaT, "0000-00-00", "1900-01-01", "2026-13-01"],
+)
+def test_is_valid_announcement_date_rejects_invalid_values(value):
+    assert not akshare_finance_statements.is_valid_announcement_date(value)
+
+
+@pytest.mark.parametrize("value", ["2026-03-31", "2026-03-31 00:00:00", "20260331"])
+def test_is_valid_announcement_date_accepts_iso_and_sina_values(value):
+    assert akshare_finance_statements.is_valid_announcement_date(value)
 
 
 class FakeConnection:
@@ -281,3 +295,79 @@ def test_sync_finance_statements_for_asset_archives_raw_payloads_and_upserts(mon
     assert raw_calls[0][3] == "CN:SH:600000"
     assert raw_calls[0][2][0]["ACCOUNTS_PAYABLE"] is None
     assert len(conn.many_calls) == 2
+
+
+def test_sync_finance_statements_skips_sentinel_announcement_dates(monkeypatch):
+    conn = FakeConnection()
+    raw_calls = []
+    sentinel_row = {
+        "SECUCODE": "600000.SH",
+        "REPORT_DATE": "2007-06-30 00:00:00",
+        "REPORT_TYPE": "中报",
+        "NOTICE_DATE": "1900-01-01 00:00:00",
+    }
+
+    monkeypatch.setattr(akshare_finance_statements, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(
+        akshare_finance_statements.ak,
+        "stock_balance_sheet_by_report_em",
+        lambda symbol: pd.DataFrame([sentinel_row]),
+    )
+    monkeypatch.setattr(
+        akshare_finance_statements.ak,
+        "stock_cash_flow_sheet_by_report_em",
+        lambda symbol: pd.DataFrame([sentinel_row]),
+    )
+    monkeypatch.setattr(
+        akshare_finance_statements,
+        "store_finance_payload",
+        lambda opened, endpoint, params, payload, asset_id=None: raw_calls.append(endpoint) or "digest",
+    )
+    monkeypatch.setattr(akshare_finance_statements, "execute_many", fake_execute_many)
+
+    counts = akshare_finance_statements.sync_finance_statements_for_asset(
+        "CN:SH:600000",
+        "SH600000",
+    )
+
+    assert counts == {"balance_sheet": 0, "cash_flow": 0, "raw_payload": 2}
+    assert raw_calls == [
+        "stock_balance_sheet_by_report_em",
+        "stock_cash_flow_sheet_by_report_em",
+    ]
+    assert conn.many_calls == []
+
+
+def test_sync_sina_finance_statements_skips_invalid_announcement_dates(monkeypatch):
+    conn = FakeConnection()
+    raw_calls = []
+    invalid_row = {
+        "报告日": "20070630",
+        "公告日期": "NaN",
+    }
+
+    monkeypatch.setattr(
+        akshare_finance_statements,
+        "connect",
+        lambda service: _ConnectionContext(conn),
+    )
+    monkeypatch.setattr(
+        akshare_finance_statements.ak,
+        "stock_financial_report_sina",
+        lambda stock, symbol: pd.DataFrame([invalid_row]),
+    )
+    monkeypatch.setattr(
+        akshare_finance_statements,
+        "store_finance_payload",
+        lambda opened, endpoint, params, payload, asset_id=None: raw_calls.append(endpoint)
+        or "digest",
+    )
+    monkeypatch.setattr(akshare_finance_statements, "execute_many", fake_execute_many)
+
+    counts = akshare_finance_statements.sync_sina_finance_statements_for_asset(
+        "CN:SH:600000",
+    )
+
+    assert counts == {"balance_sheet": 0, "cash_flow": 0, "raw_payload": 2}
+    assert raw_calls == ["stock_financial_report_sina", "stock_financial_report_sina"]
+    assert conn.many_calls == []

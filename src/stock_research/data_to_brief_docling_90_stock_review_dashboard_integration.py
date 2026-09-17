@@ -1,19 +1,34 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import quote
 
 import pandas as pd
 
 
-PROJECT_ROOT = Path("/Users/xiwei/stock_research")
+PROJECT_ROOT = Path(
+    os.environ.get("STOCK_RESEARCH_RELEASE_ROOT")
+    or Path(__file__).resolve().parents[2]
+).expanduser()
 SOURCE_DIR = PROJECT_ROOT / "outputs/research/data_to_brief_docling_90_stock_full_cold_parse_batch_v1"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research/data_to_brief_docling_90_stock_review_and_dashboard_integration_v1"
 BATCH_ID = "data_to_brief_docling_90_stock_full_cold_parse_batch_v1"
 TASK_NAME = "data_to_brief_docling_90_stock_review_and_dashboard_integration_v1"
+DOCLING_ARTIFACT_PATH_FIELDS = (
+    "report_md_path",
+    "report_html_path",
+    "report_pdf_path",
+    "evidence_matrix_path",
+    "claim_citation_map_path",
+    "sources_jsonl_path",
+)
+DOCLING_ARTIFACT_URL_PREFIX = "/api/research/data-to-brief/docling-90/artifacts/"
+DOCLING_ARTIFACT_TOP_LEVELS = frozenset({"evidence", "reports_html", "reports_md", "reports_pdf"})
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
@@ -39,6 +54,70 @@ def _str(value: Any) -> str:
     if value is None or pd.isna(value):
         return ""
     return str(value)
+
+
+def docling_artifact_relative_path(value: Any) -> str | None:
+    """Return a safe artifact path relative to the relocatable Docling batch root."""
+    text = _str(value).replace("\\", "/")
+    marker = f"outputs/research/{BATCH_ID}/"
+    marker_index = text.find(marker)
+    if marker_index < 0:
+        return None
+
+    relative_text = text[marker_index + len(marker) :]
+    relative = PurePosixPath(relative_text)
+    if (
+        not relative_text
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or relative.parts[0] not in DOCLING_ARTIFACT_TOP_LEVELS
+    ):
+        return None
+    return relative.as_posix()
+
+
+def docling_artifact_url(value: Any) -> str | None:
+    relative = docling_artifact_relative_path(value)
+    if relative is None:
+        return None
+    return f"{DOCLING_ARTIFACT_URL_PREFIX}{quote(relative, safe='/')}"
+
+
+def dashboard_payload_for_api(payload: dict[str, Any]) -> dict[str, Any]:
+    """Expose relocatable HTTP artifact links without mutating the persisted payload."""
+    result = dict(payload)
+    rows = []
+    for item in payload.get("per_stock") or []:
+        if not isinstance(item, dict):
+            rows.append(item)
+            continue
+        row = dict(item)
+        for field in DOCLING_ARTIFACT_PATH_FIELDS:
+            url = docling_artifact_url(row.get(field))
+            if url is not None:
+                row[field] = url
+        rows.append(row)
+    result["per_stock"] = rows
+    return result
+
+
+def resolve_docling_artifact(release_root: Path, artifact_path: str) -> Path | None:
+    relative = PurePosixPath(str(artifact_path).replace("\\", "/"))
+    if (
+        not artifact_path
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or relative.parts[0] not in DOCLING_ARTIFACT_TOP_LEVELS
+    ):
+        return None
+
+    root = (Path(release_root) / "outputs" / "research" / BATCH_ID).resolve()
+    candidate = (root / Path(*relative.parts)).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:

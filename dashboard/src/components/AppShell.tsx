@@ -255,9 +255,10 @@ function techBottleneckReviewUniverseStockHandoff(stock: TechBottleneckReviewSto
 
 type AppShellProps = {
   currentUser?: CurrentUser;
+  onLogout?: () => Promise<void>;
 };
 
-export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
+export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps = {}) {
   const currentUser = _currentUser;
   const navItems = currentUser?.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
   const initialTechBottleneckStockHandoff =
@@ -278,6 +279,8 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   );
   const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
   const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -520,6 +523,19 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
     }
   }
 
+  async function handleLogout() {
+    if (!onLogout || logoutPending) return;
+    setLogoutError('');
+    setLogoutPending(true);
+    try {
+      await onLogout();
+    } catch {
+      setLogoutError('退出失败，请重试');
+    } finally {
+      setLogoutPending(false);
+    }
+  }
+
   return (
     <main className="platform-shell">
       <aside className="platform-nav" aria-label="Workspace navigation">
@@ -540,6 +556,19 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
       <div className="platform-main">
         <header className="platform-topbar">
           <GlobalSearchBox onOpenResult={openGlobalSearchResult} />
+          {currentUser ? (
+            <div className="platform-account-controls" aria-label="当前账号">
+              <span className="platform-account-username">{currentUser.display_name || currentUser.username}</span>
+              <button type="button" onClick={handleLogout} disabled={logoutPending || !onLogout}>
+                {logoutPending ? '退出中…' : '退出登录'}
+              </button>
+              {logoutError ? (
+                <span role="alert" className="platform-account-error">
+                  {logoutError}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </header>
         <section className="platform-workspace">
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}

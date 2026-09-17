@@ -1,4 +1,5 @@
 import math
+from datetime import date
 from typing import Any
 
 import akshare as ak
@@ -21,6 +22,31 @@ def parse_float(value: Any) -> float | None:
 
 def date_text(value: Any) -> str:
     return str(value)[:10]
+
+
+def is_valid_announcement_date(value: Any) -> bool:
+    text = str(value).strip()
+    if text.lower() in {
+        "",
+        "0000-00-00",
+        "1900-01-01",
+        "nat",
+        "nan",
+        "none",
+        "<na>",
+    }:
+        return False
+    if len(text) >= 8 and text[:8].isdigit():
+        candidate = f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+    else:
+        candidate = text[:10]
+    if candidate in {"0000-00-00", "1900-01-01"}:
+        return False
+    try:
+        date.fromisoformat(candidate)
+    except ValueError:
+        return False
+    return True
 
 
 def sina_date_text(value: Any) -> str:
@@ -257,12 +283,12 @@ def sync_finance_statements_for_asset(
     balance_rows = [
         normalize_em_balance_sheet_row(row)
         for row in balance_payload
-        if row.get("NOTICE_DATE")
+        if is_valid_announcement_date(row.get("NOTICE_DATE"))
     ]
     cash_rows = [
         normalize_em_cash_flow_row(row)
         for row in cash_payload
-        if row.get("NOTICE_DATE")
+        if is_valid_announcement_date(row.get("NOTICE_DATE"))
     ]
     with connect(service) as conn:
         store_finance_payload(
@@ -307,12 +333,12 @@ def sync_sina_finance_statements_for_asset(
     balance_rows = [
         normalize_sina_balance_sheet_row(row, asset_id)
         for row in balance_payload
-        if row.get("报告日") and row.get("公告日期")
+        if row.get("报告日") and is_valid_announcement_date(row.get("公告日期"))
     ]
     cash_rows = [
         normalize_sina_cash_flow_row(row, asset_id)
         for row in cash_payload
-        if row.get("报告日") and row.get("公告日期")
+        if row.get("报告日") and is_valid_announcement_date(row.get("公告日期"))
     ]
     with connect(service) as conn:
         store_finance_payload(
