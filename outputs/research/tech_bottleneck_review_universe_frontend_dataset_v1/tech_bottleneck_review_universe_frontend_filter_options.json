@@ -1,0 +1,181 @@
+{
+  "bottleneck_relevance": [
+    "core"
+  ],
+  "concept_pollution_risk": [
+    "low",
+    "not_detected_in_chunk",
+    "not_detected_in_existing_artifacts",
+    "risk_or_counter_evidence_present"
+  ],
+  "concept_tags": [
+    "光电与通信 / 光互联/光芯片 / beneficiary / data_gap_core_equivalent_quality_pool",
+    "光电与通信 / 光互联/光芯片 / bottleneck",
+    "光电与通信 / 光互联/光芯片 / bottleneck / expansion_core_equivalent_quality_pool",
+    "光电与通信 / 光互联/光芯片 / bottleneck / internal_quality_pool",
+    "光电与通信 / 光互联/光芯片 / bottleneck / latent_core_equivalent_quality_pool",
+    "其他战略性关键环节 / 国产替代/供应链约束 / bottleneck",
+    "其他战略性关键环节 / 国产替代/供应链约束 / bottleneck / expansion_core_equivalent_quality_pool",
+    "其他战略性关键环节 / 国产替代/供应链约束 / bottleneck / internal_quality_pool",
+    "其他战略性关键环节 / 国产替代/供应链约束 / bottleneck / latent_core_equivalent_quality_pool",
+    "半导体 / 先进封装 / beneficiary / data_gap_core_equivalent_quality_pool",
+    "半导体 / 先进封装 / bottleneck / data_gap_core_equivalent_quality_pool",
+    "半导体 / 功率器件/IGBT/SiC/GaN / beneficiary / data_gap_core_equivalent_quality_pool",
+    "半导体 / 功率器件/IGBT/SiC/GaN / bottleneck",
+    "半导体 / 功率器件/IGBT/SiC/GaN / bottleneck / expansion_core_equivalent_quality_pool",
+    "半导体 / 功率器件/IGBT/SiC/GaN / bottleneck / internal_quality_pool",
+    "半导体 / 功率器件/IGBT/SiC/GaN / bottleneck / latent_core_equivalent_quality_pool",
+    "半导体 / 功率器件/IGBT/SiC/GaN / bottleneck / latent_standard_core_equivalent_quality_pool",
+    "半导体 / 功率器件/IGBT/SiC/GaN / chokepoint / internal_quality_pool",
+    "半导体 / 半导体材料 / beneficiary / data_gap_core_equivalent_quality_pool",
+    "半导体 / 半导体材料 / bottleneck",
+    "半导体 / 半导体材料 / bottleneck / expansion_core_equivalent_quality_pool",
+    "半导体 / 半导体材料 / bottleneck / latent_core_equivalent_quality_pool",
+    "半导体 / 半导体材料 / chokepoint",
+    "半导体 / 半导体材料 / chokepoint / internal_quality_pool",
+    "半导体 / 半导体设备 / beneficiary / data_gap_core_equivalent_quality_pool",
+    "半导体 / 半导体设备 / bottleneck",
+    "半导体 / 半导体设备 / bottleneck / expansion_core_equivalent_quality_pool",
+    "半导体 / 半导体设备 / bottleneck / internal_quality_pool",
+    "半导体 / 半导体设备 / bottleneck / latent_core_equivalent_quality_pool",
+    "半导体 / 半导体设备 / chokepoint / internal_quality_pool",
+    "半导体 / 电子/芯片/通信设备宽口径 / concept_only / false_negative_rescue_core_equivalent_quality_pool",
+    "半导体 / 高端传感器 / chokepoint",
+    "半导体 / 高端传感器 / chokepoint / internal_quality_pool",
+    "工业软件与基础软件 / 基础软件/工业软件 / beneficiary / data_gap_core_equivalent_quality_pool",
+    "工业软件与基础软件 / 基础软件/工业软件 / bottleneck",
+    "工业软件与基础软件 / 基础软件/工业软件 / bottleneck / expansion_core_equivalent_quality_pool",
+    "工业软件与基础软件 / 基础软件/工业软件 / bottleneck / internal_quality_pool",
+    "工业软件与基础软件 / 基础软件/工业软件 / bottleneck / latent_core_equivalent_quality_pool",
+    "工业软件与基础软件 / 基础软件/工业软件 / bottleneck / latent_standard_core_equivalent_quality_pool",
+    "新材料 / AI服务器PCB/HBM材料 / beneficiary / data_gap_core_equivalent_quality_pool",
+    "新材料 / AI服务器PCB/HBM材料 / bottleneck",
+    "新材料 / AI服务器PCB/HBM材料 / bottleneck / expansion_core_equivalent_quality_pool",
+    "新材料 / AI服务器PCB/HBM材料 / bottleneck / internal_quality_pool",
+    "新材料 / AI服务器PCB/HBM材料 / bottleneck / latent_core_equivalent_quality_pool",
+    "新材料 / 关键新材料 / bottleneck / latent_core_equivalent_quality_pool",
+    "新材料 / 高端磁性/电感材料 / bottleneck / internal_quality_pool",
+    "新材料 / 高端陶瓷/电子材料 / bottleneck / expansion_core_equivalent_quality_pool",
+    "能源与电力电子关键环节 / 电力电子/电网安全 / bottleneck / internal_quality_pool",
+    "能源与电力电子关键环节 / 电力电子/电网安全 / bottleneck / latent_standard_core_equivalent_quality_pool",
+    "能源与电力电子关键环节 / 电源管理/供配电 / bottleneck / internal_quality_pool",
+    "能源与电力电子关键环节 / 电网/能源基础设施 / bottleneck",
+    "能源与电力电子关键环节 / 电网/能源基础设施 / bottleneck / expansion_core_equivalent_quality_pool",
+    "能源与电力电子关键环节 / 电网/能源基础设施 / bottleneck / internal_quality_pool",
+    "能源与电力电子关键环节 / 电网/能源基础设施 / bottleneck / latent_standard_core_equivalent_quality_pool",
+    "航空航天与军工电子 / 航空航天/军工电子 / bottleneck",
+    "航空航天与军工电子 / 航空航天/军工电子 / bottleneck / expansion_core_equivalent_quality_pool",
+    "航空航天与军工电子 / 航空航天/军工电子 / bottleneck / internal_quality_pool",
+    "航空航天与军工电子 / 航空航天/军工电子 / bottleneck / latent_core_equivalent_quality_pool",
+    "航空航天与军工电子 / 航空航天/军工电子 / bottleneck / latent_standard_core_equivalent_quality_pool",
+    "高端仪器仪表与科学仪器 / 仪器仪表制造业 / concept_only / false_negative_rescue_core_equivalent_quality_pool",
+    "高端仪器仪表与科学仪器 / 科学仪器/检测 / bottleneck / expansion_core_equivalent_quality_pool",
+    "高端仪器仪表与科学仪器 / 科学仪器/检测 / bottleneck / internal_quality_pool",
+    "高端仪器仪表与科学仪器 / 科学仪器/检测 / bottleneck / latent_core_equivalent_quality_pool",
+    "高端制造装备 / 专用设备宽口径 / concept_only / false_negative_rescue_core_equivalent_quality_pool",
+    "高端制造装备 / 工业母机/机器人核心部件 / bottleneck / expansion_core_equivalent_quality_pool",
+    "高端制造装备 / 工业母机/机器人核心部件 / bottleneck / latent_core_equivalent_quality_pool",
+    "高端制造装备 / 工业母机/机器人核心部件 / chokepoint",
+    "高端制造装备 / 工业母机/机器人核心部件 / chokepoint / internal_quality_pool",
+    "高端制造装备 / 机器人核心零部件 / chokepoint",
+    "高端制造装备 / 机器人核心零部件 / chokepoint / internal_quality_pool"
+  ],
+  "current_layer_status": [
+    "",
+    "data_gap_core_equivalent_quality_pool",
+    "expansion_core_equivalent_quality_pool",
+    "false_negative_rescue_core_equivalent_quality_pool",
+    "internal_quality_pool",
+    "latent_core_equivalent_quality_pool",
+    "latent_manual_review_batch1_core_equivalent_proposal",
+    "latent_manual_review_standard_core_equivalent_proposal",
+    "latent_standard_core_equivalent_quality_pool"
+  ],
+  "evidence_strength": [
+    "moderate",
+    "strong",
+    "sufficient"
+  ],
+  "frontend_review_status": [
+    "pending_review"
+  ],
+  "hard_tech_domain": [
+    "strong",
+    "supported"
+  ],
+  "industry": [
+    "专业技术服务业",
+    "专用设备制造业",
+    "仪器仪表制造业",
+    "其他制造业",
+    "化学原料和化学制品制造业",
+    "化学纤维制造业",
+    "医药制造业",
+    "有色金属冶炼和压延加工业",
+    "橡胶和塑料制品业",
+    "汽车制造业",
+    "生态保护和环境治理业",
+    "电气机械和器材制造业",
+    "综合",
+    "计算机、通信和其他电子设备制造业",
+    "软件和信息技术服务业",
+    "通用设备制造业",
+    "金属制品业",
+    "铁路、船舶、航空航天和其他运输设备制造业",
+    "非金属矿物制品业",
+    "黑色金属冶炼和压延加工业"
+  ],
+  "manual_approval_status": [
+    "hold_for_review",
+    "pending",
+    "pending_manual_approval"
+  ],
+  "previous_tier": [
+    "Excluded",
+    "Tier A",
+    "Tier B"
+  ],
+  "primary_source_supported": [
+    true
+  ],
+  "review_universe_source": [
+    "v5_hydrated",
+    "v5_targeted_hydrated",
+    "v7_proposal_new"
+  ],
+  "reviewer_decision": [
+    ""
+  ],
+  "route_around_or_substitution_risk": [
+    "missing_announcement|missing_architecture_shift|missing_route_around",
+    "missing_announcement|missing_financial_trace|missing_route_around",
+    "missing_announcement|missing_named_customer|missing_architecture_shift|missing_route_around",
+    "missing_announcement|missing_named_customer|missing_route_around",
+    "missing_announcement|missing_route_around",
+    "missing_annual_report|missing_announcement|missing_named_customer|missing_architecture_shift|missing_route_around",
+    "missing_annual_report|missing_announcement|missing_route_around",
+    "moderate",
+    "needs_manual_review",
+    "weak"
+  ],
+  "source_group": [
+    "canonical_90_internal_manual_review",
+    "doubler_data_gap_primary_source_backfilled",
+    "expansion_2025_doubler_discovered",
+    "false_negative_rescue_backfilled",
+    "latent_manual_review_batch1_primary_source_backfilled",
+    "latent_manual_review_standard_primary_source_backfilled",
+    "latent_primary_source_backfill_batch1_rerun_v2",
+    "latent_standard_primary_source_backfilled",
+    "v5_targeted_hydrated"
+  ],
+  "supply_chain_role_hint": [
+    "evidence_required",
+    "moderate",
+    "supported"
+  ],
+  "value_capture_risk": [
+    "needs_manual_review",
+    "strong"
+  ]
+}
