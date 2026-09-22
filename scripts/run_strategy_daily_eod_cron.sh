@@ -21,6 +21,55 @@ if [[ -z "${TRADE_DATE}" ]]; then
   TRADE_DATE="$("$PYTHON_BIN" -c 'from datetime import date; print(date.today().isoformat())')"
 fi
 
+# The daily pipeline writes ops.daily_pipeline_status during finalize (~21:00+).
+# Earlier invocations would otherwise fail with "missing daily_pipeline_status"
+# every trading day; poll while that is the only blocking reason and let real
+# dependency failures (or probe errors, or timeout) fall through to the CLI,
+# which reports them unchanged.
+wait_for_daily_pipeline_status() {
+  local max_seconds="$(( ${STRATEGY_DAILY_EOD_DEP_WAIT_MINUTES:-240} * 60 ))"
+  local interval="${STRATEGY_DAILY_EOD_DEP_WAIT_INTERVAL_SECONDS:-300}"
+  local waited=0
+  local probe_rc
+  local announced=0
+  while true; do
+    set +e
+    PYTHONPATH=src "$PYTHON_BIN" - "$TRADE_DATE" >>"$DETAIL_LOG" 2>&1 <<'PY'
+import sys
+from stock_research.strategy_daily_eod import check_strategy_daily_eod_dependencies
+result = check_strategy_daily_eod_dependencies(trade_date=sys.argv[1])
+common = result.get("common") or {}
+intraday = result.get("intraday") or {}
+if common.get("status") == "success" and intraday.get("status") == "success":
+    sys.exit(0)
+reasons = f"{common.get('reason', '')}; {intraday.get('reason', '')}"
+sys.exit(3 if "missing daily_pipeline_status" in reasons else 4)
+PY
+    probe_rc=$?
+    set -e
+    if [[ "$probe_rc" -eq 0 ]]; then
+      echo "strategy_daily_eod|dependency_wait|ready|waited_seconds|$waited" >>"$DETAIL_LOG"
+      return 0
+    fi
+    if [[ "$probe_rc" -ne 3 ]]; then
+      echo "strategy_daily_eod|dependency_wait|probe_stop|rc|$probe_rc" >>"$DETAIL_LOG"
+      return 0
+    fi
+    if (( waited >= max_seconds )); then
+      echo "strategy_daily_eod|dependency_wait|timeout|waited_seconds|$waited" >>"$DETAIL_LOG"
+      return 0
+    fi
+    if [[ "$announced" -eq 0 ]]; then
+      announced=1
+      echo "等待 daily_pipeline_status 就绪（最长 ${STRATEGY_DAILY_EOD_DEP_WAIT_MINUTES:-240} 分钟）..."
+    fi
+    sleep "$interval"
+    waited=$((waited + interval))
+  done
+}
+
+wait_for_daily_pipeline_status
+
 print_summary() {
   local title="$1"
   local rc="$2"
