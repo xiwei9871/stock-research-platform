@@ -59,14 +59,14 @@ def test_data_gap_core_equivalence_gate_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "data_gap_core_equivalence_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "data_gap_core_equivalence_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_data_gap_candidate_count"] == 27
-    assert summary["processed_count"] == 27
+    assert summary["source_data_gap_candidate_count"] == 19
+    assert summary["processed_count"] == 19
     assert (
         summary["data_gap_core_equivalent_count"]
         + summary["keep_as_data_gap_candidate_count"]
         + summary["remain_data_gap_watch_count"]
         + summary["downgrade_or_reject_count"]
-        == 27
+        == 19
     )
     assert summary["auto_added_to_quality_pool_count"] == 0
     assert summary["price_move_used_for_signal"] == 0
@@ -108,8 +108,8 @@ def test_data_gap_core_equivalence_gate_integrity() -> None:
     watch = pd.read_csv(OUTPUT_DIR / "data_gap_remain_watch.csv", dtype={"stock_code": str})
     reject = pd.read_csv(OUTPUT_DIR / "data_gap_downgrade_or_reject.csv", dtype={"stock_code": str})
 
-    assert len(gate) == 27
-    assert gate["stock_code"].nunique() == 27
+    assert len(gate) == 19
+    assert gate["stock_code"].nunique() == 19
     assert set(gate["stock_code"]) == set(candidates["stock_code"].str.zfill(6))
     assert gate["research_only"].eq(True).all()
     assert gate["used_for_signal"].eq(False).all()
@@ -126,7 +126,7 @@ def test_data_gap_core_equivalence_gate_integrity() -> None:
     assert set(gate["core_equivalence_decision"]).issubset(allowed)
     assert gate["core_equivalence_reason"].str.len().gt(0).all()
     assert gate["remaining_evidence_gap_flags"].notna().all()
-    assert len(core) + len(keep) + len(watch) + len(reject) == 27
+    assert len(core) + len(keep) + len(watch) + len(reject) == 19
 
 
 def test_data_gap_core_equivalence_gate_deterministic_and_strategy_diff_clean() -> None:

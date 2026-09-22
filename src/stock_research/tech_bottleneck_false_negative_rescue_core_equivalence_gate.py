@@ -19,7 +19,7 @@ INPUT_EVIDENCE = (
     / "outputs/research/tech_bottleneck_false_negative_rescue_primary_source_backfill_v1/false_negative_rescue_evidence_matrix.csv"
 )
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 39
+EXPECTED_COUNT = 21
 SOURCE_GROUP = "false_negative_rescue_backfilled"
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",

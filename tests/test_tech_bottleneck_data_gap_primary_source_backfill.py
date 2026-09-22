@@ -60,14 +60,14 @@ def test_data_gap_primary_source_backfill_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "data_gap_primary_source_backfill_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "data_gap_primary_source_backfill_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_data_gap_backfill_queue_count"] == 27
-    assert summary["processed_count"] == 27
+    assert summary["source_data_gap_backfill_queue_count"] == 19
+    assert summary["processed_count"] == 19
     assert (
         summary["upgrade_count"]
         + summary["remain_pending_count"]
         + summary["adjacent_count"]
         + summary["downgrade_or_reject_count"]
-        == 27
+        == 19
     )
     assert summary["data_gap_manual_review_processed"] is False
     assert summary["remain_data_gap_watch_processed"] is False
@@ -101,7 +101,7 @@ def test_data_gap_primary_source_backfill_outputs_and_guardrails() -> None:
     assert guardrails["lookahead_violation_rows"] == 0
 
 
-def test_data_gap_primary_source_backfill_processes_only_27_rows() -> None:
+def test_data_gap_primary_source_backfill_processes_only_19_rows() -> None:
     _run_generator()
 
     source = pd.read_csv(INPUT_QUEUE, dtype={"stock_code": str})
@@ -109,9 +109,9 @@ def test_data_gap_primary_source_backfill_processes_only_27_rows() -> None:
     evidence = pd.read_csv(OUTPUT_DIR / "data_gap_primary_source_evidence_matrix.csv", dtype={"stock_code": str})
     gaps = pd.read_csv(OUTPUT_DIR / "data_gap_gap_matrix.csv", dtype={"stock_code": str})
 
-    assert len(source) == 27
-    assert len(results) == 27
-    assert results["stock_code"].nunique() == 27
+    assert len(source) == 19
+    assert len(results) == 19
+    assert results["stock_code"].nunique() == 19
     assert set(results["stock_code"]) == set(source["stock_code"].str.zfill(6))
     assert set(evidence["stock_code"]).issubset(set(results["stock_code"]))
     assert set(gaps["stock_code"]) == set(results["stock_code"])

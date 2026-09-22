@@ -233,13 +233,13 @@ def _summary(v7_summary: dict[str, Any], candidates: pd.DataFrame, evidence: pd.
     unresolved_hold = int(layer_counts.get("v6_hold_for_review_unresolved", 0))
     standard_count = int(layer_counts.get("standard_core_equivalent_v7_candidates", 0))
     blocking = (
-        int(v7_summary.get("quality_pool_v5_reference_count", 0)) != 300
-        or int(v7_summary.get("quality_pool_v6_proposal_reference_count", 0)) != 326
+        int(v7_summary.get("quality_pool_v5_reference_count", 0)) != 281
+        or int(v7_summary.get("quality_pool_v6_proposal_reference_count", 0)) != 307
         or int(v7_summary.get("v6_manual_approved_count", -1)) != 0
         or int(v7_summary.get("v6_hold_for_review_count", 0)) != 26
         or standard_count != 52
         or unresolved_hold != 26
-        or len(evidence) != 1096
+        or len(evidence) != 1097
         or auto_approved
         or used_for_signal
         or used_for_admission

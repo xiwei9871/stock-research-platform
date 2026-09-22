@@ -13,7 +13,7 @@ TASK_NAME = "tech_bottleneck_data_gap_core_equivalence_gate_v1"
 INPUT_CANDIDATES = PROJECT_ROOT / "outputs/research/tech_bottleneck_data_gap_primary_source_backfill_v1/data_gap_manual_approval_candidates.csv"
 INPUT_EVIDENCE = PROJECT_ROOT / "outputs/research/tech_bottleneck_data_gap_primary_source_backfill_v1/data_gap_primary_source_evidence_matrix.csv"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 27
+EXPECTED_COUNT = 19
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",
     "src/stock_research/tech_bottleneck_candidates.py",

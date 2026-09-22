@@ -65,7 +65,7 @@ def test_pipeline_closure_outputs_and_canonical_artifacts() -> None:
     assert summary["canonical_research_workbench_core_pool_ready"] is True
     assert summary["canonical_core_pool_count"] == 114
     assert summary["discovered_total"] == 3252
-    assert summary["qualified_total"] == 1128
+    assert summary["qualified_total"] == 1131
     assert summary["original_clean_subset_count"] == 126
     assert summary["manual_approval_packet_total"] == 142
     assert summary["adjacent_watchlist_count"] == 14

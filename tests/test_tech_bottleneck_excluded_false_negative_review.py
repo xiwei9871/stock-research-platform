@@ -63,14 +63,14 @@ def test_excluded_false_negative_review_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "excluded_false_negative_review_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "excluded_false_negative_review_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["excluded_false_negative_review_count"] == 76
-    assert summary["processed_count"] == 76
+    assert summary["excluded_false_negative_review_count"] == 52
+    assert summary["processed_count"] == 52
     assert (
         summary["likely_false_negative_count"]
         + summary["possible_false_negative_count"]
         + summary["remain_excluded_count"]
         + summary["reject_as_concept_or_non_bottleneck_count"]
-        == 76
+        == 52
     )
     assert summary["primary_source_backfill_performed"] is False
     assert summary["auto_added_to_quality_pool_count"] == 0
@@ -88,7 +88,7 @@ def test_excluded_false_negative_review_outputs_and_guardrails() -> None:
     }
 
     assert guardrails["research_only"] is True
-    assert guardrails["excluded_false_negative_review_count"] == 76
+    assert guardrails["excluded_false_negative_review_count"] == 52
     assert guardrails["only_false_negative_review_processed"] is True
     assert guardrails["primary_source_backfill_performed"] is False
     assert guardrails["auto_added_to_quality_pool_count"] == 0
@@ -113,10 +113,10 @@ def test_excluded_false_negative_review_processes_only_76_rows() -> None:
     remain = pd.read_csv(OUTPUT_DIR / "remain_excluded.csv", dtype={"stock_code": str})
     reject = pd.read_csv(OUTPUT_DIR / "reject_as_concept_or_non_bottleneck.csv", dtype={"stock_code": str})
 
-    assert len(results) == 76
-    assert results["stock_code"].nunique() == 76
+    assert len(results) == 52
+    assert results["stock_code"].nunique() == 52
     assert set(results["stock_code"]) == set(source["stock_code"].str.zfill(6))
-    assert len(rescue) + len(possible) + len(remain) + len(reject) == 76
+    assert len(rescue) + len(possible) + len(remain) + len(reject) == 52
     assert results["research_only"].eq(True).all()
     assert results["used_for_signal"].eq(False).all()
     assert results["used_for_admission"].eq(False).all()

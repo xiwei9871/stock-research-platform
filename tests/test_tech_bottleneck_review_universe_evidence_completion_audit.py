@@ -77,9 +77,9 @@ def test_review_universe_evidence_completion_audit_outputs_and_guardrails() -> N
         (OUTPUT_DIR / "tech_bottleneck_review_universe_evidence_completion_guardrails.json").read_text(encoding="utf-8")
     )
 
-    assert summary["quality_pool_v5_reference_count"] == 300
+    assert summary["quality_pool_v5_reference_count"] == 281
     assert summary["v7_proposal_new_candidate_count"] == 78
-    assert summary["review_universe_total_count"] == 378
+    assert summary["review_universe_total_count"] == 359
     assert summary["duplicate_stock_count"] == 0
     assert summary["primary_source_collection_performed"] is False
     assert summary["evidence_backfill_performed"] is False
@@ -97,9 +97,9 @@ def test_review_universe_evidence_completion_audit_outputs_and_guardrails() -> N
         "conditionally_ready_with_evidence_gaps",
     }
 
-    assert guardrails["quality_pool_v5_reference_count"] == 300
+    assert guardrails["quality_pool_v5_reference_count"] == 281
     assert guardrails["v7_proposal_new_candidate_count"] == 78
-    assert guardrails["review_universe_total_count"] == 378
+    assert guardrails["review_universe_total_count"] == 359
     assert guardrails["frozen_quality_pool_generated"] is False
     assert guardrails["frontend_write_performed"] is False
     assert guardrails["used_for_signal_count"] == 0
@@ -123,14 +123,14 @@ def test_review_universe_evidence_completion_audit_universe_layers_and_fields() 
         dtype={"stock_code": str},
     ).fillna("")
 
-    assert len(universe) == 378
-    assert universe["stock_code"].nunique() == 378
+    assert len(universe) == 359
+    assert universe["stock_code"].nunique() == 359
     assert universe["review_universe_source"].value_counts().to_dict() == {
-        "v5_existing": 300,
+        "v5_existing": 281,
         "v7_pending_from_standard": 52,
         "v6_hold_from_high_priority": 26,
     }
-    assert len(audit) == 378
+    assert len(audit) == 359
     assert set(audit["stock_code"]) == set(universe["stock_code"])
     assert set(audit["evidence_completion_status"]).issubset(
         {
@@ -173,7 +173,7 @@ def test_review_universe_evidence_completion_audit_universe_layers_and_fields() 
     assert audit["used_for_signal"].eq(False).all()
     assert audit["used_for_admission"].eq(False).all()
     assert audit["auto_added_to_quality_pool"].eq(False).all()
-    assert len(gap_queue) + len(frontend_ready) == 378
+    assert len(gap_queue) + len(frontend_ready) == 359
     if not frontend_ready.empty:
         assert frontend_ready["frontend_ready"].eq(True).all()
     if not gap_queue.empty:

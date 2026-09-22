@@ -26,7 +26,7 @@ IPO_COHORT = (
     PROJECT_ROOT / "outputs/research/a_share_doubled_tech_stocks_since_20250101_v1/ipo_after_20250101_doubled_stocks.csv"
 )
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 88
+EXPECTED_COUNT = 93
 SOURCE_GROUP = "expansion_2025_doubler_discovered"
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",

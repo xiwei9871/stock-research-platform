@@ -36,7 +36,7 @@ COLLECTION_MANIFEST = (
     / "outputs/research/tech_bottleneck_latent_pending_primary_source_collection_v1/latent_pending_primary_source_collection_manifest.csv"
 )
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 45
+EXPECTED_COUNT = 47
 
 
 def _read_csv(path: Path) -> pd.DataFrame:

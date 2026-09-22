@@ -59,8 +59,8 @@ def test_latent_pending_primary_source_collection_outputs_and_guardrails() -> No
     )
 
     assert summary["research_only"] is True
-    assert summary["source_latent_pending_count"] == 45
-    assert summary["processed_stock_count"] == 45
+    assert summary["source_latent_pending_count"] == 47
+    assert summary["processed_stock_count"] == 47
     assert summary["primary_source_collection_performed"] is True
     assert summary["backfill_decision_performed"] is False
     assert summary["core_equivalence_performed"] is False
@@ -77,7 +77,7 @@ def test_latent_pending_primary_source_collection_outputs_and_guardrails() -> No
     }
 
     assert guardrails["research_only"] is True
-    assert guardrails["source_latent_pending_count"] == 45
+    assert guardrails["source_latent_pending_count"] == 47
     assert guardrails["only_latent_pending_processed"] is True
     assert guardrails["primary_source_collection_performed"] is True
     assert guardrails["backfill_decision_performed"] is False
@@ -99,7 +99,7 @@ def test_latent_pending_primary_source_collection_processes_only_45_pending_rows
     downloads = pd.read_csv(OUTPUT_DIR / "latent_pending_primary_source_download_audit.csv", dtype={"stock_code": str})
 
     expected_codes = set(queue["stock_code"].astype(str).str.zfill(6))
-    assert len(queue) == 45
+    assert len(queue) == 47
     assert set(search["stock_code"].astype(str).str.zfill(6)).issubset(expected_codes)
     assert set(downloads["stock_code"].astype(str).str.zfill(6)).issubset(expected_codes)
     assert set(manifest["stock_code"].astype(str).str.zfill(6)).issubset(expected_codes)

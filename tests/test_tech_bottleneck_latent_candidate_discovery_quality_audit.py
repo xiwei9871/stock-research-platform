@@ -80,8 +80,8 @@ def test_latent_candidate_discovery_quality_audit_outputs_and_guardrails() -> No
     )
 
     assert summary["research_only"] is True
-    assert summary["source_latent_evidence_queue_count"] == 210
-    assert summary["processed_count"] == 210
+    assert summary["source_latent_evidence_queue_count"] == 212
+    assert summary["processed_count"] == 212
     assert summary["only_latent_evidence_queue_processed"] is True
     assert summary["doubled_tech_596_processed"] is False
     assert summary["quality_pool_v3_processed"] is False
@@ -106,11 +106,11 @@ def test_latent_candidate_discovery_quality_audit_outputs_and_guardrails() -> No
         + summary["latent_standard_backfill_count"]
         + summary["latent_manual_review_first_count"]
         + summary["latent_defer_or_reject_count"]
-        == 210
+        == 212
     )
 
     assert guardrails["research_only"] is True
-    assert guardrails["source_latent_evidence_queue_count"] == 210
+    assert guardrails["source_latent_evidence_queue_count"] == 212
     assert guardrails["only_latent_evidence_queue_processed"] is True
     assert guardrails["doubled_tech_596_processed"] is False
     assert guardrails["quality_pool_v3_processed"] is False
@@ -160,8 +160,8 @@ def test_latent_candidate_quality_audit_integrity() -> None:
         "notes",
     }
     assert required_columns.issubset(audit.columns)
-    assert len(audit) == 210
-    assert audit["stock_code"].nunique() == 210
+    assert len(audit) == 212
+    assert audit["stock_code"].nunique() == 212
     assert set(audit["stock_code"]) == set(source["stock_code"].astype(str).str.zfill(6))
     assert audit["quality_audit_decision"].notna().all()
     assert audit["recommended_next_action"].astype(str).str.len().gt(0).all()
@@ -174,7 +174,7 @@ def test_latent_candidate_quality_audit_integrity() -> None:
         "latent_manual_review_first",
         "latent_defer_or_reject",
     }
-    assert len(high) + len(standard) + len(manual) + len(defer) == 210
+    assert len(high) + len(standard) + len(manual) + len(defer) == 212
     assert set(high["quality_audit_decision"]) <= {"latent_high_priority_backfill"}
     assert set(standard["quality_audit_decision"]) <= {"latent_standard_backfill"}
     assert set(manual["quality_audit_decision"]) <= {"latent_manual_review_first"}

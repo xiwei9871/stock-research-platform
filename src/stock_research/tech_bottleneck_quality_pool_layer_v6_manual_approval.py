@@ -233,7 +233,7 @@ def _summary(
     used_for_admission = int(packet["used_for_admission"].map(_truthy).sum()) if not packet.empty else 0
     auto_added = int(packet["auto_added_to_quality_pool"].map(_truthy).sum()) if not packet.empty else 0
     blocking = (
-        len(v5) != 300
+        len(v5) != 281
         or int(proposal_summary.get("proposed_addition_count", 0)) != 26
         or len(additions) != 26
         or len(packet) != 26

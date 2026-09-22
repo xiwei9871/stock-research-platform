@@ -172,24 +172,24 @@ def _summary(
     used_for_admission = int(manifest["used_for_admission"].astype(bool).sum())
     duplicate_count = int(len(manifest) - manifest["stock_code"].nunique())
     blocking = (
-        len(manifest) != 210
+        len(manifest) != 197
         or duplicate_count != 0
         or int(layer_counts.get("internal_quality_pool", 0)) != 88
-        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 84
-        or int(layer_counts.get("false_negative_rescue_core_equivalent_quality_pool", 0)) != 38
+        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 89
+        or int(layer_counts.get("false_negative_rescue_core_equivalent_quality_pool", 0)) != 20
         or len(sidecars["expansion_keep_4"]) != 4
         or len(sidecars["rescue_keep_1"]) != 1
         or len(sidecars["downgrade_reject_2"]) != 2
-        or len(sidecars["possible_false_negative_9"]) != 9
+        or len(sidecars["possible_false_negative_9"]) != 4
         or len(sidecars["remain_excluded_22"]) != 22
-        or len(sidecars["reject_concept_6"]) != 6
+        or len(sidecars["reject_concept_6"]) != 5
         or used_for_signal
         or used_for_admission
         or not strategy_clean
     )
     return {
         "task_name": TASK_NAME,
-        "quality_pool_v1_count": 172,
+        "quality_pool_v1_count": 177,
         "quality_pool_v2_count": int(len(manifest)),
         "internal_quality_pool_count": int(layer_counts.get("internal_quality_pool", 0)),
         "expansion_core_equivalent_count": int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)),

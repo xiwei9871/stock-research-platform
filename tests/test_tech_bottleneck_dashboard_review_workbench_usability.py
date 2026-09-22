@@ -60,24 +60,22 @@ def test_review_workbench_frontend_source_uses_workbench_language_not_technical_
     page = PAGE.read_text(encoding="utf-8")
     route_test = ROUTE_TEST.read_text(encoding="utf-8")
 
-    assert "科技卡脖子观察池" in page
-    assert "内部研究复盘工作台" in page
-    assert "观察池标的" in page
-    assert "待复盘" in page
-    assert "高优先复核" in page
-    assert "财报缺口" in page
-    assert "新闻缺口" in page
-    assert "Review Queue Tabs" in page
-    assert "查看详情" in page
-    assert "Manual Review 研究复盘" in page
-    assert "保存研究复盘" in page
+    assert "技术瓶颈候选复盘队列" in page
+    assert "候选复盘队列" in page
+    assert "筛选工具条" in page
+    assert "候选队列状态条" in page
+    assert "Guardrails" in page
+    assert "Pipeline closure" in page
+    assert "Production boundaries" in page
+    data = (PAGE.parent / "techBottleneckReadonlyData.ts").read_text(encoding="utf-8")
+    assert "Manual Review" in data
+    assert "保存研究复盘" in data
     assert "Page Sections" not in page
     assert "Fields:" not in page
     assert "Allowed interactions:" not in page
     assert "Writeback allowed" not in page
     assert "Used for automated execution" not in page
-    assert "科技卡脖子观察池" in route_test
-    assert "保存研究复盘" in route_test
+    assert "科技卡脖子复盘" in route_test
 
 
 def test_review_workbench_guardrails_and_strategy_diff_are_clean() -> None:

@@ -3,12 +3,12 @@
   "theme_id": "ai_power_value_capture_v1",
   "universe_snapshot": {
     "dataset_path": "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/tech_bottleneck_review_universe_frontend_dataset.csv",
-    "dataset_sha256": "39939794ac8fdf5ede6b07ab42456727d6ce11ed6537018d6c0511767d55356b",
+    "dataset_sha256": "945a043a0220963f095656890f664e9975660e5e7a567478fd60a0a027f6735c",
     "evidence_index_path": "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/tech_bottleneck_review_universe_frontend_evidence_index.csv",
-    "evidence_index_sha256": "d9a3ccd2d38e477135fafffda9d01ecb9df3c92c97fc3e21f716a5257d760483",
+    "evidence_index_sha256": "913316f7e8fa0291fdcf6cd8347b8286a071a391beab0d8e6bc2ddd6ee2f2fab",
     "source_index_path": "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/tech_bottleneck_review_universe_frontend_source_index.csv",
-    "source_index_sha256": "0385da59393793784529e683ce5b56f323aefed44de6783a3f64a4493423863a",
-    "expected_universe_count": 378
+    "source_index_sha256": "ce7f0258f481810d5100608253595c563df9308235fb615b16567e2fe2686149",
+    "expected_universe_count": 359
   },
   "crosswalks": [
     {

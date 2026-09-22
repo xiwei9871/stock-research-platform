@@ -187,7 +187,7 @@ def _summary(
     used_for_signal = int(manifest["used_for_signal"].map(_truthy).sum())
     used_for_admission = int(manifest["used_for_admission"].map(_truthy).sum())
     blocking = (
-        len(manifest) != 300
+        len(manifest) != 281
         or int(layer_counts.get("latent_standard_core_equivalent_quality_pool", 0)) != 24
         or duplicate_count != 0
         or len(v4_keep) != 7
@@ -200,7 +200,7 @@ def _summary(
     )
     return {
         "task_name": TASK_NAME,
-        "quality_pool_v4_count": 276,
+        "quality_pool_v4_count": 257,
         "latent_standard_core_equivalent_added": int(
             layer_counts.get("latent_standard_core_equivalent_quality_pool", 0)
         ),

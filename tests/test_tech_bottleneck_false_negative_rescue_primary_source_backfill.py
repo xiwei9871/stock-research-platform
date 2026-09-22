@@ -64,14 +64,14 @@ def test_false_negative_rescue_primary_source_backfill_outputs_and_guardrails() 
     summary = json.loads((OUTPUT_DIR / "false_negative_rescue_primary_source_backfill_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "false_negative_rescue_primary_source_backfill_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_false_negative_rescue_count"] == 39
-    assert summary["processed_count"] == 39
+    assert summary["source_false_negative_rescue_count"] == 21
+    assert summary["processed_count"] == 21
     assert (
         summary["upgrade_count"]
         + summary["remain_pending_count"]
         + summary["adjacent_count"]
         + summary["downgrade_or_reject_count"]
-        == 39
+        == 21
     )
     assert summary["possible_false_negative_processed"] is False
     assert summary["remain_excluded_processed"] is False
@@ -91,7 +91,7 @@ def test_false_negative_rescue_primary_source_backfill_outputs_and_guardrails() 
     }
 
     assert guardrails["research_only"] is True
-    assert guardrails["source_false_negative_rescue_count"] == 39
+    assert guardrails["source_false_negative_rescue_count"] == 21
     assert guardrails["only_false_negative_rescue_processed"] is True
     assert guardrails["possible_false_negative_processed"] is False
     assert guardrails["remain_excluded_processed"] is False
@@ -108,7 +108,7 @@ def test_false_negative_rescue_primary_source_backfill_outputs_and_guardrails() 
     assert guardrails["lookahead_violation_rows"] == 0
 
 
-def test_false_negative_rescue_primary_source_backfill_processes_only_39_rows() -> None:
+def test_false_negative_rescue_primary_source_backfill_processes_only_21_rows() -> None:
     _run_generator()
 
     queue = pd.read_csv(INPUT_QUEUE, dtype={"stock_code": str})
@@ -116,7 +116,7 @@ def test_false_negative_rescue_primary_source_backfill_processes_only_39_rows() 
     evidence = pd.read_csv(OUTPUT_DIR / "false_negative_rescue_evidence_matrix.csv", dtype={"stock_code": str})
     gaps = pd.read_csv(OUTPUT_DIR / "false_negative_rescue_gap_matrix.csv", dtype={"stock_code": str})
 
-    assert len(results) == 39
+    assert len(results) == 21
     assert set(results["stock_code"]) == set(queue["stock_code"].str.zfill(6))
     assert set(evidence["stock_code"]).issubset(set(results["stock_code"]))
     assert set(gaps["stock_code"]) == set(results["stock_code"])

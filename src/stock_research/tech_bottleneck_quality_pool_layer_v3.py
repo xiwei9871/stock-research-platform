@@ -167,21 +167,21 @@ def _summary(manifest: pd.DataFrame, sidecars: dict[str, pd.DataFrame], strategy
     used_for_admission = int(manifest["used_for_admission"].astype(bool).sum())
     duplicate_count = int(len(manifest) - manifest["stock_code"].nunique())
     blocking = (
-        len(manifest) != 234
+        len(manifest) != 215
         or duplicate_count != 0
         or int(layer_counts.get("internal_quality_pool", 0)) != 88
-        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 84
-        or int(layer_counts.get("false_negative_rescue_core_equivalent_quality_pool", 0)) != 38
-        or int(layer_counts.get("data_gap_core_equivalent_quality_pool", 0)) != 24
+        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 89
+        or int(layer_counts.get("false_negative_rescue_core_equivalent_quality_pool", 0)) != 20
+        or int(layer_counts.get("data_gap_core_equivalent_quality_pool", 0)) != 18
         or len(sidecars["expansion_keep_4"]) != 4
         or len(sidecars["rescue_keep_1"]) != 1
-        or len(sidecars["data_gap_keep_3"]) != 3
+        or len(sidecars["data_gap_keep_3"]) != 1
         or len(sidecars["downgrade_reject_2"]) != 2
-        or len(sidecars["possible_false_negative_9"]) != 9
+        or len(sidecars["possible_false_negative_9"]) != 4
         or len(sidecars["remain_excluded_22"]) != 22
-        or len(sidecars["reject_concept_6"]) != 6
-        or len(sidecars["data_gap_manual_review_31"]) != 31
-        or len(sidecars["remain_data_gap_watch_6"]) != 6
+        or len(sidecars["reject_concept_6"]) != 5
+        or len(sidecars["data_gap_manual_review_31"]) != 26
+        or len(sidecars["remain_data_gap_watch_6"]) != 2
         or len(sidecars["reject_weak_concept_3"]) != 3
         or used_for_signal
         or used_for_admission
@@ -189,7 +189,7 @@ def _summary(manifest: pd.DataFrame, sidecars: dict[str, pd.DataFrame], strategy
     )
     return {
         "task_name": TASK_NAME,
-        "quality_pool_v2_count": 210,
+        "quality_pool_v2_count": 197,
         "quality_pool_v3_count": int(len(manifest)),
         "internal_quality_pool_count": int(layer_counts.get("internal_quality_pool", 0)),
         "expansion_core_equivalent_count": int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)),

@@ -66,9 +66,9 @@ def test_quality_pool_layer_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "quality_pool_layer_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "quality_pool_layer_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["quality_pool_count"] == 172
+    assert summary["quality_pool_count"] == 177
     assert summary["internal_quality_pool_count"] == 88
-    assert summary["expansion_core_equivalent_count"] == 84
+    assert summary["expansion_core_equivalent_count"] == 89
     assert summary["expansion_keep_separate_count"] == 4
     assert summary["downgrade_reject_count"] == 2
     assert summary["auto_applied_count"] == 0
@@ -83,9 +83,9 @@ def test_quality_pool_layer_outputs_and_guardrails() -> None:
 
     assert guardrails["research_only"] is True
     assert guardrails["quality_pool_layer_generated"] is True
-    assert guardrails["quality_pool_count"] == 172
+    assert guardrails["quality_pool_count"] == 177
     assert guardrails["internal_quality_pool_count"] == 88
-    assert guardrails["expansion_core_equivalent_count"] == 84
+    assert guardrails["expansion_core_equivalent_count"] == 89
     assert guardrails["expansion_keep_separate_count"] == 4
     assert guardrails["downgrade_reject_count"] == 2
     assert guardrails["auto_applied_count"] == 0
@@ -107,8 +107,8 @@ def test_quality_pool_layer_manifest_integrity() -> None:
     keep = pd.read_csv(OUTPUT_DIR / "expansion_keep_separate_4.csv", dtype={"stock_code": str})
     reject = pd.read_csv(OUTPUT_DIR / "downgrade_or_reject_2.csv", dtype={"stock_code": str})
 
-    assert len(manifest) == 172
-    assert manifest["stock_code"].nunique() == 172
+    assert len(manifest) == 177
+    assert manifest["stock_code"].nunique() == 177
     assert set(manifest["quality_layer"]) == {"internal_quality_pool", "expansion_core_equivalent_quality_pool"}
     assert manifest["research_only"].eq(True).all()
     assert manifest["used_for_signal"].eq(False).all()
@@ -119,7 +119,7 @@ def test_quality_pool_layer_manifest_integrity() -> None:
 
     counts = dict(zip(by_source["quality_layer"], by_source["candidate_count"], strict=False))
     assert counts["internal_quality_pool"] == 88
-    assert counts["expansion_core_equivalent_quality_pool"] == 84
+    assert counts["expansion_core_equivalent_quality_pool"] == 89
     assert len(keep) == 4
     assert len(reject) == 2
     assert keep["research_only"].eq(True).all()

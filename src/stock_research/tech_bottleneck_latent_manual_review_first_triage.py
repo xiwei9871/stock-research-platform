@@ -273,7 +273,7 @@ def _summary(
     blocking = (
         len(manual_first) != EXPECTED_COUNT
         or len(triage) != EXPECTED_COUNT
-        or len(quality_pool_v5) != 300
+        or len(quality_pool_v5) != 281
         or quality_overlap != 0
         or defer_overlap != 0
         or used_for_signal

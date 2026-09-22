@@ -249,7 +249,7 @@ def _summary(source_queue: pd.DataFrame, audit: pd.DataFrame, strategy_clean: bo
     used_for_signal = int(audit["used_for_signal"].astype(bool).sum())
     used_for_admission = int(audit["used_for_admission"].astype(bool).sum())
     manual_or_defer = int(counts.get("latent_manual_review_first", 0)) + int(counts.get("latent_defer_or_reject", 0))
-    blocking = used_for_signal or used_for_admission or not strategy_clean or len(source_queue) != 210 or len(audit) != 210
+    blocking = used_for_signal or used_for_admission or not strategy_clean or len(source_queue) != 212 or len(audit) != 212
     acceptance = "blocked_due_to_guardrail_violation"
     if not blocking:
         acceptance = (

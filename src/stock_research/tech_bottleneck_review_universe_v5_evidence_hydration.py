@@ -452,9 +452,9 @@ def _summary(hydrated: pd.DataFrame, universe: pd.DataFrame, gap: pd.DataFrame, 
     frontend_ready_count = int(hydrated["hydration_status"].eq("hydrated_frontend_ready").sum())
     remaining_count = int(len(hydrated) - frontend_ready_count)
     guardrail_violation = (
-        len(universe) != 378
-        or len(gap) != 300
-        or len(hydrated) != 300
+        len(universe) != 359
+        or len(gap) != 281
+        or len(hydrated) != 281
         or duplicate_stock_count != 0
         or used_for_signal_count != 0
         or used_for_admission_count != 0

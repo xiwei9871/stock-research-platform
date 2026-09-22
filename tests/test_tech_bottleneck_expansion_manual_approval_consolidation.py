@@ -62,7 +62,7 @@ def test_expansion_manual_approval_consolidation_outputs_and_guardrails() -> Non
     summary = json.loads((OUTPUT_DIR / "expansion_manual_approval_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "expansion_manual_approval_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["expansion_manual_approval_candidate_count"] == 88
+    assert summary["expansion_manual_approval_candidate_count"] == 93
     assert summary["source_group"] == "expansion_2025_doubler_discovered"
     assert summary["price_move_used_for_signal"] == 0
     assert summary["auto_applied_count"] == 0
@@ -80,7 +80,7 @@ def test_expansion_manual_approval_consolidation_outputs_and_guardrails() -> Non
 
     assert guardrails["research_only"] is True
     assert guardrails["manual_approval_package_generated"] is True
-    assert guardrails["expansion_manual_approval_candidate_count"] == 88
+    assert guardrails["expansion_manual_approval_candidate_count"] == 93
     assert guardrails["source_group"] == "expansion_2025_doubler_discovered"
     assert guardrails["price_move_used_for_signal"] == 0
     assert guardrails["auto_applied_count"] == 0
@@ -103,8 +103,8 @@ def test_expansion_manual_approval_package_integrity() -> None:
     risk = pd.read_csv(OUTPUT_DIR / "expansion_manual_approval_risk_review.csv", dtype={"stock_code": str})
     template = pd.read_csv(OUTPUT_DIR / "expansion_manual_approval_decision_template.csv", dtype={"stock_code": str})
 
-    assert len(package) == 88
-    assert package["stock_code"].nunique() == 88
+    assert len(package) == 93
+    assert package["stock_code"].nunique() == 93
     assert set(package["stock_code"]) == set(candidates["stock_code"].str.zfill(6))
     assert package["source_group"].eq("expansion_2025_doubler_discovered").all()
     assert package["proposal_source"].eq("expansion_queue_primary_source_backfill_v1").all()

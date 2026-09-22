@@ -160,11 +160,11 @@ def _summary(
     keep_overlap_count = int(len(set(keep_separate["stock_code"]) & set(manifest["stock_code"])))
     blocking = (
         int(layer_counts.get("internal_quality_pool", 0)) != 88
-        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 84
-        or int(layer_counts.get("false_negative_rescue_core_equivalent_quality_pool", 0)) != 38
-        or int(layer_counts.get("data_gap_core_equivalent_quality_pool", 0)) != 24
+        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 89
+        or int(layer_counts.get("false_negative_rescue_core_equivalent_quality_pool", 0)) != 20
+        or int(layer_counts.get("data_gap_core_equivalent_quality_pool", 0)) != 18
         or int(layer_counts.get("latent_core_equivalent_quality_pool", 0)) != 42
-        or len(manifest) != 276
+        or len(manifest) != 257
         or duplicate_count != 0
         or len(latent_keep_3) != 3
         or len(latent_initial_keep_4) != 4
@@ -176,7 +176,7 @@ def _summary(
     )
     return {
         "task_name": TASK_NAME,
-        "quality_pool_v3_count": 234,
+        "quality_pool_v3_count": 215,
         "latent_core_equivalent_added": int(layer_counts.get("latent_core_equivalent_quality_pool", 0)),
         "quality_pool_v4_count": int(len(manifest)),
         "internal_quality_pool_count": int(layer_counts.get("internal_quality_pool", 0)),

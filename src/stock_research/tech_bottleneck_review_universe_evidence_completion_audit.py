@@ -242,10 +242,10 @@ def _summary(audit: pd.DataFrame, strategy_clean: bool) -> dict[str, Any]:
     used_for_admission_count = int(audit["used_for_admission"].astype(bool).sum())
     auto_added_count = int(audit["auto_added_to_quality_pool"].astype(bool).sum())
     guardrail_violation = (
-        source_counts.get("v5_existing", 0) != 300
+        source_counts.get("v5_existing", 0) != 281
         or source_counts.get("v6_hold_from_high_priority", 0) != 26
         or source_counts.get("v7_pending_from_standard", 0) != 52
-        or len(audit) != 378
+        or len(audit) != 359
         or duplicate_stock_count != 0
         or used_for_signal_count != 0
         or used_for_admission_count != 0

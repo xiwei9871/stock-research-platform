@@ -311,11 +311,11 @@ def _summary(universe: pd.DataFrame, hydrated: pd.DataFrame, remaining_gap: pd.D
     auto_added_count = int(frontend_ready["auto_added_to_quality_pool"].astype(bool).sum())
     duplicate_stock_count = int(frontend_ready["stock_code"].duplicated().sum())
     guardrail_violation = (
-        len(universe) != 378
+        len(universe) != 359
         or len(remaining_gap) != 29
         or len(frontend_ready) != 29
         or duplicate_stock_count != 0
-        or int(hydrated["hydration_status"].eq("hydrated_frontend_ready").sum()) != 271
+        or int(hydrated["hydration_status"].eq("hydrated_frontend_ready").sum()) != 252
         or int((universe["review_universe_source"] != "v5_existing").sum()) != 78
         or used_for_signal_count != 0
         or used_for_admission_count != 0

@@ -64,9 +64,9 @@ def test_expansion_queue_primary_source_backfill_outputs_and_guardrails() -> Non
     summary = json.loads((OUTPUT_DIR / "expansion_queue_primary_source_backfill_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "expansion_queue_primary_source_backfill_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_expansion_queue_count"] == 88
-    assert summary["processed_count"] == 88
-    assert summary["upgrade_count"] + summary["remain_pending_count"] + summary["adjacent_count"] + summary["downgrade_or_reject_count"] == 88
+    assert summary["source_expansion_queue_count"] == 93
+    assert summary["processed_count"] == 93
+    assert summary["upgrade_count"] + summary["remain_pending_count"] + summary["adjacent_count"] + summary["downgrade_or_reject_count"] == 93
     assert summary["price_move_used_for_signal"] == 0
     assert summary["auto_applied_count"] == 0
     assert summary["used_for_signal_count"] == 0
@@ -82,7 +82,7 @@ def test_expansion_queue_primary_source_backfill_outputs_and_guardrails() -> Non
     }
 
     assert guardrails["research_only"] is True
-    assert guardrails["source_expansion_queue_count"] == 88
+    assert guardrails["source_expansion_queue_count"] == 93
     assert guardrails["only_expansion_queue_processed"] is True
     assert guardrails["price_move_used_for_signal"] == 0
     assert guardrails["auto_applied_count"] == 0
@@ -96,7 +96,7 @@ def test_expansion_queue_primary_source_backfill_outputs_and_guardrails() -> Non
     assert guardrails["lookahead_violation_rows"] == 0
 
 
-def test_expansion_queue_primary_source_backfill_processes_only_88_queue_rows() -> None:
+def test_expansion_queue_primary_source_backfill_processes_only_93_queue_rows() -> None:
     _run_generator()
 
     queue = pd.read_csv(INPUT_QUEUE, dtype={"stock_code": str})
@@ -104,7 +104,7 @@ def test_expansion_queue_primary_source_backfill_processes_only_88_queue_rows() 
     evidence = pd.read_csv(OUTPUT_DIR / "expansion_queue_primary_source_evidence_matrix.csv", dtype={"stock_code": str})
     gaps = pd.read_csv(OUTPUT_DIR / "expansion_queue_gap_matrix.csv", dtype={"stock_code": str})
 
-    assert len(results) == 88
+    assert len(results) == 93
     assert set(results["stock_code"]) == set(queue["stock_code"].str.zfill(6))
     assert set(evidence["stock_code"]).issubset(set(results["stock_code"]))
     assert set(gaps["stock_code"]) == set(results["stock_code"])

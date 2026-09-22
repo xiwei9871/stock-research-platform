@@ -304,9 +304,9 @@ def _summary(
     duplicate_count = int(len(duplicate))
     expected_count = int(len(v6) + len(additions))
     blocking = (
-        len(v5) != 300
-        or len(v6) != 326
-        or int(v6_summary.get("proposed_quality_pool_v6_count", 0)) != 326
+        len(v5) != 281
+        or len(v6) != 307
+        or int(v6_summary.get("proposed_quality_pool_v6_count", 0)) != 307
         or manual_approved != 0
         or hold_for_review != 26
         or len(core) != 52

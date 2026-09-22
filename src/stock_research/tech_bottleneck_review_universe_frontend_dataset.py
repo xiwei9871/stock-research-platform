@@ -595,10 +595,10 @@ def _summary(dataset: pd.DataFrame, evidence: pd.DataFrame, sources: pd.DataFram
         ).sum()
     )
     violation = (
-        source_counts.get("v5_hydrated", 0) != 271
+        source_counts.get("v5_hydrated", 0) != 252
         or source_counts.get("v7_proposal_new", 0) != 78
         or source_counts.get("v5_targeted_hydrated", 0) != 29
-        or len(dataset) != 378
+        or len(dataset) != 359
         or duplicate_count != 0
         or remaining_gap != 0
         or used_for_signal_count != 0
@@ -614,7 +614,7 @@ def _summary(dataset: pd.DataFrame, evidence: pd.DataFrame, sources: pd.DataFram
         decision = "tech_bottleneck_review_universe_frontend_dataset_ready"
     return {
         "task_name": TASK_NAME,
-        "review_universe_total_count": 378,
+        "review_universe_total_count": 359,
         "v5_hydrated_count": int(source_counts.get("v5_hydrated", 0)),
         "v7_proposal_new_count": int(source_counts.get("v7_proposal_new", 0)),
         "v5_targeted_hydrated_count": int(source_counts.get("v5_targeted_hydrated", 0)),

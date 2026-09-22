@@ -199,14 +199,14 @@ def _summary(closure: pd.DataFrame, quality: pd.DataFrame, sidecars: dict[str, p
     blocking = (
         len(closure) != 596
         or closure["stock_code"].nunique() != 596
-        or quality_pool_v3_count != 234
-        or quality_pool_v3_overlap_count != 200
-        or keep_separate_count != 8
-        or residual_manual_review_count != 40
-        or len(sidecars["remain_data_gap_watch"]) != 6
+        or quality_pool_v3_count != 215
+        or quality_pool_v3_overlap_count != 181
+        or keep_separate_count != 6
+        or residual_manual_review_count != 30
+        or len(sidecars["remain_data_gap_watch"]) != 2
         or len(sidecars["remain_excluded"]) != 22
-        or reject_count != 11
-        or int(bucket_counts.get("weak_or_concept_only_no_backfill", 0)) != 310
+        or reject_count != 10
+        or int(bucket_counts.get("weak_or_concept_only_no_backfill", 0)) != 346
         or used_for_signal
         or used_for_admission
         or price_signal

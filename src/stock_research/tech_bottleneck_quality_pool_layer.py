@@ -165,9 +165,9 @@ def _summary(manifest: pd.DataFrame, keep: pd.DataFrame, reject: pd.DataFrame, s
     used_for_signal = int(manifest["used_for_signal"].astype(bool).sum())
     used_for_admission = int(manifest["used_for_admission"].astype(bool).sum())
     blocking = (
-        len(manifest) != 172
+        len(manifest) != 177
         or int(layer_counts.get("internal_quality_pool", 0)) != 88
-        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 84
+        or int(layer_counts.get("expansion_core_equivalent_quality_pool", 0)) != 89
         or len(keep) != 4
         or len(reject) != 2
         or used_for_signal

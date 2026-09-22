@@ -16,7 +16,7 @@ INPUT_QUEUE = (
 )
 SOURCE_UNIVERSE = PROJECT_ROOT / "outputs/research/tech_bottleneck_a_share_candidate_universe_v1/a_share_candidate_universe.csv"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_QUEUE_COUNT = 49
+EXPECTED_QUEUE_COUNT = 51
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",
     "src/stock_research/tech_bottleneck_candidates.py",

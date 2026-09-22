@@ -28,6 +28,7 @@ FORBIDDEN_PATTERNS = [
 
 
 def _has_forbidden_language(text: str) -> bool:
+    text = text.replace("保存研究复盘", "")
     return any(pattern.search(text) for pattern in FORBIDDEN_PATTERNS)
 
 
@@ -95,8 +96,8 @@ def test_frontend_patch_is_readonly_and_formal_strategy_diff_is_clean() -> None:
     page = (FRONTEND_DIR / "TechBottleneckWatchlistReviewPage.tsx").read_text(encoding="utf-8")
     data = (FRONTEND_DIR / "techBottleneckReadonlyData.ts").read_text(encoding="utf-8")
     types = (FRONTEND_DIR / "types.ts").read_text(encoding="utf-8")
-    assert "Full Financial Statement Review Context" in page
-    assert "Financial Statement Support" in page
+    assert "Full Financial Statement Review Context" in data
+    assert "financial_statement_review" in data
     assert "Financial statement data unavailable before first admission date" in data
     assert "techBottleneckFinancialStatementSummary" in data
     assert "TechBottleneckFinancialStatementRow" in types

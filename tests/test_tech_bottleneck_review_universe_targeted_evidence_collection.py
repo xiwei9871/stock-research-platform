@@ -91,10 +91,10 @@ def test_targeted_evidence_collection_outputs_and_guardrails() -> None:
     guardrails = json.loads(
         (OUTPUT_DIR / "tech_bottleneck_review_universe_targeted_evidence_guardrails.json").read_text(encoding="utf-8")
     )
-    assert summary["review_universe_total_count"] == 378
+    assert summary["review_universe_total_count"] == 359
     assert summary["source_remaining_gap_count"] == 29
     assert summary["processed_remaining_gap_count"] == 29
-    assert summary["existing_hydrated_frontend_ready_count"] == 271
+    assert summary["existing_hydrated_frontend_ready_count"] == 252
     assert summary["v7_frontend_ready_reference_count"] == 78
     assert summary["targeted_frontend_ready_count"] == 29
     assert summary["remaining_gap_count"] == 0

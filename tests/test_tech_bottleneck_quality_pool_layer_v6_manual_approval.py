@@ -94,7 +94,7 @@ def test_quality_pool_layer_v6_manual_approval_outputs_and_guardrails() -> None:
     )
 
     assert summary["research_only"] is True
-    assert summary["quality_pool_v5_reference_count"] == 300
+    assert summary["quality_pool_v5_reference_count"] == 281
     assert summary["source_v6_proposed_addition_count"] == 26
     assert summary["processed_proposed_addition_count"] == 26
     assert summary["manual_approved_count"] == 0

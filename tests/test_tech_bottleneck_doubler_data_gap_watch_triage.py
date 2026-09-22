@@ -59,14 +59,14 @@ def test_doubler_data_gap_watch_triage_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "doubler_data_gap_watch_triage_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "doubler_data_gap_watch_triage_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_data_gap_watch_count"] == 67
-    assert summary["processed_count"] == 67
+    assert summary["source_data_gap_watch_count"] == 50
+    assert summary["processed_count"] == 50
     assert (
         summary["data_gap_backfill_queue_count"]
         + summary["data_gap_manual_review_count"]
         + summary["remain_data_gap_watch_count"]
         + summary["reject_as_weak_or_concept_count"]
-        == 67
+        == 50
     )
     assert summary["primary_source_backfill_performed"] is False
     assert summary["auto_added_to_quality_pool_count"] == 0
@@ -107,8 +107,8 @@ def test_doubler_data_gap_watch_triage_integrity() -> None:
     watch = pd.read_csv(OUTPUT_DIR / "remain_data_gap_watch.csv", dtype={"stock_code": str})
     reject = pd.read_csv(OUTPUT_DIR / "reject_as_weak_or_concept.csv", dtype={"stock_code": str})
 
-    assert len(results) == 67
-    assert results["stock_code"].nunique() == 67
+    assert len(results) == 50
+    assert results["stock_code"].nunique() == 50
     assert set(results["stock_code"]) == set(source["stock_code"].str.zfill(6))
     assert results["source_group"].eq("doubler_data_gap_watch").all()
     assert results["research_only"].eq(True).all()
@@ -127,7 +127,7 @@ def test_doubler_data_gap_watch_triage_integrity() -> None:
     assert set(results["triage_decision"]).issubset(allowed)
     assert results["data_gap_feasibility"].str.len().gt(0).all()
     assert results["recommended_next_action"].str.len().gt(0).all()
-    assert len(backfill) + len(manual) + len(watch) + len(reject) == 67
+    assert len(backfill) + len(manual) + len(watch) + len(reject) == 50
     if not backfill.empty:
         assert backfill["triage_decision"].eq("data_gap_backfill_queue").all()
         assert backfill["recommended_next_action"].str.contains("primary-source", case=False, regex=False).all()

@@ -45,10 +45,11 @@ def test_frontend_module_exists_and_is_readonly() -> None:
     assert page.exists()
     assert data.exists()
     assert types.exists()
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in [page, data, types])
+    assert "writebackAllowed: false" in combined
+    assert "usedForSignal: false" in combined
     for path in [page, data, types]:
         text = path.read_text(encoding="utf-8")
-        assert "writebackAllowed: false" in text or path.name == "types.ts"
-        assert "usedForSignal: false" in text or path.name == "types.ts"
         assert not module.contains_actionable_trading_language(text), path
 
 

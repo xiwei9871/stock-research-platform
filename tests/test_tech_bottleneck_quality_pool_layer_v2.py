@@ -69,17 +69,17 @@ def test_quality_pool_layer_v2_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "quality_pool_layer_v2_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "quality_pool_layer_v2_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["quality_pool_v1_count"] == 172
-    assert summary["quality_pool_v2_count"] == 210
+    assert summary["quality_pool_v1_count"] == 177
+    assert summary["quality_pool_v2_count"] == 197
     assert summary["internal_quality_pool_count"] == 88
-    assert summary["expansion_core_equivalent_count"] == 84
-    assert summary["rescue_core_equivalent_count"] == 38
+    assert summary["expansion_core_equivalent_count"] == 89
+    assert summary["rescue_core_equivalent_count"] == 20
     assert summary["expansion_keep_separate_count"] == 4
     assert summary["rescue_keep_separate_count"] == 1
     assert summary["downgrade_reject_count"] == 2
-    assert summary["possible_false_negative_manual_review_count"] == 9
+    assert summary["possible_false_negative_manual_review_count"] == 4
     assert summary["remain_excluded_count"] == 22
-    assert summary["reject_concept_or_non_bottleneck_count"] == 6
+    assert summary["reject_concept_or_non_bottleneck_count"] == 5
     assert summary["auto_applied_count"] == 0
     assert summary["used_for_signal_count"] == 0
     assert summary["used_for_admission_count"] == 0
@@ -92,7 +92,7 @@ def test_quality_pool_layer_v2_outputs_and_guardrails() -> None:
 
     assert guardrails["research_only"] is True
     assert guardrails["quality_pool_layer_v2_generated"] is True
-    assert guardrails["quality_pool_v2_count"] == 210
+    assert guardrails["quality_pool_v2_count"] == 197
     assert guardrails["auto_applied_count"] == 0
     assert guardrails["used_for_signal_count"] == 0
     assert guardrails["used_for_admission_count"] == 0
@@ -116,8 +116,8 @@ def test_quality_pool_layer_v2_manifest_integrity_and_sidecars() -> None:
     remain = pd.read_csv(OUTPUT_DIR / "remain_excluded_22.csv", dtype={"stock_code": str})
     concept = pd.read_csv(OUTPUT_DIR / "reject_concept_or_non_bottleneck_6.csv", dtype={"stock_code": str})
 
-    assert len(manifest) == 210
-    assert manifest["stock_code"].nunique() == 210
+    assert len(manifest) == 197
+    assert manifest["stock_code"].nunique() == 197
     assert set(manifest["quality_layer"]) == {
         "internal_quality_pool",
         "expansion_core_equivalent_quality_pool",
@@ -132,8 +132,8 @@ def test_quality_pool_layer_v2_manifest_integrity_and_sidecars() -> None:
 
     counts = dict(zip(by_source["quality_layer"], by_source["candidate_count"], strict=False))
     assert counts["internal_quality_pool"] == 88
-    assert counts["expansion_core_equivalent_quality_pool"] == 84
-    assert counts["false_negative_rescue_core_equivalent_quality_pool"] == 38
+    assert counts["expansion_core_equivalent_quality_pool"] == 89
+    assert counts["false_negative_rescue_core_equivalent_quality_pool"] == 20
 
     assert "688813" not in set(manifest["stock_code"])
     assert set(rescue_keep["stock_code"]) == {"688813"}
@@ -143,9 +143,9 @@ def test_quality_pool_layer_v2_manifest_integrity_and_sidecars() -> None:
     assert len(expansion_keep) == 4
     assert len(rescue_keep) == 1
     assert len(reject) == 2
-    assert len(possible) == 9
+    assert len(possible) == 4
     assert len(remain) == 22
-    assert len(concept) == 6
+    assert len(concept) == 5
     for sidecar in [expansion_keep, rescue_keep, reject, possible, remain, concept]:
         assert sidecar["research_only"].eq(True).all()
         assert sidecar["used_for_signal"].eq(False).all()

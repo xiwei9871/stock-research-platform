@@ -88,9 +88,9 @@ def test_quality_pool_layer_v5_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "quality_pool_layer_v5_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "quality_pool_layer_v5_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["quality_pool_v4_count"] == 276
+    assert summary["quality_pool_v4_count"] == 257
     assert summary["latent_standard_core_equivalent_added"] == 24
-    assert summary["quality_pool_v5_count"] == 300
+    assert summary["quality_pool_v5_count"] == 281
     assert summary["latent_keep_separate_count"] == 7
     assert summary["latent_standard_keep_separate_count"] == 0
     assert summary["latent_standard_remain_watch_count"] == 0
@@ -110,9 +110,9 @@ def test_quality_pool_layer_v5_outputs_and_guardrails() -> None:
 
     assert guardrails["research_only"] is True
     assert guardrails["quality_pool_layer_v5_generated"] is True
-    assert guardrails["quality_pool_v4_count"] == 276
+    assert guardrails["quality_pool_v4_count"] == 257
     assert guardrails["latent_standard_core_equivalent_added"] == 24
-    assert guardrails["quality_pool_v5_count"] == 300
+    assert guardrails["quality_pool_v5_count"] == 281
     assert guardrails["duplicate_stock_count"] == 0
     assert guardrails["auto_applied_count"] == 0
     assert guardrails["price_move_used_for_signal"] == 0
@@ -133,8 +133,8 @@ def test_quality_pool_layer_v5_manifest_and_sidecar_integrity() -> None:
     v4 = pd.read_csv(V4_MANIFEST, dtype={"stock_code": str})
     latent_standard = pd.read_csv(LATENT_STANDARD_24, dtype={"stock_code": str})
 
-    assert len(manifest) == 300
-    assert manifest["stock_code"].nunique() == 300
+    assert len(manifest) == 281
+    assert manifest["stock_code"].nunique() == 281
     assert set(v4["stock_code"].astype(str).str.zfill(6)).issubset(set(manifest["stock_code"]))
     assert set(latent_standard["stock_code"].astype(str).str.zfill(6)).issubset(set(manifest["stock_code"]))
     assert "latent_standard_core_equivalent_quality_pool" in set(manifest["quality_layer"])
@@ -147,9 +147,9 @@ def test_quality_pool_layer_v5_manifest_and_sidecar_integrity() -> None:
 
     counts = dict(zip(by_source["quality_layer"], by_source["candidate_count"], strict=False))
     assert counts["internal_quality_pool"] == 88
-    assert counts["expansion_core_equivalent_quality_pool"] == 84
-    assert counts["false_negative_rescue_core_equivalent_quality_pool"] == 38
-    assert counts["data_gap_core_equivalent_quality_pool"] == 24
+    assert counts["expansion_core_equivalent_quality_pool"] == 89
+    assert counts["false_negative_rescue_core_equivalent_quality_pool"] == 20
+    assert counts["data_gap_core_equivalent_quality_pool"] == 18
     assert counts["latent_core_equivalent_quality_pool"] == 42
     assert counts["latent_standard_core_equivalent_quality_pool"] == 24
 

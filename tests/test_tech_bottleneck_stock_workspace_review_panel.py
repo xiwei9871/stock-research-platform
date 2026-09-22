@@ -23,9 +23,9 @@ def test_tech_bottleneck_review_universe_summary_and_stocks_are_readonly() -> No
     assert stocks_response.status_code == 200
     summary = summary_response.json()
     stocks = stocks_response.json()
-    assert summary["frontend_dataset_count"] == 378
-    assert summary["evidence_index_row_count"] == 8583
-    assert summary["source_index_row_count"] == 1071
+    assert summary["frontend_dataset_count"] == 359
+    assert summary["evidence_index_row_count"] == 8077
+    assert summary["source_index_row_count"] == 1013
     assert summary["remaining_evidence_gap_count"] == 0
     assert summary["readonly_page"] is True
     assert summary["reviewer_decision_write_enabled"] is False
@@ -33,8 +33,8 @@ def test_tech_bottleneck_review_universe_summary_and_stocks_are_readonly() -> No
     assert summary["csv_writeback_enabled"] is False
     assert summary["used_for_signal_count"] == 0
     assert summary["used_for_admission_count"] == 0
-    assert stocks["total"] == 378
-    assert len(stocks["items"]) == 378
+    assert stocks["total"] == 359
+    assert len(stocks["items"]) == 359
     assert all(item["frontend_review_status"] == "pending_review" for item in stocks["items"])
     assert all(item["used_for_signal"] is False for item in stocks["items"])
     assert all(item["used_for_admission"] is False for item in stocks["items"])

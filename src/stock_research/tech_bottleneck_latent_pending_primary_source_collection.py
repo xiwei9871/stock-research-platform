@@ -29,7 +29,7 @@ INPUT_QUEUE = (
     / "outputs/research/tech_bottleneck_latent_primary_source_backfill_batch1_v1/latent_backfill_batch1_remain_pending.csv"
 )
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 45
+EXPECTED_COUNT = 47
 
 
 DOWNLOAD_COLUMNS = [

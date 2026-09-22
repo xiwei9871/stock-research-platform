@@ -44,6 +44,13 @@ class KeywordRule:
     keywords: tuple[str, ...]
 
 
+# Per-stock domain overrides for names whose keyword-derived domain misroutes
+# them out of the hard-tech latent backfill chain (research-reviewed, 2026-09-22).
+CURATED_DOMAIN_OVERRIDES = {
+    "002049": ("功率电子国产化", "半导体", "功率器件/IGBT/SiC/GaN", "component", "technology_bottleneck"),
+}
+
+
 MAIN_COLUMNS = [
     "stock_code",
     "ts_code",
@@ -747,6 +754,9 @@ def build_candidate_universe() -> dict[str, Any]:
         text_parts.extend(report.get("report_keyword_hits", []) or [])
         text = " ".join(_clean(part) for part in text_parts)
         trend_domain, domain, sub_domain, layer, bottleneck_type, keyword_hits = _domain_from_text(text, rules)
+        override = CURATED_DOMAIN_OVERRIDES.get(stock_code)
+        if override:
+            trend_domain, domain, sub_domain, layer, bottleneck_type = override
         industry_domain, industry_sub_domain, industry_layer = _broad_industry_domain(industry)
         if not domain and evidence.get("chain_ids"):
             trend_domain, domain, sub_domain, layer, bottleneck_type = _chain_to_domain(evidence["chain_ids"][0], (evidence.get("chain_names") or [""])[0])

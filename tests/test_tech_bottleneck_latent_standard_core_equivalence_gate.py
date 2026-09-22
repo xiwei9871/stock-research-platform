@@ -86,7 +86,7 @@ def test_latent_standard_core_equivalence_gate_outputs_and_guardrails() -> None:
         + summary["downgrade_or_reject_count"]
         == 24
     )
-    assert summary["quality_pool_v4_reference_count"] == 276
+    assert summary["quality_pool_v4_reference_count"] == 257
     assert summary["quality_pool_v4_processed"] is False
     assert summary["auto_added_to_quality_pool_count"] == 0
     assert summary["price_move_used_for_signal"] == 0

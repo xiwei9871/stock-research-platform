@@ -64,14 +64,14 @@ def test_doubler_expansion_core_equivalence_gate_outputs_and_guardrails() -> Non
     summary = json.loads((OUTPUT_DIR / "doubler_expansion_core_equivalence_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "doubler_expansion_core_equivalence_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_expansion_candidate_count"] == 88
-    assert summary["processed_count"] == 88
+    assert summary["source_expansion_candidate_count"] == 93
+    assert summary["processed_count"] == 93
     assert (
         summary["core_equivalent_count"]
         + summary["keep_as_expansion_candidate_count"]
         + summary["adjacent_or_theme_watch_count"]
         + summary["downgrade_or_reject_count"]
-        == 88
+        == 93
     )
     assert summary["price_move_used_for_signal"] == 0
     assert summary["auto_applied_count"] == 0
@@ -89,7 +89,7 @@ def test_doubler_expansion_core_equivalence_gate_outputs_and_guardrails() -> Non
 
     assert guardrails["research_only"] is True
     assert guardrails["only_expansion_88_processed"] is True
-    assert guardrails["source_expansion_candidate_count"] == 88
+    assert guardrails["source_expansion_candidate_count"] == 93
     assert guardrails["price_move_used_for_signal"] == 0
     assert guardrails["auto_applied_count"] == 0
     assert guardrails["used_for_signal_count"] == 0
@@ -113,8 +113,8 @@ def test_doubler_expansion_core_equivalence_gate_integrity_and_ipo_flags() -> No
     reject = pd.read_csv(OUTPUT_DIR / "downgrade_or_reject.csv", dtype={"stock_code": str})
     ipo = pd.read_csv(OUTPUT_DIR / "ipo_cohort_risk_audit.csv", dtype={"stock_code": str})
 
-    assert len(gate) == 88
-    assert gate["stock_code"].nunique() == 88
+    assert len(gate) == 93
+    assert gate["stock_code"].nunique() == 93
     assert set(gate["stock_code"]) == set(package["stock_code"].str.zfill(6))
     assert gate["source_group"].eq("expansion_2025_doubler_discovered").all()
     assert gate["research_only"].eq(True).all()
@@ -131,7 +131,7 @@ def test_doubler_expansion_core_equivalence_gate_integrity_and_ipo_flags() -> No
     assert set(gate["equivalence_gate_decision"]).issubset(allowed_decisions)
     assert gate["equivalence_gate_reason"].str.len().gt(0).all()
     assert gate["recommended_next_action"].str.len().gt(0).all()
-    assert len(core) + len(keep) + len(adjacent) + len(reject) == 88
+    assert len(core) + len(keep) + len(adjacent) + len(reject) == 93
 
     assert set(ipo["stock_code"]).issubset(set(gate["stock_code"]))
     if not ipo.empty:

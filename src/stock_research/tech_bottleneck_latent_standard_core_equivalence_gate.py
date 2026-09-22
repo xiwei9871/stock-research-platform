@@ -245,7 +245,7 @@ def _summary(gate: pd.DataFrame, quality_pool_v4: pd.DataFrame, strategy_clean: 
     overlap = len(set(gate["stock_code"]) & set(quality_pool_v4["stock_code"]))
     blocking = (
         len(gate) != EXPECTED_COUNT
-        or len(quality_pool_v4) != 276
+        or len(quality_pool_v4) != 257
         or overlap != 0
         or used_for_signal
         or used_for_admission

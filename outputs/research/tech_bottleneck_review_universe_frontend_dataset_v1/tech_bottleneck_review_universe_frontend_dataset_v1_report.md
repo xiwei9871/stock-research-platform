@@ -4,14 +4,14 @@
 This research-only step generates data files for a future review panel. It does not develop a page, write dashboard code, run collection/backfill/equivalence, freeze a pool, or connect to signal/admission/scoring/strategy.
 
 ## 2. Dataset Composition
-- v5_hydrated: 271
+- v5_hydrated: 252
 - v7_proposal_new: 78
 - v5_targeted_hydrated: 29
-- total: 378
+- total: 359
 
 ## 3. Evidence Index
-- evidence_index_row_count: 8583
-- source_index_row_count: 1071
+- evidence_index_row_count: 8077
+- source_index_row_count: 1013
 - remaining_evidence_gap_count: 0
 
 ## 4. Guardrails

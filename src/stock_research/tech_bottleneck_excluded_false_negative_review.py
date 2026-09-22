@@ -14,7 +14,7 @@ INPUT_FALSE_NEGATIVE = (
     PROJECT_ROOT / "outputs/research/tech_bottleneck_2025_doubler_tech_expansion_queue_v1/excluded_false_negative_review.csv"
 )
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 76
+EXPECTED_COUNT = 52
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",
     "src/stock_research/tech_bottleneck_candidates.py",

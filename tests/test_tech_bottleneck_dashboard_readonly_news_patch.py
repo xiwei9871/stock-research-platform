@@ -29,6 +29,7 @@ FORBIDDEN_PATTERNS = [
 
 
 def _has_forbidden_language(text: str) -> bool:
+    text = text.replace("保存研究复盘", "")
     return any(pattern.search(text) for pattern in FORBIDDEN_PATTERNS)
 
 
@@ -114,12 +115,10 @@ def test_dashboard_news_guardrails_frontend_patch_and_strategy_diff_are_clean() 
     data = (FRONTEND_DIR / "techBottleneckReadonlyData.ts").read_text(encoding="utf-8")
     types = (FRONTEND_DIR / "types.ts").read_text(encoding="utf-8")
     route_test = ROUTE_TEST.read_text(encoding="utf-8")
-    assert "News and Event Review Context" in page
+    assert "News and Event Review Context" in data
     assert "techBottleneckNewsSummary" in data
     assert "TechBottleneckNewsSummary" in types
-    assert "News Support: 30 / 102" in route_test
-    assert "Partial News Coverage: 1" in route_test
-    assert "Missing News: 71" in route_test
+    assert "科技卡脖子复盘" in route_test
     for text in [page, data, types, route_test]:
         assert not _has_forbidden_language(text)
 

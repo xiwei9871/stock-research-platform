@@ -37,7 +37,7 @@ PROJECT_ROOT = Path("/Users/xiwei/stock_research")
 TASK_NAME = "tech_bottleneck_data_gap_primary_source_backfill_v1"
 INPUT_QUEUE = PROJECT_ROOT / "outputs/research/tech_bottleneck_doubler_data_gap_watch_triage_v1/data_gap_backfill_queue.csv"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_QUEUE_COUNT = 27
+EXPECTED_QUEUE_COUNT = 19
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
@@ -409,7 +409,7 @@ def _report(summary: dict[str, Any]) -> str:
             "# Tech Bottleneck Data Gap Primary Source Backfill v1",
             "",
             "## 1. Scope",
-            "This research-only task processes only the 27 names in data_gap_backfill_queue. It does not process the 31 data-gap manual-review names, the 6 remain-watch names, or the 3 weak/concept rejects, and it does not add anything to quality pool v2.",
+            "This research-only task processes only the 19 names in data_gap_backfill_queue. It does not process the data-gap manual-review names, the remain-watch names, or the weak/concept rejects, and it does not add anything to quality pool v2.",
             "",
             "## 2. Source Collection And Parse",
             f"Source data-gap backfill queue: {summary['source_data_gap_backfill_queue_count']}; collection manifest rows: {summary['collection_manifest_count']}; evidence matrix rows: {summary['evidence_matrix_count']}.",
@@ -441,6 +441,7 @@ def run(output_dir: str | Path = OUTPUT_DIR) -> dict[str, Any]:
     manifest = _collect_primary_sources(queue, output)
     chunks = _parse_text_first(manifest, output)
     evidence = _build_evidence_matrix(chunks)
+    evidence = evidence[evidence["stock_code"].isin(set(queue["stock_code"]))].reset_index(drop=True)
     results = _assess_results(queue, evidence)
     gaps = _build_gap_matrix(results)
     upgrades, pending, adjacent_or_reject = _split_outputs(results)

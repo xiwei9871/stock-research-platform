@@ -70,15 +70,15 @@ def test_latent_primary_source_backfill_batch1_rerun_v2_outputs_and_guardrails()
     summary = json.loads((OUTPUT_DIR / "latent_backfill_batch1_rerun_v2_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "latent_backfill_batch1_rerun_v2_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_latent_pending_count"] == 45
-    assert summary["processed_count"] == 45
-    assert summary["collection_pdf_count"] == 135
+    assert summary["source_latent_pending_count"] == 47
+    assert summary["processed_count"] == 47
+    assert summary["collection_pdf_count"] == 141
     assert (
         summary["upgrade_count"]
         + summary["remain_pending_count"]
         + summary["adjacent_count"]
         + summary["downgrade_or_reject_count"]
-        == 45
+        == 47
     )
     assert summary["core_equivalence_performed"] is False
     assert summary["auto_added_to_quality_pool_count"] == 0
@@ -94,9 +94,9 @@ def test_latent_primary_source_backfill_batch1_rerun_v2_outputs_and_guardrails()
     }
 
     assert guardrails["research_only"] is True
-    assert guardrails["source_latent_pending_count"] == 45
-    assert guardrails["processed_count"] == 45
-    assert guardrails["collection_pdf_count"] == 135
+    assert guardrails["source_latent_pending_count"] == 47
+    assert guardrails["processed_count"] == 47
+    assert guardrails["collection_pdf_count"] == 141
     assert guardrails["core_equivalence_performed"] is False
     assert guardrails["auto_added_to_quality_pool_count"] == 0
     assert guardrails["price_move_used_for_signal"] == 0
@@ -117,11 +117,11 @@ def test_latent_primary_source_backfill_batch1_rerun_v2_processes_only_45_rows()
     pending = pd.read_csv(OUTPUT_DIR / "latent_backfill_batch1_rerun_v2_remain_pending.csv", dtype={"stock_code": str})
     adjacent = pd.read_csv(OUTPUT_DIR / "latent_backfill_batch1_rerun_v2_adjacent_or_reject.csv", dtype={"stock_code": str})
 
-    assert len(results) == 45
+    assert len(results) == 47
     assert set(results["stock_code"]) == set(queue["stock_code"].astype(str).str.zfill(6))
-    assert set(evidence["stock_code"]) == set(results["stock_code"])
+    assert set(evidence["stock_code"]) == set(results.loc[results["primary_source_supported"].astype(bool), "stock_code"])
     assert set(gaps["stock_code"]) == set(results["stock_code"])
-    assert len(manual) + len(pending) + len(adjacent) == 45
+    assert len(manual) + len(pending) + len(adjacent) == 47
     assert results["recommended_backfill_decision"].notna().all()
     assert results["recommended_manual_review_entry_class"].notna().all()
     assert results["research_only"].eq(True).all()

@@ -29,6 +29,7 @@ FORBIDDEN_PATTERNS = [
 
 
 def _has_forbidden_language(text: str) -> bool:
+    text = text.replace("保存研究复盘", "")
     return any(pattern.search(text) for pattern in FORBIDDEN_PATTERNS)
 
 

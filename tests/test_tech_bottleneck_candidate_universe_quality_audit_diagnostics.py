@@ -60,7 +60,7 @@ def test_diagnostics_outputs_and_summary_answers() -> None:
     assert summary["tier_a_total"] == 126
     assert summary["tier_a_pass_count"] == 126
     assert summary["tier_a_pass_diagnostic"] == "pass_by_construction_not_independent_validation"
-    assert summary["tier_b_total"] == 942
+    assert summary["tier_b_total"] == 945
     assert summary["tier_b_high_quality_count"] == 0
     assert summary["tier_b_high_quality_diagnostic"] == "not_structurally_impossible_threshold_and_data_gap_driven"
     assert summary["seed_watchlist_count"] == 102
@@ -83,7 +83,7 @@ def test_diagnostics_tables_cover_required_classifications() -> None:
     assert len(circularity) == 126
     assert circularity["pass_assessment"].eq("pass_by_construction_not_independent_validation").all()
     assert circularity["overlap_with_assignment_criteria"].astype(bool).all()
-    assert len(feasibility) == 942
+    assert len(feasibility) == 945
     assert feasibility["high_quality_feasibility"].eq("feasible_but_not_met").all()
     assert len(non_clean) == 3126
     allowed = {

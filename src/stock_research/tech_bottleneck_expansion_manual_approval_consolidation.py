@@ -21,7 +21,7 @@ INPUT_EVIDENCE = (
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
 SOURCE_GROUP = "expansion_2025_doubler_discovered"
 PROPOSAL_SOURCE = "expansion_queue_primary_source_backfill_v1"
-EXPECTED_CANDIDATE_COUNT = 88
+EXPECTED_CANDIDATE_COUNT = 93
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",
     "src/stock_research/tech_bottleneck_candidates.py",
@@ -383,7 +383,7 @@ def _build_report(summary: dict[str, Any]) -> str:
             "# Tech Bottleneck Expansion Manual Approval Consolidation v1",
             "",
             "## 1. Scope",
-            "This task builds a research-only manual approval package for 88 market-discovered expansion candidates. It does not process the canonical 90 internal candidates, excluded false-negative review names, or weak/concept-only names. It does not apply any core-pool, signal, admission, or strategy change.",
+            "This task builds a research-only manual approval package for 93 market-discovered expansion candidates. It does not process the canonical 90 internal candidates, excluded false-negative review names, or weak/concept-only names. It does not apply any core-pool, signal, admission, or strategy change.",
             "",
             "## 2. Input Candidates",
             f"Expansion manual approval candidates: {summary['expansion_manual_approval_candidate_count']}. Source group: {summary['source_group']}.",

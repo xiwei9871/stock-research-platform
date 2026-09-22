@@ -70,21 +70,21 @@ def test_quality_pool_layer_v3_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "quality_pool_layer_v3_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "quality_pool_layer_v3_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["quality_pool_v2_count"] == 210
-    assert summary["quality_pool_v3_count"] == 234
+    assert summary["quality_pool_v2_count"] == 197
+    assert summary["quality_pool_v3_count"] == 215
     assert summary["internal_quality_pool_count"] == 88
-    assert summary["expansion_core_equivalent_count"] == 84
-    assert summary["rescue_core_equivalent_count"] == 38
-    assert summary["data_gap_core_equivalent_count"] == 24
+    assert summary["expansion_core_equivalent_count"] == 89
+    assert summary["rescue_core_equivalent_count"] == 20
+    assert summary["data_gap_core_equivalent_count"] == 18
     assert summary["expansion_keep_separate_count"] == 4
     assert summary["rescue_keep_separate_count"] == 1
-    assert summary["data_gap_keep_separate_count"] == 3
+    assert summary["data_gap_keep_separate_count"] == 1
     assert summary["downgrade_reject_count"] == 2
-    assert summary["possible_false_negative_manual_review_count"] == 9
+    assert summary["possible_false_negative_manual_review_count"] == 4
     assert summary["remain_excluded_count"] == 22
-    assert summary["reject_concept_or_non_bottleneck_count"] == 6
-    assert summary["data_gap_manual_review_count"] == 31
-    assert summary["remain_data_gap_watch_count"] == 6
+    assert summary["reject_concept_or_non_bottleneck_count"] == 5
+    assert summary["data_gap_manual_review_count"] == 26
+    assert summary["remain_data_gap_watch_count"] == 2
     assert summary["reject_weak_or_concept_count"] == 3
     assert summary["auto_applied_count"] == 0
     assert summary["used_for_signal_count"] == 0
@@ -98,7 +98,7 @@ def test_quality_pool_layer_v3_outputs_and_guardrails() -> None:
 
     assert guardrails["research_only"] is True
     assert guardrails["quality_pool_layer_v3_generated"] is True
-    assert guardrails["quality_pool_v3_count"] == 234
+    assert guardrails["quality_pool_v3_count"] == 215
     assert guardrails["auto_applied_count"] == 0
     assert guardrails["used_for_signal_count"] == 0
     assert guardrails["used_for_admission_count"] == 0
@@ -118,8 +118,8 @@ def test_quality_pool_layer_v3_manifest_integrity_and_sidecars() -> None:
     watch_6 = pd.read_csv(OUTPUT_DIR / "remain_data_gap_watch_6.csv", dtype={"stock_code": str})
     weak_3 = pd.read_csv(OUTPUT_DIR / "reject_weak_or_concept_3.csv", dtype={"stock_code": str})
 
-    assert len(manifest) == 234
-    assert manifest["stock_code"].nunique() == 234
+    assert len(manifest) == 215
+    assert manifest["stock_code"].nunique() == 215
     assert set(manifest["quality_layer"]) == {
         "internal_quality_pool",
         "expansion_core_equivalent_quality_pool",
@@ -135,17 +135,17 @@ def test_quality_pool_layer_v3_manifest_integrity_and_sidecars() -> None:
 
     counts = dict(zip(by_source["quality_layer"], by_source["candidate_count"], strict=False))
     assert counts["internal_quality_pool"] == 88
-    assert counts["expansion_core_equivalent_quality_pool"] == 84
-    assert counts["false_negative_rescue_core_equivalent_quality_pool"] == 38
-    assert counts["data_gap_core_equivalent_quality_pool"] == 24
+    assert counts["expansion_core_equivalent_quality_pool"] == 89
+    assert counts["false_negative_rescue_core_equivalent_quality_pool"] == 20
+    assert counts["data_gap_core_equivalent_quality_pool"] == 18
 
-    assert len(data_gap_keep) == 3
-    assert {"600184", "688001", "688820"} == set(data_gap_keep["stock_code"])
+    assert len(data_gap_keep) == 1
+    assert {"600184"} == set(data_gap_keep["stock_code"])
     assert "600184" not in set(manifest["stock_code"])
     assert "688001" not in set(manifest["stock_code"])
     assert "688820" not in set(manifest["stock_code"])
-    assert len(manual_31) == 31
-    assert len(watch_6) == 6
+    assert len(manual_31) == 26
+    assert len(watch_6) == 2
     assert len(weak_3) == 3
     for sidecar in [data_gap_keep, manual_31, watch_6, weak_3]:
         assert sidecar["research_only"].eq(True).all()

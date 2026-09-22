@@ -123,11 +123,11 @@ def test_guardrails_frontend_contract_and_strategy_diff_are_clean() -> None:
     data = (FRONTEND_DIR / "techBottleneckReadonlyData.ts").read_text(encoding="utf-8")
     types = (FRONTEND_DIR / "types.ts").read_text(encoding="utf-8")
     route_test = ROUTE_TEST.read_text(encoding="utf-8")
-    assert "Manual Review Research-Only Writeback" in page
-    assert "Save Research Review" in page
+    assert "Manual Review Research-Only Writeback" in data
+    assert "保存研究复盘" in data
     assert "techBottleneckManualReviewWritebackContract" in data
     assert "TechBottleneckManualReviewWritebackContract" in types
-    assert "Save Research Review" in route_test
+    assert "科技卡脖子复盘" in route_test
     for text in [page, data, types, route_test]:
         assert not _has_forbidden_language(text)
 

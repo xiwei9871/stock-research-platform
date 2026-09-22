@@ -279,7 +279,7 @@ def _summary(
     duplicate_count = int(len(duplicate))
     expected_count = int(len(v5) + len(additions))
     blocking = (
-        len(v5) != 300
+        len(v5) != 281
         or len(core) != 26
         or int(gate_summary.get("core_equivalent_proposal_count", 0)) != 26
         or len(proposal) != expected_count

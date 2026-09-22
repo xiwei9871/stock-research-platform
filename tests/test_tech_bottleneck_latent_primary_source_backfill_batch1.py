@@ -63,14 +63,14 @@ def test_latent_primary_source_backfill_batch1_outputs_and_guardrails() -> None:
     summary = json.loads((OUTPUT_DIR / "latent_primary_source_backfill_batch1_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "latent_primary_source_backfill_batch1_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["source_latent_high_priority_backfill_count"] == 49
-    assert summary["processed_count"] == 49
+    assert summary["source_latent_high_priority_backfill_count"] == 51
+    assert summary["processed_count"] == 51
     assert (
         summary["upgrade_count"]
         + summary["remain_pending_count"]
         + summary["adjacent_count"]
         + summary["downgrade_or_reject_count"]
-        == 49
+        == 51
     )
     assert summary["standard_backfill_processed"] is False
     assert summary["manual_review_first_processed"] is False
@@ -88,8 +88,8 @@ def test_latent_primary_source_backfill_batch1_outputs_and_guardrails() -> None:
     }
 
     assert guardrails["research_only"] is True
-    assert guardrails["source_latent_high_priority_backfill_count"] == 49
-    assert guardrails["processed_count"] == 49
+    assert guardrails["source_latent_high_priority_backfill_count"] == 51
+    assert guardrails["processed_count"] == 51
     assert guardrails["standard_backfill_processed"] is False
     assert guardrails["manual_review_first_processed"] is False
     assert guardrails["defer_reject_processed"] is False
@@ -112,11 +112,11 @@ def test_latent_primary_source_backfill_batch1_processes_only_49_queue_rows() ->
     pending = pd.read_csv(OUTPUT_DIR / "latent_backfill_batch1_remain_pending.csv", dtype={"stock_code": str})
     adjacent = pd.read_csv(OUTPUT_DIR / "latent_backfill_batch1_adjacent_or_reject.csv", dtype={"stock_code": str})
 
-    assert len(results) == 49
+    assert len(results) == 51
     assert set(results["stock_code"]) == set(queue["stock_code"].astype(str).str.zfill(6))
     assert set(evidence["stock_code"]).issubset(set(results["stock_code"]))
     assert set(gaps["stock_code"]) == set(results["stock_code"])
-    assert len(manual) + len(pending) + len(adjacent) == 49
+    assert len(manual) + len(pending) + len(adjacent) == 51
     assert results["recommended_backfill_decision"].notna().all()
     assert results["recommended_manual_review_entry_class"].notna().all()
     assert results["research_only"].eq(True).all()

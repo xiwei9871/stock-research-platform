@@ -50,7 +50,7 @@ def test_ai_power_crosswalk_package_loads_and_summarizes_without_writes():
         "new_theme_evidence_count": 4,
         "p4_mapping_count": 4,
         "theme_count": 1,
-        "universe_count": 378,
+        "universe_count": 359,
     }
     assert len(package["indexes"]["existing_evidence_by_id"]) == len(
         package["existing_evidence_rows"]

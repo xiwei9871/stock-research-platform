@@ -37,7 +37,7 @@ PROJECT_ROOT = Path("/Users/xiwei/stock_research")
 TASK_NAME = "tech_bottleneck_expansion_queue_primary_source_backfill_v1"
 INPUT_QUEUE = PROJECT_ROOT / "outputs/research/tech_bottleneck_2025_doubler_tech_expansion_queue_v1/eligible_expansion_evidence_queue.csv"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_QUEUE_COUNT = 88
+EXPECTED_QUEUE_COUNT = 93
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
@@ -385,7 +385,7 @@ def _report(summary: dict[str, Any]) -> str:
             "# Tech Bottleneck Expansion Queue Primary Source Backfill v1",
             "",
             "## 1. Scope",
-            "This task processes only the 88-stock eligible expansion evidence queue discovered from the 2025 doubled-tech study. It is research-only, does not process the canonical 90 internal pool, does not process excluded false-negative review names, and does not automatically apply any core-pool change.",
+            "This task processes only the 93-stock eligible expansion evidence queue discovered from the 2025 doubled-tech study. It is research-only, does not process the canonical 90 internal pool, does not process excluded false-negative review names, and does not automatically apply any core-pool change.",
             "",
             "## 2. Input Queue",
             f"Source expansion queue count: {summary['source_expansion_queue_count']}. Collection manifest rows: {summary['collection_manifest_count']}; evidence matrix rows: {summary['evidence_matrix_count']}.",
@@ -417,6 +417,7 @@ def run(output_dir: str | Path = OUTPUT_DIR) -> dict[str, Any]:
     manifest = _collect_primary_sources(queue, output)
     chunks = _parse_text_first(manifest, output)
     evidence = _build_evidence_matrix(chunks)
+    evidence = evidence[evidence["stock_code"].isin(set(queue["stock_code"]))].reset_index(drop=True)
     results = _assess_results(queue, evidence)
     gaps = _build_gap_matrix(results)
     upgrades, pending, adjacent_or_downgrade = _split_outputs(results)

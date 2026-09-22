@@ -84,11 +84,11 @@ def test_frontend_dataset_outputs_summary_and_guardrails() -> None:
 
     summary = json.loads((OUTPUT_DIR / "tech_bottleneck_review_universe_frontend_dataset_summary.json").read_text())
     guardrails = json.loads((OUTPUT_DIR / "tech_bottleneck_review_universe_frontend_guardrails.json").read_text())
-    assert summary["review_universe_total_count"] == 378
-    assert summary["v5_hydrated_count"] == 271
+    assert summary["review_universe_total_count"] == 359
+    assert summary["v5_hydrated_count"] == 252
     assert summary["v7_proposal_new_count"] == 78
     assert summary["v5_targeted_hydrated_count"] == 29
-    assert summary["frontend_dataset_count"] == 378
+    assert summary["frontend_dataset_count"] == 359
     assert summary["duplicate_stock_count"] == 0
     assert summary["remaining_evidence_gap_count"] == 0
     assert summary["primary_source_collection_performed"] is False
@@ -105,7 +105,7 @@ def test_frontend_dataset_outputs_summary_and_guardrails() -> None:
     assert summary["low_position_used_for_signal"] == 0
     assert summary["strategy_file_diff_clean"] is True
     assert summary["acceptance_decision"] == "tech_bottleneck_review_universe_frontend_dataset_ready"
-    assert guardrails["frontend_dataset_count"] == 378
+    assert guardrails["frontend_dataset_count"] == 359
     assert guardrails["dashboard_code_modified"] is False
 
 
@@ -125,10 +125,10 @@ def test_frontend_dataset_rows_fields_and_indexes() -> None:
     ).fillna("")
     filters = json.loads((OUTPUT_DIR / "tech_bottleneck_review_universe_frontend_filter_options.json").read_text())
 
-    assert len(dataset) == 378
-    assert dataset["stock_code"].nunique() == 378
+    assert len(dataset) == 359
+    assert dataset["stock_code"].nunique() == 359
     assert dataset["review_universe_source"].value_counts().to_dict() == {
-        "v5_hydrated": 271,
+        "v5_hydrated": 252,
         "v7_proposal_new": 78,
         "v5_targeted_hydrated": 29,
     }

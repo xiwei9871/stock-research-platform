@@ -98,15 +98,15 @@ def test_quality_pool_layer_v7_proposal_outputs_and_guardrails() -> None:
     )
 
     assert summary["research_only"] is True
-    assert summary["quality_pool_v5_reference_count"] == 300
-    assert summary["quality_pool_v6_proposal_reference_count"] == 326
+    assert summary["quality_pool_v5_reference_count"] == 281
+    assert summary["quality_pool_v6_proposal_reference_count"] == 307
     assert summary["v6_manual_approved_count"] == 0
     assert summary["v6_hold_for_review_count"] == 26
     assert summary["source_standard_core_equivalent_proposal_count"] == 52
     assert summary["processed_standard_core_equivalent_proposal_count"] == 52
     assert summary["duplicate_stock_count"] == 0
     assert summary["proposed_addition_count"] == 52
-    assert summary["proposed_quality_pool_v7_count"] == 378
+    assert summary["proposed_quality_pool_v7_count"] == 359
     assert summary["primary_source_collection_performed"] is False
     assert summary["evidence_backfill_performed"] is False
     assert summary["core_equivalence_performed"] is False
@@ -122,12 +122,12 @@ def test_quality_pool_layer_v7_proposal_outputs_and_guardrails() -> None:
     assert summary["formal_strategy_files_modified"] is False
     assert summary["acceptance_decision"] == "quality_pool_layer_v7_proposal_ready"
 
-    assert guardrails["quality_pool_v5_reference_count"] == 300
-    assert guardrails["quality_pool_v6_proposal_reference_count"] == 326
+    assert guardrails["quality_pool_v5_reference_count"] == 281
+    assert guardrails["quality_pool_v6_proposal_reference_count"] == 307
     assert guardrails["v6_manual_approved_count"] == 0
     assert guardrails["v6_hold_for_review_count"] == 26
     assert guardrails["source_standard_core_equivalent_proposal_count"] == 52
-    assert guardrails["proposed_quality_pool_v7_count"] == 378
+    assert guardrails["proposed_quality_pool_v7_count"] == 359
     assert guardrails["quality_pool_v7_is_proposal_only"] is True
     assert guardrails["frozen_quality_pool_v6_generated"] is False
     assert guardrails["frozen_quality_pool_v7_generated"] is False
@@ -152,13 +152,13 @@ def test_quality_pool_layer_v7_proposal_manifest_added_rows_and_hold_state() -> 
         dtype={"stock_code": str},
     )
 
-    assert len(v5) == 300
-    assert len(v6) == 326
+    assert len(v5) == 281
+    assert len(v6) == 307
     assert len(v6_manual) == 26
     assert v6_manual["manual_decision"].eq("hold_for_review").all()
     assert len(gate_core) == 52
-    assert len(proposal) == 378
-    assert proposal["stock_code"].nunique() == 378
+    assert len(proposal) == 359
+    assert proposal["stock_code"].nunique() == 359
     assert set(v6["stock_code"].astype(str).str.zfill(6)).issubset(set(proposal["stock_code"].astype(str).str.zfill(6)))
     assert set(gate_core["stock_code"].astype(str).str.zfill(6)).issubset(
         set(proposal["stock_code"].astype(str).str.zfill(6))

@@ -57,10 +57,10 @@ def test_rescue_triage_outputs_and_guardrails() -> None:
     assert summary["baseline_admission_changed_count"] == 0
     assert summary["strategy_file_diff_clean"] is True
     assert summary["formal_strategy_files_modified"] is False
-    assert summary["rescue_review_required_count"] == 1002
+    assert summary["rescue_review_required_count"] == 1005
     assert summary["seed_tier_b_count"] == 16
     assert summary["seed_tier_b_p0_count"] == 16
-    assert summary["possible_false_negative_count"] == 90
+    assert summary["possible_false_negative_count"] == 93
     assert summary["non_seed_tier_a_manual_review_count"] == 40
     assert summary["threshold_58_high_quality_count"] == 0
 
@@ -74,16 +74,16 @@ def test_rescue_priority_rules_and_threshold_sensitivity() -> None:
     gaps = pd.read_csv(OUTPUT_DIR / "data_gap_severity_breakdown.csv")
     non_seed_tier_a = pd.read_csv(OUTPUT_DIR / "non_seed_tier_a_manual_review_queue.csv")
 
-    assert len(queue) == 1002
+    assert len(queue) == 1005
     assert len(seed) == 16
     assert seed["rescue_priority"].eq("P0").all()
     assert queue.loc[queue["is_tier_b_seed"].astype(bool), "rescue_priority"].eq("P0").all()
-    assert len(possible) == 90
+    assert len(possible) == 93
     assert set(possible["rescue_priority"]).issubset({"P0", "P1"})
     assert not queue["data_gap_severity"].isna().any()
     assert set(queue["data_gap_severity"]).issubset({"minor", "moderate", "severe", "blocking"})
     assert set(sensitivity["score_threshold"].round(2)) == {58.0, 57.5, 57.0, 56.0, 55.0}
-    assert sensitivity.loc[sensitivity["score_threshold"].eq(57.0), "would_be_high_quality_count"].iloc[0] == 74
+    assert sensitivity.loc[sensitivity["score_threshold"].eq(57.0), "would_be_high_quality_count"].iloc[0] == 77
     assert sensitivity["blocking_data_gap_count"].ge(0).all()
     assert {
         "name/code mapping gap",

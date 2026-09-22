@@ -80,13 +80,13 @@ def test_quality_pool_layer_v7_manual_review_packet_outputs_and_summary() -> Non
     summary = json.loads((OUTPUT_DIR / "v7_manual_review_packet_summary.json").read_text(encoding="utf-8"))
     guardrails = json.loads((OUTPUT_DIR / "v7_manual_review_packet_guardrails.json").read_text(encoding="utf-8"))
 
-    assert summary["quality_pool_v5_reference_count"] == 300
-    assert summary["quality_pool_v6_proposal_reference_count"] == 326
+    assert summary["quality_pool_v5_reference_count"] == 281
+    assert summary["quality_pool_v6_proposal_reference_count"] == 307
     assert summary["v6_manual_approved_count"] == 0
     assert summary["v6_hold_for_review_count"] == 26
     assert summary["standard_core_equivalent_candidate_count"] == 52
     assert summary["proposed_additions_count"] == 52
-    assert summary["evidence_index_rows"] == 1096
+    assert summary["evidence_index_rows"] == 1097
     assert summary["candidates_requiring_manual_review"] == 78
     assert summary["unresolved_hold_count"] == 26
     assert summary["auto_approved_count"] == 0
@@ -109,8 +109,8 @@ def test_quality_pool_layer_v7_manual_review_packet_candidate_layers_and_templat
     candidates = pd.read_csv(OUTPUT_DIR / "v7_manual_review_candidates.csv", dtype={"stock_code": str})
     template = pd.read_csv(OUTPUT_DIR / "v7_manual_approval_template.csv", dtype={"stock_code": str}).fillna("")
 
-    assert len(candidates) == 378
-    assert (candidates["candidate_layer"].eq("v5_baseline_kept")).sum() == 300
+    assert len(candidates) == 359
+    assert (candidates["candidate_layer"].eq("v5_baseline_kept")).sum() == 281
     assert (candidates["candidate_layer"].eq("v6_hold_for_review_unresolved")).sum() == 26
     assert (candidates["candidate_layer"].eq("standard_core_equivalent_v7_candidates")).sum() == 52
     assert candidates[candidates["candidate_layer"].eq("v6_hold_for_review_unresolved")]["review_status"].eq(

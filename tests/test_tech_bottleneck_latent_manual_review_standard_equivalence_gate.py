@@ -109,8 +109,8 @@ def test_latent_manual_review_standard_equivalence_gate_outputs_and_guardrails()
     assert summary["source_standard_backfill_stock_count"] == 52
     assert summary["processed_stock_count"] == 52
     assert summary["source_primary_source_supported_count"] == 52
-    assert summary["source_evidence_rows"] == 1096
-    assert summary["source_page_level_citations"] == 1096
+    assert summary["source_evidence_rows"] == 1097
+    assert summary["source_page_level_citations"] == 1097
     assert (
         summary["core_equivalent_proposal_count"]
         + summary["keep_separate_latent_candidate_count"]
@@ -142,8 +142,8 @@ def test_latent_manual_review_standard_equivalence_gate_outputs_and_guardrails()
     assert guardrails["source_standard_backfill_stock_count"] == 52
     assert guardrails["processed_stock_count"] == 52
     assert guardrails["source_primary_source_supported_count"] == 52
-    assert guardrails["source_evidence_rows"] == 1096
-    assert guardrails["source_page_level_citations"] == 1096
+    assert guardrails["source_evidence_rows"] == 1097
+    assert guardrails["source_page_level_citations"] == 1097
     assert guardrails["core_equivalence_performed"] is True
     assert guardrails["primary_source_collection_performed"] is False
     assert guardrails["evidence_backfill_performed"] is False

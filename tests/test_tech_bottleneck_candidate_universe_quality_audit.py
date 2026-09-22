@@ -85,8 +85,8 @@ def test_quality_audit_tables_have_expected_scope_and_clean_subset() -> None:
     clean_subset = pd.read_csv(OUTPUT_DIR / "clean_candidate_subset.csv")
 
     assert len(tier_a) == 126
-    assert len(tier_b) == 942
-    assert len(excluded) == 2124
+    assert len(tier_b) == 945
+    assert len(excluded) == 2121
     assert len(seed_preview) == 102
     assert len(clean_subset) > 0
     assert {"pass", "pass_with_data_gap", "downgrade_to_tier_b", "downgrade_to_risk_review", "downgrade_to_watch_only", "exclude_candidate"}.issuperset(

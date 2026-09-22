@@ -85,12 +85,12 @@ def test_quality_pool_layer_v6_proposal_outputs_and_guardrails() -> None:
     )
 
     assert summary["research_only"] is True
-    assert summary["quality_pool_v5_reference_count"] == 300
+    assert summary["quality_pool_v5_reference_count"] == 281
     assert summary["source_core_equivalent_proposal_count"] == 26
     assert summary["processed_core_equivalent_proposal_count"] == 26
     assert summary["duplicate_stock_count"] == 0
     assert summary["proposed_addition_count"] == 26
-    assert summary["proposed_quality_pool_v6_count"] == 326
+    assert summary["proposed_quality_pool_v6_count"] == 307
     assert summary["primary_source_collection_performed"] is False
     assert summary["evidence_backfill_performed"] is False
     assert summary["core_equivalence_performed"] is False
@@ -105,12 +105,12 @@ def test_quality_pool_layer_v6_proposal_outputs_and_guardrails() -> None:
     assert summary["acceptance_decision"] == "quality_pool_layer_v6_proposal_ready"
 
     assert guardrails["research_only"] is True
-    assert guardrails["quality_pool_v5_reference_count"] == 300
+    assert guardrails["quality_pool_v5_reference_count"] == 281
     assert guardrails["source_core_equivalent_proposal_count"] == 26
     assert guardrails["processed_core_equivalent_proposal_count"] == 26
     assert guardrails["duplicate_stock_count"] == 0
     assert guardrails["proposed_addition_count"] == 26
-    assert guardrails["proposed_quality_pool_v6_count"] == 326
+    assert guardrails["proposed_quality_pool_v6_count"] == 307
     assert guardrails["quality_pool_v6_is_proposal_only"] is True
     assert guardrails["auto_added_to_quality_pool_count"] == 0
     assert guardrails["used_for_signal_count"] == 0
@@ -131,10 +131,10 @@ def test_quality_pool_layer_v6_proposal_manifest_and_added_rows() -> None:
         dtype={"stock_code": str},
     )
 
-    assert len(v5) == 300
+    assert len(v5) == 281
     assert len(gate_core) == 26
-    assert len(proposal) == 326
-    assert proposal["stock_code"].nunique() == 326
+    assert len(proposal) == 307
+    assert proposal["stock_code"].nunique() == 307
     assert set(v5["stock_code"].astype(str).str.zfill(6)).issubset(set(proposal["stock_code"].astype(str).str.zfill(6)))
     assert set(gate_core["stock_code"].astype(str).str.zfill(6)).issubset(
         set(proposal["stock_code"].astype(str).str.zfill(6))

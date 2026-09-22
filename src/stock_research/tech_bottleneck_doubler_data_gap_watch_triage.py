@@ -12,7 +12,7 @@ PROJECT_ROOT = Path("/Users/xiwei/stock_research")
 TASK_NAME = "tech_bottleneck_doubler_data_gap_watch_triage_v1"
 INPUT_DATA_GAP = PROJECT_ROOT / "outputs/research/tech_bottleneck_2025_doubler_tech_expansion_queue_v1/data_gap_watch.csv"
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
-EXPECTED_COUNT = 67
+EXPECTED_COUNT = 50
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",
     "src/stock_research/tech_bottleneck_candidates.py",

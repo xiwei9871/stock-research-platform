@@ -30,8 +30,8 @@ V6_MANUAL = (
 )
 OUTPUT_DIR = PROJECT_ROOT / "outputs/research" / TASK_NAME
 EXPECTED_COUNT = 52
-EXPECTED_EVIDENCE_ROWS = 1096
-EXPECTED_PAGE_CITATIONS = 1096
+EXPECTED_EVIDENCE_ROWS = 1097
+EXPECTED_PAGE_CITATIONS = 1097
 FORMAL_STRATEGY_FILES = [
     "src/stock_research/tech_bottleneck_v1.py",
     "src/stock_research/tech_bottleneck_candidates.py",

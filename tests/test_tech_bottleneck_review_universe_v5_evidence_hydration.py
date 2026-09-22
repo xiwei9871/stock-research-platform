@@ -84,9 +84,9 @@ def test_v5_evidence_hydration_outputs_summary_and_guardrails() -> None:
         (OUTPUT_DIR / "tech_bottleneck_review_universe_v5_evidence_hydration_guardrails.json").read_text(encoding="utf-8")
     )
 
-    assert summary["review_universe_total_count"] == 378
-    assert summary["source_evidence_gap_queue_count"] == 300
-    assert summary["processed_v5_gap_count"] == 300
+    assert summary["review_universe_total_count"] == 359
+    assert summary["source_evidence_gap_queue_count"] == 281
+    assert summary["processed_v5_gap_count"] == 281
     assert summary["v7_frontend_ready_reference_count"] == 78
     assert summary["duplicate_stock_count"] == 0
     assert summary["primary_source_collection_performed"] is False
@@ -105,7 +105,7 @@ def test_v5_evidence_hydration_outputs_summary_and_guardrails() -> None:
         "tech_bottleneck_review_universe_v5_evidence_hydration_ready",
         "conditionally_ready_with_remaining_gaps",
     }
-    assert guardrails["processed_v5_gap_count"] == 300
+    assert guardrails["processed_v5_gap_count"] == 281
     assert guardrails["evidence_hydration_performed"] is True
     assert guardrails["used_for_signal_count"] == 0
     assert guardrails["used_for_admission_count"] == 0
@@ -131,10 +131,10 @@ def test_v5_evidence_hydration_processes_only_v5_and_normalizes_fields() -> None
         dtype={"stock_code": str},
     ).fillna("")
 
-    assert len(hydrated) == 300
-    assert hydrated["stock_code"].nunique() == 300
+    assert len(hydrated) == 281
+    assert hydrated["stock_code"].nunique() == 281
     assert set(hydrated["review_universe_source"]) == {"v5_existing"}
-    assert len(frontend_ready) + len(remaining) == 300
+    assert len(frontend_ready) + len(remaining) == 281
     assert set(index["stock_code"]).issubset(set(hydrated["stock_code"]))
     assert len(index) > 0
 

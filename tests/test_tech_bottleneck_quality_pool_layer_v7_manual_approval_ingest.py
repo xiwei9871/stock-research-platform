@@ -48,7 +48,7 @@ def test_v7_manual_approval_ingest_default_template_keeps_all_pending_or_hold() 
     summary = json.loads((OUTPUT_DIR / "v7_manual_approval_ingest_summary.json").read_text(encoding="utf-8"))
     ledger = pd.read_csv(OUTPUT_DIR / "v7_manual_approval_ledger.csv", dtype={"stock_code": str}).fillna("")
 
-    assert summary["packet_candidate_count"] == 378
+    assert summary["packet_candidate_count"] == 359
     assert summary["total_rows"] == 78
     assert summary["approved_count"] == 0
     assert summary["valid_approved_count"] == 0

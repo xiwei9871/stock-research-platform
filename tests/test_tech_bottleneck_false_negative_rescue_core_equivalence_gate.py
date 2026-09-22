@@ -67,14 +67,14 @@ def test_false_negative_rescue_core_equivalence_gate_outputs_and_guardrails() ->
         (OUTPUT_DIR / "false_negative_rescue_core_equivalence_guardrails.json").read_text(encoding="utf-8")
     )
 
-    assert summary["source_rescue_candidate_count"] == 39
-    assert summary["processed_count"] == 39
+    assert summary["source_rescue_candidate_count"] == 21
+    assert summary["processed_count"] == 21
     assert (
         summary["rescue_core_equivalent_count"]
         + summary["keep_as_rescue_candidate_count"]
         + summary["remain_excluded_after_backfill_count"]
         + summary["downgrade_or_reject_count"]
-        == 39
+        == 21
     )
     assert summary["auto_added_to_quality_pool_count"] == 0
     assert summary["price_move_used_for_signal"] == 0
@@ -118,8 +118,8 @@ def test_false_negative_rescue_core_equivalence_gate_integrity() -> None:
         OUTPUT_DIR / "false_negative_rescue_exclusion_reversal_audit.csv", dtype={"stock_code": str}
     )
 
-    assert len(gate) == 39
-    assert gate["stock_code"].nunique() == 39
+    assert len(gate) == 21
+    assert gate["stock_code"].nunique() == 21
     assert set(gate["stock_code"]) == set(candidates["stock_code"].str.zfill(6))
     assert gate["source_group"].eq("false_negative_rescue_backfilled").all()
     assert gate["research_only"].eq(True).all()
@@ -139,7 +139,7 @@ def test_false_negative_rescue_core_equivalence_gate_integrity() -> None:
     assert gate["concept_pollution_residual_risk"].str.len().gt(0).all()
     assert gate["equivalence_gate_reason"].str.len().gt(0).all()
     assert gate["recommended_next_action"].str.len().gt(0).all()
-    assert len(core) + len(keep) + len(remain) + len(reject) == 39
+    assert len(core) + len(keep) + len(remain) + len(reject) == 21
     assert set(reversal["stock_code"]) == set(gate["stock_code"])
 
 

@@ -74,7 +74,7 @@ def test_latent_candidate_discovery_outputs_and_guardrails() -> None:
     assert summary["research_only"] is True
     assert summary["source_candidate_universe_count"] == 3252
     assert summary["doubled_tech_596_count"] == 596
-    assert summary["quality_pool_v3_count"] == 234
+    assert summary["quality_pool_v3_count"] == 215
     assert summary["doubled_tech_596_excluded"] is True
     assert summary["quality_pool_v3_excluded"] is True
     assert summary["primary_source_backfill_performed"] is False

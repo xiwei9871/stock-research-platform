@@ -67,17 +67,17 @@ def test_doubler_market_discovered_closure_outputs_and_guardrails() -> None:
 
     assert summary["input_doubled_tech_count"] == 596
     assert summary["closed_count"] == 596
-    assert summary["quality_pool_v3_count"] == 234
+    assert summary["quality_pool_v3_count"] == 215
     assert summary["internal_quality_pool_count"] == 88
-    assert summary["expansion_core_equivalent_count"] == 84
-    assert summary["false_negative_rescue_core_equivalent_count"] == 38
-    assert summary["data_gap_core_equivalent_count"] == 24
-    assert summary["keep_separate_count"] == 8
-    assert summary["residual_manual_review_count"] == 40
-    assert summary["remain_watch_count"] == 6
+    assert summary["expansion_core_equivalent_count"] == 89
+    assert summary["false_negative_rescue_core_equivalent_count"] == 20
+    assert summary["data_gap_core_equivalent_count"] == 18
+    assert summary["keep_separate_count"] == 6
+    assert summary["residual_manual_review_count"] == 30
+    assert summary["remain_watch_count"] == 2
     assert summary["remain_excluded_count"] == 22
-    assert summary["reject_count"] == 11
-    assert summary["weak_or_concept_only_no_backfill_count"] == 310
+    assert summary["reject_count"] == 10
+    assert summary["weak_or_concept_only_no_backfill_count"] == 346
     assert summary["price_move_used_for_signal"] == 0
     assert summary["auto_applied_count"] == 0
     assert summary["used_for_signal_count"] == 0
@@ -119,10 +119,10 @@ def test_doubler_market_discovered_closure_master_integrity() -> None:
     assert master["used_for_admission"].eq(False).all()
     assert master["price_move_used_for_signal"].eq(False).all()
     assert int(bucket_summary["candidate_count"].sum()) == 596
-    assert int(quality["candidate_count"].sum()) == 234
-    assert len(residual) == 40
-    assert len(keep) == 8
-    assert len(excluded) == 33
+    assert int(quality["candidate_count"].sum()) == 215
+    assert len(residual) == 30
+    assert len(keep) == 6
+    assert len(excluded) == 32
     assert set(master[master["final_market_discovered_bucket"].eq("quality_pool_v3")]["quality_layer"]).issubset(
         {
             "internal_quality_pool",
