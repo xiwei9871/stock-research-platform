@@ -7,6 +7,10 @@ from typing import Any
 import pandas as pd
 
 from stock_research.strategy_eod_publish import load_strategy_score_audit_summary
+from stock_research.strategy_score_audit_store import (
+    load_score_audit_detail_rows,
+    load_score_audit_summary,
+)
 
 
 def load_strategy_score_audit_payload(
@@ -14,10 +18,17 @@ def load_strategy_score_audit_payload(
     trade_date: str,
     output_root: str | Path | None = None,
 ) -> dict[str, Any]:
-    try:
-        summary = load_strategy_score_audit_summary(trade_date=trade_date, output_root=output_root)
-    except FileNotFoundError:
-        return _missing_payload(trade_date)
+    summary: dict[str, Any] | None = None
+    if output_root is None:
+        try:
+            summary = load_score_audit_summary(trade_date=trade_date)
+        except Exception:
+            summary = None
+    if summary is None:
+        try:
+            summary = load_strategy_score_audit_summary(trade_date=trade_date, output_root=output_root)
+        except FileNotFoundError:
+            return _missing_payload(trade_date)
 
     payload = dict(summary)
     payload["trade_date"] = str(payload.get("trade_date") or trade_date)
@@ -30,7 +41,7 @@ def load_strategy_score_audit_payload(
     payload["anomaly_counts_by_type"] = _dict_of_ints(payload.get("anomaly_counts_by_type"))
     payload["strategies"] = _strategy_summaries(payload.get("strategies"))
     payload["warnings"] = _warnings(payload)
-    payload["sample_rows"] = _sample_rows(payload)
+    payload["sample_rows"] = _sample_rows(payload, db_allowed=output_root is None)
     payload["overall_status"] = _overall_status(payload)
     return payload
 
@@ -87,10 +98,20 @@ def _strategy_summaries(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
-def _sample_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
+def _sample_rows(summary: dict[str, Any], *, db_allowed: bool = True) -> list[dict[str, Any]]:
     existing = summary.get("sample_rows")
     if isinstance(existing, list):
         return [item for item in existing if isinstance(item, dict)]
+    if db_allowed:
+        try:
+            rows = load_score_audit_detail_rows(
+                trade_date=str(summary.get("trade_date") or ""),
+                limit=5,
+            )
+            if rows:
+                return [_normalize_sample_row(row) for row in rows]
+        except Exception:
+            pass
     detail_path_text = str(summary.get("detail_path") or "")
     if not detail_path_text:
         return []

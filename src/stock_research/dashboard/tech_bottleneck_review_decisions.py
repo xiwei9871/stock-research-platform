@@ -9,6 +9,8 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research import tech_bottleneck_review_store as review_store
+
 
 OVERLAY_DIR = Path("outputs/research/tech_bottleneck_review_universe_manual_decision_overlay_v1")
 DATASET_PATH = Path(
@@ -38,7 +40,6 @@ def normalize_stock_code(value: Any) -> str:
 
 def record_manual_decision(payload: dict[str, Any]) -> dict[str, Any]:
     cleaned = validate_manual_decision_payload(payload)
-    OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat()
     decision_id = f"tech_bottleneck_review_decision:{cleaned['stock_code']}:{time.time_ns()}"
     item = {
@@ -52,15 +53,10 @@ def record_manual_decision(payload: dict[str, Any]) -> dict[str, Any]:
         "frozen_v7_generated": False,
         **cleaned,
     }
-    with (OVERLAY_DIR / LEDGER_PATH_NAME).open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
+    review_store.insert_decision(item)
     load_ledger.cache_clear()
     load_current_overlay.cache_clear()
-    overlay = load_current_overlay()
-    _write_json(OVERLAY_DIR / CURRENT_OVERLAY_NAME, overlay)
-    summary = build_decision_summary()
-    _write_json(OVERLAY_DIR / SUMMARY_JSON_NAME, summary)
-    (OVERLAY_DIR / SUMMARY_MD_NAME).write_text(_summary_markdown(summary), encoding="utf-8")
+    _mirror_decision_files()
     return {
         "status": "recorded",
         "decision_id": decision_id,
@@ -68,6 +64,22 @@ def record_manual_decision(payload: dict[str, Any]) -> dict[str, Any]:
         "reviewer_decision": item["reviewer_decision"],
         "reviewed_at": now,
     }
+
+
+def _mirror_decision_files() -> None:
+    try:
+        OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
+        ledger_items = load_ledger()
+        with (OVERLAY_DIR / LEDGER_PATH_NAME).open("w", encoding="utf-8") as handle:
+            for item in ledger_items:
+                handle.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
+        overlay = load_current_overlay()
+        _write_json(OVERLAY_DIR / CURRENT_OVERLAY_NAME, overlay)
+        summary = build_decision_summary()
+        _write_json(OVERLAY_DIR / SUMMARY_JSON_NAME, summary)
+        (OVERLAY_DIR / SUMMARY_MD_NAME).write_text(_summary_markdown(summary), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def validate_manual_decision_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -106,6 +118,12 @@ def validate_manual_decision_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def review_universe_stock_codes() -> set[str]:
+    try:
+        codes = review_store.list_universe_stock_codes()
+        if codes:
+            return codes
+    except Exception:
+        pass
     if not DATASET_PATH.exists():
         return set()
     frame = pd.read_csv(DATASET_PATH, dtype=str, usecols=["stock_code"]).fillna("")
@@ -114,6 +132,16 @@ def review_universe_stock_codes() -> set[str]:
 
 @lru_cache(maxsize=1)
 def load_ledger() -> list[dict[str, Any]]:
+    try:
+        rows = [read_model(item) for item in review_store.list_decisions()]
+        if rows:
+            return rows
+    except Exception:
+        pass
+    return _load_ledger_file()
+
+
+def _load_ledger_file() -> list[dict[str, Any]]:
     path = OVERLAY_DIR / LEDGER_PATH_NAME
     if not path.exists():
         return []
@@ -129,6 +157,16 @@ def load_ledger() -> list[dict[str, Any]]:
 
 @lru_cache(maxsize=1)
 def load_current_overlay() -> dict[str, dict[str, Any]]:
+    try:
+        overlay = {
+            normalize_stock_code(stock_code): read_model(item)
+            for stock_code, item in review_store.load_decision_overlay().items()
+        }
+        overlay = {code: item for code, item in overlay.items() if code}
+        if overlay:
+            return overlay
+    except Exception:
+        pass
     overlay: dict[str, dict[str, Any]] = {}
     for item in load_ledger():
         stock_code = normalize_stock_code(item.get("stock_code"))

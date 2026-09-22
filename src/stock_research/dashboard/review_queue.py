@@ -37,9 +37,6 @@ def _configured_output_root() -> Path:
     return output_root.resolve()
 
 
-RESEARCH_OUTPUT_ROOT = _configured_output_root() / "research"
-
-
 def load_strategy_contracts(*, profile: str = "balanced") -> dict[str, Any]:
     from stock_research.strategy_contracts import load_strategy_contracts as load_contracts
 
@@ -228,19 +225,14 @@ def load_active_strategy_topn_rows(
     if manifest_rows:
         return _attach_asset_names(manifest_rows)
     suppress_tech_fallback = _has_untrusted_tech_manifest(trade_date=trade_date)
-    artifact_rows = _exact_trade_date_rows(
-        _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit),
-        trade_date,
-    )
     db_rows = _exact_trade_date_rows(
         _load_db_strategy_position_rows(trade_date=trade_date, limit=limit),
         trade_date,
     )
     if suppress_tech_fallback:
-        artifact_rows = _without_tech_bottleneck_rows(artifact_rows)
         db_rows = _without_tech_bottleneck_rows(db_rows)
     return _attach_asset_names(
-        _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows)
+        _select_latest_strategy_sources(artifact_rows=[], db_rows=db_rows)
     )
 
 
@@ -777,215 +769,6 @@ def _load_live_strategy_score_rows(*, trade_date: str, limit: int) -> list[dict[
     return normalized
 
 
-def _load_strategy_artifact_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    rows.extend(_load_lhb_shortline_artifact_rows(trade_date=trade_date, limit=limit))
-    rows.extend(_load_mid_trend_artifact_rows(trade_date=trade_date, limit=limit))
-    rows.extend(_load_tech_bottleneck_artifact_rows(trade_date=trade_date, limit=limit))
-    return _exact_trade_date_rows(rows, trade_date)
-
-
-def _load_lhb_shortline_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
-    base = RESEARCH_OUTPUT_ROOT / "web_lhb_shortline_v1_runs"
-    paths = [*base.glob("*/lhb_shortline_v1_candidates.csv"), *base.glob("*/lhb_phase18c_selected_trades_v1.csv")]
-    frame = _best_latest_artifact_frame(paths, trade_date=trade_date, date_col="trade_date")
-    if frame is None:
-        return []
-    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
-    if rows is None:
-        return []
-    rows = _dedupe_records_by_asset(
-        _sort_records(rows, ["auction_enhanced_score", "phase18c_top_n"], descending=["auction_enhanced_score"])
-    )
-    normalized: list[dict[str, Any]] = []
-    for index, row in enumerate(rows[:limit], start=1):
-        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
-        if not asset_id:
-            continue
-        score = _optional_float(row.get("auction_enhanced_score") or row.get("score_total"))
-        rule_layer = _optional_text(row.get("phase12a_rule_layer"))
-        eligibility_status = _optional_text(row.get("eligibility_status"))
-        confirmation_state = _optional_text(row.get("confirmation_state")) or _lhb_artifact_confirmation_state(
-            rule_layer=rule_layer,
-            rule_action=_optional_text(row.get("phase12a_rule_action")),
-            fill_status=_optional_text(row.get("fill_status")),
-            eligibility_status=eligibility_status,
-        )
-        fill_status = _optional_text(row.get("fill_status"))
-        notes = []
-        if rule_layer:
-            notes.append(f"龙虎榜候选：{rule_layer}")
-        if fill_status:
-            notes.append(f"填充状态：{fill_status}")
-        risk_flags = []
-        realized_return = _optional_float(row.get("realized_return"))
-        if realized_return is not None and realized_return < 0:
-            risk_flags.append(
-                {
-                    "key": "lhb_recent_loss",
-                    "label": f"最近成交回撤 {realized_return * 100:.1f}%",
-                    "severity": "warning",
-                }
-            )
-        if score is not None and score < 0:
-            risk_flags.append({"key": "lhb_negative_score", "label": "龙虎榜增强分为负", "severity": "warning"})
-        normalized.append(
-            {
-                "trade_date": str(row.get("trade_date") or "")[:10],
-                "asset_id": asset_id,
-                "rank": index,
-                "score_total": score,
-                "score_version": "strategy_topn",
-                "score_components": {},
-                "strategy_id": "lhb_shortline",
-                "strategy_name": "LHB Shortline Combo",
-                "strategy_run_id": "artifact:lhb_shortline_v1",
-                "source_type": "strategy_artifact",
-                "source_name": "LHB Shortline Combo",
-                "source_rank": index,
-                "review_tier": "risk_watch" if confirmation_state == "risk_watch" else ("top5_focus" if index <= 5 else "top10_watch"),
-                "confirmation_state": confirmation_state,
-                "phase12a_rule_layer": rule_layer,
-                "phase12a_rule_action": _optional_text(row.get("phase12a_rule_action")),
-                "fill_status": fill_status,
-                "eligibility_status": eligibility_status,
-                "top5_eligible": _optional_bool(row.get("top5_eligible")),
-                "backtest_entry_eligible": _optional_bool(row.get("backtest_entry_eligible")),
-                "eligibility_reason_codes": _optional_json_list(row.get("eligibility_reason_codes")),
-                "eligibility_warning_codes": _optional_json_list(row.get("eligibility_warning_codes")),
-                "eligibility_contract_version": _optional_text(row.get("eligibility_contract_version")),
-                "weight": _optional_float(row.get("weight") or row.get("target_weight")),
-                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
-                "score_source": "auction_enhanced_score",
-                "score_explanation": "龙虎榜竞价增强分；负分表示策略规则强惩罚或不建议跟随",
-                "review_notes": notes,
-                "risk_flags": risk_flags,
-                "warnings": ["龙虎榜列表页为策略轻量复盘，完整成交链路请打开个股工作台"],
-            }
-        )
-    return normalized
-
-
-def _lhb_artifact_confirmation_state(
-    *,
-    rule_layer: str | None,
-    rule_action: str | None,
-    fill_status: str | None,
-    eligibility_status: str | None,
-) -> str:
-    if eligibility_status == "risk_watch":
-        return "risk_watch"
-    if eligibility_status == "hard_reject":
-        return "retreat"
-    if rule_layer == "pending_intraday" or rule_action == "pending":
-        return "pending_confirmation"
-    if (rule_layer or "").startswith("follow_pool") or rule_action == "follow_allowed" or fill_status == "filled":
-        return "confirmed_follow"
-    if rule_layer in {"watch_pool", "chase_control"}:
-        return "watch_only"
-    if rule_layer == "retreat_hard":
-        return "retreat"
-    return "pending_confirmation" if eligibility_status == "eligible" else "watch_only"
-
-
-def _load_mid_trend_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
-    paths = [
-        RESEARCH_OUTPUT_ROOT / "mid_trend_shadow_top10_context_fixed_20260602/mid_trend_shadow_top10.csv",
-        RESEARCH_OUTPUT_ROOT / "mid_trend_refresh_20260602/mid_trend_watch_top10.csv",
-        RESEARCH_OUTPUT_ROOT / "mid_trend_watch_top10.csv",
-    ]
-    frame = _best_latest_artifact_frame(paths, trade_date=trade_date, date_col="trade_date")
-    if frame is None:
-        return []
-    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
-    if rows is None:
-        return []
-    rows = _dedupe_records_by_asset(_sort_records(rows, ["shadow_top10_rank", "mid_trend_top10_rank", "rank"]))
-    normalized: list[dict[str, Any]] = []
-    for index, row in enumerate(rows[:limit], start=1):
-        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
-        if not asset_id:
-            continue
-        rank = _optional_int(row.get("shadow_top10_rank") or row.get("mid_trend_top10_rank") or row.get("rank")) or index
-        score = _optional_float(row.get("mid_trend_funnel_score") or row.get("score_total") or row.get("score"))
-        notes = []
-        for label, key in (("中趋势层", "mid_trend_layer"), ("结构槽位", "structure_slot"), ("观察备注", "shadow_note")):
-            value = _optional_text(row.get(key))
-            if value:
-                notes.append(f"{label}：{value}")
-        normalized.append(
-            {
-                "trade_date": str(row.get("trade_date") or "")[:10],
-                "asset_id": asset_id,
-                "rank": rank,
-                "score_total": score,
-                "score_version": "strategy_topn",
-                "score_components": {},
-                "strategy_id": "mid_trend",
-                "strategy_name": "Mid Trend Combo",
-                "strategy_run_id": "artifact:mid_trend_shadow_top10",
-                "source_type": "strategy_artifact",
-                "source_name": "Mid Trend Combo",
-                "source_rank": rank,
-                "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
-                "weight": _optional_float(row.get("weight") or row.get("target_weight")),
-                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
-                "score_source": "mid_trend_funnel_score",
-                "score_explanation": "中趋势漏斗分；越高代表趋势结构、波动和回撤组合越符合策略",
-                "review_notes": notes or ["中趋势 Top10 候选"],
-                "warnings": ["中趋势列表页为轻量复盘，完整新闻/研报证据请打开个股工作台"],
-            }
-        )
-    return normalized
-
-
-def _load_tech_bottleneck_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
-    path = RESEARCH_OUTPUT_ROOT / "tech_bottleneck_discovery_v0_1_closeout_20260608/latest_positions.csv"
-    frame = _best_latest_artifact_frame([path], trade_date=trade_date, date_col="trade_date")
-    if frame is None:
-        return []
-    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
-    if rows is None:
-        return []
-    rows = _dedupe_records_by_asset(_sort_records(rows, ["bottleneck_rank", "rank"]))
-    normalized: list[dict[str, Any]] = []
-    for index, row in enumerate(rows[:limit], start=1):
-        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
-        if not asset_id:
-            continue
-        rank = _optional_int(row.get("bottleneck_rank") or row.get("rank")) or index
-        raw_score = _optional_float(row.get("bottleneck_score") or row.get("score_total") or row.get("score"))
-        score = raw_score * 100.0 if raw_score is not None and raw_score <= 1.0 else raw_score
-        notes = [f"技术瓶颈排名 #{rank}"]
-        protection_name = _optional_text(row.get("protection_name"))
-        if protection_name:
-            notes.append(f"保护规则：{protection_name}")
-        normalized.append(
-            {
-                "trade_date": str(row.get("trade_date") or "")[:10],
-                "asset_id": asset_id,
-                "rank": rank,
-                "score_total": score,
-                "score_version": "strategy_topn",
-                "score_components": {},
-                "strategy_id": "tech_bottleneck",
-                "strategy_name": "Tech Bottleneck Combo",
-                "strategy_run_id": "artifact:tech_bottleneck_latest_positions",
-                "source_type": "strategy_artifact",
-                "source_name": "Tech Bottleneck Combo",
-                "source_rank": rank,
-                "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
-                "weight": _optional_float(row.get("weight") or row.get("target_weight")),
-                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
-                "score_source": "bottleneck_score",
-                "score_explanation": "技术瓶颈发现分；越高代表越符合瓶颈突破/保护规则",
-                "review_notes": notes,
-                "warnings": ["技术瓶颈列表页为轻量复盘，完整新闻/研报证据请打开个股工作台"],
-            }
-        )
-    return normalized
-
-
 def _strategy_review_queue(
     *,
     rows: list[dict[str, Any]],
@@ -1326,24 +1109,6 @@ def _queue_item(
         "next_action_count": len(next_actions),
         "digest": digest,
     }
-
-
-def _best_latest_artifact_frame(paths: list[Path], *, trade_date: str, date_col: str):
-    best = None
-    best_key: tuple[str, int, str] | None = None
-    for path in paths:
-        frame = _read_artifact_frame(path)
-        if frame is None or date_col not in frame.columns:
-            continue
-        rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col=date_col)
-        if rows is None:
-            continue
-        latest_date = max((str(row.get(date_col) or "")[:10] for row in rows), default="")
-        key = (latest_date, len(rows), str(path))
-        if best_key is None or key > best_key:
-            best = frame
-            best_key = key
-    return best
 
 
 def _read_artifact_frame(path: Path):

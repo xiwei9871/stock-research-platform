@@ -49,3 +49,6 @@ config/local_secrets.json
 .vscode/
 *.swp
 *.swo
+
+# runtime lock files from scheduled jobs
+.locks/

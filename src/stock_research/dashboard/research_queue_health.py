@@ -7,6 +7,7 @@ from typing import Any
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.dashboard.research_queue_gaps import list_research_queue_gaps
+from stock_research.research_queue_refresh_store import load_latest_refresh_run
 from stock_research.research_review_actions import review_action_read_model
 
 
@@ -141,7 +142,16 @@ def load_latest_refresh_manifest(
     *,
     trade_date: str | None = None,
     output_root: str | Path = DEFAULT_REFRESH_ROOT,
+    service: str = SETTINGS.research_service,
 ) -> dict[str, Any] | None:
+    if Path(output_root) == Path(DEFAULT_REFRESH_ROOT):
+        try:
+            manifest = load_latest_refresh_run(trade_date=trade_date, service=service)
+            if manifest is not None:
+                manifest.setdefault("artifact_paths", {})
+                return manifest
+        except Exception:
+            pass
     root = Path(output_root)
     if trade_date:
         for exact in (

@@ -22,6 +22,7 @@ from stock_research.news_features import NEWS_FEATURE_COLUMNS, build_news_featur
 from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
 from stock_research.strategy_score_audit import build_strategy_score_audit, summarize_strategy_score_audit
+from stock_research.strategy_score_audit_store import upsert_score_audit, upsert_score_audit_failure
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
     get_publication_contract,
@@ -591,6 +592,11 @@ def _write_strategy_score_audit_artifacts(
     summary["detail_path"] = str(detail_path)
     summary["summary_path"] = str(summary_path)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    upsert_score_audit(
+        trade_date=trade_date,
+        summary=summary,
+        detail_rows=detail.to_dict("records"),
+    )
     return summary
 
 
@@ -608,6 +614,7 @@ def _write_strategy_score_audit_failure_summary(
         "summary_path": str(summary_path),
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    upsert_score_audit_failure(trade_date=trade_date, summary=summary)
     return summary
 
 

@@ -678,7 +678,7 @@ def _write_report(path: Path, summary: dict[str, Any]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def run(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
+def run(output_dir: Path = OUTPUT_DIR, *, publish_db: bool = False, service: str | None = None) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     v5_hydrated = _read_csv(V5_HYDRATED)
     targeted = _read_csv(TARGETED)
@@ -740,6 +740,18 @@ def run(output_dir: Path = OUTPUT_DIR) -> dict[str, Any]:
     _write_json(output_dir / "tech_bottleneck_review_universe_frontend_dataset_summary.json", summary)
     _write_json(output_dir / "tech_bottleneck_review_universe_frontend_guardrails.json", guardrails)
     _write_report(output_dir / "tech_bottleneck_review_universe_frontend_dataset_v1_report.md", summary)
+    if publish_db:
+        from stock_research.tech_bottleneck_review_store import publish_review_universe
+
+        kwargs = {"service": service} if service else {}
+        publish_review_universe(
+            dataset_version=TASK_NAME,
+            dataset_rows=dataset.to_dict("records"),
+            evidence_rows=evidence.to_dict("records"),
+            source_rows=sources.to_dict("records"),
+            meta={"summary": summary, "filter_options": filters, "guardrails": guardrails},
+            **kwargs,
+        )
     return summary
 
 

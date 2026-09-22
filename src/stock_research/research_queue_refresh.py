@@ -12,6 +12,7 @@ from stock_research.dashboard.research_queue_health import load_research_queue_c
 from stock_research.research_case_seed import run_research_case_seed, run_research_case_seed_idempotency_audit
 from stock_research.research_evidence_backfill import run_research_evidence_backfill
 from stock_research.research_objects import apply_research_object_schema
+from stock_research.research_queue_refresh_store import upsert_refresh_run
 
 
 def run_research_queue_refresh(
@@ -119,6 +120,11 @@ def run_research_queue_refresh(
     }
     manifest_paths = write_research_queue_refresh_manifest(manifest, output_dir=output_path)
     manifest["artifact_paths"].update(manifest_paths)
+    if not dry_run:
+        try:
+            upsert_refresh_run(manifest, service=service)
+        except Exception as exc:
+            warnings.append(f"db_persist_failed: {exc}")
     write_research_queue_refresh_manifest(manifest, output_dir=output_path)
     return manifest
 

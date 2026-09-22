@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from stock_research.dashboard.tech_bottleneck_review_decisions import apply_overlay_to_row
+from stock_research import tech_bottleneck_review_store as review_store
 
 
 DATA_DIR = Path("outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1")
@@ -55,23 +56,57 @@ def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
     return [{key: _clean_value(value) for key, value in row.items()} for row in frame.to_dict("records")]
 
 
+def _frame_from_records(records: list[dict[str, Any]]) -> pd.DataFrame:
+    frame = pd.DataFrame(records)
+    if frame.empty:
+        return frame
+    frame = frame.fillna("")
+    if "stock_code" in frame.columns:
+        frame["stock_code"] = frame["stock_code"].map(_normalize_stock_code)
+    return frame
+
+
 @lru_cache(maxsize=1)
 def _dataset() -> pd.DataFrame:
+    try:
+        frame = _frame_from_records(review_store.load_dataset_rows())
+        if not frame.empty:
+            return frame
+    except Exception:
+        pass
     return _read_csv(DATASET_PATH)
 
 
 @lru_cache(maxsize=1)
 def _evidence() -> pd.DataFrame:
+    try:
+        frame = _frame_from_records(review_store.load_evidence_rows())
+        if not frame.empty:
+            return frame
+    except Exception:
+        pass
     return _read_csv(EVIDENCE_PATH)
 
 
 @lru_cache(maxsize=1)
 def _sources() -> pd.DataFrame:
+    try:
+        frame = _frame_from_records(review_store.load_source_rows())
+        if not frame.empty:
+            return frame
+    except Exception:
+        pass
     return _read_csv(SOURCE_PATH)
 
 
 @lru_cache(maxsize=1)
 def _summary() -> dict[str, Any]:
+    try:
+        payload = review_store.load_meta("summary")
+        if payload:
+            return payload
+    except Exception:
+        pass
     if not SUMMARY_PATH.exists():
         return {}
     with SUMMARY_PATH.open(encoding="utf-8") as handle:
@@ -181,6 +216,12 @@ def list_review_universe_sources(stock_code: str) -> dict[str, Any]:
 
 
 def load_review_universe_filter_options() -> dict[str, Any]:
+    try:
+        payload = review_store.load_meta("filter_options")
+        if payload:
+            return payload
+    except Exception:
+        pass
     if FILTER_OPTIONS_PATH.exists():
         with FILTER_OPTIONS_PATH.open(encoding="utf-8") as handle:
             return json.load(handle)

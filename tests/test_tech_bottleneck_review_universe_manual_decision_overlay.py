@@ -17,8 +17,39 @@ FORMAL_STRATEGY_FILES = [
 
 def _client_with_tmp_overlay(monkeypatch, tmp_path: Path) -> TestClient:
     monkeypatch.setattr(decisions, "OVERLAY_DIR", tmp_path)
+    store_rows: list[dict] = []
+
+    def fake_insert(payload, *, service=None):
+        store_rows.append(dict(payload))
+        return str(payload.get("decision_id") or "")
+
+    def fake_list(*, stock_code=None, service=None):
+        if stock_code:
+            return [dict(row) for row in store_rows if row.get("stock_code") == stock_code]
+        return [dict(row) for row in store_rows]
+
+    def fake_overlay(*, service=None):
+        overlay = {}
+        for row in store_rows:
+            code = str(row.get("stock_code") or "")
+            if code:
+                overlay[code] = dict(row)
+        return overlay
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("db disabled in test")
+
+    monkeypatch.setattr(decisions.review_store, "insert_decision", fake_insert)
+    monkeypatch.setattr(decisions.review_store, "list_decisions", fake_list)
+    monkeypatch.setattr(decisions.review_store, "load_decision_overlay", fake_overlay)
+    monkeypatch.setattr(decisions.review_store, "list_universe_stock_codes", _raise)
+    monkeypatch.setattr(decisions.review_store, "load_dataset_rows", _raise)
+    monkeypatch.setattr(decisions.review_store, "load_evidence_rows", _raise)
+    monkeypatch.setattr(decisions.review_store, "load_source_rows", _raise)
+    monkeypatch.setattr(decisions.review_store, "load_meta", _raise)
     decisions.load_ledger.cache_clear()
     decisions.load_current_overlay.cache_clear()
+    decisions.review_universe_stock_codes.cache_clear()
     monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_WRITE_GUARD", "true")
     monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN", "secret")
     return TestClient(dashboard_app.create_app())
