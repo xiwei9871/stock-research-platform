@@ -55,3 +55,10 @@ Prefer targeted reads over full-file reads.
 - Manifest `artifact_path` may carry either local (`/Users/xiwei/...`) or
   container (`/app/...`) roots; both are trusted in
   `dashboard/review_queue.py` `LEGACY_STRATEGY_OUTPUT_ROOTS`.
+
+## Data Source Constraints
+- Baostock minute5 fetch is single-worker only: `max_workers_baostock_minute5`
+  stays `1` and `build_retry_failed_source_plan` must keep planning baostock
+  sources with `workers=1`. Do not parallelize baostock sessions — concurrent
+  logins/fetches cause `10002007` connection failures. Prefer one sequential
+  baostock downloader at a time host-wide.
