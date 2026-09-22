@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 
 import pandas as pd
+
+os.environ.setdefault("STOCK_RESEARCH_PUBLISH_DB", "0")
 
 from stock_research import tech_bottleneck_review_universe_frontend_dataset as frontend_dataset
 
