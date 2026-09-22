@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from stock_research.public_news.models import PublicNewsItem
 
-NEWS_QUALITY_THRESHOLD = 70
+NEWS_QUALITY_THRESHOLD = 65
 NEWS_MAX_ACCEPTED_PER_RUN = 3
 NEWS_FRESHNESS_HOURS = 24
 SOURCE_TIMEZONE = ZoneInfo("Asia/Shanghai")

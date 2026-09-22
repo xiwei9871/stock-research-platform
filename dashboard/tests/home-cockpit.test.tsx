@@ -50,7 +50,7 @@ describe('AppShell and HomeCockpit', () => {
   beforeEach(() => {
     vi.mocked(api.fetchPlatformReadiness).mockResolvedValue({
       mode: 'eod_local',
-      status: 'partial',
+      status: 'PARTIAL',
       as_of: '2026-06-15T08:30:00+08:00',
       latest_market_date: '2026-06-12',
       checks: [
@@ -67,7 +67,7 @@ describe('AppShell and HomeCockpit', () => {
           detail: 'Collector is lagging'
         }
       ],
-      warnings: ['News collector lagging']
+      warnings: ['Generated Reports unavailable']
     });
     vi.mocked(api.fetchPlatformSummary).mockResolvedValue({
       latest_market_date: '2026-06-08',
@@ -110,7 +110,16 @@ describe('AppShell and HomeCockpit', () => {
         factor_groups: ['资金行为'],
         signal_inputs: ['龙虎榜'],
         default_parameters: { top_n: 20 },
-        latest_evidence: '',
+        latest_evidence: 'Top5/20%/10bps 净值约 2.6069，最大回撤约 -5.32%。',
+        latest_metrics: {
+          as_of_date: '2026-06-08',
+          total_return_pct: 160.7,
+          max_drawdown_pct: -5.3,
+          latest_day_return_pct: 1.2,
+          latest_day_drawdown_pct: -0.4,
+          signal_status: 'no_position_rows',
+          signal_count: null
+        },
         primary_action: 'Run backtest'
       },
       {
@@ -121,7 +130,16 @@ describe('AppShell and HomeCockpit', () => {
         factor_groups: ['趋势强度'],
         signal_inputs: ['趋势'],
         default_parameters: { top_n: 5 },
-        latest_evidence: '',
+        latest_evidence: '2026区间净值 1.5599，最大回撤 -17.52%。',
+        latest_metrics: {
+          as_of_date: '2026-06-02',
+          total_return_pct: 56.0,
+          max_drawdown_pct: -17.5,
+          latest_day_return_pct: -2.1,
+          latest_day_drawdown_pct: -2.7,
+          signal_status: 'connected',
+          signal_count: 5
+        },
         primary_action: 'Run backtest'
       },
       {
@@ -132,7 +150,16 @@ describe('AppShell and HomeCockpit', () => {
         factor_groups: ['技术形态'],
         signal_inputs: ['技术'],
         default_parameters: { top_n: 5 },
-        latest_evidence: '',
+        latest_evidence: '2026-01-01 至 2026-06-08 净值约 1.6007，最大回撤约 -8.30%。',
+        latest_metrics: {
+          as_of_date: '2026-06-08',
+          total_return_pct: 60.1,
+          max_drawdown_pct: -8.3,
+          latest_day_return_pct: 0.8,
+          latest_day_drawdown_pct: -0.5,
+          signal_status: 'connected',
+          signal_count: 5
+        },
         primary_action: 'Run backtest'
       }
     ]);
@@ -306,46 +333,87 @@ describe('AppShell and HomeCockpit', () => {
     vi.clearAllMocks();
   });
 
-  it('renders platform summary and strategy entry points', async () => {
+  it('renders a strategy-centered command center', async () => {
     render(<AppShell />);
 
-    expect(await screen.findByText('Research Cockpit')).toBeVisible();
-    const readiness = within(screen.getByRole('region', { name: 'Platform Readiness' }));
-    expect(readiness.getByText('Platform Readiness')).toBeVisible();
-    expect(readiness.getByText('EOD local')).toBeVisible();
-    expect(readiness.getAllByText('Partial')).toHaveLength(2);
-    expect(readiness.getByText('Latest EOD')).toBeVisible();
-    expect(readiness.getByText('2026-06-12')).toBeVisible();
-    expect(readiness.getByText('Warnings')).toBeVisible();
-    expect(readiness.getByText('1')).toBeVisible();
-    expect(readiness.getByText('Market data')).toBeVisible();
-    expect(readiness.getByText('Ready')).toBeVisible();
-    expect(readiness.getByText('Latest EOD data loaded')).toBeVisible();
-    expect(readiness.getByText('News collector lagging')).toBeVisible();
-    expect(screen.getByText('Market Date')).toBeVisible();
-    expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
-    expect(screen.getByText('Factor Date')).toBeVisible();
-    expect(screen.getByText('2026-06-07')).toBeVisible();
-    expect(screen.getByText('Today Focus')).toBeVisible();
-    expect(screen.getByText('Market Pulse')).toBeVisible();
-    expect(screen.getByText('News Flow')).toBeVisible();
-    expect(screen.getByText('Strategy Health')).toBeVisible();
-    expect(screen.getByText('首页快讯')).toBeVisible();
-    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
-    expect(screen.getByText('Mid Trend Combo')).toBeVisible();
-    expect(screen.getByText('Tech Bottleneck Combo')).toBeVisible();
+    expect(await screen.findByText('策略指挥中心')).toBeVisible();
+    expect(screen.getByText('启用策略表现')).toBeVisible();
+    expect(screen.getByText('策略持仓状态')).toBeVisible();
+    expect(screen.getByText('市场环境')).toBeVisible();
+    expect(screen.getByText('高质量新闻')).toBeVisible();
+    expect(screen.getByText('部分可用')).toBeVisible();
+    expect(screen.getByText('生成报告不可用')).toBeVisible();
+    expect(screen.queryByText('Strategy Health')).not.toBeInTheDocument();
+    expect(screen.queryByText('Market Pulse')).not.toBeInTheDocument();
+    expect(screen.queryByText('Today Focus')).not.toBeInTheDocument();
+    expect(screen.queryByText('Today Actions')).not.toBeInTheDocument();
+    expect(screen.queryByText('CN:SZ:300951')).not.toBeInTheDocument();
+
+    const strategyPerformance = within(screen.getByRole('region', { name: '启用策略表现' }));
+    expect(strategyPerformance.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(strategyPerformance.getByText('+160.7%')).toBeVisible();
+    expect(strategyPerformance.getByText('-5.3%')).toBeVisible();
+    expect(strategyPerformance.getByText('+1.2%')).toBeVisible();
+    expect(strategyPerformance.getAllByText('正常')).toHaveLength(2);
+    expect(strategyPerformance.getByText('Mid Trend Combo')).toBeVisible();
+    expect(strategyPerformance.getByText('+56.0%')).toBeVisible();
+    expect(strategyPerformance.getByText('-17.5%')).toBeVisible();
+    expect(strategyPerformance.getByText('-2.1%')).toBeVisible();
+    expect(strategyPerformance.getByText('复盘')).toBeVisible();
+    expect(strategyPerformance.getByText('Tech Bottleneck Combo')).toBeVisible();
+    expect(strategyPerformance.getByText('+60.1%')).toBeVisible();
+    expect(strategyPerformance.getByText('-8.3%')).toBeVisible();
+    expect(strategyPerformance.getByText('+0.8%')).toBeVisible();
+    expect(strategyPerformance.getByText('持仓明细暂无')).toBeVisible();
+    expect(strategyPerformance.getAllByText('最新持仓 5')).toHaveLength(2);
+    expect(strategyPerformance.getAllByText('截至 2026-06-08')).toHaveLength(2);
+
+    const marketRegime = within(screen.getByRole('region', { name: '市场环境' }));
+    expect(marketRegime.getByText('73.6')).toBeVisible();
+    expect(marketRegime.getByText('偏热')).toBeVisible();
+    expect(marketRegime.getByText('涨跌家数')).toBeVisible();
+    expect(marketRegime.getByText('3,610 / 1,492')).toBeVisible();
+    expect(marketRegime.getByText(/强涨 269，强跌 55/)).toBeVisible();
+    expect(marketRegime.getByText('涨停 / 跌停')).toBeVisible();
+    expect(marketRegime.getByText('90 / 10')).toBeVisible();
+    expect(marketRegime.getByText(/炸板 55，炸板率 37.9%/)).toBeVisible();
+    expect(marketRegime.getByText('首板 / 二板')).toBeVisible();
+    expect(marketRegime.getByText('58 / 21')).toBeVisible();
+    expect(marketRegime.getByText('三板以上 / 高度')).toBeVisible();
+    expect(marketRegime.getByText('11 / 6')).toBeVisible();
+    expect(marketRegime.getByText('连板数量')).toBeVisible();
+    expect(marketRegime.getByText('二板数量')).toBeVisible();
+    expect(marketRegime.getByText('三板以上')).toBeVisible();
+    expect(marketRegime.getByText('金钼股份')).toBeVisible();
+    expect(marketRegime.getAllByText('股票列表未接入')).toHaveLength(1);
+    expect(marketRegime.getByText('涨跌广度评分')).toBeVisible();
+    expect(marketRegime.getByText('上涨覆盖面和涨跌比例的综合评分，不是家数')).toBeVisible();
+    expect(marketRegime.getByText('涨停表现评分')).toBeVisible();
+    expect(marketRegime.getByText('连板接力评分')).toBeVisible();
+    expect(marketRegime.getByText('涨停数量、封板质量和炸板压力的综合评分')).toBeVisible();
+    expect(marketRegime.getByText('连板晋级与昨日涨停接力表现评分')).toBeVisible();
+    expect(marketRegime.getByText('赚钱效应评分')).toBeVisible();
+    expect(marketRegime.getByText('66.8 分')).toBeVisible();
+    expect(marketRegime.getByText(/情绪偏强但需要看炸板压力/)).toBeVisible();
+
+    const strategySignals = within(screen.getByRole('region', { name: '策略持仓状态' }));
+    expect(strategySignals.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(strategySignals.getByText('Mid Trend Combo')).toBeVisible();
+    expect(strategySignals.getByText('Tech Bottleneck Combo')).toBeVisible();
+    expect(strategySignals.getByText('持仓明细暂无')).toBeVisible();
+    expect(strategySignals.getAllByText('最新持仓 5')).toHaveLength(2);
+    expect(strategySignals.getByText('非买卖建议')).toBeVisible();
+    expect(strategySignals.getByText(/最新回测持仓数量/)).toBeVisible();
+
+    const qualityNews = within(screen.getByRole('region', { name: '高质量新闻' }));
+    expect(qualityNews.getByText('首页快讯')).toBeVisible();
+    expect(qualityNews.getByText('1')).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
-    const quickActions = within(screen.getByRole('navigation', { name: 'Quick actions' }));
-    expect(quickActions.getByRole('button', { name: 'Review Queue' })).toBeVisible();
-    expect(quickActions.getByRole('button', { name: 'Market Monitor' })).toBeVisible();
-    expect(quickActions.getByRole('button', { name: 'Research Reports' })).toBeVisible();
-    expect(quickActions.getByRole('button', { name: 'Stock Workspace' })).toBeVisible();
-    expect(quickActions.getByRole('button', { name: 'Watchlist' })).toBeVisible();
-    expect(quickActions.getByRole('button', { name: 'Strategy Lab' })).toBeVisible();
-    expect(quickActions.getByRole('button', { name: 'Generated Reports' })).toBeVisible();
-    expect(quickActions.queryByRole('button', { name: 'Backtest Lab' })).not.toBeInTheDocument();
-    expect(quickActions.queryByRole('button', { name: 'Strategy Validation' })).not.toBeInTheDocument();
-    expect(quickActions.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument();
+    expect(api.fetchEvidenceDigest).not.toHaveBeenCalled();
+    expect(api.fetchPublicNews).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 5, minQualityScore: 65 })
+    );
+    expect(screen.queryByRole('navigation', { name: 'Quick actions' })).not.toBeInTheDocument();
   });
 
   it('keeps core cockpit content when platform readiness fails', async () => {
@@ -353,10 +421,10 @@ describe('AppShell and HomeCockpit', () => {
 
     render(<AppShell />);
 
-    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-    expect(screen.getByText('Platform readiness unavailable: readiness unavailable')).toBeVisible();
-    expect(screen.getByText('Today Focus')).toBeVisible();
-    expect(screen.getByText('Market Pulse')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.getByText('平台就绪状态不可用：readiness unavailable')).toBeVisible();
+    expect(screen.getByText('策略持仓状态')).toBeVisible();
+    expect(screen.getByText('市场环境')).toBeVisible();
   });
 
   it('keeps core cockpit content when optional home widgets fail', async () => {
@@ -365,38 +433,26 @@ describe('AppShell and HomeCockpit', () => {
 
     render(<AppShell />);
 
-    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-    expect(screen.getByText('Market Date')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.getByText('市场日期')).toBeVisible();
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
-    expect(screen.getByText('Today Focus')).toBeVisible();
-    expect(screen.getByText('Strategy Health')).toBeVisible();
-    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
-    expect(screen.getByText('Market pulse unavailable: market monitor unavailable')).toBeVisible();
-    expect(screen.getByText('News flow unavailable: news unavailable')).toBeVisible();
+    expect(screen.getByText('策略持仓状态')).toBeVisible();
+    expect(screen.getByText('启用策略表现')).toBeVisible();
+    expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
+    expect(screen.getByText('市场环境不可用：market monitor unavailable')).toBeVisible();
+    expect(screen.getByText('新闻流不可用：news unavailable')).toBeVisible();
   });
 
-  it('shows evidence digest badges for today focus rows', async () => {
+  it('does not load manual v1 evidence digest rows on the home page', async () => {
     render(<AppShell />);
 
-    expect(await screen.findByText('Research Cockpit')).toBeVisible();
-    expect(await screen.findByText('Strong evidence')).toBeVisible();
-    expect(api.fetchEvidenceDigest).toHaveBeenCalledWith('CN:SZ:300951', {
-      tradeDate: '2026-06-08',
-      lookbackDays: 90
-    });
+    expect(await screen.findByText('策略指挥中心')).toBeVisible();
+    expect(screen.queryByText('Strong evidence')).not.toBeInTheDocument();
+    expect(screen.queryByText('CN:SZ:300951')).not.toBeInTheDocument();
+    expect(api.fetchEvidenceDigest).not.toHaveBeenCalled();
   });
 
-  it('keeps today focus visible when digest loading fails', async () => {
-    vi.mocked(api.fetchEvidenceDigest).mockRejectedValueOnce(new Error('digest unavailable'));
-
-    render(<AppShell />);
-
-    expect(await screen.findByText('CN:SZ:300951')).toBeVisible();
-    expect(await screen.findByText('Digest unavailable')).toBeVisible();
-  });
-
-  it('updates each top-five evidence digest row independently', async () => {
-    const pendingDigest = deferred<Awaited<ReturnType<typeof api.fetchEvidenceDigest>>>();
+  it('ignores manual v1 topn rows even when platform summary has them', async () => {
     const focusRows = Array.from({ length: 6 }, (_, index) => ({
       trade_date: '2026-06-08',
       asset_id: `CN:SZ:00000${index + 1}`,
@@ -415,53 +471,13 @@ describe('AppShell and HomeCockpit', () => {
       score_versions: ['manual_v1'],
       topn_preview: focusRows
     });
-    vi.mocked(api.fetchEvidenceDigest).mockImplementation((assetId) => {
-      if (assetId === 'CN:SZ:000001') {
-        return Promise.resolve({
-          asset_id: assetId,
-          canonical_asset_id: assetId,
-          trade_date: '2026-06-08',
-          title: 'First evidence',
-          score: 81,
-          bucket: 'strong',
-          facts: [],
-          risk_flags: [],
-          source_refs: {},
-          next_actions: [],
-          warnings: []
-        });
-      }
-      if (assetId === 'CN:SZ:000002') return Promise.reject(new Error('digest unavailable'));
-      if (assetId === 'CN:SZ:000003') return pendingDigest.promise;
-      return Promise.resolve({
-        asset_id: assetId,
-        canonical_asset_id: assetId,
-        trade_date: '2026-06-08',
-        title: `Evidence ${assetId}`,
-        score: 70,
-        bucket: 'mixed',
-        facts: [],
-        risk_flags: [],
-        source_refs: {},
-        next_actions: [],
-        warnings: []
-      });
-    });
 
     render(<AppShell />);
 
-    expect(await screen.findByText('CN:SZ:000001')).toBeVisible();
-    await waitFor(() => expect(api.fetchEvidenceDigest).toHaveBeenCalledTimes(5));
-    expect(api.fetchEvidenceDigest).toHaveBeenCalledWith('CN:SZ:000005', {
-      tradeDate: '2026-06-08',
-      lookbackDays: 90
-    });
-    expect(api.fetchEvidenceDigest).not.toHaveBeenCalledWith('CN:SZ:000006', expect.anything());
-    expect(await screen.findByText('First evidence')).toBeVisible();
-    expect(await screen.findByText('Digest unavailable')).toBeVisible();
-    const pendingRow = screen.getByText('CN:SZ:000003').closest('.data-table-row');
-    expect(pendingRow).not.toBeNull();
-    expect(within(pendingRow as HTMLElement).getByText('Digest pending')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.queryByText('CN:SZ:000001')).not.toBeInTheDocument();
+    expect(screen.queryByText('CN:SZ:000006')).not.toBeInTheDocument();
+    expect(api.fetchEvidenceDigest).not.toHaveBeenCalled();
   });
 
   it('does not request evidence digests when platform summary fails', async () => {
@@ -469,7 +485,7 @@ describe('AppShell and HomeCockpit', () => {
 
     render(<AppShell />);
 
-    expect(await screen.findByText('Platform summary unavailable: summary unavailable')).toBeVisible();
+    expect(await screen.findByText('平台摘要不可用：summary unavailable')).toBeVisible();
     expect(api.fetchEvidenceDigest).not.toHaveBeenCalled();
   });
 
@@ -479,28 +495,27 @@ describe('AppShell and HomeCockpit', () => {
 
     render(<AppShell />);
 
-    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-    expect(screen.getByText('Market Date')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.getByText('市场日期')).toBeVisible();
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
-    expect(screen.getByText('Strategy Health')).toBeVisible();
-    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Open Strategy Lab' })).toBeVisible();
+    expect(screen.getByText('启用策略表现')).toBeVisible();
+    expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
+    expect(screen.getByRole('button', { name: '打开策略实验室' })).toBeVisible();
   });
 
   it('navigates to Data Explorer from Home', async () => {
     render(<AppShell />);
-    await screen.findByRole('heading', { name: 'Research Cockpit' });
+    await screen.findByRole('heading', { name: '策略指挥中心' });
 
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Quick actions' })).getByRole('button', {
-      name: 'Data Explorer'
-    }));
+    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Data Explorer workspace' }));
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Data Explorer' })).toBeVisible());
   });
 
   it('exposes side navigation with unique accessible names and current state', async () => {
     render(<AppShell />);
-    await screen.findByRole('heading', { name: 'Research Cockpit' });
+    await screen.findByRole('heading', { name: '策略指挥中心' });
 
     const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
 
@@ -516,7 +531,7 @@ describe('AppShell and HomeCockpit', () => {
 
   it('navigates to Generated Reports workspace and loads reports for the default trade date', async () => {
     render(<AppShell />);
-    await screen.findByRole('heading', { name: 'Research Cockpit' });
+    await screen.findByRole('heading', { name: '策略指挥中心' });
 
     const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
     fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Generated Reports workspace' }));
@@ -534,7 +549,7 @@ describe('AppShell and HomeCockpit', () => {
 
   it('loads reports for the selected report date', async () => {
     render(<AppShell />);
-    await screen.findByRole('heading', { name: 'Research Cockpit' });
+    await screen.findByRole('heading', { name: '策略指挥中心' });
 
     const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
     fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Generated Reports workspace' }));

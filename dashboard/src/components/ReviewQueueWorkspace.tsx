@@ -40,8 +40,25 @@ function collectSourceKinds(queue: ReviewQueueResponse) {
   return sourceKinds;
 }
 
-function formatCount(count: number, singular: string) {
-  return `${count} ${singular}${count === 1 ? '' : 's'}`;
+function formatRiskWarningCounts(riskCount: number, warningCount: number) {
+  return `${riskCount} 风险 / ${warningCount} 提醒`;
+}
+
+function reviewTierLabel(tier?: string | null) {
+  if (tier === 'top5_focus') return 'Top5 重点复盘';
+  if (tier === 'top10_watch') return 'Top6-10 观察';
+  return '策略候选';
+}
+
+function sourceKindLabel(sourceKind: string) {
+  const labels: Record<string, string> = {
+    strategy: '策略',
+    news: '新闻',
+    research: '研报',
+    market: '市场',
+    factor: '因子'
+  };
+  return labels[sourceKind] ?? sourceKind;
 }
 
 function actionContext(
@@ -82,7 +99,7 @@ export function ReviewQueueWorkspace({
     setError(null);
 
     try {
-      const nextQueue = await fetchReviewQueue({ limit: 20, lookbackDays: 90 });
+      const nextQueue = await fetchReviewQueue({ limit: 10, lookbackDays: 90 });
       if (requestIdRef.current !== requestId) return;
       const selection = findInitialSelection(nextQueue);
       setQueue(nextQueue);
@@ -145,19 +162,19 @@ export function ReviewQueueWorkspace({
   };
 
   return (
-    <section className="workspace-stack" aria-label="Review Queue workspace">
+    <section className="workspace-stack" aria-label="策略复盘队列">
       <header className="workspace-header">
-        <h1>Review Queue</h1>
-        <p className="muted">Daily evidence digest inbox for validating strategy candidates and opening source-backed next steps.</p>
+        <h1>策略复盘队列</h1>
+        <p className="muted">按启用策略复盘最近可用交易日的 Top5 / Top10，检查候选标的的证据、风险和后续查证入口。</p>
       </header>
 
-      {loading ? <p className="muted">Loading review queue...</p> : null}
+      {loading ? <p className="muted">正在加载策略复盘队列...</p> : null}
 
       {error ? (
-        <section className="workspace-band" aria-label="Review Queue Error">
+        <section className="workspace-band" aria-label="策略复盘队列错误">
           <p className="error-text">{error}</p>
           <button type="button" onClick={loadQueue}>
-            Retry Review Queue
+            重新加载复盘队列
           </button>
         </section>
       ) : null}
@@ -165,7 +182,7 @@ export function ReviewQueueWorkspace({
       {queue && !error ? (
         <>
           {queue.warnings.length > 0 ? (
-            <section className="workspace-band" aria-label="Review Queue Warnings">
+            <section className="workspace-band" aria-label="策略复盘队列提醒">
               {queue.warnings.map((warning) => (
                 <p className="error-text" key={warning}>
                   {warning}
@@ -174,16 +191,16 @@ export function ReviewQueueWorkspace({
             </section>
           ) : null}
 
-          <section className="workspace-band" aria-label="Review Queue Groups">
+          <section className="workspace-band" aria-label="策略复盘分组">
             <div className="workspace-stack">
               <div className="section-heading">
                 <div>
-                  <span className="muted">Trade Date</span>
+                  <span className="muted">复盘日期</span>
                   <strong>{queue.trade_date}</strong>
                 </div>
                 <div>
-                  <span className="muted">Score Version</span>
-                  <strong>{queue.score_version}</strong>
+                  <span className="muted">复盘范围</span>
+                  <strong>{queue.review_mode === 'strategy_topn' ? '启用策略 Top10' : queue.score_version}</strong>
                 </div>
               </div>
 
@@ -200,28 +217,28 @@ export function ReviewQueueWorkspace({
                 ))}
               </div>
 
-              <div className="tag-stack" aria-label="Source Filters">
+              <div className="tag-stack" aria-label="证据来源">
                 {sourceKinds.length > 0 ? (
                   sourceKinds.map((sourceKind) => (
                     <span className="status-chip" key={sourceKind}>
-                      {sourceKind}
+                      {sourceKindLabel(sourceKind)}
                     </span>
                   ))
                 ) : (
-                  <span className="muted">No source filters</span>
+                  <span className="muted">暂无证据来源</span>
                 )}
               </div>
             </div>
           </section>
 
-          <section className="workspace-band" aria-label="Selected Queue Group">
+          <section className="workspace-band" aria-label="当前策略复盘列表">
             <div className="section-heading">
-              <h2>{selectedGroup?.label ?? 'Queue Items'}</h2>
+              <h2>{selectedGroup?.label ?? '复盘标的'}</h2>
               <span className="muted">{queue.trade_date}</span>
             </div>
 
             {selectedGroup && selectedGroup.items.length === 0 ? (
-              <p className="muted">No {selectedGroup.label.toLowerCase()} items for {queue.trade_date}.</p>
+              <p className="muted">{queue.trade_date} 暂无 {selectedGroup.label} 复盘标的。</p>
             ) : null}
 
             {selectedGroup && selectedGroup.items.length > 0 ? (
@@ -243,48 +260,46 @@ export function ReviewQueueWorkspace({
                       <span className="muted">{item.asset_id}</span>
                       <span>{item.digest_title || item.digest.title}</span>
                     </span>
-                    <span>Score {formatScore(item.score)}</span>
-                    <span className="status-chip">{item.bucket}</span>
+                    <span>评分 {formatScore(item.score)}</span>
+                    <span className="status-chip">{reviewTierLabel(item.review_tier)}</span>
                     <span className="tag-stack" aria-label={`${item.display_name || item.asset_id} source coverage`}>
                       {item.source_kinds.length > 0 ? (
                         item.source_kinds.map((sourceKind) => (
                           <span className="status-chip" key={sourceKind}>
-                            {sourceKind}
+                            {sourceKindLabel(sourceKind)}
                           </span>
                         ))
                       ) : (
-                        <span className="muted">No sources</span>
+                        <span className="muted">暂无来源</span>
                       )}
                     </span>
-                    <span>
-                      <span>{formatCount(item.risk_count, 'risk')}</span>
-                      <span>{formatCount(item.warning_count, 'warning')}</span>
-                    </span>
-                    <span>{item.next_action_count} actions</span>
+                    <span>{formatRiskWarningCounts(item.risk_count, item.warning_count)}</span>
+                    <span>{item.next_action_count} 个入口</span>
                   </button>
                 ))}
               </div>
             ) : null}
           </section>
 
-          <section className="workspace-band" role="region" aria-label="Selected Evidence">
+          <section className="workspace-band" role="region" aria-label="选中标的证据">
             {selectedItem && selectedDigest ? (
               <div className="workspace-stack">
                 <div className="section-heading">
                   <div>
                     <h2>{selectedItem.digest_title || selectedDigest.title}</h2>
                     <p className="muted">
-                      {selectedItem.display_name || selectedItem.asset_id} · score {formatScore(selectedItem.score)}
+                      {selectedItem.strategy_name ? `${selectedItem.strategy_name} · ` : ''}
+                      {selectedItem.display_name || selectedItem.asset_id} · 评分 {formatScore(selectedItem.score)} · {reviewTierLabel(selectedItem.review_tier)}
                     </p>
                   </div>
                   <span className="status-chip">{selectedDigest.bucket}</span>
                 </div>
 
                 {selectedItem.source_kinds.length > 0 ? (
-                  <div className="tag-stack" aria-label="Evidence sources">
+                  <div className="tag-stack" aria-label="证据来源">
                     {selectedItem.source_kinds.map((sourceKind) => (
                       <span className="status-chip" key={sourceKind}>
-                        {sourceKind}
+                        {sourceKindLabel(sourceKind)}
                       </span>
                     ))}
                   </div>
@@ -304,7 +319,7 @@ export function ReviewQueueWorkspace({
 
                 {selectedDigest.risk_flags.length > 0 ? (
                   <div>
-                    <h3>Risk Flags</h3>
+                    <h3>风险提示</h3>
                     <div className="tag-stack">
                       {selectedDigest.risk_flags.map((risk) => (
                         <span className="status-chip" key={risk.key}>
@@ -317,7 +332,7 @@ export function ReviewQueueWorkspace({
 
                 {selectedDigest.warnings.length > 0 ? (
                   <div>
-                    <h3>Warnings</h3>
+                    <h3>系统提醒</h3>
                     {selectedDigest.warnings.map((warning) => (
                       <p className="error-text" key={warning}>
                         {warning}
@@ -337,7 +352,7 @@ export function ReviewQueueWorkspace({
                 ) : null}
               </div>
             ) : (
-              <p className="muted">Select a queue item to review its evidence.</p>
+              <p className="muted">请选择一个复盘标的查看证据。</p>
             )}
           </section>
         </>

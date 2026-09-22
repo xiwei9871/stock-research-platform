@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchBacktestStrategies, runFreshBacktest } from '../api/client';
-import type { BacktestRunRequest, BacktestRunResult, BacktestScalar, StrategyCatalogItem } from '../api/types';
+import { fetchBacktestStrategies, runBacktest } from '../api/client';
+import type {
+  BacktestRunRequest,
+  BacktestRunResult,
+  BacktestScalar,
+  BacktestValue,
+  StrategyCatalogItem
+} from '../api/types';
 import { BacktestResultDetail } from './BacktestResultDetail';
 
 const DEFAULT_STRATEGY_ID = 'lhb_shortline';
@@ -8,7 +14,7 @@ const DEFAULT_START_DATE = '2026-01-01';
 const DEFAULT_END_DATE = '2026-06-08';
 const DEFAULT_COMBO_STRATEGY_IDS = new Set(['lhb_shortline', 'mid_trend', 'tech_bottleneck']);
 
-type RebalanceFrequency = 'daily' | 'weekly';
+type LHBRiskProfile = 'return_max' | 'balanced' | 'drawdown_control';
 type ResultRow = Record<string, BacktestScalar>;
 type ComparisonRow = {
   strategyId: string;
@@ -29,6 +35,13 @@ function formatValue(value: BacktestScalar | undefined) {
     return value ? 'true' : 'false';
   }
   return value ?? '-';
+}
+
+function asScalar(value: BacktestValue | undefined): BacktestScalar | undefined {
+  if (Array.isArray(value) || (value !== null && typeof value === 'object')) {
+    return undefined;
+  }
+  return value;
 }
 
 function getStrategyInputs(strategy: StrategyCatalogItem) {
@@ -63,7 +76,7 @@ function metricValue(result: BacktestRunResult | null, keys: string[]) {
   for (const key of keys) {
     const value = result.summary[key];
     if (value !== undefined) {
-      return value;
+      return asScalar(value);
     }
   }
   return null;
@@ -98,10 +111,10 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
   const [strategyId, setStrategyId] = useState(DEFAULT_STRATEGY_ID);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
-  const [topN, setTopN] = useState(20);
-  const [rebalanceFrequency, setRebalanceFrequency] = useState<RebalanceFrequency>('weekly');
+  const [topN, setTopN] = useState(5);
   const [transactionCostBps, setTransactionCostBps] = useState(10);
   const [maxPositions, setMaxPositions] = useState(20);
+  const [riskProfile, setRiskProfile] = useState<LHBRiskProfile>('balanced');
   const [result, setResult] = useState<BacktestRunResult | null>(null);
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -158,7 +171,7 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
     transactionCostBps >= 0 &&
     Number.isInteger(maxPositions) &&
     maxPositions > 0 &&
-    (rebalanceFrequency === 'daily' || rebalanceFrequency === 'weekly');
+    maxPositions <= 100;
   const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning && !isComparing;
   const canCompare = runnableStrategies.length > 0 && hasValidConfig && !isRunning && !isComparing;
   const completedComparisonCount = comparisonRows.filter((row) => row.status !== 'running').length;
@@ -198,11 +211,6 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
     invalidateRun();
   };
 
-  const updateRebalanceFrequency = (nextRebalanceFrequency: RebalanceFrequency) => {
-    setRebalanceFrequency(nextRebalanceFrequency);
-    invalidateRun();
-  };
-
   const updateTransactionCostBps = (nextTransactionCostBps: number) => {
     setTransactionCostBps(nextTransactionCostBps);
     invalidateRun();
@@ -213,15 +221,21 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
     invalidateRun();
   };
 
+  const updateRiskProfile = (nextRiskProfile: LHBRiskProfile) => {
+    setRiskProfile(nextRiskProfile);
+    invalidateRun();
+  };
+
   const buildBacktestRequest = (nextStrategyId: string): BacktestRunRequest => ({
     strategy_id: nextStrategyId,
     start_date: startDate,
     end_date: endDate,
     score_version: 'manual_v1',
     top_n: topN,
-    rebalance_frequency: rebalanceFrequency,
     transaction_cost_bps: transactionCostBps,
-    max_positions: maxPositions,
+    max_positions: null,
+    max_position_weight: maxPositions / 100,
+    ...(nextStrategyId === 'lhb_shortline' ? { risk_profile: riskProfile } : {}),
     adjust_type: 'hfq'
   });
 
@@ -237,10 +251,17 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
     setResult(null);
     setComparisonRows([]);
 
-    runFreshBacktest(buildBacktestRequest(strategyId))
+    runBacktest(buildBacktestRequest(strategyId))
       .then((payload) => {
         if (!mountedRef.current || runRequestIdRef.current !== requestId) {
           return;
+        }
+        if (strategyId === 'lhb_shortline' && payload.result_source === 'live_vectorized_backtest') {
+          throw new Error(
+            `LHB Shortline must run lhb_shortline_v1, but API returned ${payload.result_source ?? 'unknown source'} for ${
+              payload.strategy_id
+            }.`
+          );
         }
         setResult(payload);
         setIsRunning(false);
@@ -281,7 +302,7 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
 
     const runs = runnableStrategies.map(async (strategy) => {
         try {
-          const payload = await runFreshBacktest(buildBacktestRequest(strategy.strategy_id));
+          const payload = await runBacktest(buildBacktestRequest(strategy.strategy_id));
           const nextRow = {
             strategyId: strategy.strategy_id,
             strategyName: strategy.strategy_name,
@@ -361,17 +382,20 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
             onChange={(event) => updateTopN(Number(event.target.value))}
           />
         </label>
-        <label>
-          <span>Rebalance</span>
-          <select
-            aria-label="rebalance frequency"
-            value={rebalanceFrequency}
-            onChange={(event) => updateRebalanceFrequency(event.target.value === 'daily' ? 'daily' : 'weekly')}
-          >
-            <option value="weekly">weekly</option>
-            <option value="daily">daily</option>
-          </select>
-        </label>
+        {strategyId === 'lhb_shortline' ? (
+          <label>
+            <span>Risk Profile</span>
+            <select
+              aria-label="risk profile"
+              value={riskProfile}
+              onChange={(event) => updateRiskProfile(event.target.value as LHBRiskProfile)}
+            >
+              <option value="return_max">收益优先</option>
+              <option value="balanced">最佳平衡</option>
+              <option value="drawdown_control">回撤优先</option>
+            </select>
+          </label>
+        ) : null}
         <label>
           <span>Cost Bps</span>
           <input
@@ -383,20 +407,21 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
           />
         </label>
         <label>
-          <span>Max Positions</span>
+          <span>Max Position %</span>
           <input
-            aria-label="max positions"
+            aria-label="max position percent"
             min="1"
+            max="100"
             type="number"
             value={maxPositions}
             onChange={(event) => updateMaxPositions(Number(event.target.value))}
           />
         </label>
         <button type="button" disabled={!canRun} onClick={submitBacktest}>
-          {isRunning ? 'Running...' : 'Run Fresh Backtest'}
+          {isRunning ? 'Running...' : 'Run Backtest'}
         </button>
         <button type="button" disabled={!canCompare} onClick={submitComparison}>
-          {isComparing ? 'Comparing...' : 'Run Fresh Comparison'}
+          {isComparing ? 'Comparing...' : 'Run Comparison'}
         </button>
         {runDisabledReason ? <p className="backtest-run-note">{runDisabledReason}</p> : null}
       </section>

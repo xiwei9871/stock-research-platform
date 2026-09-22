@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import urlencode
 from typing import Any
 
+from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import load_latest_data_run_manifest
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.scores import load_top_scores_for_dashboard
+from stock_research.dashboard.strategy_catalog import list_strategy_catalog
+from stock_research.db import connect, fetch_all
 
 BUCKET_ORDER = ["strong", "mixed", "risk_heavy", "thin"]
 BUCKET_LABELS = {
@@ -15,6 +19,7 @@ BUCKET_LABELS = {
     "risk_heavy": "Risk Flags",
     "thin": "Thin / Missing Sources",
 }
+RESEARCH_OUTPUT_ROOT = Path("/Users/xiwei/stock_research/outputs/research")
 
 
 def build_review_queue(
@@ -23,14 +28,27 @@ def build_review_queue(
     score_version: str = "manual_v1",
     limit: int = 20,
     lookback_days: int = 90,
+    review_mode: str = "strategy_topn",
 ) -> dict[str, Any]:
     bounded_limit = _bounded_int(limit, default=20, minimum=1, maximum=50)
     bounded_lookback_days = _bounded_int(lookback_days, default=90, minimum=1, maximum=365)
-    summary = load_platform_summary(score_version=score_version, top_n=bounded_limit)
+    normalized_review_mode = review_mode if review_mode in {"strategy_topn", "score_topn"} else "strategy_topn"
+    summary_top_n = 10 if normalized_review_mode == "strategy_topn" else bounded_limit
+    summary = load_platform_summary(score_version=score_version, top_n=summary_top_n)
     explicit_trade_date = bool(trade_date)
     selected_trade_date = str(trade_date) if explicit_trade_date else str(
         summary.get("latest_market_date") or summary.get("latest_score_date") or ""
     )
+    if normalized_review_mode == "strategy_topn":
+        strategy_rows = load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10))
+        if strategy_rows:
+            return _strategy_review_queue(
+                rows=strategy_rows,
+                selected_trade_date=selected_trade_date,
+                score_version="strategy_topn",
+                lookback_days=bounded_lookback_days,
+            )
+
     score_rows = (
         load_top_scores_for_dashboard(selected_trade_date, score_version, bounded_limit)
         if explicit_trade_date
@@ -76,6 +94,7 @@ def build_review_queue(
     return {
         "trade_date": selected_trade_date,
         "score_version": score_version,
+        "review_mode": "score_topn",
         "generated_at": _generated_at(selected_trade_date),
         "groups": [
             {
@@ -87,6 +106,413 @@ def build_review_queue(
             for bucket in BUCKET_ORDER
         ],
         "warnings": warnings,
+    }
+
+
+def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    artifact_rows = _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit)
+    covered_strategy_ids = {str(row.get("strategy_id") or "") for row in artifact_rows}
+    db_rows = [
+        row
+        for row in _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
+        if str(row.get("strategy_id") or "") not in covered_strategy_ids
+    ]
+    return _attach_asset_names([*artifact_rows, *db_rows])
+
+
+def _load_db_strategy_position_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    strategy_names = _active_strategy_names()
+    strategy_ids = list(strategy_names)
+    if not strategy_ids:
+        return []
+    try:
+        with connect(SETTINGS.research_service) as conn:
+            rows = fetch_all(
+                conn,
+                """
+                WITH active_runs AS (
+                    SELECT DISTINCT ON (strategy_id)
+                           run_id, strategy_id, strategy_name, combo_scheme, end_date
+                    FROM backtest.strategy_backtest_run
+                    WHERE strategy_id = ANY(%s)
+                    ORDER BY strategy_id, end_date DESC, created_at DESC
+                ),
+                latest_position_dates AS (
+                    SELECT r.run_id, max(p.trade_date) AS trade_date
+                    FROM active_runs r
+                    JOIN backtest.strategy_backtest_position p ON p.run_id = r.run_id
+                    WHERE (%s = '' OR p.trade_date <= %s::date)
+                    GROUP BY r.run_id
+                )
+                SELECT r.run_id, r.strategy_id, r.strategy_name, r.combo_scheme,
+                       p.trade_date::text AS trade_date, p.asset_id, p.weight, p.rank, p.row_json
+                FROM active_runs r
+                JOIN latest_position_dates latest
+                  ON latest.run_id = r.run_id
+                JOIN backtest.strategy_backtest_position p
+                  ON p.run_id = latest.run_id
+                 AND p.trade_date = latest.trade_date
+                ORDER BY r.strategy_id, COALESCE(p.rank, p.row_index + 1), p.row_index
+                """,
+                [strategy_ids, trade_date or "", trade_date or ""],
+            )
+    except Exception:
+        return []
+
+    grouped_counts: dict[str, int] = {}
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        strategy_id = str(row.get("strategy_id") or "")
+        if strategy_id not in strategy_names:
+            continue
+        grouped_counts[strategy_id] = grouped_counts.get(strategy_id, 0) + 1
+        if grouped_counts[strategy_id] > limit:
+            continue
+        row_json = row.get("row_json") if isinstance(row.get("row_json"), dict) else {}
+        rank = _optional_int(row.get("rank") or row_json.get("rank") or row_json.get("score_rank") or row_json.get("shadow_top10_rank"))
+        if rank is None:
+            rank = grouped_counts[strategy_id]
+        score = _optional_float(
+            row_json.get("score_total")
+            or row_json.get("score")
+            or row_json.get("mid_trend_funnel_score")
+            or row_json.get("bottleneck_score")
+        )
+        normalized.append(
+            {
+                "trade_date": str(row.get("trade_date") or "")[:10],
+                "asset_id": str(row.get("asset_id") or row_json.get("asset_id") or ""),
+                "rank": rank,
+                "score_total": score,
+                "score_version": "strategy_topn",
+                "score_components": dict(row_json.get("score_components") or {}),
+                "strategy_id": strategy_id,
+                "strategy_name": str(row.get("strategy_name") or strategy_names[strategy_id]),
+                "strategy_run_id": str(row.get("run_id") or ""),
+                "combo_scheme": str(row.get("combo_scheme") or ""),
+                "source_type": "strategy_topn",
+                "source_name": str(row.get("strategy_name") or strategy_names[strategy_id]),
+                "source_rank": rank,
+                "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
+                "weight": _optional_float(row.get("weight") or row_json.get("weight") or row_json.get("target_weight")),
+            }
+        )
+    return normalized
+
+
+def _load_strategy_artifact_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    rows.extend(_load_lhb_shortline_artifact_rows(trade_date=trade_date, limit=limit))
+    rows.extend(_load_mid_trend_artifact_rows(trade_date=trade_date, limit=limit))
+    rows.extend(_load_tech_bottleneck_artifact_rows(trade_date=trade_date, limit=limit))
+    return rows
+
+
+def _load_lhb_shortline_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    base = RESEARCH_OUTPUT_ROOT / "web_lhb_shortline_v1_runs"
+    paths = [*base.glob("*/lhb_shortline_v1_candidates.csv"), *base.glob("*/lhb_phase18c_selected_trades_v1.csv")]
+    frame = _best_latest_artifact_frame(paths, trade_date=trade_date, date_col="trade_date")
+    if frame is None:
+        return []
+    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
+    if rows is None:
+        return []
+    rows = _dedupe_records_by_asset(
+        _sort_records(rows, ["auction_enhanced_score", "phase18c_top_n"], descending=["auction_enhanced_score"])
+    )
+    normalized: list[dict[str, Any]] = []
+    for index, row in enumerate(rows[:limit], start=1):
+        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
+        if not asset_id:
+            continue
+        score = _optional_float(row.get("auction_enhanced_score") or row.get("score_total"))
+        rule_layer = _optional_text(row.get("phase12a_rule_layer"))
+        fill_status = _optional_text(row.get("fill_status"))
+        notes = []
+        if rule_layer:
+            notes.append(f"龙虎榜候选：{rule_layer}")
+        if fill_status:
+            notes.append(f"填充状态：{fill_status}")
+        risk_flags = []
+        realized_return = _optional_float(row.get("realized_return"))
+        if realized_return is not None and realized_return < 0:
+            risk_flags.append(
+                {
+                    "key": "lhb_recent_loss",
+                    "label": f"最近成交回撤 {realized_return * 100:.1f}%",
+                    "severity": "warning",
+                }
+            )
+        if score is not None and score < 0:
+            risk_flags.append({"key": "lhb_negative_score", "label": "龙虎榜增强分为负", "severity": "warning"})
+        normalized.append(
+            {
+                "trade_date": str(row.get("trade_date") or "")[:10],
+                "asset_id": asset_id,
+                "rank": index,
+                "score_total": score,
+                "score_version": "strategy_topn",
+                "score_components": {},
+                "strategy_id": "lhb_shortline",
+                "strategy_name": "LHB Shortline Combo",
+                "strategy_run_id": "artifact:lhb_shortline_v1",
+                "source_type": "strategy_artifact",
+                "source_name": "LHB Shortline Combo",
+                "source_rank": index,
+                "review_tier": "top5_focus" if index <= 5 else "top10_watch",
+                "weight": _optional_float(row.get("weight") or row.get("target_weight")),
+                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
+                "score_source": "auction_enhanced_score",
+                "score_explanation": "龙虎榜竞价增强分；负分表示策略规则强惩罚或不建议跟随",
+                "review_notes": notes,
+                "risk_flags": risk_flags,
+                "warnings": ["龙虎榜列表页为策略轻量复盘，完整成交链路请打开个股工作台"],
+            }
+        )
+    return normalized
+
+
+def _load_mid_trend_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    paths = [
+        RESEARCH_OUTPUT_ROOT / "mid_trend_shadow_top10_context_fixed_20260602/mid_trend_shadow_top10.csv",
+        RESEARCH_OUTPUT_ROOT / "mid_trend_refresh_20260602/mid_trend_watch_top10.csv",
+        RESEARCH_OUTPUT_ROOT / "mid_trend_watch_top10.csv",
+    ]
+    frame = _best_latest_artifact_frame(paths, trade_date=trade_date, date_col="trade_date")
+    if frame is None:
+        return []
+    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
+    if rows is None:
+        return []
+    rows = _dedupe_records_by_asset(_sort_records(rows, ["shadow_top10_rank", "mid_trend_top10_rank", "rank"]))
+    normalized: list[dict[str, Any]] = []
+    for index, row in enumerate(rows[:limit], start=1):
+        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
+        if not asset_id:
+            continue
+        rank = _optional_int(row.get("shadow_top10_rank") or row.get("mid_trend_top10_rank") or row.get("rank")) or index
+        score = _optional_float(row.get("mid_trend_funnel_score") or row.get("score_total") or row.get("score"))
+        notes = []
+        for label, key in (("中趋势层", "mid_trend_layer"), ("结构槽位", "structure_slot"), ("观察备注", "shadow_note")):
+            value = _optional_text(row.get(key))
+            if value:
+                notes.append(f"{label}：{value}")
+        normalized.append(
+            {
+                "trade_date": str(row.get("trade_date") or "")[:10],
+                "asset_id": asset_id,
+                "rank": rank,
+                "score_total": score,
+                "score_version": "strategy_topn",
+                "score_components": {},
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "strategy_run_id": "artifact:mid_trend_shadow_top10",
+                "source_type": "strategy_artifact",
+                "source_name": "Mid Trend Combo",
+                "source_rank": rank,
+                "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
+                "weight": _optional_float(row.get("weight") or row.get("target_weight")),
+                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
+                "score_source": "mid_trend_funnel_score",
+                "score_explanation": "中趋势漏斗分；越高代表趋势结构、波动和回撤组合越符合策略",
+                "review_notes": notes or ["中趋势 Top10 候选"],
+                "warnings": ["中趋势列表页为轻量复盘，完整新闻/研报证据请打开个股工作台"],
+            }
+        )
+    return normalized
+
+
+def _load_tech_bottleneck_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    path = RESEARCH_OUTPUT_ROOT / "tech_bottleneck_discovery_v0_1_closeout_20260608/latest_positions.csv"
+    frame = _best_latest_artifact_frame([path], trade_date=trade_date, date_col="trade_date")
+    if frame is None:
+        return []
+    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
+    if rows is None:
+        return []
+    rows = _dedupe_records_by_asset(_sort_records(rows, ["bottleneck_rank", "rank"]))
+    normalized: list[dict[str, Any]] = []
+    for index, row in enumerate(rows[:limit], start=1):
+        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
+        if not asset_id:
+            continue
+        rank = _optional_int(row.get("bottleneck_rank") or row.get("rank")) or index
+        raw_score = _optional_float(row.get("bottleneck_score") or row.get("score_total") or row.get("score"))
+        score = raw_score * 100.0 if raw_score is not None and raw_score <= 1.0 else raw_score
+        notes = [f"技术瓶颈排名 #{rank}"]
+        protection_name = _optional_text(row.get("protection_name"))
+        if protection_name:
+            notes.append(f"保护规则：{protection_name}")
+        normalized.append(
+            {
+                "trade_date": str(row.get("trade_date") or "")[:10],
+                "asset_id": asset_id,
+                "rank": rank,
+                "score_total": score,
+                "score_version": "strategy_topn",
+                "score_components": {},
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Combo",
+                "strategy_run_id": "artifact:tech_bottleneck_latest_positions",
+                "source_type": "strategy_artifact",
+                "source_name": "Tech Bottleneck Combo",
+                "source_rank": rank,
+                "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
+                "weight": _optional_float(row.get("weight") or row.get("target_weight")),
+                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
+                "score_source": "bottleneck_score",
+                "score_explanation": "技术瓶颈发现分；越高代表越符合瓶颈突破/保护规则",
+                "review_notes": notes,
+                "warnings": ["技术瓶颈列表页为轻量复盘，完整新闻/研报证据请打开个股工作台"],
+            }
+        )
+    return normalized
+
+
+def _strategy_review_queue(
+    *,
+    rows: list[dict[str, Any]],
+    selected_trade_date: str,
+    score_version: str,
+    lookback_days: int,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    by_strategy: dict[str, list[dict[str, Any]]] = {}
+    labels: dict[str, str] = {}
+    for row in rows:
+        asset_id = str(row.get("asset_id") or "")
+        strategy_id = str(row.get("strategy_id") or "unknown")
+        if not asset_id:
+            continue
+        item_trade_date = str(row.get("trade_date") or selected_trade_date)
+        digest = _strategy_lightweight_digest(row, asset_id, item_trade_date)
+        item = _queue_item(
+            row=row,
+            digest=digest,
+            trade_date=item_trade_date,
+            score_version=score_version,
+            rank=_optional_int(row.get("rank")),
+            generated_at=_generated_at(item_trade_date),
+            manifest_modules=[],
+            manifest_run_id=str(row.get("strategy_run_id") or ""),
+            manifest_latest_trade_date=item_trade_date,
+        )
+        by_strategy.setdefault(strategy_id, []).append(item)
+        labels[strategy_id] = str(row.get("strategy_name") or strategy_id)
+
+    latest_item_date = max((str(row.get("trade_date") or "") for row in rows), default=selected_trade_date)
+    if selected_trade_date and latest_item_date and latest_item_date < selected_trade_date:
+        warnings.append(
+            f"策略复盘数据最新日期 {latest_item_date}，早于平台日期 {selected_trade_date}；请检查策略候选/回测是否已更新。"
+        )
+    strategy_order = list(_active_strategy_names())
+    ordered_strategy_ids = [strategy_id for strategy_id in strategy_order if strategy_id in by_strategy]
+    ordered_strategy_ids.extend(strategy_id for strategy_id in by_strategy if strategy_id not in ordered_strategy_ids)
+    groups = [
+        {
+            "bucket": f"strategy:{strategy_id}",
+            "label": labels.get(strategy_id, strategy_id),
+            "count": len(sorted_items := sorted(by_strategy[strategy_id], key=_sort_key)),
+            "items": sorted_items,
+        }
+        for strategy_id in ordered_strategy_ids
+    ]
+    return {
+        "trade_date": latest_item_date or selected_trade_date,
+        "score_version": score_version,
+        "review_mode": "strategy_topn",
+        "generated_at": _generated_at(latest_item_date or selected_trade_date),
+        "groups": groups,
+        "warnings": warnings,
+    }
+
+
+def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date: str) -> dict[str, Any]:
+    strategy_name = str(row.get("strategy_name") or "策略")
+    display_name = _row_display_name(row, asset_id)
+    rank = _optional_int(row.get("rank"))
+    tier = str(row.get("review_tier") or "")
+    tier_label = "Top5 重点复盘" if tier == "top5_focus" else "Top6-10 观察"
+    title = f"{strategy_name} {tier_label}"
+    facts = [
+        {
+            "kind": "strategy",
+            "label": f"{strategy_name} 最近持仓/候选排名 #{rank if rank is not None else '-'}",
+            "value": tier_label,
+            "severity": "neutral",
+        }
+    ]
+    weight = _optional_float(row.get("weight"))
+    if weight is not None:
+        facts.append(
+            {
+                "kind": "strategy",
+                "label": "策略目标权重",
+                "value": round(weight * 100.0, 2),
+                "severity": "neutral",
+            }
+        )
+    for note in row.get("review_notes") or []:
+        facts.append({"kind": "strategy", "label": str(note), "value": "", "severity": "neutral"})
+    score_source = _optional_text(row.get("score_source"))
+    score_explanation = _optional_text(row.get("score_explanation"))
+    if score_source or score_explanation:
+        facts.append(
+            {
+                "kind": "strategy",
+                "label": f"评分来源：{score_source or '策略产物'}",
+                "value": score_explanation or "",
+                "severity": "neutral",
+            }
+        )
+    risk_flags = [dict(flag) for flag in (row.get("risk_flags") or []) if isinstance(flag, dict)]
+    digest_warnings = [str(warning) for warning in (row.get("warnings") or []) if str(warning)]
+    if not digest_warnings:
+        digest_warnings.append("策略列表页为轻量复盘，完整新闻/研报证据请打开个股工作台")
+    score = _optional_float(row.get("score_total"))
+    if score is None:
+        digest_warnings.append("策略候选分数缺失，请检查对应策略产物是否已更新")
+    return {
+        "asset_id": asset_id,
+        "canonical_asset_id": asset_id,
+        "trade_date": trade_date,
+        "latest_trade_date": trade_date,
+        "run_id": str(row.get("strategy_run_id") or ""),
+        "digest_key": f"{trade_date}:strategy_topn:{asset_id}",
+        "generated_at": _generated_at(trade_date),
+        "overall_status": "PARTIAL",
+        "title": title,
+        "score": round(score, 2) if score is not None else 0,
+        "bucket": "mixed",
+        "facts": facts,
+        "risk_flags": risk_flags,
+        "source_refs": {
+            "strategy_asset_id": asset_id,
+            "strategy_name": strategy_name,
+            "display_name": display_name,
+            "asset_name": display_name,
+        },
+        "next_actions": [
+            {
+                "key": "review_stock",
+                "label": "打开个股工作台",
+                "workspace": "stock",
+                "asset_id": asset_id,
+                "query": display_name,
+            }
+        ],
+        "warnings": digest_warnings,
+        "missing_evidence": ["full_evidence_digest"],
+        "partial_evidence": ["strategy_position"],
+        "lineage": {
+            "run_id": str(row.get("strategy_run_id") or ""),
+            "strategy_run_id": str(row.get("strategy_run_id") or ""),
+            "strategy_name": strategy_name,
+            "latest_trade_date": trade_date,
+            "factor_as_of": trade_date,
+            "manifest_modules": [],
+        },
     }
 
 
@@ -132,7 +558,7 @@ def _queue_item(
         "queue_id": f"{trade_date}:{score_version}:{canonical_asset_id}",
         "asset_id": str(row.get("asset_id") or digest.get("asset_id") or canonical_asset_id),
         "canonical_asset_id": canonical_asset_id,
-        "display_name": _display_name(digest, canonical_asset_id),
+        "display_name": _row_display_name(row, canonical_asset_id) or _display_name(digest, canonical_asset_id),
         "trade_date": trade_date,
         "latest_trade_date": latest_trade_date,
         "run_id": run_id,
@@ -140,13 +566,16 @@ def _queue_item(
         "score_version": score_version,
         "rank": rank,
         "score": score,
-        "source_type": "score_topn",
-        "source_name": f"{score_version}_topn",
-        "source_rank": rank,
+        "source_type": str(row.get("source_type") or "score_topn"),
+        "source_name": str(row.get("source_name") or f"{score_version}_topn"),
+        "source_rank": _optional_int(row.get("source_rank")) if row.get("source_rank") is not None else rank,
         "score_components": dict(row.get("score_components") or {}),
         "topn_rank": rank,
+        "strategy_id": _optional_text(row.get("strategy_id")),
         "strategy_name": _optional_text(row.get("strategy_name") or lineage.get("strategy_name")),
         "strategy_run_id": strategy_run_id,
+        "review_tier": _optional_text(row.get("review_tier")),
+        "weight": _optional_float(row.get("weight")),
         "factor_as_of": str(lineage.get("factor_as_of") or trade_date),
         "factor_snapshot_id": _optional_text(lineage.get("factor_snapshot_id") or row.get("factor_snapshot_id")),
         "digest_key": digest_key,
@@ -171,6 +600,166 @@ def _queue_item(
         "next_action_count": len(next_actions),
         "digest": digest,
     }
+
+
+def _best_latest_artifact_frame(paths: list[Path], *, trade_date: str, date_col: str):
+    best = None
+    best_key: tuple[str, int, str] | None = None
+    for path in paths:
+        frame = _read_artifact_frame(path)
+        if frame is None or date_col not in frame.columns:
+            continue
+        rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col=date_col)
+        if rows is None:
+            continue
+        latest_date = max((str(row.get(date_col) or "")[:10] for row in rows), default="")
+        key = (latest_date, len(rows), str(path))
+        if best_key is None or key > best_key:
+            best = frame
+            best_key = key
+    return best
+
+
+def _read_artifact_frame(path: Path):
+    if not path.exists():
+        return None
+    try:
+        import pandas as pd
+
+        return pd.read_csv(path, low_memory=False)
+    except Exception:
+        return None
+
+
+def _rows_for_latest_date(frame, *, trade_date: str, date_col: str) -> list[dict[str, Any]] | None:
+    if date_col not in frame.columns:
+        return None
+    working = frame.copy()
+    working[date_col] = working[date_col].astype(str).str.slice(0, 10)
+    if trade_date:
+        working = working[working[date_col] <= str(trade_date)[:10]]
+    if working.empty:
+        return None
+    latest_date = str(working[date_col].max())[:10]
+    latest = working[working[date_col] == latest_date]
+    return _clean_records(latest.to_dict("records"))
+
+
+def _clean_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    for record in records:
+        item: dict[str, Any] = {}
+        for key, value in record.items():
+            text = str(value)
+            if text == "nan":
+                item[key] = None
+            else:
+                item[key] = value
+        cleaned.append(item)
+    return cleaned
+
+
+def _sort_records(
+    records: list[dict[str, Any]],
+    keys: list[str],
+    *,
+    descending: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    descending_set = set(descending or [])
+
+    def sort_key(row: dict[str, Any]) -> tuple:
+        values: list[Any] = []
+        for key in keys:
+            value = _optional_float(row.get(key))
+            if value is None:
+                values.append(1_000_000)
+            elif key in descending_set:
+                values.append(-value)
+            else:
+                values.append(value)
+        values.append(str(row.get("asset_id") or row.get("ts_code") or ""))
+        return tuple(values)
+
+    return sorted(records, key=sort_key)
+
+
+def _dedupe_records_by_asset(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in records:
+        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code"))
+        if not asset_id or asset_id in seen:
+            continue
+        seen.add(asset_id)
+        deduped.append(row)
+    return deduped
+
+
+def _asset_id_from_ts_code(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("CN:"):
+        return text
+    if "." not in text:
+        return text
+    symbol, exchange = text.split(".", 1)
+    exchange = exchange.upper()
+    if exchange in {"SH", "SSE", "SHH"}:
+        return f"CN:SH:{symbol.zfill(6)}"
+    if exchange in {"SZ", "SZSE", "SHE"}:
+        return f"CN:SZ:{symbol.zfill(6)}"
+    return text
+
+
+def _attach_asset_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    asset_ids = [str(row.get("asset_id") or "") for row in rows if row.get("asset_id")]
+    names = _load_asset_names(asset_ids)
+    enriched: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        asset_id = str(item.get("asset_id") or "")
+        if not _row_display_name(item, asset_id) and asset_id in names:
+            item["stock_name"] = names[asset_id]
+        enriched.append(item)
+    return enriched
+
+
+def _load_asset_names(asset_ids: list[str]) -> dict[str, str]:
+    unique_asset_ids = sorted({asset_id for asset_id in asset_ids if asset_id})
+    if not unique_asset_ids:
+        return {}
+    try:
+        with connect(SETTINGS.research_service) as conn:
+            rows = fetch_all(
+                conn,
+                """
+                SELECT asset_id, name
+                FROM core.asset_master
+                WHERE asset_id = ANY(%s)
+                """,
+                [unique_asset_ids],
+            )
+    except Exception:
+        return {}
+    return {str(row.get("asset_id")): str(row.get("name")) for row in rows if row.get("asset_id") and row.get("name")}
+
+
+def _row_display_name(row: dict[str, Any], asset_id: str) -> str:
+    for key in ("display_name", "stock_name", "asset_name", "security_name", "name"):
+        value = _optional_text(row.get(key))
+        if value and value != asset_id:
+            return value
+    return ""
+
+
+def _active_strategy_names() -> dict[str, str]:
+    strategies: dict[str, str] = {}
+    for strategy in list_strategy_catalog():
+        strategy_id = str(strategy.get("strategy_id") or "")
+        if strategy.get("status") == "runnable" and strategy_id:
+            strategies[strategy_id] = str(strategy.get("strategy_name") or strategy_id)
+    return strategies
 
 
 def _generated_at(selected_trade_date: str) -> str:
