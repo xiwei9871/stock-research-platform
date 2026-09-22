@@ -8,7 +8,14 @@ from psycopg.rows import dict_row
 
 @contextmanager
 def connect(service: str):
-    conn = psycopg.connect(f"service={service}", row_factory=dict_row)
+    conn = psycopg.connect(
+        f"service={service}",
+        row_factory=dict_row,
+        keepalives=1,
+        keepalives_idle=60,
+        keepalives_interval=30,
+        keepalives_count=5,
+    )
     try:
         yield conn
         conn.commit()
