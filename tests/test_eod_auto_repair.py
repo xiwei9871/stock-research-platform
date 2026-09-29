@@ -1854,6 +1854,30 @@ def test_default_minute5_action_uses_direct_raw_repair(monkeypatch, tmp_path):
     assert captured["kwargs"]["symbol_sleep_seconds"] == 0.75
 
 
+def test_default_strategy_action_finalizes_status_before_publish(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_finalize(trade_date, *, config):
+        calls.append(("finalize", trade_date))
+
+    def fake_repair(trade_date, *, output_root, publisher):
+        calls.append(("publish", trade_date))
+        return RepairActionResult(
+            "repair_strategy_publish",
+            RepairStatus.SUCCESS,
+            "strategy publish complete",
+        )
+
+    monkeypatch.setattr(daily_close_pipeline, "finalize_pipeline_status", fake_finalize)
+    monkeypatch.setattr(eod_auto_repair_actions, "repair_strategy_publish", fake_repair)
+
+    registry = build_default_action_registry(output_root="outputs")
+    result = registry["strategy_publish"]("2026-07-06", tmp_path)
+
+    assert result.name == "repair_strategy_publish"
+    assert calls == [("finalize", date(2026, 7, 6)), ("publish", "2026-07-06")]
+
+
 def test_default_minute5_action_refreshes_raw_and_qfq_quality(monkeypatch, tmp_path):
     captured = {}
 

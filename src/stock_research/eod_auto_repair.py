@@ -1634,12 +1634,15 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         )
 
     def strategy_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
+        from stock_research.daily_close_pipeline import PipelineConfig, finalize_pipeline_status
+
         def publisher(*, trade_date: str, output_root: str | Path) -> dict[str, Any]:
             return run_strategy_daily_eod(
                 trade_date=trade_date,
                 output_root=Path(output_root) / "research" / "strategy_daily_eod",
             )
 
+        finalize_pipeline_status(date.fromisoformat(trade_date), config=PipelineConfig())
         return repair_strategy_publish(
             trade_date,
             output_root=output_root,
