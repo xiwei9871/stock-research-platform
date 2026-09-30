@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import fcntl
 import json
 import os
 import shutil
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -24,6 +26,7 @@ from stock_research.mid_trend_shadow_top10 import build_mid_trend_shadow_top10_f
 from stock_research.strategy_daily_eod_store import (
     apply_strategy_daily_eod_status_schema,
     build_status_payload,
+    load_strategy_daily_eod_status,
     upsert_strategy_daily_eod_status,
     upsert_strategy_daily_eod_status_with_connection,
 )
@@ -69,7 +72,149 @@ ARTIFACT_METADATA_FILE_LIST_KEYS = {"report_files", "report_paths"}
 ARTIFACT_METADATA_OPTIONAL_DIR_KEYS = {"reports_dir"}
 
 
+STRATEGY_EOD_PUBLISH_LOCK_FILENAME = "strategy_daily_eod_publish.flock"
+STRATEGY_EOD_PUBLISH_LOCK_MAX_WAIT_ENV = "STRATEGY_EOD_PUBLISH_LOCK_MAX_WAIT_SECONDS"
+STRATEGY_EOD_PUBLISH_LOCK_POLL_ENV = "STRATEGY_EOD_PUBLISH_LOCK_POLL_SECONDS"
+DEFAULT_PUBLISH_LOCK_MAX_WAIT_SECONDS = 9000.0
+DEFAULT_PUBLISH_LOCK_POLL_SECONDS = 30.0
+
+
+def _load_published_result(
+    trade_date: str,
+    *,
+    canonical_output_dir: Path,
+    service: str,
+) -> dict[str, Any] | None:
+    try:
+        row = load_strategy_daily_eod_status(trade_date, service=service)
+    except Exception:  # noqa: BLE001 - inspection failure means not published.
+        return None
+    if not row or str(row.get("status") or "") != "success":
+        return None
+    output_dir = Path(str(row.get("output_dir") or ""))
+    summary_path = Path(str(row.get("summary_path") or ""))
+    try:
+        output_dir.resolve().relative_to(canonical_output_dir.resolve())
+    except ValueError:
+        return None
+    if not summary_path.is_file():
+        return None
+    return {
+        "trade_date": trade_date,
+        "run_id": "",
+        "output_dir": str(row.get("output_dir") or ""),
+        "dependency_check": {},
+        "dependency_reason": "",
+        "strategy_status": {
+            "lhb_shortline": row.get("lhb_shortline_status"),
+            "mid_trend": row.get("mid_trend_status"),
+            "midtrend_artifacts": row.get("midtrend_artifacts_status"),
+            "tech_bottleneck": row.get("tech_bottleneck_status"),
+        },
+        "strategy_errors": {},
+        "midtrend_artifacts": {},
+        "midtrend_artifact_warnings": [],
+        "review_rows": int(row.get("review_rows") or 0),
+        "status": "success",
+        "publishable": True,
+        "skipped": "already_published",
+        "manifest_modules": [],
+        "score_audit": {"status": "success", "strategy_counts": {}},
+        "error_summary": "",
+        "summary_path": str(summary_path),
+    }
+
+
 def run_strategy_daily_eod(
+    *,
+    trade_date: str,
+    output_root: str | Path = DEFAULT_OUTPUT_ROOT,
+    dependency_checker: DependencyChecker | None = None,
+    publisher: Publisher = publish_strategy_eod,
+    release_root: str | Path | None = None,
+    publication_transaction: PublicationTransaction | None = None,
+    lhb_runner: StrategyRunner | None = None,
+    mid_runner: StrategyRunner | None = None,
+    tech_runner: StrategyRunner | None = None,
+    midtrend_artifact_builder: StrategyRunner | None = None,
+    service: str = SETTINGS.research_service,
+    publish_lock_path: str | Path | None = None,
+) -> dict[str, Any]:
+    root = Path(output_root).resolve()
+    allowed_release_root = (
+        Path(release_root).resolve()
+        if release_root is not None
+        else _default_release_boundary(root)
+    )
+    canonical_output_dir = root / trade_date
+    published = _load_published_result(
+        trade_date, canonical_output_dir=canonical_output_dir, service=service
+    )
+    if published is not None:
+        return published
+    lock_path = (
+        Path(publish_lock_path)
+        if publish_lock_path is not None
+        else allowed_release_root / ".locks" / STRATEGY_EOD_PUBLISH_LOCK_FILENAME
+    )
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    max_wait = float(
+        os.getenv(
+            STRATEGY_EOD_PUBLISH_LOCK_MAX_WAIT_ENV,
+            str(DEFAULT_PUBLISH_LOCK_MAX_WAIT_SECONDS),
+        )
+    )
+    poll = float(
+        os.getenv(STRATEGY_EOD_PUBLISH_LOCK_POLL_ENV, str(DEFAULT_PUBLISH_LOCK_POLL_SECONDS))
+    )
+    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        deadline = time.monotonic() + max_wait
+        while True:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                published = _load_published_result(
+                    trade_date,
+                    canonical_output_dir=canonical_output_dir,
+                    service=service,
+                )
+                if published is not None:
+                    return published
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"strategy_daily_eod publish lock busy for {trade_date} "
+                        f"longer than {int(max_wait)}s"
+                    )
+                time.sleep(poll)
+        published = _load_published_result(
+            trade_date, canonical_output_dir=canonical_output_dir, service=service
+        )
+        if published is not None:
+            return published
+        return _run_strategy_daily_eod_once(
+            trade_date=trade_date,
+            output_root=output_root,
+            dependency_checker=dependency_checker,
+            publisher=publisher,
+            release_root=release_root,
+            publication_transaction=publication_transaction,
+            lhb_runner=lhb_runner,
+            mid_runner=mid_runner,
+            tech_runner=tech_runner,
+            midtrend_artifact_builder=midtrend_artifact_builder,
+            service=service,
+        )
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        os.close(lock_fd)
+
+
+def _run_strategy_daily_eod_once(
     *,
     trade_date: str,
     output_root: str | Path = DEFAULT_OUTPUT_ROOT,

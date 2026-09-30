@@ -1,5 +1,6 @@
 import errno
 import copy
+import fcntl
 import importlib.util
 import json
 import os
@@ -113,6 +114,63 @@ def _write_complete_mature_release(
         json.dumps(summary), encoding="utf-8"
     )
     return summary
+
+
+def test_run_strategy_daily_eod_skips_when_already_published(tmp_path, monkeypatch):
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    summary_path = canonical / "strategy_eod_publish_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        eod,
+        "load_strategy_daily_eod_status",
+        lambda *_args, **_kwargs: {
+            "status": "success",
+            "lhb_shortline_status": "success",
+            "mid_trend_status": "success",
+            "midtrend_artifacts_status": "success",
+            "tech_bottleneck_status": "success",
+            "review_rows": 15,
+            "output_dir": str(canonical),
+            "summary_path": str(summary_path),
+        },
+    )
+    called = []
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: called.append("checker") or {"status": "success"},
+        publisher=lambda **_kwargs: called.append("publisher") or {},
+        service="test",
+    )
+    assert result["status"] == "success"
+    assert result["skipped"] == "already_published"
+    assert result["review_rows"] == 15
+    assert called == []
+
+
+def test_run_strategy_daily_eod_publish_lock_times_out_when_held(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        eod, "load_strategy_daily_eod_status", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setenv(eod.STRATEGY_EOD_PUBLISH_LOCK_MAX_WAIT_ENV, "0")
+    monkeypatch.setenv(eod.STRATEGY_EOD_PUBLISH_LOCK_POLL_ENV, "0.01")
+    lock_path = tmp_path / ".locks" / eod.STRATEGY_EOD_PUBLISH_LOCK_FILENAME
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    holder_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(holder_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        with pytest.raises(TimeoutError):
+            eod.run_strategy_daily_eod(
+                trade_date="2026-07-24",
+                output_root=tmp_path,
+                dependency_checker=lambda **_kwargs: {"status": "success"},
+                publisher=lambda **_kwargs: {},
+                service="test",
+            )
+    finally:
+        fcntl.flock(holder_fd, fcntl.LOCK_UN)
+        os.close(holder_fd)
 
 
 def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
