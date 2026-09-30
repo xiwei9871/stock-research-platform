@@ -26,6 +26,7 @@ from stock_research.db import connect, execute, execute_many, fetch_all
 from stock_research.loaders.baostock_ingestion import sync_index_daily_bars
 from stock_research.market_emotion_state_v1 import DAILY_OUTPUT_COLUMNS
 from stock_research.minute_data import (
+    is_retryable_baostock_error,
     login_or_raise as baostock_login_or_raise,
     logout_safely as baostock_logout_safely,
     minute_market_row as baostock_minute_market_row,
@@ -147,6 +148,8 @@ class PipelineConfig:
     minute5_symbol_sleep_seconds: float = 0.75
     external_data_max_quality_gap_ratio: float = DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO
     minute5_source_timeout_seconds: int = 2400
+    minute5_baostock_login_retry_seconds: float = 600.0
+    minute5_baostock_login_max_wait_seconds: float = 10800.0
     daily_start_time: str = "17:00"
     minute5_start_time: str = "17:30"
     deps_start_time: str = "19:00"
@@ -184,6 +187,12 @@ class PipelineConfig:
             ),
             minute5_source_timeout_seconds=int(
                 os.getenv("MINUTE5_SOURCE_TIMEOUT_SECONDS", "2400")
+            ),
+            minute5_baostock_login_retry_seconds=float(
+                os.getenv("MINUTE5_BAOSTOCK_LOGIN_RETRY_SECONDS", "600")
+            ),
+            minute5_baostock_login_max_wait_seconds=float(
+                os.getenv("MINUTE5_BAOSTOCK_LOGIN_MAX_WAIT_SECONDS", "10800")
             ),
             daily_start_time=os.getenv("DAILY_START_TIME", "17:00"),
             minute5_start_time=os.getenv("MINUTE5_START_TIME", "17:30"),
@@ -1084,6 +1093,36 @@ def fetch_baostock_minute5_worker(
     return ts_code, rows, attempt_count, error
 
 
+def login_baostock_with_retry_window(
+    config: PipelineConfig,
+    trade_date: date,
+    logger: logging.Logger | None = None,
+) -> None:
+    log = logger or logging.getLogger(__name__)
+    deadline = time.monotonic() + config.minute5_baostock_login_max_wait_seconds
+    attempt = 1
+    while True:
+        try:
+            baostock_login_or_raise(timeout_seconds=config.request_timeout_seconds)
+            if attempt > 1:
+                log.info(
+                    "baostock login succeeded after %d attempts",
+                    attempt,
+                )
+            return
+        except Exception as exc:  # noqa: BLE001 - classify retryable upstream refusals.
+            if not is_retryable_baostock_error(str(exc)) or time.monotonic() >= deadline:
+                raise
+            log.warning(
+                "baostock login refused (attempt %d): %s; retrying in %.0fs",
+                attempt,
+                exc,
+                config.minute5_baostock_login_retry_seconds,
+            )
+            time.sleep(config.minute5_baostock_login_retry_seconds)
+            attempt += 1
+
+
 def normalize_daily_rows(rows: Iterable[dict[str, Any]], source: str) -> list[dict[str, Any]]:
     normalized = []
     for row in rows:
@@ -1767,7 +1806,7 @@ def run_minute5_stage(
 
     try:
         if pending_ts_codes:
-            baostock_login_or_raise(timeout_seconds=config.request_timeout_seconds)
+            login_baostock_with_retry_window(config, trade_date, logger)
             try:
                 for source in MINUTE5_SOURCES:
                     _run_source(source, source_codes[source])
@@ -1938,16 +1977,37 @@ def run_retry_failed_stage(
         return source, ts_code, rows, attempt_count, error
 
     retry_plan = build_retry_failed_source_plan(missing_symbols, config=config)
-    for source, codes, workers in retry_plan:
-        if not codes:
-            continue
-        for ts_code in codes:
-            _source, ts_code, rows, attempt_count, error = _fetch_with_source(source, ts_code)
-            attempts[ts_code] = attempt_count
-            if error:
-                failures[ts_code] = error
-            else:
-                rows_by_symbol[ts_code] = rows
+    baostock_needed = any(
+        source.startswith("baostock_") and codes for source, codes, _workers in retry_plan
+    )
+    try:
+        if baostock_needed:
+            try:
+                login_baostock_with_retry_window(config, trade_date)
+            except Exception as exc:  # noqa: BLE001 - degrade to per-symbol failures.
+                for source, codes, _workers in retry_plan:
+                    if not source.startswith("baostock_"):
+                        continue
+                    for ts_code in codes:
+                        attempts[ts_code] = 0
+                        failures[ts_code] = f"baostock login unavailable: {exc}"
+                retry_plan = [
+                    entry for entry in retry_plan if not entry[0].startswith("baostock_")
+                ]
+                baostock_needed = False
+        for source, codes, workers in retry_plan:
+            if not codes:
+                continue
+            for ts_code in codes:
+                _source, ts_code, rows, attempt_count, error = _fetch_with_source(source, ts_code)
+                attempts[ts_code] = attempt_count
+                if error:
+                    failures[ts_code] = error
+                else:
+                    rows_by_symbol[ts_code] = rows
+    finally:
+        if baostock_needed:
+            baostock_logout_safely()
 
     rows = [row for symbol_rows in rows_by_symbol.values() for row in symbol_rows]
     rows_upserted = upserter(config.service, rows) if rows else 0

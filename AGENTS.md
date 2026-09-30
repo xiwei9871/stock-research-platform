@@ -62,3 +62,9 @@ Prefer targeted reads over full-file reads.
   sources with `workers=1`. Do not parallelize baostock sessions — concurrent
   logins/fetches cause `10002007` connection failures. Prefer one sequential
   baostock downloader at a time host-wide.
+- Baostock rejects logins in its evening settlement window (~17:00-19:00
+  observed). `run_minute5_stage` and `run_retry_failed_stage` absorb this via
+  `login_baostock_with_retry_window`: retryable refusals sleep
+  `MINUTE5_BAOSTOCK_LOGIN_RETRY_SECONDS` (default 600) until
+  `MINUTE5_BAOSTOCK_LOGIN_MAX_WAIT_SECONDS` (default 10800) elapses, then fail.
+  Non-retryable login errors still fail fast.

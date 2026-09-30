@@ -944,6 +944,118 @@ def test_call_with_timeout_shuts_down_executor_without_waiting_on_timeout(monkey
     assert calls["shutdown"] == (False, True)
 
 
+def test_baostock_login_retry_window_retries_retryable_refusal_until_success(monkeypatch):
+    calls = []
+
+    def flaky_login(**_kwargs):
+        calls.append(1)
+        if len(calls) < 3:
+            raise RuntimeError("baostock login failed: 10002007 网络接收错误")
+
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", flaky_login)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    config = dcp.PipelineConfig(
+        service="test",
+        minute5_baostock_login_retry_seconds=1,
+        minute5_baostock_login_max_wait_seconds=3600,
+    )
+    dcp.login_baostock_with_retry_window(config, date(2026, 9, 29))
+    assert len(calls) == 3
+
+
+def test_baostock_login_retry_window_fails_fast_on_non_retryable_error(monkeypatch):
+    calls = []
+
+    def bad_login(**_kwargs):
+        calls.append(1)
+        raise RuntimeError("baostock login failed: 10001000 auth rejected")
+
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", bad_login)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    config = dcp.PipelineConfig(
+        service="test",
+        minute5_baostock_login_retry_seconds=1,
+        minute5_baostock_login_max_wait_seconds=3600,
+    )
+    with pytest.raises(RuntimeError, match="10001000"):
+        dcp.login_baostock_with_retry_window(config, date(2026, 9, 29))
+    assert len(calls) == 1
+
+
+def test_baostock_login_retry_window_gives_up_at_deadline(monkeypatch):
+    calls = []
+
+    def refused_login(**_kwargs):
+        calls.append(1)
+        raise RuntimeError("baostock login failed: 10002007 网络接收错误")
+
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", refused_login)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    config = dcp.PipelineConfig(
+        service="test",
+        minute5_baostock_login_retry_seconds=1,
+        minute5_baostock_login_max_wait_seconds=0,
+    )
+    with pytest.raises(RuntimeError, match="10002007"):
+        dcp.login_baostock_with_retry_window(config, date(2026, 9, 29))
+    assert len(calls) == 1
+
+
+def test_retry_failed_stage_logs_in_once_for_baostock_plan(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        dcp,
+        "load_latest_minute5_missing_symbols",
+        lambda _service, _trade_date: ["600000.SH"],
+    )
+    events = []
+    monkeypatch.setattr(
+        dcp,
+        "baostock_login_or_raise",
+        lambda **_kwargs: events.append("login"),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "baostock_logout_safely",
+        lambda: events.append("logout"),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "fetch_baostock_minute5_rows",
+        lambda ts_code, start_date, end_date, timeout_seconds: events.append("fetch")
+        or [{"ts_code": ts_code, "trade_date": date(2026, 6, 5), "source": "baostock"}],
+    )
+    monkeypatch.setattr(
+        dcp,
+        "inspect_minute5_quality_from_db",
+        lambda _service, expected_ts_codes, _trade_date, *, adjust_type="raw": {
+            "status": "pass",
+            "expected_count": len(expected_ts_codes),
+            "actual_count": len(expected_ts_codes),
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": "ok",
+        },
+    )
+    monkeypatch.setattr(dcp, "upsert_quality", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "mark_failed_symbol_success", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        dcp, "load_minute5_expected_ts_codes", lambda _service, _trade_date: ["600000.SH"]
+    )
+    result = dcp.run_retry_failed_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test", max_retries=1),
+        upserter=lambda _service, rows: len(rows),
+        qfq_deriver=lambda _service, _trade_date: {"raw_rows": 1, "inserted_rows": 1},
+    )
+    assert result["status"] == "success"
+    assert events[0] == "login"
+    assert events[-1] == "logout"
+    assert "fetch" in events
+
+
 def test_retry_failed_source_plan_uses_baostock_for_all_missing_symbols():
     config = dcp.PipelineConfig(
         max_workers_akshare_minute5=2,
