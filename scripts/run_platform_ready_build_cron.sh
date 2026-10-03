@@ -37,7 +37,17 @@ run_step() {
   shift
   echo "platform_ready_build|step|${step_name}|start|$(date '+%Y-%m-%d %H:%M:%S %z')" >>"$RUN_LOG"
   set +e
-  "$@" >>"$RUN_LOG" 2>&1
+  "$@" >>"$RUN_LOG" 2>&1 &
+  local step_pid=$!
+  local elapsed=0
+  local heartbeat_seconds="${PLATFORM_READY_STEP_HEARTBEAT_SECONDS:-60}"
+  while kill -0 "$step_pid" 2>/dev/null; do
+    sleep "$heartbeat_seconds"
+    elapsed=$((elapsed + heartbeat_seconds))
+    kill -0 "$step_pid" 2>/dev/null || break
+    echo "platform_ready_build|heartbeat|step=${step_name}|elapsed=${elapsed}s" | tee -a "$RUN_LOG"
+  done
+  wait "$step_pid"
   local rc=$?
   set -e
   if [[ "$rc" -ne 0 ]]; then

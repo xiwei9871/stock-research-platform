@@ -455,6 +455,41 @@ def test_finalize_repaired_release_rejects_runner_that_did_not_refresh_summary(t
     assert events == ["official"]
 
 
+def test_finalize_repaired_release_accepts_already_published_skip(tmp_path):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    runner_summary = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    runner_summary.parent.mkdir(parents=True)
+    published = _successful_strategy_summary("2026-07-02", summary_path=runner_summary)
+    runner_summary.write_text(json.dumps(published), encoding="utf-8")
+    events = []
+
+    def official_publication(**_kwargs):
+        events.append("official")
+        return {**published, "skipped": "already_published"}
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+        official_publication=official_publication,
+        contract_check=lambda: events.append("contract") or {"status": "success"},
+        readiness_check=lambda: events.append("readiness") or {"status": "success"},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "success"
+    assert events == ["official", "contract", "readiness", "cache", "sync"]
+
+
 def test_finalize_repaired_release_rejects_refreshed_runner_with_wrong_date(tmp_path):
     output_dir = tmp_path / "repair"
     output_dir.mkdir()

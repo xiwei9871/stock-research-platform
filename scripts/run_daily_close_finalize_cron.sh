@@ -113,7 +113,7 @@ run_stage_command() {
     sleep 1
     elapsed=$((elapsed + 1))
     if [[ "$heartbeat_seconds" -gt 0 && $((elapsed % heartbeat_seconds)) -eq 0 ]]; then
-      echo "daily_close_finalize|stage|${stage}|heartbeat|elapsed=${elapsed}" >>"$DETAIL_LOG"
+      echo "daily_close_finalize|stage|${stage}|heartbeat|elapsed=${elapsed}" | tee -a "$DETAIL_LOG"
     fi
   done
   wait "$child_pid"

@@ -95,34 +95,37 @@ def _load_published_result(
     summary_path = Path(str(row.get("summary_path") or ""))
     try:
         output_dir.resolve().relative_to(canonical_output_dir.resolve())
-    except ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
     if not summary_path.is_file():
         return None
-    return {
-        "trade_date": trade_date,
-        "run_id": "",
-        "output_dir": str(row.get("output_dir") or ""),
-        "dependency_check": {},
-        "dependency_reason": "",
-        "strategy_status": {
+    try:
+        published = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(published, dict) or str(published.get("status") or "") != "success":
+        return None
+    result = dict(published)
+    result["trade_date"] = trade_date
+    result["output_dir"] = str(output_dir)
+    result["summary_path"] = str(summary_path)
+    result["skipped"] = "already_published"
+    result.setdefault("status", "success")
+    result.setdefault("publishable", True)
+    result.setdefault("review_rows", int(row.get("review_rows") or 0))
+    result.setdefault(
+        "strategy_status",
+        {
             "lhb_shortline": row.get("lhb_shortline_status"),
             "mid_trend": row.get("mid_trend_status"),
             "midtrend_artifacts": row.get("midtrend_artifacts_status"),
             "tech_bottleneck": row.get("tech_bottleneck_status"),
         },
-        "strategy_errors": {},
-        "midtrend_artifacts": {},
-        "midtrend_artifact_warnings": [],
-        "review_rows": int(row.get("review_rows") or 0),
-        "status": "success",
-        "publishable": True,
-        "skipped": "already_published",
-        "manifest_modules": [],
-        "score_audit": {"status": "success", "strategy_counts": {}},
-        "error_summary": "",
-        "summary_path": str(summary_path),
-    }
+    )
+    result.setdefault("dependency_check", {})
+    result.setdefault("strategy_errors", {})
+    result.setdefault("error_summary", "")
+    return result
 
 
 def run_strategy_daily_eod(

@@ -589,6 +589,9 @@ def finalize_repaired_release(
                 "STOCK_RESEARCH_PYTHON": sys.executable,
                 "EXPECTED_TRADE_DATE": trade_date,
                 "STOCK_RESEARCH_OPERATION_ID": operation_id,
+                "RELEASE_CHECK_TIMEOUT_SECONDS": os.getenv(
+                    "EOD_REPAIR_RELEASE_CHECK_TIMEOUT_SECONDS", "600"
+                ),
             }
         )
         completed = subprocess.run([str(sync_script)], cwd=root, env=env, check=False)
@@ -676,7 +679,10 @@ def finalize_repaired_release(
                 expected_trade_date=trade_date,
             )
         current_fingerprint = file_fingerprint(runner_summary)
-        if current_fingerprint is None or current_fingerprint == previous_fingerprint:
+        publication_skipped = official_result.get("skipped") == "already_published"
+        if current_fingerprint is None or (
+            current_fingerprint == previous_fingerprint and not publication_skipped
+        ):
             return {
                 "status": "failed",
                 "exit_code": 2,

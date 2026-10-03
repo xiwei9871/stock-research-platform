@@ -120,7 +120,19 @@ def test_run_strategy_daily_eod_skips_when_already_published(tmp_path, monkeypat
     canonical = tmp_path / "2026-07-24"
     canonical.mkdir()
     summary_path = canonical / "strategy_eod_publish_summary.json"
-    summary_path.write_text("{}", encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(
+            {
+                "status": "success",
+                "publishable": True,
+                "trade_date": "2026-07-24",
+                "run_id": "strategy-eod-2026-07-24-prior",
+                "review_rows": 15,
+                "summary_path": str(summary_path),
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         eod,
         "load_strategy_daily_eod_status",
