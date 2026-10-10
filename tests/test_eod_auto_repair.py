@@ -2622,3 +2622,69 @@ def test_20260701_incident_flow_repairs_minute_score_watchlist_then_degrades_on_
     assert summary.final_status == RepairStatus.DEGRADED
     assert summary.remaining_blockers == []
     assert summary.remaining_non_blockers == ["reports"]
+
+
+def test_official_publication_returns_already_published_without_subprocess(
+    monkeypatch, tmp_path
+):
+    output_root = tmp_path / "strategy_daily_eod"
+    canonical_dir = output_root / "2026-10-09"
+    canonical_dir.mkdir(parents=True)
+    published = {
+        "trade_date": "2026-10-09",
+        "run_id": "strategy-eod-2026-10-09-local",
+        "status": "success",
+        "summary_path": str(canonical_dir / "strategy_eod_publish_summary.json"),
+        "skipped": "already_published",
+    }
+
+    def fake_load(trade_date, *, canonical_output_dir, service):
+        assert trade_date == "2026-10-09"
+        assert canonical_output_dir == canonical_dir
+        return published
+
+    def forbidden_subprocess(*args, **kwargs):
+        pytest.fail("official publication subprocess must not run when already published")
+
+    monkeypatch.setattr(
+        "stock_research.strategy_daily_eod._load_published_result", fake_load
+    )
+    monkeypatch.setattr(eod_auto_repair.subprocess, "run", forbidden_subprocess)
+
+    result = eod_auto_repair._run_official_strategy_publication(
+        trade_date="2026-10-09",
+        output_root=output_root,
+    )
+
+    assert result["skipped"] == "already_published"
+    assert result["status"] == "success"
+
+
+def test_official_publication_runs_subprocess_when_not_published(monkeypatch, tmp_path):
+    output_root = tmp_path / "strategy_daily_eod"
+    canonical_dir = output_root / "2026-10-09"
+    canonical_dir.mkdir(parents=True)
+    summary_path = canonical_dir / "strategy_eod_publish_summary.json"
+
+    monkeypatch.setattr(
+        "stock_research.strategy_daily_eod._load_published_result",
+        lambda *args, **kwargs: None,
+    )
+
+    def fake_subprocess(cmd, **kwargs):
+        assert "run-strategy-daily-eod" in cmd
+        summary_path.write_text(
+            json.dumps(_successful_strategy_summary("2026-10-09")),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(eod_auto_repair.subprocess, "run", fake_subprocess)
+
+    result = eod_auto_repair._run_official_strategy_publication(
+        trade_date="2026-10-09",
+        output_root=output_root,
+    )
+
+    assert result["status"] == "success"
+    assert result["summary_path"] == str(summary_path)

@@ -410,6 +410,16 @@ def _run_official_strategy_publication(
     trade_date: str,
     output_root: Path,
 ) -> dict[str, Any]:
+    from stock_research.config import SETTINGS
+    from stock_research.strategy_daily_eod import _load_published_result
+
+    published = _load_published_result(
+        trade_date,
+        canonical_output_dir=output_root / trade_date,
+        service=SETTINGS.research_service,
+    )
+    if published is not None:
+        return published
     completed = subprocess.run(
         [
             sys.executable,
