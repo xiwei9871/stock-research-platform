@@ -198,3 +198,71 @@ def test_receipt_validation_rejects_malformed_summary_mappings_safely(
         "status": "failed",
         "error_code": "publication_receipt_summary_invalid",
     }
+
+
+def test_receipt_accepts_partial_strategy_counts_with_consistent_review_rows(tmp_path):
+    path = tmp_path / "strategy_eod_publish_summary.json"
+    payload = _summary()
+    payload["review_rows"] = 14
+    payload["score_audit"]["strategy_counts"]["lhb_shortline"] = 4
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    receipt = build_publication_receipt(
+        summary_path=path,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+    )
+
+    result = validate_publication_receipt(
+        receipt,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+        expected_summary_path=path,
+        release_root=tmp_path,
+    )
+
+    assert result["status"] == "success"
+
+
+def test_receipt_rejects_counts_exceeding_strategy_limit(tmp_path):
+    path = tmp_path / "strategy_eod_publish_summary.json"
+    payload = _summary()
+    payload["review_rows"] = 16
+    payload["score_audit"]["strategy_counts"]["lhb_shortline"] = 6
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    receipt = build_publication_receipt(
+        summary_path=path,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+    )
+
+    result = validate_publication_receipt(
+        receipt,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+        expected_summary_path=path,
+        release_root=tmp_path,
+    )
+
+    assert result["error_code"] == "publication_receipt_summary_mismatch"
+
+
+def test_receipt_rejects_review_rows_inconsistent_with_counts(tmp_path):
+    path = tmp_path / "strategy_eod_publish_summary.json"
+    payload = _summary()
+    payload["review_rows"] = 12
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    receipt = build_publication_receipt(
+        summary_path=path,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+    )
+
+    result = validate_publication_receipt(
+        receipt,
+        expected_trade_date="2026-07-24",
+        repair_run_id="repair-1",
+        expected_summary_path=path,
+        release_root=tmp_path,
+    )
+
+    assert result["error_code"] == "publication_receipt_summary_mismatch"

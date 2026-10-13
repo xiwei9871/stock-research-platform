@@ -14,7 +14,7 @@ REQUIRED_STRATEGY_RUNNERS = {
     "mid_trend",
     "tech_bottleneck",
 }
-EXPECTED_STRATEGY_COUNTS = {
+EXPECTED_STRATEGY_COUNT_LIMITS = {
     "lhb_shortline": 5,
     "mid_trend": 5,
     "tech_bottleneck": 5,
@@ -171,13 +171,26 @@ def validate_publication_receipt(
     except PublicationReceiptSummaryInvalid:
         return {"status": "failed", "error_code": "publication_receipt_summary_invalid"}
     expected_run_id = f"strategy-eod-{expected_trade_date}-local"
+    review_rows = payload.get("review_rows")
+    counts_valid = (
+        set(strategy_counts) == set(EXPECTED_STRATEGY_COUNT_LIMITS)
+        and all(
+            isinstance(count, int)
+            and not isinstance(count, bool)
+            and 0 <= count <= EXPECTED_STRATEGY_COUNT_LIMITS[name]
+            for name, count in strategy_counts.items()
+        )
+        and isinstance(review_rows, int)
+        and not isinstance(review_rows, bool)
+        and review_rows == sum(strategy_counts.values())
+        and review_rows >= 1
+    )
     if (
         payload.get("trade_date") != expected_trade_date
         or payload.get("run_id") != expected_run_id
         or payload.get("status") != "success"
         or payload.get("publishable") is not True
-        or payload.get("review_rows") != 15
-        or strategy_counts != EXPECTED_STRATEGY_COUNTS
+        or not counts_valid
         or score_audit.get("status") != "success"
         or not REQUIRED_STRATEGY_RUNNERS.issubset(strategy_status)
         or any(strategy_status.get(name) != "success" for name in REQUIRED_STRATEGY_RUNNERS)
@@ -188,8 +201,8 @@ def validate_publication_receipt(
         or receipt.get("overall_status") != payload.get("status")
         or receipt.get("strategy_status") != strategy_status
         or receipt.get("publishable") is not True
-        or receipt.get("review_rows") != 15
-        or receipt.get("strategy_counts") != EXPECTED_STRATEGY_COUNTS
+        or receipt.get("review_rows") != review_rows
+        or receipt.get("strategy_counts") != strategy_counts
         or receipt.get("score_audit_status") != "success"
     ):
         return {"status": "failed", "error_code": "publication_receipt_payload_mismatch"}
