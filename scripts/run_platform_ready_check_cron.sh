@@ -55,12 +55,22 @@ print_summary() {
   local rc="$2"
   echo "$title"
   echo "交易日: $TRADE_DATE"
-  echo "摘要文件: $REPAIR_OUTPUT_DIR/run_summary.json"
-  echo "报告文件: $REPAIR_OUTPUT_DIR/run_report.md"
+  if [ "$rc" -ne 0 ] && [ -s "$REPAIR_OUTPUT_DIR/run_summary.json" ]; then
+    "$PYTHON" - "$REPAIR_OUTPUT_DIR/run_summary.json" <<'PYEOF' 2>/dev/null || true
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(0)
+errs = d.get("repair_phase_errors") or {}
+if errs:
+    print("失败环节: " + ", ".join(f"{k}={v}" for k, v in errs.items()))
+PYEOF
+  fi
   if [ "$rc" -ne 0 ]; then
     echo "退出码: $rc"
   fi
-  echo "详细日志: $RUN_LOG"
+  echo "日志: logs/${RUN_LOG##*/}"
 }
 
 PIPELINE_PID=""
@@ -98,7 +108,7 @@ forward_signal() {
 trap forward_signal TERM INT HUP
 trap cleanup_all EXIT
 
-echo "platform_ready_check|started|stage=eod_auto_repair|trade_date=${TRADE_DATE}|detail_log=${RUN_LOG}"
+echo "platform_ready_check|started|stage=eod_auto_repair|trade_date=${TRADE_DATE}|detail_log=${RUN_LOG}" >>"$RUN_LOG"
 echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$RUN_LOG"
 RUN_LOG_START_LINE="$(($(wc -l < "$RUN_LOG") + 1))"
 cd "$ROOT"

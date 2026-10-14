@@ -79,7 +79,7 @@ print_summary() {
     echo "5分钟线: $minute5_status"
   fi
   echo "Dashboard缓存: $dashboard_cache_status"
-  echo "详细日志: $DETAIL_LOG"
+  echo "日志: logs/${DETAIL_LOG##*/}"
 }
 
 run_stage_command() {

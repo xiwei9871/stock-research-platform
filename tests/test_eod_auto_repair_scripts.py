@@ -133,7 +133,7 @@ def test_eod_auto_repair_cron_runs_under_flock_wrapper(tmp_path):
     assert calls.index("--mode loop") < calls.index("--finalize-publication")
     assert "EOD自动修复完成" in result.stdout
     assert "交易日: 2026-07-02" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志: logs/" in result.stdout
     assert "eod_auto_repair|" not in result.stdout
 
 
@@ -297,7 +297,7 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
     assert "EOD自动修复失败" in result.stdout
     assert "交易日: 2026-07-02" in result.stdout
     assert "退出码: 7" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志: logs/" in result.stdout
     assert "-m stock_research.eod_auto_repair" in (root / "python.log").read_text()
     assert "--mode loop" in (root / "python.log").read_text()
     assert "--action-timeout-seconds" in (root / "python.log").read_text()

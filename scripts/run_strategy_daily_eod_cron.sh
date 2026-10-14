@@ -109,7 +109,7 @@ print_summary() {
   if [[ "$rc" -ne 0 ]]; then
     echo "退出码: $rc"
   fi
-  echo "详细日志: $DETAIL_LOG"
+  echo "日志: logs/${DETAIL_LOG##*/}"
 }
 
 set +e

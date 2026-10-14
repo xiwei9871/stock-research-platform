@@ -65,7 +65,7 @@ def test_daily_close_pipeline_script_clears_proxy_env(tmp_path: Path) -> None:
     assert "股票日终阶段完成" in result.stdout
     assert "阶段: minute5" in result.stdout
     assert "交易日: 2026-06-22" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志: logs/" in result.stdout
 
 
 def test_daily_close_pipeline_script_smoke_mode_does_not_run_stage(tmp_path: Path) -> None:
@@ -140,7 +140,7 @@ exit 0
     assert "交易日: 2026-06-22" in result.stdout
     assert "状态: failed" in result.stdout
     assert "缺失: 1252" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志: logs/" in result.stdout
     assert "600000.SH" not in result.stdout
     assert "daily_close_pipeline|business_failed|stage=minute5|trade_date=2026-06-22" not in result.stderr
 
@@ -269,7 +269,7 @@ def test_daily_close_finalize_script_clears_proxy_env(tmp_path: Path) -> None:
     assert "交易日: 2026-06-22" in result.stdout
     assert "阶段: retry_failed=success, market_monitor=success, deps=success, health=success" in result.stdout
     assert "Dashboard缓存: success" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志: logs/" in result.stdout
     assert "daily_close_finalize|stage|" not in result.stdout
 
 
@@ -340,7 +340,7 @@ exit 0
     assert "股票收盘修复失败" in result.stdout
     assert "失败阶段: retry_failed" in result.stdout
     assert "退出码: 124" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志: logs/" in result.stdout
     assert "daily_close_finalize|stage|retry_failed|timeout|1" not in result.stdout
     calls = calls_file.read_text(encoding="utf-8")
     assert "-m scripts.daily_pipeline --date 2026-06-22 --stage retry_failed" in calls

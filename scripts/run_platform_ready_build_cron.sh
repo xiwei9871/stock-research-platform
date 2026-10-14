@@ -92,7 +92,7 @@ print_summary() {
     echo "失败步骤: $FAILED_STEP"
     echo "退出码: $FAILED_RC"
   fi
-  echo "详细日志: $RUN_LOG"
+  echo "日志: logs/${RUN_LOG##*/}"
 }
 
 if [ "$SMOKE_ONLY" = "1" ]; then

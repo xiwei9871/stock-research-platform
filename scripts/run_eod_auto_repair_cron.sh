@@ -53,12 +53,22 @@ print_summary() {
   echo "$title"
   echo "交易日: $TRADE_DATE"
   echo "锁模式: $LOCK_MODE"
-  echo "摘要文件: $OUTPUT_DIR/run_summary.json"
-  echo "报告文件: $OUTPUT_DIR/run_report.md"
+  if [[ "$rc" -ne 0 && -s "$OUTPUT_DIR/run_summary.json" ]]; then
+    "$PYTHON" - "$OUTPUT_DIR/run_summary.json" <<'PYEOF' 2>/dev/null || true
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(0)
+errs = d.get("repair_phase_errors") or {}
+if errs:
+    print("失败环节: " + ", ".join(f"{k}={v}" for k, v in errs.items()))
+PYEOF
+  fi
   if [[ "$rc" -ne 0 ]]; then
     echo "退出码: $rc"
   fi
-  echo "详细日志: $DETAIL_LOG"
+  echo "日志: logs/${DETAIL_LOG##*/}"
 }
 
 run_repair() {
