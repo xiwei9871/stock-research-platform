@@ -41,11 +41,16 @@ run_step() {
   local step_pid=$!
   local elapsed=0
   local heartbeat_seconds="${PLATFORM_READY_STEP_HEARTBEAT_SECONDS:-60}"
+  local stdout_heartbeat="${PLATFORM_READY_STDOUT_HEARTBEAT_SECONDS:-600}"
   while kill -0 "$step_pid" 2>/dev/null; do
     sleep "$heartbeat_seconds"
     elapsed=$((elapsed + heartbeat_seconds))
     kill -0 "$step_pid" 2>/dev/null || break
-    echo "platform_ready_build|heartbeat|step=${step_name}|elapsed=${elapsed}s" | tee -a "$RUN_LOG"
+    local line="platform_ready_build|heartbeat|step=${step_name}|elapsed=${elapsed}s"
+    echo "$line" >>"$RUN_LOG"
+    if [[ $((elapsed % stdout_heartbeat)) -eq 0 ]]; then
+      echo "$line"
+    fi
   done
   wait "$step_pid"
   local rc=$?

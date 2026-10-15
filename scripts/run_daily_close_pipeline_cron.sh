@@ -110,7 +110,11 @@ PIPELINE_PID=$!
     kill -0 "$PIPELINE_PID" 2>/dev/null || break
     now_epoch="$(date +%s)"
     last_progress="$(grep -E '^(progress\|minute5_bar|minute5\|progress)' "$DETAIL_LOG" | tail -n 1 || true)"
-    echo "daily_close_pipeline|heartbeat|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}" | tee -a "$DETAIL_LOG"
+    hb_line="daily_close_pipeline|heartbeat|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}"
+    echo "$hb_line" >>"$DETAIL_LOG"
+    if [[ $(( (now_epoch - started_epoch) % ${PIPELINE_STDOUT_HEARTBEAT_SECONDS:-600} )) -lt ${HEARTBEAT_SECONDS} ]]; then
+      echo "$hb_line"
+    fi
   done
 ) &
 HEARTBEAT_PID=$!

@@ -170,6 +170,7 @@ exit 0
             "TRADE_DATE": "2026-07-10",
             "DAILY_CLOSE_CRON_LOG_DIR": str(log_dir),
             "DAILY_CLOSE_HEARTBEAT_SECONDS": "1",
+            "PIPELINE_STDOUT_HEARTBEAT_SECONDS": "1",
         }
     )
 
@@ -369,6 +370,7 @@ exit 0
             "TRADE_DATE": "2026-06-22",
             "FINALIZE_STAGE_TIMEOUT_SECONDS": "10",
             "FINALIZE_STAGE_HEARTBEAT_SECONDS": "1",
+            "FINALIZE_STDOUT_HEARTBEAT_SECONDS": "1",
             "DASHBOARD_CACHE_CLEAR_URL": "",
         }
     )

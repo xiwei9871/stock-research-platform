@@ -137,7 +137,11 @@ PIPELINE_PID=$!
     kill -0 "$PIPELINE_PID" 2>/dev/null || break
     now_epoch="$(date +%s)"
     last_progress="$(tail -n +"$RUN_LOG_START_LINE" "$RUN_LOG" | grep -E '^(eod_auto_repair\||progress\||free_enrichment_batch\|)' | tail -n 1 || true)"
-    echo "platform_ready_check|heartbeat|stage=eod_auto_repair|trade_date=${TRADE_DATE}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}"
+    hb_line="platform_ready_check|heartbeat|stage=eod_auto_repair|trade_date=${TRADE_DATE}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}"
+    echo "$hb_line" >>"$RUN_LOG"
+    if [[ $(( (now_epoch - started_epoch) % ${READY_CHECK_STDOUT_HEARTBEAT_SECONDS:-600} )) -lt ${HEARTBEAT_SECONDS} ]]; then
+      echo "$hb_line"
+    fi
   done
 ) &
 HEARTBEAT_PID=$!
