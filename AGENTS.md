@@ -68,3 +68,7 @@ Prefer targeted reads over full-file reads.
   `MINUTE5_BAOSTOCK_LOGIN_RETRY_SECONDS` (default 600) until
   `MINUTE5_BAOSTOCK_LOGIN_MAX_WAIT_SECONDS` (default 10800) elapses, then fail.
   Non-retryable login errors still fail fast.
+- The finalize cron shortens that window for `retry_failed` via
+  `FINALIZE_RETRY_FAILED_BAOSTOCK_WAIT_SECONDS` (default 900): the 21:00 pass
+  is a fast attempt only — the 22:00 repair job (180min budget) carries the
+  real repair on bad baostock nights.

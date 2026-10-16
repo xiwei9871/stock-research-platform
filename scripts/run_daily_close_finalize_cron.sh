@@ -126,6 +126,9 @@ run_stage_command() {
 run_stage() {
   local stage="$1"
   echo "daily_close_finalize|stage|${stage}|start|$(date '+%Y-%m-%d %H:%M:%S %z')" >>"$DETAIL_LOG"
+  if [[ "$stage" == "retry_failed" ]]; then
+    export MINUTE5_BAOSTOCK_LOGIN_MAX_WAIT_SECONDS="${FINALIZE_RETRY_FAILED_BAOSTOCK_WAIT_SECONDS:-900}"
+  fi
   local rc=0
   set +e
   if [[ -n "${TRADE_DATE}" ]]; then
