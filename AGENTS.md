@@ -38,8 +38,11 @@ Prefer targeted reads over full-file reads.
   `backup/main-pre-consolidation-20260917`.
 - Historical checkouts live under `/Users/xiwei/stock_research_archive/`
   (still registered git worktrees; branches preserved).
-- Internal dashboard: launchd `com.stockresearch.dashboard-local-api`
-  (127.0.0.1:8765) + `dashboard-local-frontend` (127.0.0.1:5174).
+- Internal dashboard: retired 2026-10-15. The launchd jobs
+  `com.stockresearch.dashboard-local-api` (127.0.0.1:8765) and
+  `dashboard-local-frontend` (5174) were booted out and their plists moved to
+  `~/Library/LaunchAgents/.disabled/`. Cache-clear URLs are optional now:
+  `DASHBOARD_CACHE_CLEAR_URL` empty → skipped (finalize + eod_auto_repair).
 - External site https://stock.manqiaotechnology.com runs on stock-prod
   (192.168.3.185) as docker compose project `stock_research_dashboard`,
   querying the same Postgres at 192.168.3.187.

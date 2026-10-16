@@ -265,11 +265,11 @@ def test_daily_close_finalize_script_clears_proxy_env(tmp_path: Path) -> None:
     assert calls.count("-m scripts.daily_pipeline --date 2026-06-22 --stage market_monitor") == 1
     assert calls.count("-m scripts.daily_pipeline --date 2026-06-22 --stage deps") == 1
     assert calls.count("-m scripts.daily_pipeline --date 2026-06-22 --stage health") == 1
-    assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in curl_calls_file.read_text(encoding="utf-8")
+    assert not curl_calls_file.exists()
     assert "股票收盘修复完成" in result.stdout
     assert "交易日: 2026-06-22" in result.stdout
     assert "阶段: retry_failed=success, market_monitor=success, deps=success, health=success" in result.stdout
-    assert "Dashboard缓存: success" in result.stdout
+    assert "Dashboard缓存: skipped(url_empty)" in result.stdout
     assert "日志: logs/" in result.stdout
     assert "daily_close_finalize|stage|" not in result.stdout
 

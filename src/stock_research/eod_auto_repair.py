@@ -265,13 +265,17 @@ def finalize_repair_publication(
             errors["cache_invalidation"] = _sanitized_phase_error(exc)
             return finish("failed", exit_code=1)
     if not _phase_succeeded(cache_result):
-        phases["cache_invalidation"] = "failed"
-        phases["external_sync"] = "skipped"
-        errors["cache_invalidation"] = _phase_error_code(
-            cache_result, default="cache_invalidation_failed"
-        )
-        return finish("failed", exit_code=_phase_exit_code(cache_result))
-    phases["cache_invalidation"] = "success"
+        if isinstance(cache_result, dict) and cache_result.get("status") == "skipped":
+            phases["cache_invalidation"] = "skipped"
+        else:
+            phases["cache_invalidation"] = "failed"
+            phases["external_sync"] = "skipped"
+            errors["cache_invalidation"] = _phase_error_code(
+                cache_result, default="cache_invalidation_failed"
+            )
+            return finish("failed", exit_code=_phase_exit_code(cache_result))
+    else:
+        phases["cache_invalidation"] = "success"
     errors.pop("cache_invalidation", None)
     if summary_path is not None:
         persist_repair_publication_summary(
@@ -450,10 +454,9 @@ def _run_official_strategy_publication(
 
 
 def _clear_dashboard_cache() -> dict[str, Any]:
-    cache_url = os.getenv(
-        "DASHBOARD_CACHE_CLEAR_URL",
-        "http://127.0.0.1:8765/api/dashboard/cache/clear",
-    )
+    cache_url = os.getenv("DASHBOARD_CACHE_CLEAR_URL", "").strip()
+    if not cache_url:
+        return {"status": "skipped", "error_code": "cache_url_not_configured"}
     login_url = os.getenv("DASHBOARD_AUTH_LOGIN_URL", "http://127.0.0.1:8765/api/auth/login")
     username = os.getenv("DASHBOARD_AUTH_USERNAME", "eod_repair")
     password = os.getenv("DASHBOARD_AUTH_PASSWORD", "")
