@@ -32,6 +32,7 @@ wait_for_daily_pipeline_status() {
   local waited=0
   local probe_rc
   local announced=0
+  local last_stdout=0
   while true; do
     set +e
     PYTHONPATH=src "$PYTHON_BIN" - "$TRADE_DATE" >>"$DETAIL_LOG" 2>&1 <<'PY'
@@ -65,6 +66,13 @@ PY
     fi
     sleep "$interval"
     waited=$((waited + interval))
+    # sparse stdout heartbeat during the (up to 240min) dependency wait so the
+    # OpenClaw no-output watchdog does not kill a healthy waiting job
+    local stdout_interval="${STRATEGY_DAILY_EOD_STDOUT_HEARTBEAT_SECONDS:-600}"
+    if (( waited - last_stdout >= stdout_interval )); then
+      last_stdout=$waited
+      echo "strategy_daily_eod|dependency_wait|heartbeat|waited_seconds|$waited"
+    fi
   done
 }
 

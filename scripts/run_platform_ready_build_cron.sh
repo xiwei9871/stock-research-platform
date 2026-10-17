@@ -42,16 +42,21 @@ run_step() {
   local elapsed=0
   local heartbeat_seconds="${PLATFORM_READY_STEP_HEARTBEAT_SECONDS:-60}"
   local stdout_heartbeat="${PLATFORM_READY_STDOUT_HEARTBEAT_SECONDS:-600}"
+  local last_stdout_emitted=${LAST_STDOUT_HEARTBEAT_ELAPSED:-0}
   while kill -0 "$step_pid" 2>/dev/null; do
     sleep "$heartbeat_seconds"
     elapsed=$((elapsed + heartbeat_seconds))
     kill -0 "$step_pid" 2>/dev/null || break
     local line="platform_ready_build|heartbeat|step=${step_name}|elapsed=${elapsed}s"
     echo "$line" >>"$RUN_LOG"
-    if [[ $((elapsed % stdout_heartbeat)) -eq 0 ]]; then
+    # stdout heartbeat on script-global elapsed so watchdog liveness does not
+    # depend on any single step exceeding the sparse interval.
+    if (( SECONDS - last_stdout_emitted >= stdout_heartbeat )); then
+      last_stdout_emitted=$SECONDS
       echo "$line"
     fi
   done
+  LAST_STDOUT_HEARTBEAT_ELAPSED=$last_stdout_emitted
   wait "$step_pid"
   local rc=$?
   set -e
@@ -123,6 +128,7 @@ if [ "$SMOKE_ONLY" = "1" ]; then
 fi
 
 echo "=== platform ready build start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$RUN_LOG"
+echo "platform_ready_build|started|trade_date=$TRADE_DATE|log=${RUN_LOG##*/}"
 echo "trade_date=$TRADE_DATE" >>"$RUN_LOG"
 cd "$ROOT"
 
