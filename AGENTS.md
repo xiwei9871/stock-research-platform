@@ -75,3 +75,30 @@ Prefer targeted reads over full-file reads.
   `FINALIZE_RETRY_FAILED_BAOSTOCK_WAIT_SECONDS` (default 900): the 21:00 pass
   is a fast attempt only — the 22:00 repair job (180min budget) carries the
   real repair on bad baostock nights.
+
+## Untracked But Production-Critical Inputs
+- `outputs/` is gitignored, but some directories inside it are hard runtime
+  inputs for strategy EOD — deleting them silently breaks nightly runs
+  (FileNotFoundError → all strategies fail → repair reports
+  `strategy_publication=repair_failed`). Do NOT clean these:
+  - `outputs/research/serenity_bottleneck_baseline_st_only_financial_state_20250101_20260605/`
+    (baseline universe CSV, `tech_bottleneck_v1.TECH_BOTTLENECK_V1_CANDIDATES_PATH`)
+  - `outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/`
+    (`TECH_BOTTLENECK_V1_MARKET_EXPOSURE_PATH`)
+  - `outputs/research/market_emotion_state_v1_20230103_20260605/` (its source)
+  - `outputs/research/mid_trend_watch_funnel_detail.csv` (mid_trend review)
+  - `outputs/research/strategy_daily_eod/<latest dates>` + `reports/` must
+    also keep existing — nightly rsync fails if they are absent.
+- Recovery notes (2026-10-17 incident): the strict_153 baseline restores from
+  any `strategy_daily_eod/<date>/tech_bottleneck_candidate_source/` snapshot
+  (universe identical; stamp columns are rewritten at publish). The regime
+  file regenerates via `market-emotion-state-v1-backfill` then
+  `market-regime-confirmation-v1-backtest` — both read Postgres, funnel input
+  only affects backtest side-metrics, not the daily regime series.
+
+## Long-Running Cron Stdout Contract
+- OpenClaw `noOutputTimeoutSeconds` (1200) watches stdout+stderr, and announce
+  messages include raw stdout. Every wrapper must therefore emit sparse
+  stdout heartbeats (~600s) on **script-global elapsed time**, never per-step
+  counters — back-to-back short steps once caused >20min of silence and a
+  kill. Detail logs keep the frequent (60s) heartbeat.
