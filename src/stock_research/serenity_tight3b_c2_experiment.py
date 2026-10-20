@@ -335,6 +335,7 @@ def _simulate_one_config(
     rank_by_date = {date: day.set_index("asset_id") for date, day in ranks.groupby("trade_date")}
     exposure_by_date = market_exposure.set_index("trade_date")["target_exposure"].to_dict()
     rebalance_dates = set(_rebalance_dates(trading_dates[:-1], frequency))
+    _validate_market_exposure_coverage(rebalance_dates, market_exposure)
 
     equity = 1.0
     peak_equity = 1.0
@@ -353,7 +354,7 @@ def _simulate_one_config(
 
         if trade_date in rebalance_dates:
             selected = _selected_for_day(day_ranks, top_n)
-            exposure = float(exposure_by_date.get(trade_date, 1.0))
+            exposure = float(exposure_by_date[trade_date])
             selected_assets = selected["asset_id"].astype(str).tolist() if not selected.empty else []
             target = _target_equal_weights(
                 selected_assets,
@@ -518,10 +519,51 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
 
 
 def _normalize_market_exposure(market_exposure: pd.DataFrame) -> pd.DataFrame:
+    missing = [
+        column
+        for column in ["trade_date", "target_exposure"]
+        if column not in market_exposure.columns
+    ]
+    if missing:
+        raise ValueError(f"market exposure input missing columns: {missing}")
     frame = market_exposure.copy()
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    frame["target_exposure"] = pd.to_numeric(frame["target_exposure"], errors="coerce").fillna(1.0)
+    frame["target_exposure"] = pd.to_numeric(frame["target_exposure"], errors="coerce")
     return frame[["trade_date", "target_exposure"]].dropna(subset=["trade_date"])
+
+
+def _validate_market_exposure_coverage(
+    rebalance_dates: set[str],
+    market_exposure: pd.DataFrame,
+) -> None:
+    if not rebalance_dates:
+        return
+    counts = market_exposure["trade_date"].value_counts(dropna=True)
+    ordered_dates = sorted(rebalance_dates)
+    missing = [trade_date for trade_date in ordered_dates if int(counts.get(trade_date, 0)) == 0]
+    if missing:
+        raise ValueError(
+            "market exposure missing exact rebalance dates: "
+            f"{', '.join(missing[:5])}"
+        )
+    duplicates = [trade_date for trade_date in ordered_dates if int(counts.get(trade_date, 0)) > 1]
+    if duplicates:
+        raise ValueError(
+            "market exposure has duplicate rows for rebalance dates: "
+            f"{', '.join(duplicates[:5])}"
+        )
+    indexed = market_exposure.set_index("trade_date")["target_exposure"]
+    invalid = [
+        trade_date
+        for trade_date in ordered_dates
+        if pd.isna(indexed.loc[trade_date])
+        or not np.isfinite(float(indexed.loc[trade_date]))
+    ]
+    if invalid:
+        raise ValueError(
+            "missing or invalid target_exposure for rebalance date: "
+            f"{', '.join(invalid[:5])}"
+        )
 
 
 def _build_daily_bottleneck_ranks(

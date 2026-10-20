@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research import cli
 from stock_research.serenity_tight3b_c2_experiment import (
@@ -189,3 +190,43 @@ def test_cli_dispatches_serenity_tight3b_c2_experiment(monkeypatch, capsys, tmp_
     assert captured["rebalance_frequencies"] == ["weekly", "monthly"]
     out = capsys.readouterr().out
     assert "serenity_tight3b_c2|summary|" in out
+
+
+def test_serenity_simulation_fails_closed_when_rebalance_exposure_date_is_missing():
+    exposure = _market_exposure()
+    exposure = exposure[exposure["trade_date"].ne("2025-01-01")]
+
+    with pytest.raises(
+        ValueError,
+        match="market exposure missing exact rebalance dates: 2025-01-01",
+    ):
+        build_serenity_tight3b_c2_experiment_from_frames(
+            candidates=_candidates(),
+            prices=_prices(),
+            market_exposure=exposure,
+            start_date="2025-01-01",
+            end_date="2025-01-06",
+            top_n_values=[2],
+            rebalance_frequencies=["weekly"],
+            transaction_cost_bps=10.0,
+        )
+
+
+def test_serenity_simulation_fails_closed_when_rebalance_exposure_value_is_missing():
+    exposure = _market_exposure()
+    exposure.loc[exposure["trade_date"].eq("2025-01-01"), "target_exposure"] = float("nan")
+
+    with pytest.raises(
+        ValueError,
+        match="missing or invalid target_exposure for rebalance date: 2025-01-01",
+    ):
+        build_serenity_tight3b_c2_experiment_from_frames(
+            candidates=_candidates(),
+            prices=_prices(),
+            market_exposure=exposure,
+            start_date="2025-01-01",
+            end_date="2025-01-06",
+            top_n_values=[2],
+            rebalance_frequencies=["weekly"],
+            transaction_cost_bps=10.0,
+        )
