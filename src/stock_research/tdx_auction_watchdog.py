@@ -211,6 +211,26 @@ def _load_tdx_trade_dates(
         return [str(row["trade_date"])[:10] for row in fetch_all(conn, sql, [start_date, end_date])]
 
 
+def latest_open_trade_date(
+    *,
+    service: str,
+    on_or_before: str | dt.date | None = None,
+) -> str | None:
+    """Most recent open trading day at or before ``on_or_before`` (default today)."""
+
+    day = _date_text(on_or_before) or dt.date.today().isoformat()
+    sql = """
+    SELECT max(trade_date)::text AS latest
+    FROM market.trading_calendar
+    WHERE is_open = true
+      AND trade_date <= %s
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [day])
+    latest = rows[0].get("latest") if rows else None
+    return str(latest)[:10] if latest else None
+
+
 def _load_status_rows(*, run_id: str, service: str) -> list[dict[str, Any]]:
     sql = """
     SELECT
@@ -237,9 +257,18 @@ class TdxAuctionBackfillAdapter:
     retry_sleep_seconds: float = 0.25
     max_pages: int = 100
     min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO
+    run_id: str | None = None
 
     task_name: str = "tdx_auction_backfill"
     dataset: str = TDX_AUCTION_DATASET
+
+    def _run_id(self) -> str:
+        if self.run_id:
+            return self.run_id
+        return (
+            f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:"
+            f"{self.start_date}:{self.end_date}"
+        )
 
     def load_scope(self) -> dict[str, str]:
         trade_dates = _load_tdx_trade_dates(
@@ -248,10 +277,7 @@ class TdxAuctionBackfillAdapter:
             service=self.service,
         )
         partitions = build_daily_partitions(trade_dates)
-        run_id = (
-            f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:"
-            f"{self.start_date}:{self.end_date}"
-        )
+        run_id = self._run_id()
         with connect(self.service) as conn:
             create_backfill_run(
                 conn,
@@ -273,11 +299,7 @@ class TdxAuctionBackfillAdapter:
         }
 
     def load_status_rows(self) -> list[dict[str, Any]]:
-        run_id = (
-            f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:"
-            f"{self.start_date}:{self.end_date}"
-        )
-        return _load_status_rows(run_id=run_id, service=self.service)
+        return _load_status_rows(run_id=self._run_id(), service=self.service)
 
     def summarize_status(self, rows: list[dict[str, Any]]) -> BackfillSummary:
         counts = {status: sum(1 for row in rows if row.get("status") == status) for status in (
@@ -457,7 +479,7 @@ class TdxAuctionBackfillAdapter:
         status: BackfillWatchdogStatus,
     ) -> list[str]:
         del summary, scope, status
-        return [
+        lines = [
             f"endpoint={TDX_AUCTION_ENDPOINT}",
             f"volume_unit=hand",
             f"run_status={run_result.get('status', '')}",
@@ -474,6 +496,9 @@ class TdxAuctionBackfillAdapter:
             f"run_missing_symbols={int(run_result.get('missing_codes', 0) or 0)}",
             f"completed_months={len(completed_month_summaries(rows))}",
         ]
+        for error in list(run_result.get("errors") or [])[:5]:
+            lines.append(f"error={error}")
+        return lines
 
 
 def run_tdx_auction_backfill_watchdog(
@@ -499,6 +524,7 @@ def run_tdx_auction_backfill_watchdog(
     ledger_path: str | Path = DEFAULT_MONTH_LEDGER,
     send: Callable[..., Any] = send_openclaw_feishu_message,
     min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     adapter = TdxAuctionBackfillAdapter(
         start_date=start_date,
@@ -512,6 +538,7 @@ def run_tdx_auction_backfill_watchdog(
         retry_sleep_seconds=retry_sleep_seconds,
         max_pages=max_pages,
         min_coverage_ratio=min_coverage_ratio,
+        run_id=run_id,
     )
     result = run_watchdog_once(
         adapter=adapter,

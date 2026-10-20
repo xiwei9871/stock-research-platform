@@ -1143,6 +1143,8 @@ def add_tdx_auction_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--report-dry-run", action="store_true")
     parser.add_argument("--ledger-path", default=str(DEFAULT_MONTH_LEDGER))
     parser.add_argument("--min-coverage-ratio", type=float, default=0.98)
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--daily", action="store_true")
 
 
 def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
@@ -1215,9 +1217,26 @@ def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
 
 
 def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
+    from stock_research.tdx_auction_backfill import TDX_AUCTION_SOURCE_VERSION
+    from stock_research.tdx_auction_watchdog import latest_open_trade_date
+
+    start_date = args.start_date
+    end_date = args.end_date
+    run_id = args.run_id
+    if args.daily:
+        latest = latest_open_trade_date(service=args.service)
+        if not latest:
+            print("tdx_auction_watchdog|action|skipped_no_open_trade_date")
+            return
+        start_date = latest
+        end_date = latest
+        if not run_id:
+            run_id = f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:daily"
+    print(f"tdx_auction_watchdog|window|{start_date}..{end_date}")
+    print(f"tdx_auction_watchdog|run_id|{run_id or 'auto'}")
     result = run_tdx_auction_backfill_watchdog(
-        start_date=args.start_date,
-        end_date=args.end_date,
+        start_date=start_date,
+        end_date=end_date,
         max_jobs=args.max_jobs,
         workers=args.workers,
         stale_after_minutes=args.stale_after_minutes,
@@ -1236,6 +1255,7 @@ def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
         report_dry_run=args.report_dry_run,
         ledger_path=args.ledger_path,
         min_coverage_ratio=args.min_coverage_ratio,
+        run_id=run_id,
     )
     run_result = result.get("run_result", {})
     post_summary = result["post_summary"]

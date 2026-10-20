@@ -11,15 +11,96 @@ def test_tdx_host_runner_and_launchd_job_are_present():
     assert script.exists()
     assert plist.exists()
     assert "tdx-auction-backfill-watchdog" in script.read_text()
-    assert "StartInterval" in plist.read_text()
+    assert "StartCalendarInterval" in plist.read_text()
 
 
-def test_tdx_host_runner_uses_four_dates_and_launchd_retries_quickly_by_default():
-    script = Path("/Users/xiwei/stock_research/scripts/run_tdx_auction_backfill_watchdog_host.sh")
+def test_tdx_launchd_uses_daily_mode_with_bounded_post_close_retries():
     plist = Path("/Users/xiwei/stock_research/deploy/launchd/com.stockresearch.tdx-auction-backfill-watchdog.plist")
+    text = plist.read_text()
 
-    assert 'MAX_JOBS="${TDX_AUCTION_WATCHDOG_MAX_JOBS:-4}"' in script.read_text()
-    assert "<integer>60</integer>" in plist.read_text()
+    assert "<key>TDX_AUCTION_WATCHDOG_MODE</key>" in text
+    assert "<string>daily</string>" in text
+    assert "StartInterval" not in text
+    # bounded retries after close (measured TDX availability ~16:40)
+    assert text.count("<key>Hour</key>") == 3
+
+
+def test_tdx_host_runner_daily_mode_passes_daily_flag_and_rotating_sentinel(tmp_path):
+    script = Path("/Users/xiwei/stock_research/scripts/run_tdx_auction_backfill_watchdog_host.sh")
+    fake_python = tmp_path / "fake_python.sh"
+    fake_python.write_text(
+        "#!/usr/bin/env bash\n"
+        "if [ \"$1\" = \"-c\" ]; then printf '2026-10-20\\n'; exit 0; fi\n"
+        "printf '%s\\n' \"$*\" >> \"$TDX_TEST_INVOKE_LOG\"\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|action|healthy'\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|work_remaining|False'\n"
+    )
+    fake_python.chmod(fake_python.stat().st_mode | stat.S_IXUSR)
+    invoke_log = tmp_path / "invoke.log"
+    sentinel = tmp_path / "done"
+    env = os.environ.copy()
+    env.update(
+        {
+            "TDX_AUCTION_WATCHDOG_ROOT": "/Users/xiwei/stock_research",
+            "TDX_AUCTION_WATCHDOG_PYTHON": str(fake_python),
+            "TDX_AUCTION_WATCHDOG_LOG_DIR": str(tmp_path / "logs"),
+            "TDX_AUCTION_WATCHDOG_RUN_LOG": str(tmp_path / "run.log"),
+            "TDX_AUCTION_WATCHDOG_LOCK_DIR": str(tmp_path / "lock"),
+            "TDX_AUCTION_WATCHDOG_COMPLETION_SENTINEL": str(sentinel),
+            "TDX_AUCTION_WATCHDOG_MODE": "daily",
+            "TDX_AUCTION_WATCHDOG_REPORT_DRY_RUN": "1",
+            "TDX_TEST_INVOKE_LOG": str(invoke_log),
+        }
+    )
+
+    result = subprocess.run(["bash", str(script)], check=False, env=env,
+                            capture_output=True, text=True)
+
+    assert result.returncode == 0
+    invoked = invoke_log.read_text()
+    assert "--daily" in invoked
+    assert "--start-date" not in invoked
+    assert sentinel.read_text().strip() == "tdx-auction-daily|2026-10-20|coverage0.98"
+
+    # second trigger same day: sentinel current → exits before invoking python
+    invoke_log.unlink()
+    result = subprocess.run(["bash", str(script)], check=False, env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0
+    assert not invoke_log.exists()
+
+
+def test_tdx_host_runner_partial_coverage_blocks_completion_sentinel(tmp_path):
+    script = Path("/Users/xiwei/stock_research/scripts/run_tdx_auction_backfill_watchdog_host.sh")
+    fake_python = tmp_path / "fake_python.sh"
+    fake_python.write_text(
+        "#!/usr/bin/env bash\n"
+        "if [ \"$1\" = \"-c\" ]; then printf '2026-10-20\\n'; exit 0; fi\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|action|degraded'\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|run_partial|1'\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|work_remaining|True'\n"
+    )
+    fake_python.chmod(fake_python.stat().st_mode | stat.S_IXUSR)
+    sentinel = tmp_path / "done"
+    env = os.environ.copy()
+    env.update(
+        {
+            "TDX_AUCTION_WATCHDOG_ROOT": "/Users/xiwei/stock_research",
+            "TDX_AUCTION_WATCHDOG_PYTHON": str(fake_python),
+            "TDX_AUCTION_WATCHDOG_LOG_DIR": str(tmp_path / "logs"),
+            "TDX_AUCTION_WATCHDOG_RUN_LOG": str(tmp_path / "run.log"),
+            "TDX_AUCTION_WATCHDOG_LOCK_DIR": str(tmp_path / "lock"),
+            "TDX_AUCTION_WATCHDOG_COMPLETION_SENTINEL": str(sentinel),
+            "TDX_AUCTION_WATCHDOG_MODE": "daily",
+            "TDX_AUCTION_WATCHDOG_REPORT_DRY_RUN": "1",
+        }
+    )
+
+    result = subprocess.run(["bash", str(script)], check=False, env=env,
+                            capture_output=True, text=True)
+
+    assert result.returncode == 0
+    assert not sentinel.exists()
 
 
 def test_tdx_host_runner_uses_a_small_failover_pool_by_default():

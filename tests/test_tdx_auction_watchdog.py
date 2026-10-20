@@ -134,3 +134,102 @@ def test_monthly_completion_report_is_idempotent(tmp_path):
     assert "当前退市未请求=11" in first[0]["message"]
     assert second == []
     assert len(sent) == 1
+
+
+def test_adapter_run_id_override_keeps_daily_tasks_claimable(monkeypatch):
+    """Stable run_id lets a failed date re-claim on later daily runs."""
+
+    from stock_research import tdx_auction_watchdog as w
+
+    created = {}
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(w, "connect", lambda service: FakeConn())
+    monkeypatch.setattr(
+        w, "_load_tdx_trade_dates", lambda **kw: ["2026-10-21"]
+    )
+    monkeypatch.setattr(
+        w, "create_backfill_run",
+        lambda conn, **kw: created.update(kw),
+    )
+    monkeypatch.setattr(
+        w, "_load_status_rows",
+        lambda *, run_id, service: [{"run_id_seen": run_id}],
+    )
+
+    adapter = w.TdxAuctionBackfillAdapter(
+        start_date="2026-10-21",
+        end_date="2026-10-21",
+        run_id="tdx-auction-open:test:daily",
+    )
+    scope = adapter.load_scope()
+    assert created["run_id"] == "tdx-auction-open:test:daily"
+    assert created["start_date"] == "2026-10-21"
+    assert scope["run_id"] == "tdx-auction-open:test:daily"
+    rows = adapter.load_status_rows()
+    assert rows == [{"run_id_seen": "tdx-auction-open:test:daily"}]
+
+
+def test_adapter_default_run_id_derives_from_window():
+    from stock_research.tdx_auction_watchdog import TdxAuctionBackfillAdapter
+
+    adapter = TdxAuctionBackfillAdapter(
+        start_date="2026-10-20", end_date="2026-10-20"
+    )
+    assert adapter._run_id().endswith(":2026-10-20:2026-10-20")
+
+
+def test_latest_open_trade_date_queries_calendar(monkeypatch):
+    from stock_research import tdx_auction_watchdog as w
+
+    calls = []
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(w, "connect", lambda service: FakeConn())
+    monkeypatch.setattr(
+        w, "fetch_all",
+        lambda conn, sql, params: calls.append((sql, params)) or [
+            {"latest": "2026-10-20"}
+        ],
+    )
+    assert w.latest_open_trade_date(service="s", on_or_before="2026-10-20") == "2026-10-20"
+    sql, params = calls[0]
+    assert "is_open" in sql
+    assert "trading_calendar" in sql
+    assert params == ["2026-10-20"]
+
+
+def test_partial_run_lines_report_coverage_and_errors():
+    from stock_research.tdx_auction_watchdog import TdxAuctionBackfillAdapter
+
+    adapter = TdxAuctionBackfillAdapter(
+        start_date="2026-10-20", end_date="2026-10-20"
+    )
+    lines = adapter.format_extra_status_lines(
+        rows=[],
+        summary=None,
+        scope={},
+        run_result={
+            "success": 0, "failed": 0, "partial": 1,
+            "errors": ["2026-10-20: coverage 3100/5181 = 59.8% below required 98%"],
+            "requested": 5181, "missing": 2081, "failed_symbols": 0,
+            "unsupported_symbols": 0, "excluded_symbols": 0, "rows": 3100,
+        },
+        status=None,
+    )
+    text = "\n".join(lines)
+    assert "run_partial=1" in text
+    assert "min_coverage_ratio" in text
+    assert any("coverage" in line for line in lines)

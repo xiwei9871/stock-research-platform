@@ -258,3 +258,30 @@ DEGRADED，直到 10-20 补齐；其余日达标。
   覆盖 TDX/Tushare 历史行。
 - 待用户决定：是否续订 Tushare 竞价接口 / 是否立项扩 close_call EM 采集 /
   是否联系 TDX 采集工具来源方。
+
+## 2026-10-20 晚：状态机修复 + 10-20 完整恢复 + v2 适配（本轮新交付）
+
+### Watchdog 完整性判定（P0 修复）
+- 新三态 `tdx_task_outcome()`：fatal / partial / success（执行成功 ≠ 数据完整）。
+- 覆盖门槛默认 98%（`--min-coverage-ratio` 可调）；partial 任务标 failed 保留已写行、自动回队、不推进 completed frontier、不写 sentinel。params 持久化 `coverage_ratio`+`completeness_status`。
+- 生产验证：10-20 任务重置 failed → watchdog 重认领 → 16:40 实测覆盖 98.9%（5126/5181，0 failed）→ 合法 success，价格一致 5,126/5,126。
+- 10-20 missing 逐只分类：55 只全部"接口延迟返回"（在册、未退市、当日正成交量、非无效代码）。无停牌/退市/代码异常。
+- TDX 历史数据可获得时点：盘中 59.8% → 16:40 已达 98.9%；收盘后 1-2 小时基本完整。
+
+### 三口径对账（修正 126,397→128,423）
+- market = staging = ledger.rows_written，25 日零不一致。
+- 累计 upsert 尝试 131,523 次（10-20 两次抓取：3,100 + 5,126），最终存量 128,423，3,100 行幂等重写同值。
+- 前报 126,397 是重试前快照（算术应为 10,277+77,020+36,000+3,100=126,397；126,297 系笔误）。
+
+### 每日增量调度（代码就绪，未启用）
+- 每日模式：`--daily` → start=end=latest_open_trade_date；稳定 run_id `tdx-auction-open:...:daily` 使失败任务跨日自动重认领（次日补漏无需新逻辑）。
+- 非交易日：latest=前一交易日 → 已完成 → sentinel 早退，零抓取。
+- launchd：StartInterval=60 → StartCalendarInterval 17:10/18:10/19:40（覆盖实测 ~16:40 可用时点，三次有限重试）。
+- host 测试：daily flag 透传、按日轮转 sentinel、partial 阻断 sentinel、重复触发幂等。**未启用生产调度，待审。**
+
+### v2 适配因子（隔离研究路径）
+- `auction_data_v2.py`：TDX open_call（entry）+ raw 日线收盘（signal close）+ `signal_last_5m_return`（显式代理命名，14:55-15:00 bar 内部涨跌幅）。
+- `signal_close_auction_return` 在 v2 恒为 NULL（不可还原，不补零）；14:55 bar open=0 脏数据 → NULL 非 inf。
+- `auction_enhanced_score_v2`：同分桶，signal 项用 last_5m。
+- 实测对拍（285 trades / 144 日，155 笔可验证）：分差 20/155（12.9%），Top5 翻转 0/79 日；Top5 收益 v1=v2（avg 0.0200, win 51.6%, maxdd -15.75%）。
+- 工件：`outputs/research/m0_8_auction_v2_comparison/`。未接入正式策略。
