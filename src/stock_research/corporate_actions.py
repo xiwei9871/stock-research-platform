@@ -77,11 +77,15 @@ def build_adjustment_factors(
     execute(conn, sql, params)
 
 
+DEFAULT_MIN_FACTOR_CHANGE = 0.0005
+
+
 def build_corporate_actions_from_factors_for_service(
     start_date: str | None = None,
     end_date: str | None = None,
     source_version: str = "derived_adjustment_factor_v1",
     factor_source_version: str = "derived_market_daily_bar_v1",
+    min_factor_change: float = DEFAULT_MIN_FACTOR_CHANGE,
     service: str = SETTINGS.research_service,
 ) -> None:
     with connect(service) as conn:
@@ -91,6 +95,7 @@ def build_corporate_actions_from_factors_for_service(
             end_date=end_date,
             source_version=source_version,
             factor_source_version=factor_source_version,
+            min_factor_change=min_factor_change,
         )
 
 
@@ -100,8 +105,9 @@ def build_corporate_actions_from_factors(
     end_date: str | None = None,
     source_version: str = "derived_adjustment_factor_v1",
     factor_source_version: str = "derived_market_daily_bar_v1",
+    min_factor_change: float = DEFAULT_MIN_FACTOR_CHANGE,
 ) -> None:
-    params = [source_version, factor_source_version]
+    params = [source_version, factor_source_version, min_factor_change]
     filters = ["factor_before IS NOT NULL"]
     if start_date:
         filters.append("event_date >= %s")
@@ -144,6 +150,7 @@ def build_corporate_actions_from_factors(
     ) changes
     WHERE {where_sql}
       AND factor_after IS DISTINCT FROM factor_before
+      AND ABS(factor_after / NULLIF(factor_before, 0) - 1) >= %s
     ON CONFLICT (asset_id, event_date, action_type, source_version) DO UPDATE SET
         factor_before = EXCLUDED.factor_before,
         factor_after = EXCLUDED.factor_after,

@@ -7598,8 +7598,11 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             ledger = result["ledger"]
             print(f"yanbaoke_weekly|queue|{result['queue_path']}")
             for key in ("search_calls", "candidates_found", "dedup_dropped",
-                        "planned_downloads", "api_charged", "downloaded",
-                        "not_pdf", "failed", "imported"):
+                        "planned_downloads", "attempts_this_run",
+                        "attempts_period_total", "downloaded", "not_pdf",
+                        "failed", "imported", "skipped_already_attempted"):
+                if key not in ledger:
+                    continue
                 print(f"yanbaoke_weekly|{key}|{ledger[key]}")
     elif args.command == "daily-health":
         result = summarize_operational_health(

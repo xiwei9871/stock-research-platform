@@ -77,6 +77,7 @@ def test_build_corporate_actions_from_factors_detects_factor_changes(monkeypatch
     assert "lag(hfq_factor) OVER" in sql
     assert "source_version = %s" in sql
     assert "factor_after IS DISTINCT FROM factor_before" in sql
+    assert "ABS(factor_after / NULLIF(factor_before, 0) - 1) >= %s" in sql
     assert "'adjustment_factor_change' AS action_type" in sql
     assert "event_date >= %s" in sql
     assert "event_date <= %s" in sql
@@ -84,9 +85,23 @@ def test_build_corporate_actions_from_factors_detects_factor_changes(monkeypatch
     assert params == [
         "derived_actions_v1",
         "derived_factors_v1",
+        corporate_actions.DEFAULT_MIN_FACTOR_CHANGE,
         "2024-05-27",
         "2024-05-31",
     ]
+
+
+def test_build_corporate_actions_min_factor_change_override(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(corporate_actions, "execute", fake_execute)
+
+    corporate_actions.build_corporate_actions_from_factors(
+        conn,
+        min_factor_change=0.02,
+    )
+
+    _sql, params = conn.executed[0]
+    assert params[2] == 0.02
 
 
 def test_service_wrappers_open_connection(monkeypatch):
@@ -135,6 +150,7 @@ def test_service_wrappers_open_connection(monkeypatch):
                 "end_date": "2024-05-31",
                 "source_version": "actions_v1",
                 "factor_source_version": "factors_v1",
+                "min_factor_change": corporate_actions.DEFAULT_MIN_FACTOR_CHANGE,
             },
         ),
     ]

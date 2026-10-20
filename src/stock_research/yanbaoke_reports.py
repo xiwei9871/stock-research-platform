@@ -270,7 +270,7 @@ def download_yanbaoke_report_pdf(
     get_json: Any | None = None,
     get_binary: Any | None = None,
 ) -> dict[str, Any]:
-    key = api_key or os.environ.get("YANBAOKE_API_KEY", "")
+    key = api_key or load_yanbaoke_api_key()
     if not key:
         raise ValueError("YANBAOKE_API_KEY is required for Yanbaoke downloads")
     headers = _yanbaoke_headers(api_key=key)
@@ -585,6 +585,20 @@ def run_yanbaoke_report_backfill(
         },
         "paths": paths,
     }
+
+
+def load_yanbaoke_api_key() -> str:
+    env = os.environ.get("YANBAOKE_API_KEY", "").strip()
+    if env:
+        return env
+    path = Path(__file__).resolve().parents[2] / "config" / "local_secrets.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    return str((payload.get("yanbaoke") or {}).get("api_key") or "").strip()
 
 
 def _yanbaoke_headers(api_key: str | None = None) -> dict[str, str]:
