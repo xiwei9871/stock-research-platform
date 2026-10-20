@@ -181,7 +181,7 @@ Readiness 由"全部 required 输入 READY 且 optional 降级在契约允许内
 | intraday 特征接入 platform_ready + 8-04 起回填 | 设计完，CLI 现成 | 生产调度+批量回填 |
 | derive_qfq 口径改走 daily_bar 自推导 | 设计 | 代码变更批准 |
 | MidTrend 两目录恢复 + 兜底契约 | 待执行(只读复制) | 文件恢复确认 |
-| Gate 实现（manifest/readiness 字段+检查器） | 设计 | 开发任务批准 |
+| Gate 实现（manifest/readiness 字段+检查器） | **核心检查器已实现**：`src/stock_research/data_freshness_gate.py`，11 项行为测试绿；已按 §5.2 分类对 13 条输入实测（7 READY / 4 DEGRADED / 1 NOT_EVALUATED / 0 BLOCKED），证据 `outputs/research/data_freshness_health_20261020.csv`；manifest/readiness 集成仍待批准 | 集成任务批准 |
 | P2 表退役确认 | 待确认 | 确认即标注 |
 
 **本阶段未做**：任何生产库写入、cron/launchd 启用、配置变更、策略行为变更、部署。所有恢复动作均为设计/隔离测试状态。
@@ -189,6 +189,8 @@ Readiness 由"全部 required 输入 READY 且 optional 降级在契约允许内
 ## 7. 证据路径
 
 - 依赖矩阵：`docs/research_upgrade/02_data_dependency_matrix.csv`
+- Gate 模块与测试：`src/stock_research/data_freshness_gate.py`、`tests/test_data_freshness_gate.py`（11 passed）
+- 实测健康报告：`outputs/research/data_freshness_health_20261020.csv`（as_of 2026-10-19 post_close；EM 竞价分钟按 intraday 窗口评估，体现"不同消费窗口不同预期日"原则）
 - 竞价分源：`SELECT source,auction_phase,max(trade_date) FROM market.stock_auction_bar GROUP BY 1,2`
 - 依赖门缺陷代码：`src/stock_research/strategy_daily_eod.py:1061-1103`
 - 竞价降级代码：`src/stock_research/lhb_shortline_v1.py:1549-1647`（`_lhb_shortline_daily_auction_score_fallback`）
