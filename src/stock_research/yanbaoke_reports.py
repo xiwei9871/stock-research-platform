@@ -31,6 +31,7 @@ from stock_research.stock_report_web_collection import (
     upsert_stock_report_features,
     upsert_stock_report_sources_events,
 )
+from stock_research.yanbaoke_weekly_topup import yanbaoke_report_id
 
 
 YANBAOKE_SOURCE_TYPE = "yanbaoke_api"
@@ -315,7 +316,7 @@ def build_yanbaoke_sources_events_from_downloads(downloads: pd.DataFrame) -> dic
             continue
         pdf_path = Path(str(row["pdf_path"])).expanduser().resolve()
         source_url = pdf_path.as_uri()
-        report_id = f"yanbaoke_{_stable_token([str(row.get('uuid') or ''), source_url])}"
+        report_id = yanbaoke_report_id(row)
         metadata = {
             "yanbaoke": {
                 "uuid": row.get("uuid") or "",
