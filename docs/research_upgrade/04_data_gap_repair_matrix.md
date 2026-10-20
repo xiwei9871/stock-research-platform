@@ -42,6 +42,17 @@
 3. `build-corporate-actions-from-factors`（自动捕获 369 事件）
 4. 系统性防再发：日线任务加**滚动重写窗口**（如近 60 交易日），吸收供应商的滞后修订 —— 这才是根治，单次补录只是止血
 
+## 任务二补充：R2 执行核验结论（2026-10-20 晚更新）
+
+- **真实候选范围**：preclose 跳变检测（|preclose−prev_close|/prev>0.1%）2026-01-01→10-20 共 4,042 事件 / 3,317 股；其中 06-01 起 2,991 事件 / 2,643 股，1-5 月另有 1,054 事件 / 675 只窗口外独有股。
+- **SQL 预筛**（除权日前 qfq==raw ⇒ 铁证污染）：3,318 事件股中 **3,043 CONFIRMED_DIRTY**、275 REVIEW；另有 50 只全年无事件对照股待 live 抽验。
+- **修复窗口（5 股样本实证）**：qfq 需**全历史重写**（自上市日起，600016 首日行偏差 ~5%）；hfq 仅需自最早漏采事件日前向修（600016→07-02、600380→06-26、000568→08-28、600028→09-30、301237→09-01）。
+- **漏采早于探测窗**：600016 另有 07-02 事件、600380 有 06-26 事件——探测窗必须从 01-01（或更早）起算，不能用 adjustment_factor 停建日。
+- **架构归因**：库存 qfq/hfq 为 `derived:tushare_raw_latest_factor`（raw×因子快照），因子快照在漏采事件后=1.0 → 新写入行退化为 raw；同时底层行从不回头修订。
+- **修复口径**：差异驱动只写变动行；raw 严禁改（`assert_no_raw_rows` 硬约束 + 测试）；`source='baostock_revision_r2'` 标记；`backup.market_daily_bar_r2_<batch>` 批次快照 + `r2_rollback_batch.py` 可回滚；后置 live 对拍必须 diff=0。
+- **执行**：5 股样本已修（commit f206de1d 前的 ad-hoc 脚本）；首批 50 股分层批次 b1 已启动；live 分类脚本 `r2_classify_batch.py` 断点续跑兜底 REVIEW/对照组。
+- **下游待重建**（修复完成后按序）：`adjustment_factor`（已随批 scoped 重建）→ `corporate_action`（已随批）→ 除权日前 qfq 分钟线分区 → `stock_technical_features_daily`；未完成前标记 DEGRADED。
+
 ## 任务三：Intraday 特征 — 方案已验证待批准
 
 见 `03_intraday_recovery_validation.md`：隔离 compute 验证 PASS（两日 51,890/51,860 行，分布同量级、字节级幂等）；staging 08-04/05 试写 PASS。
