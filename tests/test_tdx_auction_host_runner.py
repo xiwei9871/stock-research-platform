@@ -30,7 +30,7 @@ def test_tdx_host_runner_daily_mode_passes_daily_flag_and_rotating_sentinel(tmp_
     fake_python = tmp_path / "fake_python.sh"
     fake_python.write_text(
         "#!/usr/bin/env bash\n"
-        "if [ \"$1\" = \"-c\" ]; then printf '2026-10-20\\n'; exit 0; fi\n"
+        "if [ \"$1\" = \"-c\" ]; then printf '2026-10-19..2026-10-20\\n'; exit 0; fi\n"
         "printf '%s\\n' \"$*\" >> \"$TDX_TEST_INVOKE_LOG\"\n"
         "printf '%s\\n' 'tdx_auction_watchdog|action|healthy'\n"
         "printf '%s\\n' 'tdx_auction_watchdog|work_remaining|False'\n"
@@ -59,8 +59,11 @@ def test_tdx_host_runner_daily_mode_passes_daily_flag_and_rotating_sentinel(tmp_
     assert result.returncode == 0
     invoked = invoke_log.read_text()
     assert "--daily" in invoked
+    assert "--daily-lookback-open-days" in invoked
     assert "--start-date" not in invoked
-    assert sentinel.read_text().strip() == "tdx-auction-daily|2026-10-20|coverage0.98"
+    assert sentinel.read_text().strip() == (
+        "tdx-auction-daily|2026-10-19..2026-10-20|coverage0.98"
+    )
 
     # second trigger same day: sentinel current → exits before invoking python
     invoke_log.unlink()
@@ -68,6 +71,53 @@ def test_tdx_host_runner_daily_mode_passes_daily_flag_and_rotating_sentinel(tmp_
                             capture_output=True, text=True)
     assert result.returncode == 0
     assert not invoke_log.exists()
+
+
+def test_tdx_host_runner_new_incomplete_window_invalidates_sentinel(tmp_path):
+    """A date reappearing in scope (failed/partial/never-registered) changes
+    the resolved key, so the stale sentinel must not mask it."""
+
+    script = Path("/Users/xiwei/stock_research/scripts/run_tdx_auction_backfill_watchdog_host.sh")
+    scope_file = tmp_path / "scope.txt"
+    scope_file.write_text("2026-10-20..2026-10-20\n")
+    fake_python = tmp_path / "fake_python.sh"
+    fake_python.write_text(
+        "#!/usr/bin/env bash\n"
+        "if [ \"$1\" = \"-c\" ]; then cat \"$TDX_TEST_SCOPE_FILE\"; exit 0; fi\n"
+        "printf '%s\\n' \"$*\" >> \"$TDX_TEST_INVOKE_LOG\"\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|action|healthy'\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|work_remaining|False'\n"
+    )
+    fake_python.chmod(fake_python.stat().st_mode | stat.S_IXUSR)
+    invoke_log = tmp_path / "invoke.log"
+    sentinel = tmp_path / "done"
+    sentinel.write_text("tdx-auction-daily|complete:2026-10-19|coverage0.98\n")
+    env = os.environ.copy()
+    env.update(
+        {
+            "TDX_AUCTION_WATCHDOG_ROOT": "/Users/xiwei/stock_research",
+            "TDX_AUCTION_WATCHDOG_PYTHON": str(fake_python),
+            "TDX_AUCTION_WATCHDOG_LOG_DIR": str(tmp_path / "logs"),
+            "TDX_AUCTION_WATCHDOG_RUN_LOG": str(tmp_path / "run.log"),
+            "TDX_AUCTION_WATCHDOG_LOCK_DIR": str(tmp_path / "lock"),
+            "TDX_AUCTION_WATCHDOG_COMPLETION_SENTINEL": str(sentinel),
+            "TDX_AUCTION_WATCHDOG_MODE": "daily",
+            "TDX_AUCTION_WATCHDOG_REPORT_DRY_RUN": "1",
+            "TDX_TEST_INVOKE_LOG": str(invoke_log),
+            "TDX_TEST_SCOPE_FILE": str(scope_file),
+        }
+    )
+
+    result = subprocess.run(["bash", str(script)], check=False, env=env,
+                            capture_output=True, text=True)
+
+    # stale 'complete:2026-10-19' sentinel must not skip the new window
+    assert result.returncode == 0
+    assert invoke_log.exists()
+    assert "--daily" in invoke_log.read_text()
+    assert sentinel.read_text().strip() == (
+        "tdx-auction-daily|2026-10-20..2026-10-20|coverage0.98"
+    )
 
 
 def test_tdx_host_runner_partial_coverage_blocks_completion_sentinel(tmp_path):

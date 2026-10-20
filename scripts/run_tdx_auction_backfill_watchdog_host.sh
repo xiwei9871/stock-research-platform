@@ -28,19 +28,26 @@ REPORT_ACCOUNT="${TDX_AUCTION_WATCHDOG_REPORT_ACCOUNT:-jarvis}"
 LEDGER_PATH="${TDX_AUCTION_WATCHDOG_LEDGER_PATH:-$ROOT/outputs/research/tdx_auction_backfill_watchdog/reported_months.json}"
 COMPLETION_SENTINEL="${TDX_AUCTION_WATCHDOG_COMPLETION_SENTINEL:-$LOG_DIR/tdx_auction_backfill_watchdog.completed}"
 COMPLETION_KEY="${TDX_AUCTION_WATCHDOG_COMPLETION_KEY:-tdx-auction|$START_DATE|$END_DATE|max$MAX_JOBS|workers$WORKERS|timeout$RUN_TIMEOUT_SECONDS}"
-DAILY_TARGET_DATE=""
+DAILY_SCOPE_KEY=""
 if [ "$MODE" = "daily" ] && [ -z "${TDX_AUCTION_WATCHDOG_COMPLETION_KEY:-}" ]; then
-  # Resolved against market.trading_calendar; on non-trading days this is the
-  # most recent open day so the run either no-ops (already complete) or
-  # repairs the unfinished trading day.
-  DAILY_TARGET_DATE="$(cd "$ROOT" && "$PYTHON" -c "
-from stock_research.tdx_auction_watchdog import latest_open_trade_date
-print(latest_open_trade_date(service='stock_research') or '')
+  # Resolved against the trading calendar, the stable-run ledger and the
+  # destination table: the token names the exact window that still needs
+  # work (or the completed frontier), so the sentinel can never mask a
+  # failed/partial/never-registered date that later reappears in scope.
+  DAILY_SCOPE_KEY="$(cd "$ROOT" && "$PYTHON" -c "
+import os
+from stock_research.tdx_auction_watchdog import daily_completion_key
+print(daily_completion_key(
+    service='stock_research',
+    run_id=os.environ.get('TDX_AUCTION_WATCHDOG_RUN_ID') or None,
+    lookback_open_days=int(os.environ.get('TDX_AUCTION_WATCHDOG_DAILY_LOOKBACK_OPEN_DAYS') or 30),
+    min_coverage_ratio=float(os.environ.get('TDX_AUCTION_WATCHDOG_MIN_COVERAGE_RATIO') or 0.98),
+))
 " 2>/dev/null || true)"
-  if [ -z "$DAILY_TARGET_DATE" ]; then
-    DAILY_TARGET_DATE="unresolved"
+  if [ -z "$DAILY_SCOPE_KEY" ]; then
+    DAILY_SCOPE_KEY="unresolved"
   fi
-  COMPLETION_KEY="tdx-auction-daily|$DAILY_TARGET_DATE|coverage${TDX_AUCTION_WATCHDOG_MIN_COVERAGE_RATIO:-0.98}"
+  COMPLETION_KEY="tdx-auction-daily|$DAILY_SCOPE_KEY|coverage${TDX_AUCTION_WATCHDOG_MIN_COVERAGE_RATIO:-0.98}"
 fi
 RUN_OUTPUT=""
 
@@ -53,7 +60,7 @@ echo "cwd=$ROOT"
 echo "python=$PYTHON"
 echo "openclaw_bin=$OPENCLAW_BIN"
 echo "mode=$MODE"
-echo "daily_target_date=$DAILY_TARGET_DATE"
+echo "daily_scope_key=$DAILY_SCOPE_KEY"
 echo "start_date=$START_DATE"
 echo "end_date=$END_DATE"
 echo "max_jobs=$MAX_JOBS"
@@ -93,7 +100,7 @@ RUN_OUTPUT="$(mktemp "$LOG_DIR/tdx_auction_backfill_watchdog.XXXXXX")"
 run_watchdog_command() {
   local mode_args=()
   if [ "$MODE" = "daily" ]; then
-    mode_args+=(--daily)
+    mode_args+=(--daily --daily-lookback-open-days "${TDX_AUCTION_WATCHDOG_DAILY_LOOKBACK_OPEN_DAYS:-30}")
     if [ -n "$RUN_ID" ]; then
       mode_args+=(--run-id "$RUN_ID")
     fi

@@ -1145,6 +1145,7 @@ def add_tdx_auction_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--min-coverage-ratio", type=float, default=0.98)
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--daily", action="store_true")
+    parser.add_argument("--daily-lookback-open-days", type=int, default=30)
 
 
 def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
@@ -1218,20 +1219,33 @@ def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
 
 def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
     from stock_research.tdx_auction_backfill import TDX_AUCTION_SOURCE_VERSION
-    from stock_research.tdx_auction_watchdog import latest_open_trade_date
+    from stock_research.tdx_auction_watchdog import load_daily_backfill_scope
 
     start_date = args.start_date
     end_date = args.end_date
     run_id = args.run_id
     if args.daily:
-        latest = latest_open_trade_date(service=args.service)
-        if not latest:
-            print("tdx_auction_watchdog|action|skipped_no_open_trade_date")
-            return
-        start_date = latest
-        end_date = latest
         if not run_id:
             run_id = f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:daily"
+        scope = load_daily_backfill_scope(
+            service=args.service,
+            run_id=run_id,
+            lookback_open_days=args.daily_lookback_open_days,
+            min_coverage_ratio=args.min_coverage_ratio,
+        )
+        if scope.window_start is None:
+            print(
+                "tdx_auction_watchdog|daily_scope|"
+                f"complete:{scope.latest_collectible or 'none'}"
+            )
+            print("tdx_auction_watchdog|action|skipped_no_incomplete_dates")
+            return
+        start_date = scope.window_start
+        end_date = scope.window_end
+        print(
+            f"tdx_auction_watchdog|daily_scope|{start_date}..{end_date}"
+            f"|incomplete={len(scope.incomplete_dates)}"
+        )
     print(f"tdx_auction_watchdog|window|{start_date}..{end_date}")
     print(f"tdx_auction_watchdog|run_id|{run_id or 'auto'}")
     result = run_tdx_auction_backfill_watchdog(

@@ -233,3 +233,217 @@ def test_partial_run_lines_report_coverage_and_errors():
     assert "run_partial=1" in text
     assert "min_coverage_ratio" in text
     assert any("coverage" in line for line in lines)
+
+
+def test_daily_scope_three_day_downtime_registers_gap():
+    """3 open days missed while host down -> window covers all of them."""
+
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-15", "2026-10-16", "2026-10-19", "2026-10-20"]
+    done = {"2026-10-15", "2026-10-16"}  # last complete = Fri 10-16
+    now = dt.datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.window_start == "2026-10-19"
+    assert scope.window_end == "2026-10-20"
+    assert scope.incomplete_dates == ["2026-10-19", "2026-10-20"]
+    assert scope.latest_collectible == "2026-10-20"
+
+
+def test_daily_scope_weekend_recovery_uses_open_days_only():
+    """Machine off Sat/Sun, Mon reboot -> only open days enter the window."""
+
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-16", "2026-10-19"]  # Fri then Mon
+    done = {"2026-10-16"}
+    now = dt.datetime(2026, 10, 19, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.incomplete_dates == ["2026-10-19"]
+    assert scope.window_start == "2026-10-19"
+
+
+def test_daily_scope_failed_task_stays_in_window_for_reclaim():
+    """A failed/partial ledger entry is treated as incomplete -> re-registered."""
+
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-19", "2026-10-20"]
+    done = {"2026-10-20"}  # 10-19 failed in ledger -> not in done set
+    now = dt.datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.incomplete_dates == ["2026-10-19"]
+    assert scope.window_start == "2026-10-19"
+    assert scope.window_end == "2026-10-20"
+
+
+def test_daily_scope_hole_before_last_success_is_found():
+    """Missing date earlier than the last success still re-opens the window."""
+
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-15", "2026-10-16", "2026-10-19", "2026-10-20"]
+    done = {"2026-10-15", "2026-10-19", "2026-10-20"}  # 10-16 never registered
+    now = dt.datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.incomplete_dates == ["2026-10-16"]
+    assert scope.window_start == "2026-10-16"
+
+
+def test_daily_scope_all_complete_returns_no_window():
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-19", "2026-10-20"]
+    done = {"2026-10-19", "2026-10-20"}
+    now = dt.datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.window_start is None
+    assert scope.incomplete_dates == []
+
+
+def test_daily_scope_same_day_not_collectible_before_cutoff():
+    """RunAtLoad mid-trading-day must not target today before publish cutoff."""
+
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-19", "2026-10-20"]
+    done = {"2026-10-19"}
+    # 10:00 Shanghai on an open day -> today excluded from collectibility
+    now = dt.datetime(2026, 10, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.latest_collectible == "2026-10-19"
+    assert scope.incomplete_dates == []
+    assert scope.window_start is None
+
+
+def test_daily_scope_same_day_collectible_after_cutoff():
+    from stock_research.tdx_auction_watchdog import resolve_daily_backfill_scope
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    open_dates = ["2026-10-19", "2026-10-20"]
+    done = {"2026-10-19"}
+    now = dt.datetime(2026, 10, 20, 17, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    scope = resolve_daily_backfill_scope(
+        open_dates=open_dates, done_dates=done, now=now
+    )
+
+    assert scope.latest_collectible == "2026-10-20"
+    assert scope.incomplete_dates == ["2026-10-20"]
+
+
+def test_load_daily_scope_combines_ledger_and_table_coverage(monkeypatch):
+    """Ledger-success OR destination coverage >=98% counts a date as done."""
+
+    from stock_research import tdx_auction_watchdog as w
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_fetch_all(conn, sql, params):
+        if "trading_calendar" in sql:
+            return [
+                {"trade_date": "2026-10-19"},
+                {"trade_date": "2026-10-20"},
+            ]
+        if "backfill_task" in sql:
+            return [{"trade_date": "2026-10-19"}]  # ledger success
+        if "stock_auction_bar" in sql:
+            return [{"trade_date": "2026-10-20", "rows": 5000}]
+        if "market_daily_bar" in sql:
+            return [{"trade_date": "2026-10-20", "universe": 5000}]
+        raise AssertionError(f"unexpected sql: {sql}")
+
+    monkeypatch.setattr(w, "connect", lambda service: FakeConn())
+    monkeypatch.setattr(w, "fetch_all", fake_fetch_all)
+
+    scope = w.load_daily_backfill_scope(
+        service="s",
+        run_id="r",
+        now=dt.datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    # 10-19 done via ledger, 10-20 done via table coverage -> nothing to do
+    assert scope.incomplete_dates == []
+    assert scope.window_start is None
+
+
+def test_load_daily_scope_table_gap_reopens_date(monkeypatch):
+    """Date absent from ledger AND under-covered in the table is incomplete."""
+
+    from stock_research import tdx_auction_watchdog as w
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_fetch_all(conn, sql, params):
+        if "trading_calendar" in sql:
+            return [{"trade_date": "2026-10-20"}]
+        if "backfill_task" in sql:
+            return []
+        if "stock_auction_bar" in sql:
+            return [{"trade_date": "2026-10-20", "rows": 3000}]
+        if "market_daily_bar" in sql:
+            return [{"trade_date": "2026-10-20", "universe": 5000}]
+        raise AssertionError(sql)
+
+    monkeypatch.setattr(w, "connect", lambda service: FakeConn())
+    monkeypatch.setattr(w, "fetch_all", fake_fetch_all)
+
+    scope = w.load_daily_backfill_scope(
+        service="s",
+        run_id="r",
+        now=dt.datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    assert scope.incomplete_dates == ["2026-10-20"]
+    assert scope.window_start == "2026-10-20"

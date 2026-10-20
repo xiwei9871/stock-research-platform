@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import time
 from typing import Any, Callable, Sequence
+from zoneinfo import ZoneInfo
 
 from stock_research.backfill_runs import (
     claim_backfill_tasks_for_service,
@@ -39,6 +40,11 @@ from stock_research.tdx_auction_backfill import (
 
 TDX_AUCTION_DATASET = "market.stock_auction_bar"
 DEFAULT_REPORT_TARGET = "chat:oc_82dd978138a0cde5864868c5b5b8e754"
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+# A trading day is only collectable after the post-close publish window;
+# mid-session RunAtLoad must never resolve "today" as a target.
+DEFAULT_DAILY_COLLECTIBLE_AFTER = dt.time(17, 0)
+DEFAULT_DAILY_LOOKBACK_OPEN_DAYS = 30
 DEFAULT_MONTH_LEDGER = Path(
     "/Users/xiwei/stock_research/outputs/research/tdx_auction_backfill_watchdog/reported_months.json"
 )
@@ -229,6 +235,202 @@ def latest_open_trade_date(
         rows = fetch_all(conn, sql, [day])
     latest = rows[0].get("latest") if rows else None
     return str(latest)[:10] if latest else None
+
+
+@dataclass
+class DailyBackfillScope:
+    latest_collectible: str | None
+    window_start: str | None
+    window_end: str | None
+    incomplete_dates: list[str]
+    checked_dates: list[str]
+
+
+def resolve_daily_backfill_scope(
+    *,
+    open_dates: Sequence[str | dt.date],
+    done_dates: Sequence[str | dt.date] | set[str],
+    now: dt.datetime,
+    collectible_after: dt.time = DEFAULT_DAILY_COLLECTIBLE_AFTER,
+) -> DailyBackfillScope:
+    """Resolve which open days still need a task under the daily schedule.
+
+    ``open_dates`` are the trading-calendar open days in the lookback window;
+    ``done_dates`` are dates already satisfied (ledger success OR destination
+    coverage).  Same-day is only collectable once ``now`` (Asia/Shanghai) is
+    past ``collectible_after`` so a mid-session RunAtLoad cannot mark an
+    unfinished day complete.
+    """
+
+    candidates = sorted({_date_text(value) for value in open_dates if _date_text(value)})
+    done = {_date_text(value) for value in done_dates}
+    local_now = now.astimezone(SHANGHAI_TZ)
+    today = local_now.date().isoformat()
+    candidates = [day for day in candidates if day <= today]
+    if not candidates:
+        return DailyBackfillScope(
+            latest_collectible=None,
+            window_start=None,
+            window_end=None,
+            incomplete_dates=[],
+            checked_dates=[],
+        )
+    latest = candidates[-1]
+    if latest == today and local_now.time() < collectible_after:
+        candidates = candidates[:-1]
+        if not candidates:
+            return DailyBackfillScope(
+                latest_collectible=None,
+                window_start=None,
+                window_end=None,
+                incomplete_dates=[],
+                checked_dates=[],
+            )
+        latest = candidates[-1]
+    incomplete = [day for day in candidates if day not in done]
+    return DailyBackfillScope(
+        latest_collectible=latest,
+        window_start=incomplete[0] if incomplete else None,
+        window_end=latest if incomplete else None,
+        incomplete_dates=incomplete,
+        checked_dates=candidates,
+    )
+
+
+def _load_ledger_success_dates(
+    *,
+    run_id: str,
+    since_date: str,
+    service: str,
+) -> set[str]:
+    sql = """
+    SELECT start_date::text AS trade_date
+    FROM ingest.backfill_task
+    WHERE run_id = %s
+      AND status = 'success'
+      AND start_date >= %s
+    """
+    with connect(service) as conn:
+        return {str(row["trade_date"])[:10] for row in fetch_all(conn, sql, [run_id, since_date])}
+
+
+def _load_covered_dates(
+    *,
+    start_date: str,
+    end_date: str,
+    min_coverage_ratio: float,
+    service: str,
+) -> set[str]:
+    """Dates whose destination rows already meet the coverage threshold."""
+
+    universe_sql = """
+    SELECT d.trade_date::text AS trade_date, count(DISTINCT a.asset_id) AS universe
+    FROM core.asset_master AS a
+    JOIN market_daily_bar AS d
+      ON d.asset_id = a.asset_id
+     AND d.trade_date BETWEEN %s AND %s
+     AND d.adjust_type = 'raw'
+     AND d.volume > 0
+    WHERE a.exchange IN ('SH', 'SZ', 'BJ')
+      AND a.symbol ~ '^[0-9]{6}$'
+      AND a.is_active IS TRUE
+      AND a.list_date <= d.trade_date
+      AND (a.delist_date IS NULL OR a.delist_date >= d.trade_date)
+    GROUP BY d.trade_date
+    """
+    auction_sql = """
+    SELECT trade_date::text AS trade_date, count(*) AS rows
+    FROM market.stock_auction_bar
+    WHERE auction_phase = 'open_call'
+      AND source = 'tdx'
+      AND trade_date BETWEEN %s AND %s
+    GROUP BY trade_date
+    """
+    with connect(service) as conn:
+        universe = {
+            str(row["trade_date"])[:10]: int(row["universe"] or 0)
+            for row in fetch_all(conn, universe_sql, [start_date, end_date])
+        }
+        auction = {
+            str(row["trade_date"])[:10]: int(row["rows"] or 0)
+            for row in fetch_all(conn, auction_sql, [start_date, end_date])
+        }
+    return {
+        day
+        for day, total in universe.items()
+        if total > 0 and auction.get(day, 0) >= min_coverage_ratio * total
+    }
+
+
+def load_daily_backfill_scope(
+    *,
+    service: str,
+    run_id: str,
+    lookback_open_days: int = DEFAULT_DAILY_LOOKBACK_OPEN_DAYS,
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
+    now: dt.datetime | None = None,
+    collectible_after: dt.time = DEFAULT_DAILY_COLLECTIBLE_AFTER,
+) -> DailyBackfillScope:
+    """Scan the trading-calendar lookback for unfinished daily tasks.
+
+    A date counts as done when the stable-run ledger marks it ``success`` OR
+    the destination table already holds >= ``min_coverage_ratio`` of the
+    eligible universe (e.g. restored by a different backfill run).  Missing
+    ledger rows and failed/partial tasks are (re)registered by the caller's
+    ``create_backfill_run`` upsert.
+    """
+
+    local_now = (now or dt.datetime.now(SHANGHAI_TZ)).astimezone(SHANGHAI_TZ)
+    today = local_now.date().isoformat()
+    calendar_sql = """
+    SELECT trade_date::text AS trade_date
+    FROM market.trading_calendar
+    WHERE is_open = true
+      AND trade_date <= %s
+    ORDER BY trade_date DESC
+    LIMIT %s
+    """
+    with connect(service) as conn:
+        open_dates = [
+            str(row["trade_date"])[:10]
+            for row in fetch_all(conn, calendar_sql, [today, lookback_open_days])
+        ]
+    if not open_dates:
+        return DailyBackfillScope(None, None, None, [], [])
+    floor = min(open_dates)
+    done = _load_ledger_success_dates(run_id=run_id, since_date=floor, service=service)
+    done |= _load_covered_dates(
+        start_date=floor,
+        end_date=today,
+        min_coverage_ratio=min_coverage_ratio,
+        service=service,
+    )
+    return resolve_daily_backfill_scope(
+        open_dates=open_dates,
+        done_dates=done,
+        now=local_now,
+        collectible_after=collectible_after,
+    )
+
+
+def daily_completion_key(
+    *,
+    service: str,
+    run_id: str | None = None,
+    lookback_open_days: int = DEFAULT_DAILY_LOOKBACK_OPEN_DAYS,
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
+) -> str:
+    """Sentinel token that always reflects the *resolved* ledger/table state."""
+
+    scope = load_daily_backfill_scope(
+        service=service,
+        run_id=run_id or f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:daily",
+        lookback_open_days=lookback_open_days,
+        min_coverage_ratio=min_coverage_ratio,
+    )
+    if scope.window_start is not None:
+        return f"{scope.window_start}..{scope.window_end}"
+    return f"complete:{scope.latest_collectible or 'none'}"
 
 
 def _load_status_rows(*, run_id: str, service: str) -> list[dict[str, Any]]:
