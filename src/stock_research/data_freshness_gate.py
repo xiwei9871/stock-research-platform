@@ -109,7 +109,9 @@ def evaluate_input_status(
         return READY if file_exists else BLOCKED
 
     missing = list(missing_dates or [])
-    stale = latest_date is None or str(latest_date)[:10] != str(expected_date)[:10]
+    # stale means strictly OLDER than expected — an intraday input already holding
+    # data for a newer session is fresh, not degraded.
+    stale = latest_date is None or str(latest_date)[:10] < str(expected_date)[:10]
     low_coverage = (
         coverage_min is not None
         and (coverage_actual is None or coverage_actual < coverage_min)
@@ -156,12 +158,17 @@ def check_table_input(
         f"count(distinct {spec.coverage_column})" if spec.coverage_column else "count(*)"
     )
     agg = fetcher(
-        f"SELECT max({spec.date_column}) AS latest_trade_date, count(*) AS row_count, "
-        f"{coverage_expr} AS asset_count "
+        f"SELECT count(*) AS row_count, {coverage_expr} AS asset_count "
         f"FROM {spec.table} WHERE {spec.date_column} = %s",
         (expected,),
     )
-    latest = (agg or [{}])[0].get("latest_trade_date")
+    # True newest row across the whole table — a stale input must still report
+    # how stale it is (e.g. 2026-09-07), not just "nothing on the expected date".
+    latest_rows = fetcher(
+        f"SELECT max({spec.date_column})::text AS latest_trade_date FROM {spec.table}",
+        (),
+    )
+    latest = (latest_rows or [{}])[0].get("latest_trade_date")
     coverage = None
     if spec.coverage_column and agg:
         coverage = agg[0].get("asset_count")
@@ -196,3 +203,166 @@ def check_table_input(
             else None
         ),
     }
+
+
+# Registry of consumed inputs — every entry must name its real consumers.
+# min_daily_rows is a coverage floor for the EXPECTED date (count of coverage_column,
+# or row count when coverage_column is None).
+DEFAULT_INPUT_SPECS: tuple[InputSpec, ...] = (
+    InputSpec(
+        name="market_daily_bar",
+        table="public.market_daily_bar",
+        category=REQUIRED_DAILY,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("all_strategies", "factor_build", "emotion"),
+    ),
+    InputSpec(
+        name="stock_minute_bar",
+        table="market.stock_minute_bar",
+        category=REQUIRED_DAILY,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("intraday_features", "replay", "minute_backfill"),
+    ),
+    InputSpec(
+        name="asset_status_daily",
+        table="core.asset_status_daily",
+        category=REQUIRED_DAILY,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("st_filter", "universe"),
+    ),
+    InputSpec(
+        name="stock_score_daily",
+        table="factor.stock_score_daily",
+        category=REQUIRED_DAILY,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("eod_top_scores", "mid_trend"),
+    ),
+    InputSpec(
+        name="stock_technical_features_daily",
+        table="factor.stock_technical_features_daily",
+        category=REQUIRED_DAILY,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("lhb_loader", "tech_features"),
+    ),
+    InputSpec(
+        name="lhb_top_list_daily",
+        table="market.lhb_top_list_daily",
+        category=REQUIRED_DAILY,
+        coverage_column="ts_code",
+        min_daily_rows=20,
+        consumers=("lhb_shortline",),
+    ),
+    InputSpec(
+        name="lhb_event_features_daily",
+        table="factor.lhb_event_features_daily",
+        category=REQUIRED_DAILY,
+        coverage_column="ts_code",
+        min_daily_rows=10,
+        consumers=("lhb_shortline",),
+    ),
+    InputSpec(
+        name="index_daily_bar",
+        table="market.index_daily_bar",
+        category=REQUIRED_DAILY,
+        coverage_column="index_id",
+        min_daily_rows=5,
+        consumers=("emotion", "regime", "midtrend"),
+    ),
+    InputSpec(
+        name="industry_daily_bar",
+        table="market.industry_daily_bar",
+        category=REQUIRED_DAILY,
+        coverage_column="industry_code",
+        min_daily_rows=70,
+        consumers=("midtrend", "emotion"),
+    ),
+    InputSpec(
+        name="market_emotion_state_daily",
+        table="research.market_emotion_state_daily",
+        category=REQUIRED_DAILY,
+        min_daily_rows=1,
+        consumers=("regime", "eod"),
+    ),
+    InputSpec(
+        name="stock_auction_bar(open_call)",
+        table="market.stock_auction_bar",
+        category=OPTIONAL_ENHANCEMENT,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("lhb_backtest:entry_auction",),
+    ),
+    InputSpec(
+        name="stock_auction_minute_bar(EM)",
+        table="market.stock_auction_minute_bar",
+        category=OPTIONAL_ENHANCEMENT,
+        coverage_column="asset_id",
+        consumers=("open_auction_watch",),
+        window=WINDOW_INTRADAY,
+    ),
+    InputSpec(
+        name="stock_intraday_features_daily",
+        table="factor.stock_intraday_features_daily",
+        category=OPTIONAL_ENHANCEMENT,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("lhb_backtest:intraday", "midtrend_overlay", "factor_eval"),
+    ),
+    InputSpec(
+        name="industry_intraday_features_daily",
+        table="factor.industry_intraday_features_daily",
+        category=OPTIONAL_ENHANCEMENT,
+        coverage_column="feature_name",
+        min_daily_rows=50,
+        consumers=("factor_eval", "research"),
+    ),
+    InputSpec(
+        name="adjustment_factor",
+        table="market.adjustment_factor",
+        category=CONDITIONAL,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        consumers=("minute_backfill_derive",),
+    ),
+    InputSpec(
+        name="corporate_action",
+        table="market.corporate_action",
+        category=UNUSED,
+        date_column="event_date",
+    ),
+)
+
+
+def run_freshness_sweep(
+    *,
+    as_of_date: str,
+    service: str | None = None,
+    fetcher: Callable[[str, tuple], list[dict[str, Any]]] | None = None,
+    specs: Iterable[InputSpec] | None = None,
+    output_path: str | None = None,
+) -> list[dict[str, Any]]:
+    """Shadow-mode sweep: evaluate every registered input read-only and return
+    health rows. Writes a CSV report when ``output_path`` is given. Never mutates
+    anything — this gate observes; it does not enforce yet."""
+    if fetcher is None:
+        from stock_research.config import SETTINGS
+        from stock_research.db import connect, fetch_all
+
+        svc = service or SETTINGS.research_service
+
+        def _fetcher(sql: str, params: tuple) -> list[dict[str, Any]]:
+            with connect(svc) as conn:
+                return list(fetch_all(conn, sql, list(params) if params else None))
+
+        fetcher = _fetcher
+    rows = [
+        check_table_input(spec, as_of_date=as_of_date, fetcher=fetcher)
+        for spec in (specs or DEFAULT_INPUT_SPECS)
+    ]
+    if output_path:
+        pd.DataFrame(rows).to_csv(output_path, index=False)
+    return rows

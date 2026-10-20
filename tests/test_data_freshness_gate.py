@@ -118,6 +118,20 @@ def test_static_frozen_missing_file_is_blocked():
     assert status == BLOCKED
 
 
+def test_intraday_input_newer_than_expected_is_ready_not_stale():
+    # A 09:40 collection that already wrote today's rows (newer than the
+    # post-close expected date) is fresh — only strictly older is stale.
+    status = evaluate_input_status(
+        category="optional_enhancement",
+        expected_date="2026-10-19",
+        latest_date="2026-10-20",
+        missing_dates=[],
+        coverage_actual=40,
+        coverage_min=None,
+    )
+    assert status == READY
+
+
 def test_unused_input_is_not_evaluated():
     status = evaluate_input_status(
         category="unused",
@@ -156,3 +170,36 @@ def test_check_table_input_uses_injected_fetcher():
     assert health["freshness_status"] == READY
     assert health["consumer"] == spec.consumers
     assert "coverage" in health
+
+
+def test_check_table_input_reports_true_latest_when_stale():
+    # The expected-date-scoped coverage query returns 0 rows for a stale table;
+    # actual_latest_date must still surface the real newest row (e.g. 2026-09-07),
+    # not None — otherwise the report loses "how stale" information.
+    spec = InputSpec(
+        name="stock_auction_bar",
+        category="optional_enhancement",
+        kind="table",
+        table="market.stock_auction_bar",
+        date_column="trade_date",
+        coverage_column="asset_id",
+        consumers=("lhb_shortline",),
+    )
+    cal = CAL.copy()
+
+    def fake_fetcher(sql, params):
+        if "trading_calendar" in sql:
+            return cal.to_dict("records")
+        if "DISTINCT" in sql:
+            return [{"trade_date": "2026-10-14"}, {"trade_date": "2026-10-15"}]
+        if "= %s" in sql and "max(" in sql:
+            # expected-date coverage query: no rows on 2026-10-19
+            return [{"row_count": 0, "asset_count": 0, "latest_trade_date": None}]
+        if "max(" in sql:
+            # global latest query
+            return [{"latest_trade_date": "2026-09-07"}]
+        return []
+
+    health = check_table_input(spec, as_of_date="2026-10-19", fetcher=fake_fetcher)
+    assert health["actual_latest_date"] == "2026-09-07"
+    assert health["freshness_status"] == DEGRADED
