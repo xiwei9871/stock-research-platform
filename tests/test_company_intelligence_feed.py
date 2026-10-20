@@ -118,12 +118,14 @@ def test_render_markdown_sections_and_citations():
 
     dossier = build_company_dossier(
         company_code="002837", company_name="英维克", as_of="2026-10-20",
-        claims=[ResearchClaim("c1", "commercialization", "液冷收入存在", ("e1",))],
+        claims=[ResearchClaim("c1", "commercialization", "液冷收入存在", ("e1", "e2"))],
         evidence=[
             CompanyEvidence("e1", "S1", "commercialization", "support",
-                            excerpt="液冷收入xx", page_or_section="第 10 页"),
+                            excerpt="液冷收入xx", page_or_section="第 10 页",
+                            review_status="accepted"),
             CompanyEvidence("e2", "S2", "commercialization", "refute",
-                            excerpt="未单独披露", page_or_section="第 3 页"),
+                            excerpt="未单独披露", page_or_section="第 3 页",
+                            review_status="accepted"),
         ],
         sources=[
             CompanySource("S1", "company_filing", published_at="2026-08-19"),

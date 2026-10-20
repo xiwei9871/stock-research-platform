@@ -6,9 +6,9 @@
 
 | 案例 | 代码 | 总体判定 | 置信度 | 关键维度结果 |
 |---|---|---|---|---|
-| 英维克（液冷/AI 数据中心温控） | 002837 | contested | 0.35 | 技术壁垒 部分支持(5/0)；商业化 部分支持(5/0)；竞争优势 **存在反证**(0/4)；财务兑现 **正反冲突**(1/1)；风险 已证实(3/0) |
-| 北方华创（半导体设备国产替代） | 002371 | contested | 0.35 | 技术壁垒 部分支持(5/0)；商业化 部分支持(2/0，1000 台里程碑)；竞争优势 **存在反证**(0/1，普达特)；财务兑现 **存在反证**(0/1，产品线未拆分)；风险 部分支持 |
-| 奥普特（人形机器人负向对照） | 688686 | needs_evidence | 0.20 | 技术壁垒 部分支持(4/0，工业视觉)；商业化 **needs_evidence**(0/0)；产业链地位 **unknown**(0/0)；财务/竞争优势 needs_evidence |
+| 英维克（液冷/AI 数据中心温控） | 002837 | unverified (R0: contested) | 0.25 | 全维度 partially_supported；独占性 claim needs_evidence(4 条 lead_only 线索不计入)；液冷收入可量化 claim needs_evidence |
+| 北方华创（半导体设备国产替代） | 002371 | needs_evidence (R0: contested) | 0.20 | 技术壁垒/商业化/竞争优势 partially_supported；分部收入 claim needs_evidence（未披露≠反证）；客户验证 claim unknown |
+| 奥普特（人形机器人负向对照） | 688686 | needs_evidence | 0.20 | 工业视觉技术 partially_supported；机器人商业化 needs_evidence（越疆合作线索为 lead_only 不计入）；产业链/财务/竞争优势 needs_evidence |
 
 证据全部来自 `research.tech_bottleneck_review_universe_evidence` 页级摘录（公司定期报告一手披露）+ M1 已核查券商线索（单一来源标注 `lead_only`）。**未虚构任何订单、客户、营收、份额或技术参数**。
 
@@ -22,14 +22,19 @@
 
 这正是验收目标："不因公司名称与热门主题相关就自动给出高评价"。
 
-### 冲突证据不被折叠
+### R1 判定语义修正（2026-10-21）
 
-- 英维克 `c_edge_uniqueness`（全链条稀缺性）：公司年报自述支持 vs 申菱环境"液冷全方案出海先锋"、三花液冷收入翻倍、国金风液同源图谱、大元泵业屏蔽泵适配 Kyber——4 条反驳使该论点 `contradicted`，总体判 `contested`；反驳证据在矩阵与 bear_case 中全部保留可见。
-- 北方华创 `c_fin_by_line`：分部收入不可拆分 → `contradicted`，而非默认"龙头所以财务兑现好"。
+按初审意见完成四项修复（claim 级判定 / 审核分级 / 严格 PIT / 全量指纹）：
 
-### PIT（研究截止）行为
+- **claim 独立裁定**：维度结论由 claim 判定聚合；英维克"独占性"(needs_evidence)、"差异化能力"(partially_supported)、"性能对比"(unknown) 三个论点各自保留结论——"有竞对"不再推翻"有优势"
+- **审核分级**：`lead_only`/`pending` 证据可见（matrix + pending_verification 清单）但不计入 verdict；`confirmed` 需 ≥2 独立来源（source_id + source_type + publisher 三重独立）且全部 accepted
+- **严格 PIT**：ingested_at 为绑定约束（迟到入库→post_asof 排除）；无入库证时按日期上下界判断，区间跨截止日 → pit_uncertain 退出判定；年报类 year 精度不猜精确日
+- **"未披露"语义**：证据缺失类条目标 `unclear`（absence-of-evidence），不再误作 refute——北方华创分部收入 claim 由 contradicted 修正为 needs_evidence
+- **指纹覆盖全文**：正文/方向/审核状态/claim 绑定/来源时间全部入 sha256；复核记录绑定 dossier_fingerprint 形成可追溯版本
 
-引擎按 `published_at → available_at → ingested_at` 顺序取证据有效时间，晚于 `as_of` 的证据进入 `post_asof_excluded` 并保留记录（单元测试覆盖；三案例真实来源均早于 2026-10-20，故实输出为空列表）。
+### PIT（研究截止）行为——R1 严格化
+
+`ingested_at` 为绑定约束：已证入库 ≤ 截止日 → 在范围（发表精度单独标记 `published_precision`）；入库晚于截止日 → `post_asof_excluded`；无入库证时按发表/可获取日的上下界判定，区间跨截止日或全无日期 → `pit_uncertain`，全部退出 claim/维度判定且矩阵可见。三案例 ru_* 证据的 ingested_at 取自 DB 数据集入库戳（2026-09-22），非推断值。
 
 ## 二、与旧研究流程的基线对照
 

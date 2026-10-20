@@ -283,7 +283,7 @@ def load_review_universe_evidence(
     from stock_research.db import connect, fetch_all
 
     sql = """
-    SELECT row_index, payload
+    SELECT row_index, payload, published_at
     FROM research.tech_bottleneck_review_universe_evidence
     WHERE stock_code = %s
     ORDER BY row_index
@@ -306,6 +306,10 @@ def load_review_universe_evidence(
         eid = f"ru_{stock_code}_{row['row_index']}"
         overrides = (source_dates or {}).get(eid, {})
         published = overrides.get("published_at") or str(payload.get("source_date") or "")
+        # The table's ``published_at`` column is the dataset ingest stamp
+        # (identical across the snapshot) — it is the platform's real
+        # ingestion time, used as ``ingested_at`` for PIT semantics.
+        ingested = overrides.get("ingested_at") or str(row.get("published_at") or "")[:10]
         sources.setdefault(
             eid,
             CompanySource(
@@ -315,7 +319,7 @@ def load_review_universe_evidence(
                 publisher="公司披露" if source_type in {"annual_report", "interim_report", "announcement"} else "",
                 published_at=published,
                 available_at=overrides.get("available_at", ""),
-                ingested_at=overrides.get("ingested_at", ""),
+                ingested_at=ingested,
                 reliability_level="S1",
                 uri=str(payload.get("source_file") or ""),
             ),

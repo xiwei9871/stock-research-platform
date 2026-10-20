@@ -18,6 +18,7 @@ def _write_dossier(root: Path, code: str = "002837") -> Path:
         "as_of": "2026-10-20",
         "generated_at": "2026-10-20T09:00:00+00:00",
         "provenance": {"code_sha": "abc1234"},
+        "input_snapshot": {"code_sha": "abc1234", "evidence_set_sha256": "deadbeef0123"},
         "conclusion": {"overall_verdict": "contested", "confidence": 0.35},
         "dimensions": {},
         "claims": [],
@@ -144,3 +145,23 @@ def test_read_model_roundtrip(tmp_path, monkeypatch):
     assert ci.load_company_intelligence_dossier("688686")["company_name"] == "英维克"
     assert ci.load_company_intelligence_dossier("000000") is None
     assert ci.load_company_intelligence_markdown("688686") == "# dossier\n"
+
+
+def test_dossier_endpoints_require_session_when_auth_enabled(dossier_dir, client, monkeypatch):
+    """R1: 实际部署开启 AUTH_REQUIRED 时，公司研究 API 必须 401。"""
+    _write_dossier(dossier_dir)
+    monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "true")
+    assert client.get("/api/research/company-intelligence/dossiers").status_code == 401
+    assert client.get("/api/research/company-intelligence/stocks/002837/dossier").status_code == 401
+    assert client.get("/api/research/company-intelligence/stocks/002837/dossier.md").status_code == 401
+    assert client.get("/api/research/company-intelligence/stocks/002837/reviews").status_code == 401
+
+
+def test_review_record_pins_dossier_fingerprint(dossier_dir, client):
+    _write_dossier(dossier_dir)
+    client.post(
+        "/api/research/company-intelligence/stocks/002837/reviews",
+        json={"claim_id": "c1", "review_status": "accepted", "reviewer": "r", "comment": "ok"},
+    )
+    items = client.get("/api/research/company-intelligence/stocks/002837/reviews").json()["items"]
+    assert items[0]["dossier_fingerprint"]  # 绑定当时证据集指纹，形成可追溯审核版本

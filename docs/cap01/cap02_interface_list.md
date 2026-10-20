@@ -40,3 +40,27 @@ CAP-01 三案例运行后，引擎以下结构化缺口需要 DATA 线/CAP-02 �
 
 - 不新建证据注册表——以上全部走现有 `research.evidence_artifact`/`evidence_link`/`stock_report_source` 通道
 - 不改引擎判定逻辑——CAP-02 只提供更细输入，判定阈值/规则保持 CAP-01 语义
+
+---
+
+## CAP-02 第一阶段最小实施任务清单（获批准的后备计划）
+
+目标：在不新建证据注册表、不改正式选股的前提下，把 CAP-01 公司维度的六维判定复用到"产业链节点"维度。
+
+### T1（复用）节点瓶颈分级模型
+- 输入：`theme_decomposition` 现有 node（产业链环节）+ 该节点全部公司映射
+- 输出：节点级判定 `{node_id, bottleneck_verdict, gate_items: {产能约束,工艺约束,认证周期,技术性能,炒作成分}}`，沿用 CAP-01 的 UNKNOWN/NEEDS_EVIDENCE 与 lead_only 不计入判定语义
+- 代码：新模块 `chain_bottleneck.py`，共享 `company_intelligence.py` 的 verdict/PIT/指纹函数
+
+### T2（复用）价值分配证据视图
+- 对每个节点聚合其公司 claim：谁有可验证收入 vs 谁只有概念关联
+- 输出：节点-公司矩阵 `{node_id, company, 商业化claim判定, 财务兑现claim判定, 证据强度}`
+- 直接读 CAP-01 dossier JSON + `theme_research_company_mapping`，无新表
+
+### T3 数据接口（交 DATA 线，见上方 P0 清单）
+- 分部收入、客户验证、竞对结构化 —— CAP-02 不自行采集，只消费
+
+### T4 验收用节点（复用现有主题，不新建）
+- 候选节点：AI供电液冷（英维克已在案）、半导体设备平台（北方华创+普达特竞对线索已在案）、人形机器人视觉（奥普特负例已在案）
+
+边界同 CAP-01：research_only、零生产写入、无信号/准入改动。

@@ -52,21 +52,28 @@ def render_dossier_markdown(dossier: dict[str, Any]) -> str:
     lines.append("## 二、关键论点与证据矩阵")
     lines.append("")
     for claim in dossier["claims"]:
+        verdict = _VERDICT_LABEL.get(claim.get("verdict", ""), claim.get("verdict", ""))
+        unverified = claim.get("unverified_evidence_ids") or []
+        lead_note = f"；待验证线索 {len(unverified)} 条" if unverified else ""
         lines.append(
             f"- `{claim['claim_id']}` [{DIMENSIONS.get(claim['dimension'], claim['dimension'])}] "
-            f"{claim['claim_text']} — 支持 {claim['support_count']} / 反驳 {claim['refute_count']}"
-            f"（审核:{claim['review_status']}）"
+            f"{claim['claim_text']} — 判定 **{verdict}**"
+            f"（支持 {claim['support_count']} / 反驳 {claim['refute_count']}{lead_note}）"
         )
     lines.append("")
-    lines.append("| 证据 | 维度 | 方向 | 页码/章节 | 来源类型 | 发布 | 可获取 | 审核 |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("| 证据 | 维度 | 方向 | 页码/章节 | 来源类型 | 发布 | 入库 | PIT | 判定权重 |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
     for row in dossier["evidence_matrix"]:
+        precision = row.get("published_precision", "")
+        pub = row["published_at"] or "-"
+        if precision and precision != "day":
+            pub = f"{pub}({precision})"
         lines.append(
             f"| `{row['evidence_id']}` | {DIMENSIONS.get(row['dimension'], row['dimension'])} "
             f"| {_DIRECTION_LABEL.get(row['direction'], row['direction'])} "
             f"| {row['page_or_section'] or '-'} | {row['source_type']} "
-            f"| {row['published_at'] or '-'} | {row['available_at'] or '-'} "
-            f"| {row['review_status']} |"
+            f"| {pub} | {row['ingested_at'] or '-'} "
+            f"| {row.get('pit_status', '-')} | {row.get('verdict_weight', '-')} |"
         )
     lines.append("")
 
@@ -120,9 +127,22 @@ def render_dossier_markdown(dossier: dict[str, Any]) -> str:
             lines.append(f"  - {item}")
     if dossier.get("post_asof_excluded"):
         lines.append(
-            f"- PIT 排除: {len(dossier['post_asof_excluded'])} 条证据发布时间晚于研究截止，未参与判定: "
+            f"- PIT 排除: {len(dossier['post_asof_excluded'])} 条证据可用时间晚于研究截止，未参与判定: "
             + "、".join(dossier["post_asof_excluded"])
         )
+    if dossier.get("pit_uncertain"):
+        lines.append(
+            f"- PIT 不定: {len(dossier['pit_uncertain'])} 条证据时间精度不足或缺失，未参与判定: "
+            + "、".join(dossier["pit_uncertain"])
+        )
+    if dossier.get("pending_verification"):
+        lines.append("- 待验证线索（不参与判定）:")
+        for row in dossier["pending_verification"]:
+            excerpt = row["excerpt"].replace("\n", " ")[:120]
+            lines.append(
+                f"  - `{row['evidence_id']}` [{DIMENSIONS.get(row['dimension'], row['dimension'])}] "
+                f"{excerpt}（{row['source_type']}，{row['published_at']}）"
+            )
     lines.append("")
 
     lines.append("## 附: 输入快照与护栏")

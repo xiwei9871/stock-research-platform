@@ -110,6 +110,10 @@ def record_company_intelligence_review(stock_code: str, payload: dict[str, Any])
     status = str(payload["review_status"]).strip()
     if status not in _VALID_REVIEW_STATUSES:
         raise ValueError(f"invalid_review_status:{status}")
+    # Reviews are append-only records pinned to the dossier fingerprint at
+    # write time — a later dossier regeneration never silently rewrites what
+    # a reviewer actually saw.
+    dossier = json.loads(_dossier_path(code).read_text(encoding="utf-8"))
     record = {
         "stock_code": code,
         "claim_id": str(payload["claim_id"]).strip(),
@@ -117,6 +121,7 @@ def record_company_intelligence_review(stock_code: str, payload: dict[str, Any])
         "reviewer": str(payload["reviewer"]).strip(),
         "comment": str(payload["comment"]).strip(),
         "dimension": str(payload.get("dimension", "")).strip(),
+        "dossier_fingerprint": (dossier.get("input_snapshot") or {}).get("evidence_set_sha256", ""),
         "recorded_at": datetime.now(timezone.utc).isoformat(),
     }
     path = _reviews_path(stock_code)

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import json
+import re
 from typing import Any, Iterable, Sequence
 
 
@@ -124,34 +125,186 @@ def _date_key(value: str) -> str:
     return str(value or "")[:10]
 
 
-def _effective_date(source: CompanySource | None) -> str:
+_DATE_FULL = re.compile(r"^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?")
+
+_DAYS_IN_MONTH = {
+    1: 31, 2: 29, 3: 31, 4: 30, 5: 31, 6: 30,
+    7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31,
+}
+
+
+def _date_bound(value: str) -> tuple[str, str, str]:
+    """Parse a possibly partial date into (lower, upper, precision).
+
+    ``"2026"`` → ``("2026-01-01", "2026-12-31", "year")`` — never guess an
+    exact day inside an imprecise date.  Empty/unparseable → ``("", "", "unknown")``.
+    """
+    text = str(value or "").strip()
+    match = _DATE_FULL.match(text)
+    if not match:
+        return "", "", "unknown"
+    year, month, day = match.group(1), match.group(2), match.group(3)
+    if day and month:
+        exact = f"{year}-{month}-{day}"
+        return exact, exact, "day"
+    if month:
+        last = _DAYS_IN_MONTH[int(month)]
+        return f"{year}-{month}-01", f"{year}-{month}-{last:02d}", "month"
+    return f"{year}-01-01", f"{year}-12-31", "year"
+
+
+def _pit_status(source: CompanySource | None, as_of_key: str) -> tuple[str, str]:
+    """Classify evidence vs the research cutoff.
+
+    Returns ``(status, basis)``:
+    - ``in_scope``: usable by the platform no later than ``as_of``.
+      ``ingested_at`` is the binding constraint — a source proven ingested
+      ≤ as_of was necessarily published before that; publication precision is
+      reported separately and never guessed.
+    - ``post_asof``: earliest possible usable time is after ``as_of``
+      (including late ingestion) — excluded from all verdict math.
+    - ``uncertain``: no dates, or the possible-usable window straddles the
+      cutoff — excluded from verdict math, listed under ``pit_uncertain``.
+    """
     if source is None:
-        return ""
-    return _date_key(source.available_at) or _date_key(source.published_at)
+        return "uncertain", "no_source"
+    ing_lo, ing_hi, _ = _date_bound(source.ingested_at)
+    if ing_lo and ing_lo > as_of_key:
+        return "post_asof", "ingested_at"
+    if ing_hi and ing_hi <= as_of_key:
+        return "in_scope", "ingested_at"
+    lowers: list[str] = []
+    uppers: list[str] = []
+    for field_value in (source.published_at, source.available_at, source.ingested_at):
+        lo, hi, _prec = _date_bound(field_value)
+        if lo:
+            lowers.append(lo)
+            uppers.append(hi)
+    if not lowers:
+        return "uncertain", "no_dates"
+    usable_lo = max(lowers)
+    usable_hi = max(uppers)
+    if usable_lo > as_of_key:
+        return "post_asof", "published_or_available"
+    if usable_hi <= as_of_key:
+        return "in_scope", "published_or_available"
+    return "uncertain", "date_precision"
 
 
-def _is_usable(ev: CompanyEvidence) -> bool:
-    return ev.direction in {"support", "refute"} and ev.review_status != "rejected"
+def _published_precision(source: CompanySource | None) -> str:
+    if source is None:
+        return "unknown"
+    return _date_bound(source.published_at)[2]
+
+
+def _verdict_tier(ev: CompanyEvidence) -> str:
+    """Review-status tier for verdict math.
+
+    Only ``accepted`` evidence can confirm or contradict a claim.  ``pending``
+    and ``lead_only`` material stays visible (matrix / unverified list) but
+    carries no verdict weight.
+    """
+    if ev.review_status == "rejected":
+        return "excluded"
+    if ev.review_status == "accepted":
+        return "counted"
+    if ev.direction in {"support", "refute"}:
+        return "unverified"
+    return "unclear"
+
+
+def _is_independent(
+    support: list[CompanyEvidence],
+    sources_by_id: dict[str, CompanySource],
+) -> bool:
+    """Confirmed requires ≥2 independent accepted supports: distinct source ids,
+    distinct source types and distinct non-empty publishers."""
+    if len({ev.source_id for ev in support}) < 2:
+        return False
+    source_types = {
+        (sources_by_id.get(ev.source_id) or CompanySource("", "unknown")).source_type
+        for ev in support
+    }
+    if len(source_types) < 2:
+        return False
+    publishers = {
+        (sources_by_id.get(ev.source_id) or CompanySource("", "unknown")).publisher
+        for ev in support
+    }
+    publishers.discard("")
+    return len(publishers) >= 2
+
+
+def _claim_verdict(
+    claim: ResearchClaim,
+    evidence_by_id: dict[str, CompanyEvidence],
+    in_scope_ids: set[str],
+    sources_by_id: dict[str, CompanySource],
+) -> dict[str, Any]:
+    linked = [
+        eid for eid in claim.evidence_ids
+        if eid in evidence_by_id and eid in in_scope_ids
+    ]
+    linked_evs = [evidence_by_id[eid] for eid in linked]
+    counted = [ev for ev in linked_evs if _verdict_tier(ev) == "counted"]
+    support = [ev for ev in counted if ev.direction == "support"]
+    refute = [ev for ev in counted if ev.direction == "refute"]
+    unverified = [
+        ev.evidence_id for ev in linked_evs if _verdict_tier(ev) == "unverified"
+    ]
+    if support and refute:
+        verdict = "contested"
+    elif refute:
+        verdict = "contradicted"
+    elif support:
+        verdict = (
+            "confirmed"
+            if _is_independent(support, sources_by_id)
+            else "partially_supported"
+        )
+    elif linked:
+        verdict = "needs_evidence"
+    else:
+        verdict = "unknown"
+    return {
+        "claim_id": claim.claim_id,
+        "dimension": claim.dimension,
+        "claim_text": claim.claim_text,
+        "evidence_ids": linked,
+        "review_status": claim.review_status,
+        "verdict": verdict,
+        "confidence": _CONFIDENCE_BY_VERDICT[verdict],
+        "support_count": len(support),
+        "refute_count": len(refute),
+        "unclear_count": len(linked) - len(support) - len(refute),
+        "unverified_evidence_ids": unverified,
+    }
 
 
 def _dimension_verdict(
-    usable_support: list[CompanyEvidence],
-    usable_refute: list[CompanyEvidence],
-    sources_by_id: dict[str, CompanySource],
+    claim_verdicts: list[str],
+    pool_size: int,
 ) -> str:
-    if usable_support and usable_refute:
+    """Aggregate claim verdicts into the dimension verdict.
+
+    Distinct claims keep their own verdicts; the dimension reflects the mix:
+    contradicted claims drag the dimension to ``contradicted`` only when
+    nothing else is supported — otherwise the mix is ``contested``.
+    """
+    if not claim_verdicts:
+        return "needs_evidence" if pool_size else "unknown"
+    if all(v == "unknown" for v in claim_verdicts):
+        return "unknown"
+    supported = {"confirmed", "partially_supported"}
+    if any(v == "contradicted" for v in claim_verdicts):
+        return "contested" if any(v in supported for v in claim_verdicts) else "contradicted"
+    if any(v == "contested" for v in claim_verdicts):
         return "contested"
-    if usable_refute:
-        return "contradicted"
-    if usable_support:
-        source_types = {
-            (sources_by_id.get(ev.source_id) or CompanySource("", "unknown")).source_type
-            for ev in usable_support
-        }
-        if len(source_types) >= 2 and len(usable_support) >= 2:
-            return "confirmed"
+    if all(v == "confirmed" for v in claim_verdicts):
+        return "confirmed"
+    if any(v in supported for v in claim_verdicts):
         return "partially_supported"
-    return "unknown"
+    return "needs_evidence"
 
 
 def _checklist_gaps(
@@ -180,49 +333,48 @@ def build_company_dossier(
     sources_by_id = {src.source_id: src for src in sources}
     evidence_by_id = {ev.evidence_id: ev for ev in evidence}
 
-    # PIT discipline: an item whose effective availability is after as_of is
-    # excluded from every verdict and recorded for the audit trail.
+    # PIT discipline: ingestion time is the binding constraint (a source proven
+    # ingested ≤ as_of was necessarily published earlier); without ingestion
+    # proof, publication/availability bounds decide.  Anything definitely later
+    # or temporally indeterminate is excluded from all verdict math.
     in_scope: dict[str, list[CompanyEvidence]] = {d: [] for d in DIMENSIONS}
+    in_scope_ids: set[str] = set()
+    pit_status_by_id: dict[str, str] = {}
     post_asof: list[str] = []
+    pit_uncertain: list[str] = []
     for ev in evidence:
         if ev.dimension not in DIMENSIONS:
+            pit_status_by_id[ev.evidence_id] = "excluded"
             continue
-        effective = _effective_date(sources_by_id.get(ev.source_id))
-        if effective and effective > as_of_key:
+        status, _basis = _pit_status(sources_by_id.get(ev.source_id), as_of_key)
+        pit_status_by_id[ev.evidence_id] = status
+        if status == "post_asof":
             post_asof.append(ev.evidence_id)
             continue
+        if status == "uncertain":
+            pit_uncertain.append(ev.evidence_id)
+            continue
+        in_scope_ids.add(ev.evidence_id)
         in_scope[ev.dimension].append(ev)
 
     claim_evidence_links: dict[str, list[str]] = {}
     claims_out: list[dict[str, Any]] = []
+    claim_verdicts_by_dim: dict[str, list[str]] = {d: [] for d in DIMENSIONS}
     for claim in claims:
-        linked = [eid for eid in claim.evidence_ids if eid in evidence_by_id]
-        claim_evidence_links[claim.claim_id] = linked
-        linked_evs = [evidence_by_id[eid] for eid in linked]
-        claims_out.append(
-            {
-                "claim_id": claim.claim_id,
-                "dimension": claim.dimension,
-                "claim_text": claim.claim_text,
-                "evidence_ids": linked,
-                "review_status": claim.review_status,
-                "support_count": sum(1 for e in linked_evs if e.direction == "support"),
-                "refute_count": sum(1 for e in linked_evs if e.direction == "refute"),
-            }
-        )
+        row = _claim_verdict(claim, evidence_by_id, in_scope_ids, sources_by_id)
+        claim_evidence_links[claim.claim_id] = row["evidence_ids"]
+        claims_out.append(row)
+        if claim.dimension in claim_verdicts_by_dim:
+            claim_verdicts_by_dim[claim.dimension].append(row["verdict"])
 
     dimensions_out: dict[str, dict[str, Any]] = {}
     for dimension in DIMENSIONS:
         pool = in_scope[dimension]
-        usable = [ev for ev in pool if _is_usable(ev)]
-        support = [ev for ev in usable if ev.direction == "support"]
-        refute = [ev for ev in usable if ev.direction == "refute"]
-        if not pool:
-            verdict = "unknown"
-        elif not usable:
-            verdict = "needs_evidence"
-        else:
-            verdict = _dimension_verdict(support, refute, sources_by_id)
+        counted = [ev for ev in pool if _verdict_tier(ev) == "counted"]
+        support = [ev for ev in counted if ev.direction == "support"]
+        refute = [ev for ev in counted if ev.direction == "refute"]
+        unverified = [ev for ev in pool if _verdict_tier(ev) == "unverified"]
+        verdict = _dimension_verdict(claim_verdicts_by_dim[dimension], len(pool))
         conflicts = []
         if support and refute:
             conflicts = [
@@ -232,23 +384,33 @@ def build_company_dossier(
                     "refute_evidence_ids": [ev.evidence_id for ev in refute],
                 }
             ]
-        covered = {
-            ev.checklist_item for ev in usable if ev.checklist_item
-        }
+        covered = {ev.checklist_item for ev in counted if ev.checklist_item}
         dimensions_out[dimension] = {
             "label": DIMENSIONS[dimension],
             "verdict": verdict,
             "confidence": _CONFIDENCE_BY_VERDICT[verdict],
             "evidence_ids": [ev.evidence_id for ev in pool],
+            "claim_ids": [
+                c["claim_id"] for c in claims_out if c["dimension"] == dimension
+            ],
+            "claim_verdicts": {
+                c["claim_id"]: c["verdict"]
+                for c in claims_out
+                if c["dimension"] == dimension
+            },
             "support_count": len(support),
             "refute_count": len(refute),
-            "unclear_count": len(pool) - len(usable),
+            "unverified_count": len(unverified),
+            "unclear_count": len(pool) - len(counted) - len(unverified),
             "conflicts": conflicts,
             "missing_checklist_items": _checklist_gaps(dimension, covered),
         }
 
-    bull = _collect_case(in_scope, evidence_by_id, sources_by_id, direction="support")
-    bear = _collect_case(in_scope, evidence_by_id, sources_by_id, direction="refute")
+    bull = _collect_case(in_scope, sources_by_id, direction="support")
+    bear = _collect_case(in_scope, sources_by_id, direction="refute")
+    pending_verification = _collect_case(
+        in_scope, sources_by_id, direction=None
+    )
 
     research_gaps: list[dict[str, Any]] = []
     for dimension, dim in dimensions_out.items():
@@ -297,7 +459,12 @@ def build_company_dossier(
         "dimensions": dimensions_out,
         "claims": claims_out,
         "evidence_matrix": [
-            _matrix_row(ev, sources_by_id.get(ev.source_id), claim_evidence_links)
+            _matrix_row(
+                ev,
+                sources_by_id.get(ev.source_id),
+                claim_evidence_links,
+                pit_status_by_id.get(ev.evidence_id, "uncertain"),
+            )
             for ev in evidence
         ],
         "bull_case": bull,
@@ -310,6 +477,8 @@ def build_company_dossier(
             "verification_conditions": _verification_conditions(dimensions_out),
         },
         "post_asof_excluded": sorted(post_asof),
+        "pit_uncertain": sorted(pit_uncertain),
+        "pending_verification": pending_verification,
         "guardrails": {
             "research_only": True,
             "used_for_signal": False,
@@ -323,16 +492,17 @@ def build_company_dossier(
 
 def _collect_case(
     in_scope: dict[str, list[CompanyEvidence]],
-    evidence_by_id: dict[str, CompanyEvidence],
     sources_by_id: dict[str, CompanySource],
     *,
-    direction: str,
+    direction: str | None,
 ) -> list[dict[str, Any]]:
-    del evidence_by_id
     rows: list[dict[str, Any]] = []
     for dimension, pool in in_scope.items():
         for ev in pool:
-            if ev.direction != direction or ev.review_status == "rejected":
+            if direction is None:
+                if _verdict_tier(ev) != "unverified":
+                    continue
+            elif ev.direction != direction or ev.review_status != "accepted":
                 continue
             src = sources_by_id.get(ev.source_id)
             rows.append(
@@ -353,10 +523,15 @@ def _matrix_row(
     ev: CompanyEvidence,
     src: CompanySource | None,
     claim_links: dict[str, list[str]],
+    pit_status: str,
 ) -> dict[str, Any]:
     linked_claims = [
         cid for cid, eids in claim_links.items() if ev.evidence_id in eids
     ]
+    if pit_status in {"post_asof", "uncertain"}:
+        verdict_weight = "excluded"
+    else:
+        verdict_weight = _verdict_tier(ev)
     return {
         "evidence_id": ev.evidence_id,
         "dimension": ev.dimension,
@@ -365,6 +540,9 @@ def _matrix_row(
         "checklist_item": ev.checklist_item,
         "confidence": ev.confidence,
         "review_status": ev.review_status,
+        "verdict_weight": verdict_weight,
+        "pit_status": pit_status,
+        "published_precision": _published_precision(src),
         "source_id": ev.source_id,
         "source_type": src.source_type if src else "unknown",
         "published_at": src.published_at if src else "",
@@ -449,14 +627,41 @@ def _input_fingerprint(
     canonical = json.dumps(
         {
             "claims": sorted(
-                (c.claim_id, c.dimension, c.claim_text) for c in claims
+                (
+                    c.claim_id,
+                    c.dimension,
+                    c.claim_text,
+                    tuple(sorted(c.evidence_ids)),
+                    c.review_status,
+                )
+                for c in claims
             ),
             "evidence": sorted(
-                (e.evidence_id, e.dimension, e.direction, e.source_id, e.page_or_section)
+                (
+                    e.evidence_id,
+                    e.dimension,
+                    e.direction,
+                    e.source_id,
+                    e.page_or_section,
+                    e.excerpt,
+                    e.confidence,
+                    e.review_status,
+                    e.checklist_item,
+                )
                 for e in evidence
             ),
             "sources": sorted(
-                (s.source_id, s.source_type, s.published_at, s.available_at)
+                (
+                    s.source_id,
+                    s.source_type,
+                    s.title,
+                    s.publisher,
+                    s.published_at,
+                    s.available_at,
+                    s.ingested_at,
+                    s.reliability_level,
+                    s.uri,
+                )
                 for s in sources
             ),
         },

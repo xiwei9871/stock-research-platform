@@ -34,6 +34,9 @@ export interface CompanyIntelligenceEvidence {
   review_status?: string;
   checklist_item?: string;
   claim_ids?: string[];
+  verdict_weight?: string;
+  pit_status?: string;
+  published_precision?: string;
 }
 
 export interface CompanyIntelligenceClaim {
@@ -41,8 +44,12 @@ export interface CompanyIntelligenceClaim {
   dimension: string;
   claim_text: string;
   review_status?: string;
+  verdict?: string;
+  confidence?: number;
   support_count?: number;
   refute_count?: number;
+  unclear_count?: number;
+  unverified_evidence_ids?: string[];
   evidence_ids?: string[];
 }
 
@@ -95,6 +102,8 @@ export interface CompanyIntelligenceDossier {
   input_snapshot?: { code_sha?: string; evidence_set_sha256?: string; [key: string]: unknown };
   theme_context?: Record<string, unknown>;
   post_asof_excluded?: unknown;
+  pit_uncertain?: string[];
+  pending_verification?: CompanyIntelligenceBearCaseItem[];
   reviews?: CompanyIntelligenceReviewRecord[];
   markdown_available?: boolean;
 }

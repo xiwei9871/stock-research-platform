@@ -11,48 +11,176 @@
     "priority_score": 98.0
   },
   "review_universe_stock_code": "688686",
-  "review_universe_row_indexes": [5885,5889,5893,5894,5895,5897,5898,5899,5906,5908,5909,5910],
+  "review_universe_row_indexes": [
+    5885,
+    5889,
+    5893,
+    5894,
+    5895,
+    5897,
+    5898,
+    5899,
+    5906,
+    5908,
+    5909,
+    5910
+  ],
   "source_overrides": {
-    "ru_688686_5885": {"published_at": "2025-08"}, "ru_688686_5889": {"published_at": "2025-08"},
-    "ru_688686_5893": {"published_at": "2025-08"}, "ru_688686_5894": {"published_at": "2025-08"},
-    "ru_688686_5895": {"published_at": "2025-08"}, "ru_688686_5897": {"published_at": "2025-08"},
-    "ru_688686_5898": {"published_at": "2025-08"}, "ru_688686_5899": {"published_at": "2025-08"},
-    "ru_688686_5906": {"published_at": "2026"}, "ru_688686_5908": {"published_at": "2026"},
-    "ru_688686_5909": {"published_at": "2026"}, "ru_688686_5910": {"published_at": "2026"}
+    "ru_688686_5885": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5889": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5893": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5894": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5895": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5897": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5898": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5899": {
+      "published_at": "2025-08"
+    },
+    "ru_688686_5906": {
+      "published_at": "2026"
+    },
+    "ru_688686_5908": {
+      "published_at": "2026"
+    },
+    "ru_688686_5909": {
+      "published_at": "2026"
+    },
+    "ru_688686_5910": {
+      "published_at": "2026"
+    }
   },
   "evidence_overrides": {
-    "ru_688686_5889": {"dimension": "tech_moat", "direction": "support", "checklist_item": "自研技术/知识产权"},
-    "ru_688686_5898": {"dimension": "tech_moat", "direction": "support", "checklist_item": "自研技术/知识产权"},
-    "ru_688686_5909": {"dimension": "tech_moat", "direction": "support", "checklist_item": "自研技术/知识产权"},
-    "ru_688686_5897": {"dimension": "tech_moat", "direction": "support", "checklist_item": "关键工艺"},
-    "ru_688686_5894": {"dimension": "commercialization", "direction": "unclear"},
-    "ru_688686_5895": {"dimension": "commercialization", "direction": "unclear"},
-    "ru_688686_5899": {"dimension": "financial_realization", "direction": "unclear"},
-    "ru_688686_5906": {"dimension": "commercialization", "direction": "unclear"},
-    "ru_688686_5910": {"dimension": "risk_counter", "direction": "support", "checklist_item": "竞争对手突破"}
+    "ru_688686_5889": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "自研技术/知识产权"
+    },
+    "ru_688686_5898": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "自研技术/知识产权"
+    },
+    "ru_688686_5909": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "自研技术/知识产权"
+    },
+    "ru_688686_5897": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "关键工艺"
+    },
+    "ru_688686_5894": {
+      "dimension": "commercialization",
+      "direction": "unclear"
+    },
+    "ru_688686_5895": {
+      "dimension": "commercialization",
+      "direction": "unclear"
+    },
+    "ru_688686_5899": {
+      "dimension": "financial_realization",
+      "direction": "unclear"
+    },
+    "ru_688686_5906": {
+      "dimension": "commercialization",
+      "direction": "unclear"
+    },
+    "ru_688686_5910": {
+      "dimension": "risk_counter",
+      "direction": "support",
+      "checklist_item": "竞争对手突破"
+    }
   },
-  "extra_sources": [],
-  "extra_evidence": [],
+  "extra_sources": [
+    {
+      "source_id": "public_web_929553c10b516ee2",
+      "source_type": "broker_report",
+      "title": "奥普特(688686)：下游需求复苏 与越疆开展机器人业务合作",
+      "publisher": "公开网络检索（研报线索）",
+      "published_at": "2025-11-02",
+      "available_at": "",
+      "ingested_at": "",
+      "reliability_level": "S3"
+    }
+  ],
+  "extra_evidence": [
+    {
+      "evidence_id": "ev_yuejiang_coop_lead",
+      "source_id": "public_web_929553c10b516ee2",
+      "dimension": "commercialization",
+      "direction": "support",
+      "excerpt": "券商点评称奥普特'与越疆开展机器人业务合作'——存在真实机器人业务接触线索，但未见订单规模/收入贡献披露。",
+      "page_or_section": "报告标题/摘要",
+      "confidence": "low",
+      "review_status": "lead_only",
+      "checklist_item": "客户验证"
+    }
+  ],
   "claims": [
-    {"claim_id": "c_hm_vision_tech", "dimension": "tech_moat",
-     "claim_text": "公司在工业机器视觉领域具备自研成像/3D视觉/软硬件平台技术(可迁移至机器人感知)",
-     "evidence_ids": ["ru_688686_5889", "ru_688686_5897", "ru_688686_5898", "ru_688686_5909"]},
-    {"claim_id": "c_hm_robot_biz", "dimension": "commercialization",
-     "claim_text": "公司在人形机器人领域已形成明确的客户订单、批量交付或收入贡献",
-     "evidence_ids": []},
-    {"claim_id": "c_hm_chain_node", "dimension": "chain_position",
-     "claim_text": "公司是人形机器人视觉感知环节的关键节点供应商",
-     "evidence_ids": ["ru_688686_5906"]},
-    {"claim_id": "c_hm_fin", "dimension": "financial_realization",
-     "claim_text": "机器人相关业务收入占比与毛利可量化",
-     "evidence_ids": ["ru_688686_5899"]},
-    {"claim_id": "c_hm_risk", "dimension": "risk_counter",
-     "claim_text": "核心技术泄露/人才流失及新业务投入期亏损风险",
-     "evidence_ids": ["ru_688686_5910"]}
+    {
+      "claim_id": "c_hm_vision_tech",
+      "dimension": "tech_moat",
+      "claim_text": "公司在工业机器视觉领域具备自研成像/3D视觉/软硬件平台技术(可迁移至机器人感知)",
+      "evidence_ids": [
+        "ru_688686_5889",
+        "ru_688686_5897",
+        "ru_688686_5898",
+        "ru_688686_5909"
+      ]
+    },
+    {
+      "claim_id": "c_hm_robot_biz",
+      "dimension": "commercialization",
+      "claim_text": "公司在人形机器人领域已形成明确的客户订单、批量交付或收入贡献",
+      "evidence_ids": [
+        "ev_yuejiang_coop_lead",
+        "ru_688686_5906"
+      ]
+    },
+    {
+      "claim_id": "c_hm_chain_node",
+      "dimension": "chain_position",
+      "claim_text": "公司是人形机器人视觉感知环节的关键节点供应商",
+      "evidence_ids": [
+        "ru_688686_5906"
+      ]
+    },
+    {
+      "claim_id": "c_hm_fin",
+      "dimension": "financial_realization",
+      "claim_text": "机器人相关业务收入占比与毛利可量化",
+      "evidence_ids": [
+        "ru_688686_5899"
+      ]
+    },
+    {
+      "claim_id": "c_hm_risk",
+      "dimension": "risk_counter",
+      "claim_text": "核心技术泄露/人才流失及新业务投入期亏损风险",
+      "evidence_ids": [
+        "ru_688686_5910"
+      ]
+    }
   ],
   "input_snapshot": {
     "evidence_pool": "research.tech_bottleneck_review_universe_evidence@dataset_v1（本地PDF摘录30行，非向量语义）",
     "negative_control_rationale": "Theme mapping priority_score=98.0、dependency 高关联；但现有摘录仅见工业机器视觉主业与'提前布局机器人赛道'的定位表述，无任何客户/订单/收入级机器人证据",
-    "note": "5906页'提前布局机器人赛道'为定位性表述(unclear)，不构成商业化证据——本案例刻意测试引擎是否因主题高关联而自动给正面结论"
+    "note": "5906页'提前布局机器人赛道'为定位性表述(unclear)，不构成商业化证据——本案例刻意测试引擎是否因主题高关联而自动给正面结论",
+    "r1_revision": "加入越疆合作真实线索(lead_only)：验证有合作接触≠商业化证据，claim仍应needs_evidence"
   }
 }

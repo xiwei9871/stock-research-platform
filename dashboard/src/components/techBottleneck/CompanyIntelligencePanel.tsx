@@ -28,7 +28,9 @@ const VERDICT_LABELS: Record<string, string> = {
   contested: '正反冲突',
   contradicted: '存在反证',
   needs_evidence: '需补证据',
-  unknown: '未知'
+  unknown: '未知',
+  unverified: '未证实',
+  established: '成立'
 };
 
 const DIRECTION_LABELS: Record<string, string> = {
@@ -192,10 +194,35 @@ export function CompanyIntelligencePanel({ stockCode }: Props) {
                 {dossier.claims.map((claim) => (
                   <li key={claim.claim_id}>
                     <code>{claim.claim_id}</code> [{claim.dimension}] {claim.claim_text}
+                    <span className="status-pill">{verdictLabel(claim.verdict ?? '')}</span>
                     <span className="muted">
                       {' '}
-                      支持 {claim.support_count ?? 0} / 反证 {claim.refute_count ?? 0} · {claim.review_status}
+                      支持 {claim.support_count ?? 0} / 反证 {claim.refute_count ?? 0}
+                      {(claim.unverified_evidence_ids ?? []).length
+                        ? ` · 待验证线索 ${claim.unverified_evidence_ids?.length}`
+                        : ''}
                     </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+
+          {(dossier.pending_verification?.length || dossier.pit_uncertain?.length) ? (
+            <details className="ci-gaps">
+              <summary>
+                待验证线索 / PIT 不定证据（不参与判定）
+              </summary>
+              <ul>
+                {(dossier.pending_verification ?? []).map((item) => (
+                  <li key={item.evidence_id}>
+                    <code>{item.evidence_id}</code> [{item.dimension}] {item.excerpt}
+                    <span className="muted">（{item.source_type} · {item.published_at || '时间未知'}）</span>
+                  </li>
+                ))}
+                {(dossier.pit_uncertain ?? []).map((eid) => (
+                  <li key={eid}>
+                    <code>{eid}</code> <span className="muted">时间精度不足，未参与判定</span>
                   </li>
                 ))}
               </ul>
