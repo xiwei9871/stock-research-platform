@@ -120,6 +120,55 @@ Tushare 续订的边际研究价值有限 → 支持"暂不购买权限"决定�
 
 Sweep 2026-10-19：19 项 = **14 READY / 4 DEGRADED / 1 NOT_EVALUATED**。
 
+### 真实 TDX 只读抓取验证（2026-10-20 执行，dry_run，零写库）
+
+使用生产原语（`load_tdx_auction_universe` → `fetch_tdx_opening_matches` →
+`build_tdx_market_row`，捕获行但不 upsert）：
+
+| 日期 | universe | matched | missing | failed | unsupported | 耗时 |
+|---|---|---|---|---|---|---|
+| 2026-09-07（已有） | 5,181 | 5,145 (99.3%) | 34 | 0 | 2 | 122s |
+| **2026-09-08（缺口首日）** | 5,181 | **5,141 (99.2%)** | 38 | 0 | 2 | 131s |
+| 2026-10-19 | 5,177 | 5,136 (99.2%) | 41 | 0 | 0 | 136s |
+
+- **价格一致性 100%**：matched 行的 09:25 撮合价与 `market_daily_bar` raw open
+  逐只全等（5,145/5,145、5,141/5,141、5,136/5,136）。
+- 与已有 DB 行对拍（9-07）：**5,145/5,145 与库内值一致，0 mismatch**（库内 5,147 行，
+  新抓少了 2 行——现为 no-match，历史抓取可能曾有其值或退市）。
+- missing ~34-41/日：无开盘撮合的标的（停牌/无竞价成交），属正常空值，
+  代码语义即 no-match 非 failure。
+- **结论：9-08 以来的缺口数据 TDX 服务器真实可提供**，回填是执行+质控问题。
+
+证据：`outputs/research/m0_8_tdx_readonly_probe_20261020.json`
+
+**缺口清单（open_call:tdx）：2026-09-08 → 2026-10-20 共 25 个交易日**
+（含 10-20；EM 分钟数据不构成等价替代）。
+
+### host 脚本每日增量最小修改点
+
+| 现状 | 问题 | 最小修改 |
+|---|---|---|
+| `START_DATE/END_DATE` env 固定（2018→2024 / 回填期 6-10→9-07） | 每日模式需动态日期 | env 缺省时由脚本查 `trading_calendar`：START=END=最近开放日（≤今日-1 或收盘后含今日） |
+| completion sentinel | `COMPLETION_KEY` 已含日期→自然按日轮换；单日窗口完成后当日重跑自动 skip ✓ | 无需改 |
+| launchd `StartInterval=60` | 回填期每分钟重试合理；日常模式浪费+日志噪声 | 改 `StartCalendarInterval`（如 17:10 每日一次，在 platform_ready 前完成）；或保留 60s 靠 sentinel 幂等（次选） |
+| `MAX_JOBS=4` | 单日只有 1 个 partition | 无需改，自动收敛 |
+
+### 生产试补申请（2 个交易日）
+
+**范围**：`2026-09-08`（缺口首日）+ `2026-10-19`（最近日，覆盖不同时段市场状态）。
+对 `market.stock_auction_bar` / `staging.tdx_stock_auction_bar` 写入
+`source='tdx' AND auction_phase='open_call'` 行（ON CONFLICT 幂等）。
+
+| 项 | 方案 |
+|---|---|
+| 备份 | 缺口日无既有 tdx 行 → 覆盖风险为零；仍先做行数+hash 快照留档 |
+| 执行 | `tdx-auction-backfill-watchdog --start-date D --end-date D`（单日窗口）；或直接 `backfill_tdx_auction_date(D)` |
+| 验收 | matched/universe ≥ 99%；价格 vs daily raw open 一致性 ≥ 99.9%；failed=0（或有文档化原因）；Freshness Gate `open_call:tdx` 对当日转 READY |
+| 回滚 | `DELETE FROM market.stock_auction_bar WHERE source='tdx' AND auction_phase='open_call' AND trade_date IN ('2026-09-08','2026-10-19')` + staging 同条件；PK 含 source 不触及其他来源 |
+| 预计耗时 | ≈2-3 分钟/日（实测 122-136s） |
+
+批准后路径：试补通过 → 分批历史回填（9-08→10-20 余 23 日）→ 每日增量调度（plist 修改 + bootstrap）。
+
 ### 最小改造方案（待正式集成审批）
 
 1. **TDX 日更恢复**：从 `8dd57c88` 恢复 tdx_auction_backfill/watchdog/host 脚本 + 测试；
