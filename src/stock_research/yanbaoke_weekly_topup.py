@@ -239,6 +239,26 @@ def _write_quota_ledger(path: str | Path, ledger: dict[str, Any]) -> None:
     os.replace(tmp, p)
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def _quota_lock(path: str | Path):
+    """Cross-process mutex for quota ledger read-modify-write."""
+
+    import fcntl
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(p.with_suffix(p.suffix + ".lock"), "a")
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+        fh.close()
+
+
 def record_download_intent(
     path: str | Path, period: str, uuid: str, ts_code: str
 ) -> bool:
@@ -248,18 +268,19 @@ def record_download_intent(
     must not issue a second (possibly charged) request for it.
     """
 
-    ledger = load_quota_ledger(path)
-    slot = ledger["periods"].setdefault(period, {"attempts": {}})
-    if uuid in slot["attempts"]:
-        return False
-    slot["attempts"][uuid] = {
-        "ts_code": ts_code,
-        "status": "attempted",
-        "at": pd.Timestamp.now().isoformat(),
-        "error": None,
-    }
-    _write_quota_ledger(path, ledger)
-    return True
+    with _quota_lock(path):
+        ledger = load_quota_ledger(path)
+        slot = ledger["periods"].setdefault(period, {"attempts": {}})
+        if uuid in slot["attempts"]:
+            return False
+        slot["attempts"][uuid] = {
+            "ts_code": ts_code,
+            "status": "attempted",
+            "at": pd.Timestamp.now().isoformat(),
+            "error": None,
+        }
+        _write_quota_ledger(path, ledger)
+        return True
 
 
 def update_download_status(
@@ -270,13 +291,14 @@ def update_download_status(
     *,
     error: str | None = None,
 ) -> None:
-    ledger = load_quota_ledger(path)
-    attempt = ledger["periods"].setdefault(period, {"attempts": {}})["attempts"].setdefault(
-        uuid, {"ts_code": "", "at": pd.Timestamp.now().isoformat()}
-    )
-    attempt["status"] = status
-    attempt["error"] = error
-    _write_quota_ledger(path, ledger)
+    with _quota_lock(path):
+        ledger = load_quota_ledger(path)
+        attempt = ledger["periods"].setdefault(period, {"attempts": {}})["attempts"].setdefault(
+            uuid, {"ts_code": "", "at": pd.Timestamp.now().isoformat()}
+        )
+        attempt["status"] = status
+        attempt["error"] = error
+        _write_quota_ledger(path, ledger)
 
 
 def period_attempt_count(ledger: dict[str, Any], period: str) -> int:
@@ -324,10 +346,10 @@ def load_report_coverage(conn: Any, ts_codes: list[str] | None = None) -> pd.Dat
                        OR s.metadata->>'pdf_path' IS NOT NULL
                        OR starts_with(s.source_url, 'file:'))
                AS pdf_count,
-           count(DISTINCT e.report_id)
+           count(DISTINCT COALESCE(NULLIF(s.metadata->'yanbaoke'->>'uuid',''), s.report_id))
                FILTER (WHERE (e.metadata->'pdf_extract'->>'pdf_text_extract_chars')::int > 0)
                AS parsed_count,
-           count(DISTINCT e.report_id)
+           count(DISTINCT COALESCE(NULLIF(s.metadata->'yanbaoke'->>'uuid',''), s.report_id))
                FILTER (WHERE (e.metadata->'pdf_extract'->>'pdf_text_extract_chars')::int > 0
                        AND (NULLIF(btrim(e.company_view), '') IS NOT NULL
                             OR NULLIF(btrim(e.risk_summary), '') IS NOT NULL
@@ -625,7 +647,11 @@ def run_yanbaoke_weekly_topup(
         # quota refreshes MONTHLY (verified: 2026-07-01 refresh in prior ops
         # docs) — default period = calendar month, weekly_limit stays a plan cap.
         period = quota_period_key or pd.Timestamp.now().strftime("%Y-%m")
-        quota_budget = int(quota_budget) if quota_budget is not None else weekly_limit
+        # quota_budget = account-level attempts cap for the whole quota
+        # period (monthly refresh). It is NOT the weekly plan limit and has
+        # no safe default: when unverified (None), allowed=0 and no paid
+        # download is issued — pass --quota-budget after balance check.
+        quota_budget = int(quota_budget) if quota_budget is not None else 0
         quota = load_quota_ledger(quota_path)
         spent = period_attempt_count(quota, period)
         allowed = max(0, quota_budget - spent)

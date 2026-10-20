@@ -161,9 +161,8 @@ def test_run_weekly_topup_end_to_end_with_fakes(tmp_path, monkeypatch):
     result = w.run_yanbaoke_weekly_topup(
         conn=object(), dry_run=False, week_key="2026-W43",
         output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
-        quota_ledger_path=tmp_path / "quota.json",
-        filter_fn=lambda df, **kw: df,
-        write_db=False,
+        quota_ledger_path=tmp_path / "quota.json", quota_budget=25,
+        filter_fn=lambda df, **kw: df, write_db=False,
     )
     ledger = result["ledger"]
     assert ledger["search_calls"] == 2
@@ -278,7 +277,7 @@ def test_second_run_same_period_skips_already_attempted(tmp_path, monkeypatch):
     r1 = w.run_yanbaoke_weekly_topup(
         conn=object(), dry_run=False, week_key="2026-W43",
         output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
-        quota_ledger_path=quota, quota_period_key="2026-W43",
+        quota_ledger_path=quota, quota_period_key="2026-W43", quota_budget=25,
         filter_fn=lambda df, **kw: df, write_db=False)
     assert r1["ledger"]["attempts_this_run"] == 2  # per_stock_cap=2 of 3 cands
     n1 = len(calls)
@@ -286,7 +285,7 @@ def test_second_run_same_period_skips_already_attempted(tmp_path, monkeypatch):
     r2 = w.run_yanbaoke_weekly_topup(
         conn=object(), dry_run=False, week_key="2026-W43",
         output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
-        quota_ledger_path=quota, quota_period_key="2026-W43",
+        quota_ledger_path=quota, quota_period_key="2026-W43", quota_budget=25,
         filter_fn=lambda df, **kw: df, write_db=False)
     assert len(calls) == n1
     assert r2["ledger"]["skipped_already_attempted"] >= 1
@@ -324,3 +323,52 @@ def test_quota_budget_caps_period_total_attempts(tmp_path, monkeypatch):
         write_db=False)
     assert r["ledger"]["attempts_this_run"] == 2  # 25 - 23 spent
     assert r["ledger"]["attempts_period_total"] == 25
+
+
+def test_no_verified_budget_means_zero_paid_downloads(tmp_path, monkeypatch):
+    from stock_research import yanbaoke_weekly_topup as w
+
+    monkeypatch.setattr(w, "build_weekly_plan", lambda conn, **kw: {
+        "priority_queue": pd.DataFrame({
+            "ts_code": ["000001.SZ"], "stock_name": ["平安"],
+            "priority_bucket": ["no_coverage"]}),
+        "bucket_counts": {}, "existing_uuids": set(), "existing_keys": set()})
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.search_yanbaoke_reports",
+        lambda **kw: {"reports": pd.DataFrame([
+            {"uuid": "u1", "title": "R", "broker": "中信",
+             "publish_date": "2026-10-15"}])})
+    calls = []
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.download_yanbaoke_report_pdf",
+        lambda **kw: calls.append(kw) or {"status": "downloaded"})
+    r = w.run_yanbaoke_weekly_topup(
+        conn=object(), dry_run=False, week_key="2026-W43",
+        output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
+        quota_ledger_path=tmp_path / "quota.json",
+        filter_fn=lambda df, **kw: df, write_db=False)
+    assert r["ledger"]["attempts_this_run"] == 0
+    assert r["ledger"]["planned_downloads"] == 0
+    assert calls == []
+
+
+def test_quota_ledger_lock_allows_concurrent_intent(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from stock_research.yanbaoke_weekly_topup import (
+        load_quota_ledger, period_attempt_count, record_download_intent,
+    )
+
+    p = tmp_path / "quota.json"
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(
+            lambda i: record_download_intent(p, "2026-10", f"u{i}", "000001.SZ"),
+            range(50)))
+    assert all(results)
+    assert period_attempt_count(load_quota_ledger(p), "2026-10") == 50
+    # same uuid raced twice -> exactly one intent wins
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        dup = list(ex.map(
+            lambda _: record_download_intent(p, "2026-10", "race", "000001.SZ"),
+            range(8)))
+    assert dup.count(True) == 1 and dup.count(False) == 7
