@@ -526,6 +526,7 @@ from stock_research.hibor_reports import (
 )
 from stock_research.hibor_ui_download import run_hibor_ui_download_backfill
 from stock_research.yanbaoke_reports import run_yanbaoke_report_backfill
+from stock_research.yanbaoke_weekly_topup import run_yanbaoke_weekly_topup
 from stock_research.intraday_features import (
     INTRADAY_FEATURE_CALC_VERSION,
     backfill_intraday_features_daily_range,
@@ -3853,6 +3854,22 @@ def build_parser() -> argparse.ArgumentParser:
     yanbaoke_run.add_argument("--feature-trade-date")
     yanbaoke_run.add_argument("--industry-structured-detail-path")
     yanbaoke_run.set_defaults(import_pdfs=True, run_pdf_backfill=True)
+
+    yanbaoke_weekly = subparsers.add_parser("yanbaoke-weekly-topup")
+    yanbaoke_weekly.add_argument("--week-key")
+    yanbaoke_weekly.add_argument("--weekly-limit", type=int, default=25)
+    yanbaoke_weekly.add_argument("--per-stock-cap", type=int, default=2)
+    yanbaoke_weekly.add_argument("--per-broker-cap", type=int, default=8)
+    yanbaoke_weekly.add_argument("--stale-days", type=int, default=120)
+    yanbaoke_weekly.add_argument("--search-top-stocks", type=int, default=40)
+    yanbaoke_weekly.add_argument("--search-window-days", type=int, default=45)
+    yanbaoke_weekly.add_argument("--output-dir", default="outputs/research/yanbaoke_weekly")
+    yanbaoke_weekly.add_argument("--ledger-path", default="outputs/research/yanbaoke_weekly/ledger.json")
+    yanbaoke_weekly.add_argument("--download-dir")
+    yanbaoke_weekly.add_argument("--service", default=SETTINGS.research_service)
+    yanbaoke_weekly.add_argument("--write-db", action="store_true")
+    yanbaoke_weekly.add_argument("--execute", dest="dry_run", action="store_false")
+    yanbaoke_weekly.set_defaults(dry_run=True)
 
     daily_health = subparsers.add_parser("daily-health")
     daily_health.add_argument("--trade-date", required=True)
@@ -7546,6 +7563,35 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"yanbaoke_backfill|processed_tasks|{result['summary']['processed_tasks']}")
         print(f"yanbaoke_backfill|done_tasks|{result['summary']['done_tasks']}")
         print(f"yanbaoke_backfill|downloaded|{result['summary']['downloaded_count']}")
+    elif args.command == "yanbaoke-weekly-topup":
+        result = run_yanbaoke_weekly_topup(
+            week_key=args.week_key,
+            weekly_limit=args.weekly_limit,
+            per_stock_cap=args.per_stock_cap,
+            per_broker_cap=args.per_broker_cap,
+            stale_days=args.stale_days,
+            search_top_stocks=args.search_top_stocks,
+            search_window_days=args.search_window_days,
+            output_dir=args.output_dir,
+            ledger_path=args.ledger_path,
+            download_dir=args.download_dir,
+            service=args.service,
+            dry_run=args.dry_run,
+            write_db=args.write_db,
+        )
+        print(f"yanbaoke_weekly|week|{result['week_key']}")
+        print(f"yanbaoke_weekly|dry_run|{result['dry_run']}")
+        if result["dry_run"]:
+            print(f"yanbaoke_weekly|plan|{result['priority_queue_path']}")
+            print(f"yanbaoke_weekly|buckets|{result['bucket_counts']}")
+            print(f"yanbaoke_weekly|search_universe|{result['search_universe']}")
+        else:
+            ledger = result["ledger"]
+            print(f"yanbaoke_weekly|queue|{result['queue_path']}")
+            for key in ("search_calls", "candidates_found", "dedup_dropped",
+                        "planned_downloads", "api_charged", "downloaded",
+                        "not_pdf", "failed", "imported"):
+                print(f"yanbaoke_weekly|{key}|{ledger[key]}")
     elif args.command == "daily-health":
         result = summarize_operational_health(
             trade_date=args.trade_date,
