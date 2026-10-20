@@ -7037,3 +7037,123 @@ table.data-table td {
   font-weight: 650;
   text-decoration: none;
 }
+
+.company-intelligence-panel .ci-meta {
+  margin: 4px 0 12px;
+  font-size: 12px;
+}
+
+.ci-dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.ci-dimension-card {
+  border: 1px solid var(--border, #d8d8d8);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.ci-dimension-card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ci-dimension-card[data-verdict='contradicted'],
+.ci-dimension-card[data-verdict='contested'] {
+  border-color: #c2452d;
+}
+
+.ci-dimension-card[data-verdict='needs_evidence'],
+.ci-dimension-card[data-verdict='unknown'] {
+  border-style: dashed;
+}
+
+.ci-missing {
+  color: #a35b00;
+  font-size: 12px;
+}
+
+.ci-evidence-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ci-evidence-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 3px solid var(--border, #d8d8d8);
+  padding-left: 8px;
+  font-size: 12px;
+}
+
+.ci-evidence-row[data-direction='refute'] {
+  border-left-color: #c2452d;
+}
+
+.ci-evidence-row[data-direction='support'] {
+  border-left-color: #1d7a4f;
+}
+
+.ci-evidence-direction {
+  font-weight: 650;
+}
+
+.ci-claims,
+.ci-gaps,
+.ci-review {
+  margin-top: 14px;
+}
+
+.ci-claims ul,
+.ci-gaps ul,
+.ci-review-log {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.ci-review-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 8px;
+}
+
+.ci-review-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ci-review-form textarea {
+  min-width: 280px;
+}
+
+.ci-stock-entry {
+  margin: 16px 0 4px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ci-stock-entry label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.ci-guardrail-note {
+  margin-top: 14px;
+  font-size: 12px;
+}

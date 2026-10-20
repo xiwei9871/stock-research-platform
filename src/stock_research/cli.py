@@ -1217,6 +1217,37 @@ def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
     print(f"factor_gate_watchdog|work_remaining|{result['status'].work_remaining}")
 
 
+def run_company_intelligence_dossier_command(args: argparse.Namespace) -> None:
+    from stock_research.company_intelligence import build_company_dossier
+    from stock_research.company_intelligence_feed import load_case_input
+    from stock_research.company_intelligence_report import write_dossier_outputs
+
+    case_input = load_case_input(args.case)
+    dossier = build_company_dossier(
+        company_code=case_input.company_code,
+        company_name=case_input.company_name,
+        as_of=case_input.as_of,
+        claims=case_input.claims,
+        evidence=case_input.evidence,
+        sources=case_input.sources,
+        theme_context=case_input.theme_context,
+        input_snapshot=case_input.input_snapshot,
+    )
+    paths = write_dossier_outputs(
+        dossier, args.output_dir, code_sha=args.code_sha
+    )
+    print(f"company_intelligence|json|{paths['json']}")
+    print(f"company_intelligence|markdown|{paths['markdown']}")
+    print(
+        "company_intelligence|overall_verdict|"
+        f"{dossier['conclusion']['overall_verdict']}"
+    )
+    print(
+        "company_intelligence|gaps|"
+        f"{len(dossier['research_gaps'])}"
+    )
+
+
 def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
     from stock_research.tdx_auction_backfill import TDX_AUCTION_SOURCE_VERSION
     from stock_research.tdx_auction_watchdog import load_daily_backfill_scope
@@ -2233,6 +2264,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     tdx_auction_backfill_watchdog = subparsers.add_parser("tdx-auction-backfill-watchdog")
     add_tdx_auction_watchdog_arguments(tdx_auction_backfill_watchdog)
+
+    company_intel = subparsers.add_parser("company-intelligence-dossier")
+    company_intel.add_argument("--case", required=True, help="case JSON path")
+    company_intel.add_argument(
+        "--output-dir", default="outputs/research/company_intelligence"
+    )
+    company_intel.add_argument("--code-sha", default="")
 
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
@@ -9460,6 +9498,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         run_baostock_minute_backfill_watchdog_command(args)
     elif args.command == "tdx-auction-backfill-watchdog":
         run_tdx_auction_watchdog_command(args)
+    elif args.command == "company-intelligence-dossier":
+        run_company_intelligence_dossier_command(args)
     elif args.command == "backfill-watchdog":
         if args.adapter == "minute":
             run_minute_backfill_watchdog_command(args)

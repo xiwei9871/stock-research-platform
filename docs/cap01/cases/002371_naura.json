@@ -1,0 +1,86 @@
+{
+  "company_code": "002371",
+  "company_name": "北方华创",
+  "as_of": "2026-10-20",
+  "theme_context": {
+    "theme_id": "tech_bottleneck_domestic_v1",
+    "theme_name": "卡脖子技术国产替代主线",
+    "node_id": "semi_equipment_platform_002371_v1",
+    "node_name": "semiconductor_equipment",
+    "mapping_type": "direct_product",
+    "priority_score": 95.0
+  },
+  "review_universe_stock_code": "002371",
+  "review_universe_row_indexes": [409,410,412,413,415,416,419,421,422,424,425,426,428],
+  "source_overrides": {
+    "ru_002371_409": {"published_at": "2025-08"}, "ru_002371_410": {"published_at": "2025-08"},
+    "ru_002371_412": {"published_at": "2025-08"}, "ru_002371_413": {"published_at": "2025-08"},
+    "ru_002371_415": {"published_at": "2025-08"}, "ru_002371_416": {"published_at": "2025-08"},
+    "ru_002371_419": {"published_at": "2026"}, "ru_002371_421": {"published_at": "2026"},
+    "ru_002371_422": {"published_at": "2026"}, "ru_002371_424": {"published_at": "2026"},
+    "ru_002371_425": {"published_at": "2026"}, "ru_002371_426": {"published_at": "2026"},
+    "ru_002371_428": {"published_at": "2026"}
+  },
+  "evidence_overrides": {
+    "ru_002371_409": {"dimension": "tech_moat", "direction": "support", "checklist_item": "自研技术/知识产权"},
+    "ru_002371_410": {"dimension": "tech_moat", "direction": "support", "checklist_item": "关键工艺"},
+    "ru_002371_416": {"dimension": "tech_moat", "direction": "support", "checklist_item": "关键工艺"},
+    "ru_002371_424": {"dimension": "tech_moat", "direction": "support", "checklist_item": "自研技术/知识产权"},
+    "ru_002371_426": {"dimension": "tech_moat", "direction": "support", "checklist_item": "关键工艺"},
+    "ru_002371_425": {"dimension": "commercialization", "direction": "support", "checklist_item": "量产/订单"},
+    "ru_002371_412": {"dimension": "commercialization", "direction": "support", "checklist_item": "量产/订单"},
+    "ru_002371_428": {"dimension": "chain_position", "direction": "support", "checklist_item": "产业链关键节点"},
+    "ru_002371_419": {"dimension": "chain_position", "direction": "support", "checklist_item": "产业链关键节点"},
+    "ru_002371_421": {"dimension": "risk_counter", "direction": "support", "checklist_item": "商业化不及预期"},
+    "ru_002371_415": {"dimension": "risk_counter", "direction": "support", "checklist_item": "技术替代/绕开风险"},
+    "ru_002371_413": {"dimension": "financial_realization", "direction": "unclear"},
+    "ru_002371_422": {"dimension": "financial_realization", "direction": "unclear"}
+  },
+  "extra_sources": [
+    {"source_id": "B_puda_huaxin_20260410", "source_type": "broker_report",
+     "title": "普达特：清洗+LPCVD双驱国产替代（华鑫证券）", "publisher": "华鑫证券",
+     "published_at": "2026-04-10", "available_at": "2026-10-19", "ingested_at": "2026-10-19",
+     "reliability_level": "S3"},
+    {"source_id": "N_m1_node_evidence", "source_type": "industry_data",
+     "title": "M1 半导设备节点证据深化核查", "publisher": "内部研究",
+     "published_at": "2026-10-20", "available_at": "2026-10-20", "ingested_at": "2026-10-20",
+     "reliability_level": "S2"}
+  ],
+  "extra_evidence": [
+    {"evidence_id": "ev_puda_compete", "source_id": "B_puda_huaxin_20260410",
+     "dimension": "competitive_edge", "direction": "refute",
+     "excerpt": "普达特在清洗设备与LPCVD等热处理设备形成'双驱'布局并主打国产替代（华鑫 p24）——国内同类设备商正在分赛道竞争，平台型覆盖不意味着无对手。",
+     "page_or_section": "第 24 页", "confidence": "medium", "review_status": "lead_only",
+     "checklist_item": "国内外主要对手"},
+    {"evidence_id": "ev_per_line_disclosure", "source_id": "N_m1_node_evidence",
+     "dimension": "financial_realization", "direction": "refute",
+     "excerpt": "现有定期报告摘录未按设备品类拆分收入/毛利；'集成电路装备行业'口径无法区分刻蚀/PVD/炉管各线的兑现程度与毛利率差异。",
+     "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §2", "confidence": "medium",
+     "review_status": "accepted", "checklist_item": "相关业务收入占比"}
+  ],
+  "claims": [
+    {"claim_id": "c_tech_platform", "dimension": "tech_moat",
+     "claim_text": "公司具备平台化半导体设备矩阵：刻蚀、薄膜沉积(PVD/CVD/ALD)、热处理(立式炉/退火)、湿法、离子注入，并通过并购芯源微补齐涂胶显影/清洗",
+     "evidence_ids": ["ru_002371_409", "ru_002371_410", "ru_002371_416", "ru_002371_424", "ru_002371_426"]},
+    {"claim_id": "c_chain_substitution", "dimension": "chain_position",
+     "claim_text": "公司处于半导体设备国产替代核心节点，受益于国产化率提升与AI算力驱动的扩产周期",
+     "evidence_ids": ["ru_002371_428", "ru_002371_419"]},
+    {"claim_id": "c_comm_scale_delivery", "dimension": "commercialization",
+     "claim_text": "主力装备实现规模化量产交付：立式炉/PVD/刻蚀设备均达到第1000台交付里程碑",
+     "evidence_ids": ["ru_002371_412", "ru_002371_425"]},
+    {"claim_id": "c_edge_leader", "dimension": "competitive_edge",
+     "claim_text": "公司作为国内半导体设备平台型龙头，其覆盖广度构成持续竞争优势",
+     "evidence_ids": ["ru_002371_424", "ru_002371_425", "ru_002371_426", "ev_puda_compete"]},
+    {"claim_id": "c_fin_by_line", "dimension": "financial_realization",
+     "claim_text": "各设备产品线的收入贡献与毛利可量化追溯，并购扩张的现金流影响可控",
+     "evidence_ids": ["ru_002371_413", "ru_002371_422", "ev_per_line_disclosure"]},
+    {"claim_id": "c_risk_iteration", "dimension": "risk_counter",
+     "claim_text": "存在技术更新迭代风险与新兴领域(量子/光电/化合物)验证不及预期风险",
+     "evidence_ids": ["ru_002371_415", "ru_002371_421"]}
+  ],
+  "input_snapshot": {
+    "evidence_pool": "research.tech_bottleneck_review_universe_evidence@dataset_v1 + M1节点证据核查",
+    "date_basis": "interim=2025-08(标题推断)；annual=标题'2025年年度报告'(年)",
+    "note": "客户验证(下游fab认证)在现有摘录中未见具名证据→保留为gap"
+  }
+}
