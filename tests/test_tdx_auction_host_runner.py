@@ -256,3 +256,41 @@ def test_tdx_host_runner_does_not_mark_complete_when_month_report_failed(tmp_pat
 
     assert result.returncode == 0
     assert not sentinel.exists()
+
+
+def test_tdx_host_runner_writes_sentinel_on_complete_skip(tmp_path):
+    """A no-work daily run still writes the resolved 'complete:' sentinel."""
+
+    script = Path("/Users/xiwei/stock_research/scripts/run_tdx_auction_backfill_watchdog_host.sh")
+    fake_python = tmp_path / "fake_python.sh"
+    fake_python.write_text(
+        "#!/usr/bin/env bash\n"
+        "if [ \"$1\" = \"-c\" ]; then printf 'complete:2026-10-20\\n'; exit 0; fi\n"
+        "printf '%s\\n' \"$*\" >> \"$TDX_TEST_INVOKE_LOG\"\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|daily_scope|complete:2026-10-20'\n"
+        "printf '%s\\n' 'tdx_auction_watchdog|action|skipped_no_incomplete_dates'\n"
+    )
+    fake_python.chmod(fake_python.stat().st_mode | stat.S_IXUSR)
+    sentinel = tmp_path / "done"
+    env = os.environ.copy()
+    env.update(
+        {
+            "TDX_AUCTION_WATCHDOG_ROOT": "/Users/xiwei/stock_research",
+            "TDX_AUCTION_WATCHDOG_PYTHON": str(fake_python),
+            "TDX_AUCTION_WATCHDOG_LOG_DIR": str(tmp_path / "logs"),
+            "TDX_AUCTION_WATCHDOG_RUN_LOG": str(tmp_path / "run.log"),
+            "TDX_AUCTION_WATCHDOG_LOCK_DIR": str(tmp_path / "lock"),
+            "TDX_AUCTION_WATCHDOG_COMPLETION_SENTINEL": str(sentinel),
+            "TDX_AUCTION_WATCHDOG_MODE": "daily",
+            "TDX_AUCTION_WATCHDOG_REPORT_DRY_RUN": "1",
+            "TDX_TEST_INVOKE_LOG": str(tmp_path / "invoke.log"),
+        }
+    )
+
+    result = subprocess.run(["bash", str(script)], check=False, env=env,
+                            capture_output=True, text=True)
+
+    assert result.returncode == 0
+    assert sentinel.read_text().strip() == (
+        "tdx-auction-daily|complete:2026-10-20|coverage0.98"
+    )

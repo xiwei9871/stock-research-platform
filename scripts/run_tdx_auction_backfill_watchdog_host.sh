@@ -138,9 +138,10 @@ rc=${PIPESTATUS[0]}
 set -e
 
 if [ "$rc" -eq 0 ] \
-  && grep -Eq '\|action\|healthy$' "$RUN_OUTPUT" \
-  && grep -Eq '\|work_remaining\|False$' "$RUN_OUTPUT" \
-  && ! grep -Eq '\|month_report\|.*\|sent\|False$' "$RUN_OUTPUT"; then
+  && { grep -Eq '\|action\|skipped_no_incomplete_dates$' "$RUN_OUTPUT" \
+    || { grep -Eq '\|action\|healthy$' "$RUN_OUTPUT" \
+      && grep -Eq '\|work_remaining\|False$' "$RUN_OUTPUT" \
+      && ! grep -Eq '\|month_report\|.*\|sent\|False$' "$RUN_OUTPUT"; }; }; then
   printf '%s\n' "$COMPLETION_KEY" > "$COMPLETION_SENTINEL"
   echo "completion_sentinel_written=true"
 else
