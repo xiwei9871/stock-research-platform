@@ -223,6 +223,8 @@ def build_and_store_intraday_features_daily(
     adjust_type: str = "raw",
     industry_system: str = "csrc",
     service: str = SETTINGS.research_service,
+    stock_table: str = "factor.stock_intraday_features_daily",
+    industry_table: str = "factor.industry_intraday_features_daily",
 ) -> dict[str, int]:
     bars = load_stock_minute_bars_for_intraday_features(
         trade_date=trade_date,
@@ -236,7 +238,9 @@ def build_and_store_intraday_features_daily(
         freq=freq,
         adjust_type=adjust_type,
     )
-    stock_rows = upsert_stock_intraday_features_daily(stock_features, service=service)
+    stock_rows = upsert_stock_intraday_features_daily(
+        stock_features, service=service, target_table=stock_table
+    )
 
     memberships = load_industry_memberships_for_intraday_features(
         trade_date=trade_date,
@@ -254,6 +258,7 @@ def build_and_store_intraday_features_daily(
     industry_rows = upsert_industry_intraday_features_daily(
         industry_features,
         service=service,
+        target_table=industry_table,
     )
     return {"stock_rows": stock_rows, "industry_rows": industry_rows}
 
@@ -262,11 +267,12 @@ def upsert_stock_intraday_features_daily(
     features: pd.DataFrame,
     *,
     service: str = SETTINGS.research_service,
+    target_table: str = "factor.stock_intraday_features_daily",
 ) -> int:
     if features.empty:
         return 0
-    sql = """
-    INSERT INTO factor.stock_intraday_features_daily (
+    sql = f"""
+    INSERT INTO {target_table} (
         trade_date, asset_id, freq, adjust_type, feature_name, feature_value,
         calc_version, source, source_data_version
     )
@@ -292,11 +298,12 @@ def upsert_industry_intraday_features_daily(
     features: pd.DataFrame,
     *,
     service: str = SETTINGS.research_service,
+    target_table: str = "factor.industry_intraday_features_daily",
 ) -> int:
     if features.empty:
         return 0
-    sql = """
-    INSERT INTO factor.industry_intraday_features_daily (
+    sql = f"""
+    INSERT INTO {target_table} (
         trade_date, industry_system, industry_code, industry_name, freq, adjust_type,
         feature_name, feature_value, calc_version, source, source_data_version
     )
@@ -522,12 +529,16 @@ def _build_intraday_features_daily_task(
     freq: str,
     adjust_type: str,
     industry_system: str,
+    stock_table: str = "factor.stock_intraday_features_daily",
+    industry_table: str = "factor.industry_intraday_features_daily",
 ) -> dict[str, int]:
     return build_and_store_intraday_features_daily(
         trade_date=trade_date,
         freq=freq,
         adjust_type=adjust_type,
         industry_system=industry_system,
+        stock_table=stock_table,
+        industry_table=industry_table,
     )
 
 

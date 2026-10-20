@@ -1280,6 +1280,7 @@ def build_midtrend_daily_review_artifacts_eod(
         key="midtrend_v1_top5_reference.csv",
     )
 
+    artifact_status: dict[str, str] = {}
     top10_dir = Path("outputs/research/current_mid_trend_strategy_v2_top10_candidate_20250101_20260612")
     top10_holdings = top10_dir / "current_mid_trend_strategy_v2_top10_candidate_daily_holdings.csv"
     top10_trades = top10_dir / "current_mid_trend_strategy_v2_top10_candidate_trade_changes.csv"
@@ -1290,6 +1291,7 @@ def build_midtrend_daily_review_artifacts_eod(
         paths=paths,
         warnings=warnings,
         key="midtrend_v2_top10_candidate.csv",
+        artifact_status=artifact_status,
     )
     _write_trade_date_slice(
         top10_trades,
@@ -1298,6 +1300,7 @@ def build_midtrend_daily_review_artifacts_eod(
         paths=paths,
         warnings=warnings,
         key="midtrend_v2_top10_trade_changes.csv",
+        artifact_status=artifact_status,
     )
 
     canonical_dir = Path("outputs/research/midtrend_pit_attribution_canonical_and_daily_review_lite_v1_20260628")
@@ -1323,8 +1326,22 @@ def build_midtrend_daily_review_artifacts_eod(
         key="midtrend_post_exit_watch_daily_review_lite.csv",
     )
 
+    for frozen_key in (
+        "midtrend_canonical_pit_review_labels.csv",
+        "midtrend_post_exit_watch_daily_review_lite.json",
+        "midtrend_post_exit_watch_daily_review_lite.csv",
+    ):
+        if frozen_key in paths:
+            artifact_status.setdefault(frozen_key, "research_only_frozen")
     manifest = pd.DataFrame(
-        [{"artifact_name": key, "path": value} for key, value in sorted(paths.items())]
+        [
+            {
+                "artifact_name": key,
+                "path": value,
+                "artifact_status": artifact_status.get(key, "daily_valid"),
+            }
+            for key, value in sorted(paths.items())
+        ]
     )
     manifest_path = output / "midtrend_daily_review_artifacts_manifest.csv"
     manifest.to_csv(manifest_path, index=False)
@@ -1418,10 +1435,20 @@ def _write_trade_date_slice(
     paths: dict[str, str],
     warnings: list[str],
     key: str,
-) -> None:
+    artifact_status: dict[str, str] | None = None,
+) -> bool:
+    """Emit the per-date slice of a (possibly frozen) artifact.
+
+    Returns True when the slice produced rows. A static research artifact whose
+    window ends before ``trade_date`` yields an empty slice — flagged as
+    ``research_only_out_of_window`` so consumers stop reading it as a fresh
+    daily input.
+    """
     if not source.exists():
         warnings.append(f"missing:{source}")
-        return
+        if artifact_status is not None:
+            artifact_status[key] = "missing_source"
+        return False
     frame = pd.read_csv(source, low_memory=False)
     if "trade_date" in frame.columns:
         frame = frame[frame["trade_date"].astype(str).eq(trade_date)].copy()
@@ -1430,6 +1457,9 @@ def _write_trade_date_slice(
     target.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(target, index=False)
     paths[key] = str(target)
+    if artifact_status is not None:
+        artifact_status[key] = "daily_valid" if not frame.empty else "research_only_out_of_window"
+    return not frame.empty
 
 
 def _load_asset_names(asset_ids: list[str], *, service: str) -> dict[str, str]:

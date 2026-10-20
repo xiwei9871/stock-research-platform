@@ -172,6 +172,40 @@ def test_check_table_input_uses_injected_fetcher():
     assert "coverage" in health
 
 
+def test_check_table_input_applies_where_filter():
+    # Auction phases share one table; a spec must be able to scope its
+    # presence/coverage/max queries to its own slice (e.g. close_call only).
+    spec = InputSpec(
+        name="stock_auction_bar(close_call)",
+        category="optional_enhancement",
+        kind="table",
+        table="market.stock_auction_bar",
+        date_column="trade_date",
+        coverage_column="asset_id",
+        where="auction_phase = 'close_call'",
+        consumers=("lhb_backtest:signal_gap",),
+    )
+    captured = []
+
+    def fake_fetcher(sql, params):
+        captured.append(sql)
+        if "trading_calendar" in sql:
+            return CAL.to_dict("records")
+        if "DISTINCT" in sql:
+            return []
+        if "= ANY" in sql:
+            return []
+        if "max(" in sql:
+            return [{"latest_trade_date": "2026-06-09"}]
+        return [{"row_count": 0, "asset_count": 0}]
+
+    health = check_table_input(spec, as_of_date="2026-10-19", fetcher=fake_fetcher)
+    scoped = [s for s in captured if spec.table in s and "trading_calendar" not in s]
+    assert scoped and all("auction_phase = 'close_call'" in s for s in scoped)
+    assert health["actual_latest_date"] == "2026-06-09"
+    assert health["freshness_status"] == DEGRADED
+
+
 def test_check_table_input_reports_true_latest_when_stale():
     # The expected-date-scoped coverage query returns 0 rows for a stale table;
     # actual_latest_date must still surface the real newest row (e.g. 2026-09-07),

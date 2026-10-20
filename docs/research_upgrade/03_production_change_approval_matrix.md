@@ -11,13 +11,15 @@ Date: 2026-10-20. 每项列出：变更、影响范围、前置条件、回滚�
 | 4 | **required 输入 BLOCKED→禁止发布** | 正式发布门禁 | shadow 期无 required 误报 | 阈值回退 | 过期必需输入被正确拦截 | shadow 观察后 |
 | 5 | **Intraday 特征调度接入**（platform_ready 插入 build-intraday-features-daily） | factor 两表恢复日更 | 隔离验证已通过（覆盖率=市场全量、幂等、分布正常） | 移除该步骤 | 当日 5,186×10 特征行落库 | 设计/待批准 |
 | 6 | **Intraday 历史回填**（backfill-intraday-features-daily 8-04→今） | factor 两表批量 upsert ~2.6M 行 | 分批+断点；隔离幂等已证 | 按日期删除重填 | 中间断档为0、覆盖率达标 | 设计/待批准 |
-| 7 | **Tushare 竞价恢复** | `stock_auction_bar` 双相日更 | **用户续订 `stk_auction_o/c` 权限**（当前无权限已实测） | 停用同步 | open+close_call 当日覆盖≈全市场 | **用户动作阻塞** |
+| 7 | **Tushare 竞价恢复** | `stock_auction_bar` 双相日更 | **用户续订 `stk_auction_o/c` 权限**（当前无权限已实测）；价值评估：增强分仅 7% 交易 ±10-20 分、0 Top5 翻转 → 边际价值有限 | 停用同步 | open+close_call 当日覆盖≈全市场 | **暂不购买（用户决定）；若弃购则 close_call 特征标 deprecated** |
 | 8 | **close_call 新采集器（EM 收盘竞价扩相）** | `stock_auction_bar` close_call | 若无 Tushare 权限则立项；需与 Tushare 历史重叠等价验证 | 停用 | 重叠期差异在阈值内 | 设计/备选 |
-| 9 | **MidTrend 切片契约**（静态工件标 research_only，停止每日空切片） | mid_trend EOD manifest | — | 恢复 emit | 无误导性每日空切片 | 设计/待批准 |
+| 9 | **MidTrend 切片契约**（manifest `artifact_status` 列：daily_valid/research_only_out_of_window/research_only_frozen/missing_source） | mid_trend EOD manifest | **代码已实现**（release candidate，未部署） | 恢复 emit | manifest 可区分每日有效输入与冻结工件 | **待批准部署** |
 | 10 | **顶层 funnel 兜底→DEGRADED 契约** | mid_trend EOD | — | 恢复兜底 | fallback_used/degradation_reason 入 manifest | 设计/待批准 |
 | 11 | **derive_qfq 口径统一**（minute_backfill 改 daily_bar 自推导） | 历史分钟回填正确性 | 等价性对拍 | 恢复旧逻辑 | 除权股回填结果一致 | 设计/低优先 |
 | 12 | **PDF 权限修复**（`public_access=false` 未执行） | 外网付费报告泄露面 | 最小权限补丁+回归测试 | 恢复路由 | 未授权访问被拒 | 独立 Gate/待批准 |
-| 13 | P2：`corporate_action`/`stock_auction_detail`/`staging.tushare_auction` 退役确认 | 无消费者 | 确认外部消费者不存在 | — | 保留表不删除，只标注 | 待确认 |
+| 13 | P2：`corporate_action`/`stock_auction_detail`/`staging.tushare_auction` 退役确认 | 保留表不删除（用户指示） | 确认外部消费者不存在 | — | 只标注 deprecated，不删数据 | 待确认 |
+| 14 | **Intraday staging→生产小批量回填**（8-04→8-31 约20日 ~104万行 upsert） | factor 两表 | staging 实测已通过（幂等/零NULL/16s·日） | 按日期删除重填 | staging↔prod 等价、覆盖率达标 | **待批准（审批包见 03_intraday_recovery_validation.md）** |
+| 15 | **Regime 版本化发布接入**（`regime_daily_update` publish_versioned 到 canonical 消费路径） | tech_bottleneck/serenity 市场敞口 | 模块已实现+演练；staging 差异审批通过 | `latest` 指针回切 | 89 新日期入正式路径，0 历史改写 | 待批准 |
 
 ## 建议放行顺序
 

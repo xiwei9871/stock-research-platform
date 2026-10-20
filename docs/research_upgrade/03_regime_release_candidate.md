@@ -57,6 +57,25 @@ permission-blocked for production write**.
 - **不**以 evidence digest 全 READY 为验收（PARTIAL 为轻量摘要设计语义）。
 - EOD 冻结基线回放 equity endpoint 复现 `1.6562725546299535`。
 
+## 本轮实做（代码 + 故障演练，隔离）
+
+新模块 `src/stock_research/regime_daily_update.py`（8 测试绿）：
+
+- `validate_regime_frame`：空表/非法日期/重复/非递增/缺失或 NaN target_exposure/
+  最后日≠预期/缺必需调仓日 → 全部 fail-closed `RegimeValidationError`。
+- `diff_against_published`：行级 diff（new_date / removed_date / value_changed），
+  **数值容差 1e-9**——初版精确比较误报 480 行"变化"，实测均为浮点精度噪声；
+  修正后 staging vs canonical = **89 新增日期、0 共享日期内容变化**（前缀稳定性
+  正式证实：发布重建版不改写任何历史行的实质值）。
+- `publish_versioned` + `rollback_to_version`：版本目录 + `latest` 指针；
+  无效输入拒绝发布且旧版本不动；回滚=指针回切。
+- 隔离演练 `outputs/research/m0_7_regime_release_drill_20261020/`：
+  正常发布→指针移动 ✓；NaN 输入→拒绝且指针不动 ✓；回滚到 20260605 ✓。
+
+即"每日自动更新+历史版本隔离+回滚"所需的核心构件**已经实现并演练**；未接入生产
+调度（待批准）。历史行改写按用户要求走"staging 差异报告→分类→审批"，本轮证据
+支持"新增发布不改写历史实质值"。
+
 ## 仍未执行（等待批准）
 
 - 每日重建+staging+差异报告的代码编写（设计完，未写）。

@@ -39,6 +39,21 @@ Date: 2026-10-20. Status: **historical dirs restored+verified (isolated) /
 新鲜度）或 `research_only`（退出正式每日依赖），**停止让 EOD 把冻结工件包装成当日
 数据**——这是比"恢复目录"更根本的修复。
 
+## 本轮实做：冻结工件与正式输入分离（代码级，release candidate）
+
+`strategy_daily_eod._write_trade_date_slice` 现在接受 `artifact_status` 输出参数，
+`midtrend_daily_review_artifacts_manifest.csv` 新增 `artifact_status` 列：
+
+| status | 含义 |
+|---|---|
+| `daily_valid` | 切片对当日有行（真实每日产物） |
+| `research_only_out_of_window` | 静态工件窗口外空切片（6-13 后的 v2 top10/trade_changes） |
+| `research_only_frozen` | 冻结工件整文件复制（canonical PIT 三件） |
+| `missing_source` | 源缺失 |
+
+效果：manifest 消费者能区分"每日有效输入"与"历史研究工件"——冻结工件不再伪装成
+当日数据。代码变更，279 个 midtrend 相关测试全过；未部署（发布需批准）。
+
 ## 未执行/待批准
 
 - 契约改造（EOD 切片函数加 window/research_only 标记）— 代码变更待批准。

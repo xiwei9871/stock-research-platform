@@ -39,6 +39,25 @@ max_intraday_drawdown`。
 
 证据：`outputs/research/m0_7_intraday_validation_20261020/stock_intraday_features_{20261016,20261019}.csv`
 
+## PostgreSQL staging 回填测试（本轮新增，已执行）
+
+为支持安全的回填验证，给 upsert 增加了 `target_table` 参数（默认仍为正式表，
+行为不变；`tests/test_intraday_features.py` 新增针对性测试，4 passed）。
+在生产库 `staging` schema 建镜像表并实跑 2 个缺口日：
+
+| 交易日 | stock_rows | 覆盖资产 | industry_rows | 重跑幂等 | 
+|---|---|---|---|---|
+| 2026-08-04 | 51,920 | 5,192 | 415 | pass2 相同行数，ON CONFLICT 更新 ✓ |
+| 2026-08-05 | 51,940 | 5,194 | 415 | ✓ |
+
+- 耗时：4 个 day-build 共 64.8s（≈16s/日）→ 全缺口 ~55 交易日估算 <30 分钟。
+- 三大消费特征零 NULL，分布与停更前同量级。
+- 证据表：`staging.stock_intraday_features_daily` / `staging.industry_intraday_features_daily`（staging schema 内的测试表，可整表 DROP 回滚）。
+
+**小批量生产恢复申请（待批准）**：先回填 8-04→8-31（约 20 个交易日，~104 万行
+upsert），观察一周无异常再续 9 月以后批次；接入 platform_ready 链 `technical_features`
+之后、`lhb_shortline` 之前。
+
 ## 恢复方案（设计，待批准）
 
 1. **调度接入**：platform_ready 链 `technical_features` 之后、`lhb_shortline` 之前

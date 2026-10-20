@@ -50,6 +50,7 @@ class InputSpec:
     window: str = WINDOW_POST_CLOSE
     degradation_contract: str | None = None  # e.g. "publish_allowed", "publish_blocked"
     file_path: str | None = None
+    where: str | None = None  # extra AND-scoped filter, e.g. "auction_phase = 'close_call'"
 
 
 def _open_days(cal: pd.DataFrame) -> list[str]:
@@ -146,9 +147,10 @@ def check_table_input(
     cal_days = _open_days(cal)
     window_days = [d for d in cal_days if expected and d <= expected][-lookback_days:]
 
+    scoped = f" AND ({spec.where})" if spec.where else ""
     distinct_rows = fetcher(
         f"SELECT DISTINCT {spec.date_column}::text AS trade_date FROM {spec.table} "
-        f"WHERE {spec.date_column} = ANY(%s)",
+        f"WHERE {spec.date_column} = ANY(%s){scoped}",
         (window_days,),
     )
     present = [r["trade_date"] for r in distinct_rows]
@@ -159,13 +161,14 @@ def check_table_input(
     )
     agg = fetcher(
         f"SELECT count(*) AS row_count, {coverage_expr} AS asset_count "
-        f"FROM {spec.table} WHERE {spec.date_column} = %s",
+        f"FROM {spec.table} WHERE {spec.date_column} = %s{scoped}",
         (expected,),
     )
     # True newest row across the whole table — a stale input must still report
     # how stale it is (e.g. 2026-09-07), not just "nothing on the expected date".
     latest_rows = fetcher(
-        f"SELECT max({spec.date_column})::text AS latest_trade_date FROM {spec.table}",
+        f"SELECT max({spec.date_column})::text AS latest_trade_date FROM {spec.table} "
+        f"WHERE true{scoped}",
         (),
     )
     latest = (latest_rows or [{}])[0].get("latest_trade_date")
@@ -239,6 +242,7 @@ DEFAULT_INPUT_SPECS: tuple[InputSpec, ...] = (
         category=REQUIRED_DAILY,
         coverage_column="asset_id",
         min_daily_rows=4000,
+        where="score_version = 'manual_v1'",
         consumers=("eod_top_scores", "mid_trend"),
     ),
     InputSpec(
@@ -294,7 +298,17 @@ DEFAULT_INPUT_SPECS: tuple[InputSpec, ...] = (
         category=OPTIONAL_ENHANCEMENT,
         coverage_column="asset_id",
         min_daily_rows=4000,
+        where="auction_phase = 'open_call'",
         consumers=("lhb_backtest:entry_auction",),
+    ),
+    InputSpec(
+        name="stock_auction_bar(close_call)",
+        table="market.stock_auction_bar",
+        category=OPTIONAL_ENHANCEMENT,
+        coverage_column="asset_id",
+        min_daily_rows=4000,
+        where="auction_phase = 'close_call'",
+        consumers=("lhb_backtest:signal_gap",),
     ),
     InputSpec(
         name="stock_auction_minute_bar(EM)",

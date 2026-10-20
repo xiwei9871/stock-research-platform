@@ -154,6 +154,41 @@ def test_run_intraday_feature_gap_check_reports_missing_dates(monkeypatch):
     assert result["summary"]["dates_with_stock_gaps"] == 1
 
 
+def test_upsert_stock_intraday_features_targets_given_table(monkeypatch):
+    captured = {}
+
+    class _Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def executemany(self, sql, rows):
+            captured["sql"] = sql
+            captured["rows"] = rows
+
+    class _Conn:
+        def cursor(self):
+            return _Cursor()
+
+    class _Context:
+        def __enter__(self):
+            return _Conn()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(intraday_features, "connect", lambda service: _Context())
+    frame = intraday_features.pd.DataFrame([_stock_feature("A", "morning_return", 0.01)])
+    n = intraday_features.upsert_stock_intraday_features_daily(
+        frame, target_table="staging.stock_intraday_features_daily"
+    )
+    assert n == 1
+    assert "staging.stock_intraday_features_daily" in captured["sql"]
+    assert "factor.stock_intraday_features_daily" not in captured["sql"]
+
+
 def _stock_feature(asset_id: str, feature_name: str, value: float) -> dict:
     return {
         "trade_date": "2026-06-05",

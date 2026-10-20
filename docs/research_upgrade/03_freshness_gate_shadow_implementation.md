@@ -64,6 +64,18 @@ no EOD behavior changed, no enforcement, no scheduler, no manifest write.
   is not wired into the sweep yet (midtrend dirs, funnel CSV, watchlist CSV).
 - No per-strategy blocking is wired — Shadow Mode reports only, by design.
 
+## Round-2 additions (M0.8)
+
+- `InputSpec.where` — per-spec SQL scoping (e.g. `auction_phase='close_call'`,
+  `score_version='manual_v1'`); applied to all presence/coverage/max queries.
+- `close_call` now monitored as its own input → latest **2026-06-09** surfaces
+  separately from open_call **2026-09-07** (previously masked by phase-agnostic
+  MAX). Registry is now 17 inputs; sweep: **11 READY / 5 DEGRADED / 1 NOT_EVALUATED**.
+- `scripts/run_freshness_gate_shadow.sh` — daily-ready runner emitting CSV+JSON
+  to `outputs/research/freshness_gate_shadow/`; executed manually for
+  2026-10-19 (`{READY:11, DEGRADED:5, NOT_EVALUATED:1}`). **Not yet in cron** —
+  the only remaining step for daily Shadow Mode is approving this zero-risk job.
+
 ## Pending (needs approval to integrate)
 
 - Wire `run_freshness_sweep` into a daily cron emitting the report post-close.
