@@ -3,10 +3,16 @@
 This repository contains the downstream research platform for an AI-assisted
 stock monitoring and stock-selection workflow.
 
+Use [`docs/README.md`](docs/README.md) as the guide to current operating
+runbooks, research workflows, and historical phase records.
+
 The platform is complete through **P19 Final Platform Closure**. It supports
 manual research operations, read-only dashboard review, operator decision
 journaling, outcome analytics, offline experiment review, and a review-only
 shadow lifecycle from watchlist candidates through P18 follow-up resolution.
+
+P0-P19 document the platform foundation and governance closure. Strategy and
+research work continues in separately scoped workflows.
 
 This is **not** an automated trading system. It does not provide broker
 integration, order execution, account state, cash mutation, position mutation,
@@ -14,17 +20,18 @@ or automatic production watchlist promotion.
 
 ## Current Release Status
 
-- Branch: `factor-scoring-daily-pipeline`
+- Canonical branch: `main` (`origin/main`)
+- Canonical checkout: `/Users/xiwei/stock_research`
+- Production dashboard: <https://stock.manqiaotechnology.com>
 - Final platform closure: `docs/quant_system/69_p19_final_platform_closure_completion.md`
 - Phase index: `docs/quant_system/65_p19_platform_phase_index.md`
 - Release readiness audit: `docs/quant_system/66_p19_release_readiness_audit.md`
 - Final smoke matrix: `docs/quant_system/67_p19_final_smoke_matrix.md`
 - Final release runbook: `docs/quant_system/68_p19_final_release_runbook.md`
 
-P0-P19 have been committed and pushed to the remote branch. Later strategy work
-such as alpha191, mid-trend research, strong-winner research, stock-report
-collection, and additional watchlist experiments should be handled as separate
-scopes.
+The P0-P19 phase records remain available for audit in `docs/quant_system/`.
+Later strategy work, including mid-trend research, stock-report collection,
+and watchlist experiments, should be handled as separate scopes.
 
 ## Platform Map
 
@@ -44,6 +51,10 @@ scopes.
 - Daily factor scoring pipeline and daily operational runbooks.
 - Read-only dashboard workbench for charts, TopN review, watchlist review,
   report navigation, outcome review, experiment review, and shadow review.
+- Stock report library backed by `research.stock_report_source` and
+  `research.stock_report_event`, with PDF-field backfill for research use.
+- Tech Bottleneck candidate discovery can use stock report metadata as
+  secondary research evidence; page-level claims still require review.
 - Operator decision journal and outcome review artifacts.
 - Decision outcome analytics and experiment proposal/replay governance.
 - Shadow watchlist candidates, shadow outcome tracking, shadow outcome
@@ -72,25 +83,32 @@ Run the daily research script:
 /Users/xiwei/stock_research/scripts/run_daily_research.sh
 ```
 
-## Ops Snapshot Pages
+## Production Dashboard
 
-Internal ops status:
-
-```bash
-curl http://127.0.0.1:8765/api/ops/snapshot
-curl http://127.0.0.1:8765/api/ops/stages
-```
-
-Public snapshot:
+The external dashboard runs on stock-prod and reads the shared research
+PostgreSQL database:
 
 ```bash
-curl http://127.0.0.1:8765/api/public/snapshot
+curl -fsS https://stock.manqiaotechnology.com/api/ops/snapshot
+curl -fsS https://stock.manqiaotechnology.com/api/ops/stages
+curl -fsS https://stock.manqiaotechnology.com/api/public/snapshot
 ```
+
+Deployment entry points:
+
+```bash
+bash deploy/sync_dashboard_release.sh
+bash deploy/sync_dashboard_artifacts.sh
+```
+
+The release script rebuilds the API/frontend and runs the release gate. The
+artifact-only script mirrors only its configured artifact paths; it does not
+sync every directory under `outputs/research`.
 
 Canonical frontend deployment:
 
 ```bash
-cd /Users/xiwei/stock_research/dashboard
+cd dashboard
 pnpm build
 ```
 
@@ -104,6 +122,27 @@ Start the dashboard API:
 ```bash
 stock-research dashboard-api --host 127.0.0.1 --port 8765
 ```
+
+This command starts a manually launched local development API. The old
+internal dashboard launchd services were retired; `127.0.0.1:8765` is not the
+production dashboard.
+
+## Research Report Flow
+
+- Yanbaoke report downloads and source/event imports use the existing
+  `src/stock_research/yanbaoke_reports.py` flow and
+  `docs/ops/yanbaoke-report-backfill-runbook.md`.
+- The stock report workspace searches by stock code and can open the stored
+  PDF through `/api/research-reports/{report_id}/pdf`.
+- The Tech Bottleneck A-share candidate-universe workflow reads report
+  metadata as secondary keyword support. It does not turn a broker report into
+  a verified primary-source claim or automatically change admission/signals.
+- Theme/industry reports without a unique issuer remain general report entries;
+  do not attach them to an arbitrary stock.
+- PDF file locations and report access flags are documented in the stock
+  report import manifest. The current PDF endpoint does not enforce
+  `public_access`; treat a synced PDF as reachable by anyone who can access the
+  endpoint.
 
 ## EOD Auto Repair
 
@@ -196,20 +235,12 @@ matrix and expected evidence.
 
 ## Documentation Entry Points
 
-| Topic | Document |
-| --- | --- |
-| Final phase index | `docs/quant_system/65_p19_platform_phase_index.md` |
-| Release readiness audit | `docs/quant_system/66_p19_release_readiness_audit.md` |
-| Final smoke matrix | `docs/quant_system/67_p19_final_smoke_matrix.md` |
-| Final release runbook | `docs/quant_system/68_p19_final_release_runbook.md` |
-| Final platform completion | `docs/quant_system/69_p19_final_platform_closure_completion.md` |
-| Dashboard workbench | `docs/dashboard-workbench-runbook.md` |
-| Dashboard ops snapshot runbook | `docs/dashboard-ops-snapshot-runbook.md` |
-| Daily factor pipeline | `docs/daily-factor-pipeline-runbook.md` |
-| P2 daily runbook and smoke report | `docs/quant_system/17_p2_daily_runbook_and_smoke_report.md` |
-| P4 scheduler runbook | `docs/quant_system/21_p4_scheduler_runbook.md` |
-| P17 follow-up queue runbook | `docs/quant_system/59_p17_shadow_decision_follow_up_queue_runbook.md` |
-| P18 resolution review runbook | `docs/quant_system/62_p18_shadow_follow_up_resolution_review_runbook.md` |
+See [`docs/README.md`](docs/README.md) for a categorized index of active
+operations, report/research workflows, and historical phase records.
+
+For P19 release context, start with
+`docs/quant_system/65_p19_platform_phase_index.md` and
+`docs/quant_system/69_p19_final_platform_closure_completion.md`.
 
 ## Data Principles
 

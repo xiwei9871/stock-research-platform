@@ -1906,6 +1906,7 @@ def build_parser() -> argparse.ArgumentParser:
     baostock_finance.add_argument("--quarter", required=True, type=int)
     baostock_finance.add_argument("--limit", type=int)
     baostock_finance.add_argument("--offset", type=int, default=0)
+    baostock_finance.add_argument("--batch-size", type=int, default=100)
 
     baostock_minutes = subparsers.add_parser("sync-baostock-minute-bars")
     baostock_minutes.add_argument("--start-date", default="2024-01-01")
@@ -8995,11 +8996,16 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             args.quarter,
             limit=args.limit,
             offset=args.offset,
+            batch_size=args.batch_size,
         )
         print(f"baostock_finance_assets|{counts['queried_assets']}")
         print(f"finance_indicator_quarter_synced|{counts['indicator_quarter']}")
         print(f"finance_income_statement_synced|{counts['income_statement']}")
         print(f"finance_share_capital_event_synced|{counts['share_capital_event']}")
+        print(f"baostock_finance_empty_assets|{counts.get('empty_assets', 0)}")
+        print(f"baostock_finance_failed_assets|{counts.get('failed_assets', 0)}")
+        if counts.get("failed_codes"):
+            print(f"baostock_finance_failed_codes|{','.join(counts['failed_codes'])}")
     elif args.command == "sync-baostock-minute-bars":
         counts = sync_baostock_stock_minute_bars(
             start_date=args.start_date,
