@@ -688,6 +688,27 @@ CREATE TABLE IF NOT EXISTS staging.tushare_stock_auction_bar (
     PRIMARY KEY (source_endpoint, ts_code, trade_date, auction_phase)
 );
 
+CREATE TABLE IF NOT EXISTS staging.tdx_stock_auction_bar (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    ts_code text NOT NULL,
+    raw_trade_date text NOT NULL,
+    trade_date date NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    vwap numeric,
+    order_count integer,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_date, auction_phase)
+);
+
 CREATE TABLE IF NOT EXISTS market.stock_auction_bar (
     asset_id text NOT NULL,
     ts_code text NOT NULL,
@@ -700,7 +721,9 @@ CREATE TABLE IF NOT EXISTS market.stock_auction_bar (
     volume numeric,
     amount numeric,
     vwap numeric,
-    source text NOT NULL CHECK (source IN ('tushare')),
+    order_count integer,
+    volume_unit text NOT NULL DEFAULT 'share' CHECK (volume_unit IN ('share', 'hand')),
+    source text NOT NULL CHECK (source IN ('tushare', 'tdx')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (trade_date, asset_id, auction_phase, source)
@@ -2185,6 +2208,9 @@ CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_period
 CREATE INDEX IF NOT EXISTS idx_staging_tushare_stock_auction_bar_date_phase
     ON staging.tushare_stock_auction_bar (trade_date, auction_phase);
 
+CREATE INDEX IF NOT EXISTS idx_staging_tdx_stock_auction_bar_date_phase
+    ON staging.tdx_stock_auction_bar (trade_date, auction_phase);
+
 CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_date_phase
     ON market.stock_auction_bar (trade_date, auction_phase);
 
@@ -2432,6 +2458,35 @@ def apply_schema(service: str = SETTINGS.research_service) -> None:
 
 
 def ensure_research_schema_compatibility(conn) -> None:
+    # Historical deployments created this check with only ``tushare``.  Keep
+    # those rows intact while allowing the TDX adapter to coexist under its
+    # own source key.
+    conn.execute(
+        "ALTER TABLE market.stock_auction_bar "
+        "DROP CONSTRAINT IF EXISTS stock_auction_bar_source_check"
+    )
+    conn.execute(
+        "ALTER TABLE market.stock_auction_bar "
+        "ADD CONSTRAINT stock_auction_bar_source_check "
+        "CHECK (source IN ('tushare', 'tdx'))"
+    )
+    conn.execute(
+        "ALTER TABLE market.stock_auction_bar "
+        "ADD COLUMN IF NOT EXISTS volume_unit text NOT NULL DEFAULT 'share'"
+    )
+    conn.execute(
+        "ALTER TABLE market.stock_auction_bar "
+        "ADD COLUMN IF NOT EXISTS order_count integer"
+    )
+    conn.execute(
+        "ALTER TABLE market.stock_auction_bar "
+        "DROP CONSTRAINT IF EXISTS stock_auction_bar_volume_unit_check"
+    )
+    conn.execute(
+        "ALTER TABLE market.stock_auction_bar "
+        "ADD CONSTRAINT stock_auction_bar_volume_unit_check "
+        "CHECK (volume_unit IN ('share', 'hand'))"
+    )
     technical_feature_columns: tuple[tuple[str, str], ...] = (
         ("ma5", "numeric"),
         ("ma10", "numeric"),

@@ -145,6 +145,11 @@ from stock_research.factor_eval_store import (
 )
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
 from stock_research.factor_gate_watchdog import run_factor_gate_batch_watchdog
+from stock_research.tdx_auction_watchdog import (
+    DEFAULT_MONTH_LEDGER,
+    DEFAULT_REPORT_TARGET,
+    run_tdx_auction_backfill_watchdog,
+)
 from stock_research.daily_pipeline import run_daily_factor_pipeline
 from stock_research.daily_close_pipeline import (
     PipelineConfig as DailyClosePipelineConfig,
@@ -1117,6 +1122,28 @@ def add_factor_gate_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--top-n", type=int, default=30)
 
 
+def add_tdx_auction_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start-date", default="2018-02-14")
+    parser.add_argument("--end-date", default="2024-12-31")
+    parser.add_argument("--max-jobs", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--stale-after-minutes", type=int, default=60)
+    parser.add_argument("--run-timeout-seconds", type=int, default=3600)
+    parser.add_argument("--tdx-hosts", type=lambda value: parse_str_list(value, "--tdx-hosts"))
+    parser.add_argument("--tdx-timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--tdx-server-count", type=int, default=4)
+    parser.add_argument("--tdx-connections-per-server", type=int, default=1)
+    parser.add_argument("--retry-attempts", type=int, default=2)
+    parser.add_argument("--retry-sleep-seconds", type=float, default=0.25)
+    parser.add_argument("--max-pages", type=int, default=100)
+    parser.add_argument("--service", default=SETTINGS.research_service)
+    parser.add_argument("--report-target", default=DEFAULT_REPORT_TARGET)
+    parser.add_argument("--report-account", default="jarvis")
+    parser.add_argument("--openclaw-bin", default="openclaw")
+    parser.add_argument("--report-dry-run", action="store_true")
+    parser.add_argument("--ledger-path", default=str(DEFAULT_MONTH_LEDGER))
+
+
 def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
     result = run_technical_feature_backfill_watchdog(
         start_date=args.start_date,
@@ -1184,6 +1211,50 @@ def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
     print(f"factor_gate_watchdog|delta_success|{delta_success}")
     print(f"factor_gate_watchdog|delta_rows|{max(0, delta_rows)}")
     print(f"factor_gate_watchdog|work_remaining|{result['status'].work_remaining}")
+
+
+def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
+    result = run_tdx_auction_backfill_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        hosts=args.tdx_hosts,
+        timeout_seconds=args.tdx_timeout_seconds,
+        server_count=args.tdx_server_count,
+        connections_per_server=args.tdx_connections_per_server,
+        retry_attempts=args.retry_attempts,
+        retry_sleep_seconds=args.retry_sleep_seconds,
+        max_pages=args.max_pages,
+        service=args.service,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+        ledger_path=args.ledger_path,
+    )
+    run_result = result.get("run_result", {})
+    post_summary = result["post_summary"]
+    print(f"tdx_auction_watchdog|action|{result['status'].watchdog_action}")
+    print(f"tdx_auction_watchdog|completed_tasks|{post_summary.success_tasks}")
+    print(f"tdx_auction_watchdog|pending_tasks|{post_summary.pending_tasks}")
+    print(f"tdx_auction_watchdog|failed_tasks|{post_summary.failed_tasks}")
+    print(f"tdx_auction_watchdog|rows_written|{post_summary.total_rows_written}")
+    print(f"tdx_auction_watchdog|run_attempted|{run_result.get('attempted', 0)}")
+    print(f"tdx_auction_watchdog|run_rows|{run_result.get('rows', 0)}")
+    print(f"tdx_auction_watchdog|run_requested_symbols|{run_result.get('requested_codes', 0)}")
+    print(f"tdx_auction_watchdog|run_missing_symbols|{run_result.get('missing_codes', 0)}")
+    print(f"tdx_auction_watchdog|run_failed_symbols|{run_result.get('failed_symbols', 0)}")
+    print(f"tdx_auction_watchdog|run_unsupported_symbols|{run_result.get('unsupported_symbols', 0)}")
+    print(f"tdx_auction_watchdog|run_excluded_symbols|{run_result.get('excluded_symbols', 0)}")
+    print(f"tdx_auction_watchdog|work_remaining|{result['status'].work_remaining}")
+    for report in result.get("monthly_reports", []):
+        print(
+            "tdx_auction_watchdog|month_report|"
+            f"{report.get('month', '')}|sent|{report.get('sent', False)}"
+        )
 
 
 def print_factor_backfill_progress(event: dict) -> None:
@@ -2122,6 +2193,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     baostock_minute_backfill_watchdog = subparsers.add_parser("baostock-minute-backfill-watchdog")
     add_baostock_minute_backfill_watchdog_arguments(baostock_minute_backfill_watchdog)
+
+    tdx_auction_backfill_watchdog = subparsers.add_parser("tdx-auction-backfill-watchdog")
+    add_tdx_auction_watchdog_arguments(tdx_auction_backfill_watchdog)
 
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
@@ -9347,6 +9421,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         run_minute_backfill_watchdog_command(args)
     elif args.command == "baostock-minute-backfill-watchdog":
         run_baostock_minute_backfill_watchdog_command(args)
+    elif args.command == "tdx-auction-backfill-watchdog":
+        run_tdx_auction_watchdog_command(args)
     elif args.command == "backfill-watchdog":
         if args.adapter == "minute":
             run_minute_backfill_watchdog_command(args)

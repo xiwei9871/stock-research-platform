@@ -185,6 +185,8 @@ def check_table_input(
         missing_dates=missing,
         coverage_actual=coverage,
         coverage_min=spec.min_daily_rows,
+        # for a table-backed frozen input, "exists" means the table has any rows
+        file_exists=latest is not None,
     )
     return {
         "input": spec.name,
@@ -293,22 +295,38 @@ DEFAULT_INPUT_SPECS: tuple[InputSpec, ...] = (
         consumers=("regime", "eod"),
     ),
     InputSpec(
-        name="stock_auction_bar(open_call)",
+        name="stock_auction_bar(open_call:tdx)",
         table="market.stock_auction_bar",
         category=OPTIONAL_ENHANCEMENT,
         coverage_column="asset_id",
         min_daily_rows=4000,
-        where="auction_phase = 'open_call'",
+        where="auction_phase = 'open_call' AND source = 'tdx'",
+        consumers=("lhb_backtest:entry_auction",),
+    ),
+    InputSpec(
+        name="stock_auction_bar(open_call:tushare)",
+        table="market.stock_auction_bar",
+        category=STATIC_FROZEN,
+        coverage_column="asset_id",
+        where="auction_phase = 'open_call' AND source = 'tushare'",
         consumers=("lhb_backtest:entry_auction",),
     ),
     InputSpec(
         name="stock_auction_bar(close_call)",
         table="market.stock_auction_bar",
+        category=STATIC_FROZEN,
+        coverage_column="asset_id",
+        where="auction_phase = 'close_call'",
+        consumers=("lhb_backtest:signal_gap",),
+    ),
+    InputSpec(
+        name="stock_minute_bar(5min:raw)",
+        table="market.stock_minute_bar",
         category=OPTIONAL_ENHANCEMENT,
         coverage_column="asset_id",
         min_daily_rows=4000,
-        where="auction_phase = 'close_call'",
-        consumers=("lhb_backtest:signal_gap",),
+        where="freq = '5min' AND adjust_type = 'raw'",
+        consumers=("auction_proxy:last_5m", "intraday_features"),
     ),
     InputSpec(
         name="stock_auction_minute_bar(EM)",

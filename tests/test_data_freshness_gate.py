@@ -237,3 +237,56 @@ def test_check_table_input_reports_true_latest_when_stale():
     health = check_table_input(spec, as_of_date="2026-10-19", fetcher=fake_fetcher)
     assert health["actual_latest_date"] == "2026-09-07"
     assert health["freshness_status"] == DEGRADED
+
+
+def test_static_frozen_table_is_ready_when_rows_exist():
+    # Frozen historical tables (e.g. close_call auction with no forward source)
+    # must be judged by existence, not date — never compared to expected date.
+    spec = InputSpec(
+        name="stock_auction_bar(close_call)",
+        category="static_frozen",
+        kind="table",
+        table="market.stock_auction_bar",
+        date_column="trade_date",
+        where="auction_phase = 'close_call'",
+        consumers=("lhb_backtest:signal_gap",),
+    )
+    cal = CAL.copy()
+
+    def fake_fetcher(sql, params):
+        if "trading_calendar" in sql:
+            return cal.to_dict("records")
+        if "DISTINCT" in sql:
+            return []
+        if "max(" in sql:
+            return [{"latest_trade_date": "2026-06-09"}]
+        return [{"row_count": 0, "asset_count": 0, "latest_trade_date": None}]
+
+    health = check_table_input(spec, as_of_date="2026-10-19", fetcher=fake_fetcher)
+    assert health["freshness_status"] == READY
+    assert health["actual_latest_date"] == "2026-06-09"
+
+
+def test_static_frozen_table_is_blocked_when_empty():
+    spec = InputSpec(
+        name="stock_auction_bar(close_call)",
+        category="static_frozen",
+        kind="table",
+        table="market.stock_auction_bar",
+        date_column="trade_date",
+        where="auction_phase = 'close_call'",
+        consumers=("lhb_backtest:signal_gap",),
+    )
+    cal = CAL.copy()
+
+    def fake_fetcher(sql, params):
+        if "trading_calendar" in sql:
+            return cal.to_dict("records")
+        if "DISTINCT" in sql:
+            return []
+        if "max(" in sql:
+            return [{"latest_trade_date": None}]
+        return [{"row_count": 0, "asset_count": 0, "latest_trade_date": None}]
+
+    health = check_table_input(spec, as_of_date="2026-10-19", fetcher=fake_fetcher)
+    assert health["freshness_status"] == BLOCKED

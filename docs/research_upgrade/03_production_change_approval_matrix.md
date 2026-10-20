@@ -11,8 +11,9 @@ Date: 2026-10-20. 每项列出：变更、影响范围、前置条件、回滚�
 | 4 | **required 输入 BLOCKED→禁止发布** | 正式发布门禁 | shadow 期无 required 误报 | 阈值回退 | 过期必需输入被正确拦截 | shadow 观察后 |
 | 5 | **Intraday 特征调度接入**（platform_ready 插入 build-intraday-features-daily） | factor 两表恢复日更 | 隔离验证已通过（覆盖率=市场全量、幂等、分布正常） | 移除该步骤 | 当日 5,186×10 特征行落库 | 设计/待批准 |
 | 6 | **Intraday 历史回填**（backfill-intraday-features-daily 8-04→今） | factor 两表批量 upsert ~2.6M 行 | 分批+断点；隔离幂等已证 | 按日期删除重填 | 中间断档为0、覆盖率达标 | 设计/待批准 |
-| 7 | **Tushare 竞价恢复** | `stock_auction_bar` 双相日更 | **用户续订 `stk_auction_o/c` 权限**（当前无权限已实测）；价值评估：增强分仅 7% 交易 ±10-20 分、0 Top5 翻转 → 边际价值有限 | 停用同步 | open+close_call 当日覆盖≈全市场 | **暂不购买（用户决定）；若弃购则 close_call 特征标 deprecated** |
-| 8 | **close_call 新采集器（EM 收盘竞价扩相）** | `stock_auction_bar` close_call | 若无 Tushare 权限则立项；需与 Tushare 历史重叠等价验证 | 停用 | 重叠期差异在阈值内 | 设计/备选 |
+| 7 | **TDX open_call 日更恢复** | `stock_auction_bar` open_call 增量 | 从 `8dd57c88`（wip 分支）恢复 tdx_auction_backfill/watchdog/host + 测试；`eltdx` 入 pyproject；接入 platform_ready 链 | 停用该步骤 | open_call:tdx Gate 项转 READY、当日覆盖≈5k | **待批准（调度+合并分支文件）** |
+| 8 | **v2 适配版竞价增强因子**（研究版） | lhb_backtest 研究路径 | v2 detail：open 侧任意 source（TDX 优先）、`signal_last_5m_return` 显式命名、竞价专有字段置 NULL 不补零；与 v1 对拍已证明 0 Top5 翻转（79 日） | 不部署 v2，v1 行为不变 | 新旧版本差异报告稳定；PIT 边界验证 | **待批准（代码合并，非生产行为）** |
+| 8b | ~~Tushare 竞价恢复~~ | — | **已否决**：用户决定不购买权限；close_call 历史专有数据不可完整还原 → STATIC_FROZEN 保留研究限制 | — | — | 关闭 |
 | 9 | **MidTrend 切片契约**（manifest `artifact_status` 列：daily_valid/research_only_out_of_window/research_only_frozen/missing_source） | mid_trend EOD manifest | **代码已实现**（release candidate，未部署） | 恢复 emit | manifest 可区分每日有效输入与冻结工件 | **待批准部署** |
 | 10 | **顶层 funnel 兜底→DEGRADED 契约** | mid_trend EOD | — | 恢复兜底 | fallback_used/degradation_reason 入 manifest | 设计/待批准 |
 | 11 | **derive_qfq 口径统一**（minute_backfill 改 daily_bar 自推导） | 历史分钟回填正确性 | 等价性对拍 | 恢复旧逻辑 | 除权股回填结果一致 | 设计/低优先 |

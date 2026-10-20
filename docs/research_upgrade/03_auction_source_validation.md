@@ -58,7 +58,84 @@ Tushare 续订的边际研究价值有限 → 支持"暂不购买权限"决定�
 （4 个月）且唯一来源是 Tushare；若其价值不足，可将 close_call 特征在契约中正式
 标记 `deprecated`，消除"假装存在"的假象。
 
-## 结论与待办
+## 修订方案（用户 2026-10-20 决定）：TDX 开盘 + 5min 收盘代理，不买 Tushare
+
+### 5 分钟行情核验（实测结论，全部通过）
+
+在 `market.stock_minute_bar`（freq=5min, adjust_type=raw）上：
+
+| 检查项 | 结果 |
+|---|---|
+| 最后一根 K 线标签 | 恒为 `15:00`；每日 48 根均匀网格（首根 09:35）→ 窗口为 **14:55–15:00**，含约 2 分钟连续竞价 + 3 分钟收盘集合竞价 |
+| 15:00 close == 日线 raw close | **5,186/5,186 完全一致**（2026-10-19）；连续 5 个交易日全对 |
+| 历史对拍（2026-06-08） | close_call.close == 15:00 close：5,198/5,198；close_call 量 ≈ 全日 **19.1%** |
+| 缺失/停牌/零成交 | 5 日测试 0 缺失、0 零量（当日 trade_status 全 '1'）；**但发现 14:55 close=0 脏数据存在**（需 NULLIF 保护） |
+| 15:00 bar open 位置 | 在 **14:55**（窗口起点），非 14:57；open==close 仅 20.8% → bar 内确有连续竞价成分 |
+
+结论：**收盘价信号可直接复用**（5min close = 日线 close = 历史 close_call close）；
+**尾盘涨跌幅只能作为 `last_5m_return` 新因子**（混合窗口，不得冒充 close_call_return）；
+**14:57–15:00 竞价量/订单结构不可还原**（bar 内不可分）。
+
+### A/B 对拍（真实 trades，2026-10-20 执行）
+
+285 笔 filled trades；可验证子集 155 笔（信号日 ≤2026-06-08，真实 close_call 存在）：
+
+| 指标 | 结果 |
+|---|---|
+| corr（真实 close_call_return, last_5m_return) | **0.21** —— 确为不同因子，量纲更小（真实均值 +0.55% vs 代理 +0.09%） |
+| 打分项触发差异 | 20/155 笔（±10 分档） |
+| **Top5 成员翻转** | **0/79 日** |
+| 选中集收益 | 原/代理完全一致（avg 0.0200, med 0.0017, win 51.6%） |
+
+`entry_open_vs_signal_close`（gap 项）在适配版**无损**：close_call.close == 日线 raw close，
+只需 entry 日 open_call + signal 日日线收盘 —— TDX 恢复后该因子可活到最新日。
+真正损失的只有 `signal_close_auction_return` 的严格语义 → 以 `signal_last_5m_return`
+显式标记替代；竞价专有指标（竞价量/额/订单数）保持 unknown，不补零。
+
+证据：`outputs/research/m0_8_auction_proxy_ab_20261020.csv` + `_summary_20261020.csv`。
+
+### TDX 采集工具定位（已查明）
+
+整套实现存在于 git 历史 `8dd57c88`（`wip/minute5-resumable-snapshot-20260917`）：
+
+- `src/stock_research/tdx_auction_backfill.py`：`backfill_tdx_auction_date(date)` 单日全市场
+  抓取（`eltdx` 客户端 `trades.opening_match_history`，0x0fc6 历史成交明细聚合）；
+  `upsert_tdx_auction_rows` 幂等写 `staging.tdx_stock_auction_bar` + `market.stock_auction_bar`
+  （ON CONFLICT，天然支持断点续采/重跑）。
+- `tdx_auction_watchdog.py`：多日分区 + ledger 断点续采 + 月度报告。
+- `scripts/run_tdx_auction_backfill_watchdog_host.sh`、launchd plist、6 个测试文件。
+
+**停在 9-07 的原因**：任务是按 `START_DATE=2026-06-10 / END_DATE=2026-09-07` 的有界回填
+设计，写完 completion sentinel 后 launchd 退出——从未配置"每日增量"模式，非工具失效。
+
+`eltdx==3.1.3` 已装在 venv 但未入 pyproject → 需补依赖声明。
+
+### Freshness Gate 注册表更新（已实施）
+
+- `open_call` 拆为 `open_call:tdx`（前向来源，OPTIONAL_ENHANCEMENT → 当前 DEGRADED）
+  与 `open_call:tushare`（STATIC_FROZEN → READY）；
+- `close_call` 改 STATIC_FROZEN（无前向来源，仅历史可复现）；
+- 新增 `stock_minute_bar(5min:raw)`（OPTIONAL_ENHANCEMENT，consumer=`auction_proxy:last_5m`）。
+- 修复：表级 STATIC_FROZEN 曾被误判 BLOCKED（file_exists 未注入）。
+
+Sweep 2026-10-19：19 项 = **14 READY / 4 DEGRADED / 1 NOT_EVALUATED**。
+
+### 最小改造方案（待正式集成审批）
+
+1. **TDX 日更恢复**：从 `8dd57c88` 恢复 tdx_auction_backfill/watchdog/host 脚本 + 测试；
+   `eltdx` 加入 pyproject；以每日 `backfill_tdx_auction_date(expected_open_day)` 接入
+   platform_ready 链（不复用全区间 watchdog）；字段语义对拍已做（volume=手 vs tushare=股，
+   `volume_unit` 列已区分）。**待批准：生产调度启用**。
+2. **适配版增强因子（研究版，不动正式策略）**：新增
+   `build_lhb_auction_observation_detail_v2`，open 侧读 open_call（任意 source，TDX 优先），
+   收盘侧以 15:00/14:55 5min bar 计算 `signal_last_5m_return`，列名显式区分；
+   不可还原字段（auction volume/amount/order_count/vwap）置 NULL + coverage 标记，
+   不补零。**严格 PIT**：代理仅用收盘后才可得的数据（14:55/15:00 bar 于当日 EOD 可得）。
+3. **对拍报告**：v1（真实 close_call 期）vs v2 的评分/Top5/收益差异已在上方给出；
+   v2 对 >6-09 日期提供 gap 因子延长覆盖（至 9-07；TDX 恢复后至最新日）。
+4. **Gate**：已按上表更新；`close_call` 保留"历史专有数据不可完整还原"研究限制说明。
+
+### 结论与待办
 
 - **当前没有可直接启用的竞价日频来源**：Tushare 权限缺失（用户级解决），
   TDX 无日内工具，EM 覆盖不足。
