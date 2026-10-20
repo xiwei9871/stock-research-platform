@@ -129,3 +129,64 @@ on the frozen baseline inputs.
 - The daily-rebuild code path itself is **designed, not yet written** — it is the only
   code change needed in this release and is small (orchestrate existing functions +
   publish/validate wrapper).
+
+---
+
+## I. Complete upstream dependency inventory for this release (M0.6 expanded)
+
+Full consumer-dependency matrix (32 items): `docs/research_upgrade/02_data_dependency_matrix.csv`.
+Recovery designs: `docs/research_upgrade/02_data_freshness_recovery_plan.md`.
+
+The Regime release touches only the **market_daily_bar → emotion rebuild → regime rebuild
+→ tech_bottleneck EOD → publish → sync** spine. Per-input freshness measured on 2026-10-20:
+
+| # | Input | Role in release | Freshness | Gate |
+|---|---|---|---|---|
+| 1 | `public.market_daily_bar` | emotion + replay frames | 2026-10-19, 全市场 | required → READY |
+| 2 | `market.trading_calendar` | expected-day computation | to 2027-02 | required → READY |
+| 3 | `core.asset_status_daily` / `asset_master` | universe/status filter | 2026-10-19 | required → READY |
+| 4 | `market_emotion_state_daily` | rebuild source rows | stale incremental snapshots (root cause fixed by full rebuild) | required → repaired-verified |
+| 5 | rebuilt regime CSV (isolated) | `TECH_BOTTLENECK_V1_MARKET_EXPOSURE_PATH` | 2026-10-19, sha `300cfa51…` | required → repaired-verified |
+| 6 | frozen universe `serenity_bottleneck_baseline_...20260605` (148) | candidates seed | static_frozen (by design) | version+hash check |
+| 7 | `factor.stock_score_daily` `manual_v1` | EOD top_scores | 2026-10-19 | required → READY |
+| 8 | `ops.daily_pipeline_status` | dependency gate input | execution-only semantics | must be extended (§J) |
+| 9 | `strategy_daily_eod/<date>` artifacts + publish | output spine | 2026-10-19 | required → READY |
+
+All `required` inputs for this release are READY or repaired-verified — **no stale chain
+found on the regime spine blocks this release** (see §K).
+
+## J. Freshness & consumer-contract conditions (release gate semantics)
+
+Per the M0.6 decision, release gates use tri-state data health, **separate from job_status**:
+
+- **READY** — latest data date == expected trading day (`market.trading_calendar`), coverage
+  ≥ threshold, no intermediate trading-day gap, and the input is actually consumed.
+- **DEGRADED** — optional enhancement stale/missing; publish allowed only if the strategy's
+  degradation contract permits; `fallback_used` + `degradation_reason` written to manifest.
+- **BLOCKED** — required input missing/invalid/stale or coverage below threshold;
+  **formal publish prohibited** regardless of job success.
+
+Known defect this release partially depends on fixing later (not a release blocker):
+`check_strategy_daily_eod_dependencies` (`strategy_daily_eod.py:1061-1103`) evaluates the
+`intraday` dependency key as `minute5_status == success` only — it never inspects
+`factor.stock_intraday_features_daily` (stale since 2026-08-03) or `market.stock_auction_bar`
+(open_call 2026-09-07 / close_call 2026-06-09). Those tables are **optional enhancements**
+for lhb_shortline backtests — under §5.2 they map to DEGRADED, visible, not release-blocking.
+Their recovery is tracked in `02_data_freshness_recovery_plan.md` P0-A/P0-B.
+
+## K. Release-blocking conditions for THIS deployment
+
+| Condition | Status | Blocks? |
+|---|---|---|
+| §F failure drills pass in isolated workspace | designed, run before deploy | yes — pre-deploy |
+| Formal strategy files diff limited to reviewed hunks | to verify at packaging | yes — pre-deploy |
+| Focused tests green (exposure validation + serenity + pipeline) | M0.5 evidence: 2+6+4 passed | yes — pre-deploy |
+| Regime daily-rebuild code written + staged | designed-not-written | yes — pre-deploy |
+| Regime + fail-closed deployed **as one controlled change** (old static CSV + new validator ship together, else EOD fails closed immediately) | packaged | yes — ordering gate |
+| TDX/Tushare auction + intraday recovery | **separate workstream** | **no — per instruction, does not block this release** |
+| Post-deploy: readiness no longer PARTIAL on regime/emotion; next-day regime row appears; equity endpoint `1.6562725546299535` stable | verify after deploy | post-deploy |
+
+## L. Expansion note
+
+Sections I–K added 2026-10-20 per M0.6 scope expansion (platform-wide Data Freshness &
+Consumer Contract). Sections A–H are the original preflight content unchanged.
