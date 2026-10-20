@@ -161,6 +161,8 @@ def test_run_weekly_topup_end_to_end_with_fakes(tmp_path, monkeypatch):
     result = w.run_yanbaoke_weekly_topup(
         conn=object(), dry_run=False, week_key="2026-W43",
         output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
+        quota_ledger_path=tmp_path / "quota.json",
+        filter_fn=lambda df, **kw: df,
         write_db=False,
     )
     ledger = result["ledger"]
@@ -168,8 +170,157 @@ def test_run_weekly_topup_end_to_end_with_fakes(tmp_path, monkeypatch):
     assert ledger["dedup_dropped"] == 1       # old-uuid filtered
     assert ledger["planned_downloads"] == 1   # only new-1 left
     assert ledger["downloaded"] == 1
-    assert ledger["api_charged"] == 1
+    assert ledger["attempts_this_run"] == 1
     assert ledger["imported"] == 1
     assert len(imported["downloads"]) == 1
     on_disk = w.load_weekly_ledger(tmp_path / "ledger.json")
     assert on_disk["weeks"][0]["week_key"] == "2026-W43"
+
+
+# --- fix 2: batch dedup must not drop same-broker same-day different reports ---
+
+def test_batch_dedup_keeps_same_broker_same_day_different_titles():
+    from stock_research.yanbaoke_weekly_topup import dedupe_weekly_candidates
+
+    candidates = pd.DataFrame({
+        "uuid": ["u1", "u2"],
+        "ts_code": ["000001.SZ", "000001.SZ"],
+        "broker": ["中信证券", "中信证券"],
+        "publish_date": ["2026-10-15", "2026-10-15"],
+        "title": ["公司深度报告A", "公司深度报告B"],
+    })
+    kept, dropped = dedupe_weekly_candidates(
+        candidates, existing_uuids=set(), existing_keys=set()
+    )
+    assert len(kept) == 2  # different titles -> different reports
+    assert dropped.empty
+
+
+def test_batch_dedup_drops_identical_title_duplicates():
+    from stock_research.yanbaoke_weekly_topup import dedupe_weekly_candidates
+
+    candidates = pd.DataFrame({
+        "uuid": ["u1", "u2"],
+        "ts_code": ["000001.SZ", "000001.SZ"],
+        "broker": ["中信证券", "中信证券"],
+        "publish_date": ["2026-10-15", "2026-10-15"],
+        "title": ["公司深度报告", "公司深度报告"],
+    })
+    kept, dropped = dedupe_weekly_candidates(
+        candidates, existing_uuids=set(), existing_keys=set()
+    )
+    assert len(kept) == 1
+
+
+def test_candidates_missing_uuid_or_broker_or_date_not_downloadable():
+    from stock_research.yanbaoke_weekly_topup import dedupe_weekly_candidates
+
+    candidates = pd.DataFrame({
+        "uuid": ["", "u2", "u3"],
+        "ts_code": ["000001.SZ"] * 3,
+        "broker": ["中信", "", "中信"],
+        "publish_date": ["2026-10-15", "2026-10-15", ""],
+        "title": ["A", "B", "C"],
+    })
+    kept, dropped = dedupe_weekly_candidates(
+        candidates, existing_uuids=set(), existing_keys=set()
+    )
+    assert len(kept) == 0
+    assert set(dropped["drop_reason"]) == {
+        "missing_uuid", "missing_broker", "missing_publish_date"}
+
+
+# --- fix 3: persistent quota ledger ----------------------------------------
+
+def test_quota_ledger_records_intent_and_survives_rerun(tmp_path):
+    from stock_research.yanbaoke_weekly_topup import (
+        load_quota_ledger, period_attempt_count,
+        record_download_intent, update_download_status,
+    )
+
+    p = tmp_path / "quota.json"
+    assert record_download_intent(p, "2026-W43", "u1", "000001.SZ") is True
+    # same period, same uuid -> idempotent, no double charge
+    assert record_download_intent(p, "2026-W43", "u1", "000001.SZ") is False
+    assert record_download_intent(p, "2026-W43", "u2", "000002.SZ") is True
+    ledger = load_quota_ledger(p)
+    assert period_attempt_count(ledger, "2026-W43") == 2
+    assert period_attempt_count(ledger, "2026-W44") == 0
+    update_download_status(p, "2026-W43", "u1", "downloaded")
+    ledger = load_quota_ledger(p)
+    assert ledger["periods"]["2026-W43"]["attempts"]["u1"]["status"] == "downloaded"
+    assert ledger["periods"]["2026-W43"]["attempts"]["u2"]["status"] == "attempted"
+
+
+def test_second_run_same_period_skips_already_attempted(tmp_path, monkeypatch):
+    from stock_research import yanbaoke_weekly_topup as w
+
+    monkeypatch.setattr(w, "build_weekly_plan", lambda conn, **kw: {
+        "priority_queue": pd.DataFrame({
+            "ts_code": ["000001.SZ"], "stock_name": ["平安"],
+            "priority_bucket": ["no_coverage"]}),
+        "bucket_counts": {}, "existing_uuids": set(), "existing_keys": set()})
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.search_yanbaoke_reports",
+        lambda **kw: {"reports": pd.DataFrame([
+            {"uuid": f"u{i}", "title": f"R{i}", "broker": "中信",
+             "publish_date": "2026-10-15"} for i in range(3)])})
+    calls = []
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.download_yanbaoke_report_pdf",
+        lambda *, uuid, output_dir, **kw: calls.append(uuid) or {
+            "uuid": uuid, "status": "downloaded",
+            "pdf_path": str(tmp_path / f"{uuid}.pdf"), "filename": f"{uuid}.pdf"})
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.import_yanbaoke_report_downloads",
+        lambda downloads, **kw: {"summary": {"source_rows": len(downloads)}})
+    quota = tmp_path / "quota.json"
+    r1 = w.run_yanbaoke_weekly_topup(
+        conn=object(), dry_run=False, week_key="2026-W43",
+        output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
+        quota_ledger_path=quota, quota_period_key="2026-W43",
+        filter_fn=lambda df, **kw: df, write_db=False)
+    assert r1["ledger"]["attempts_this_run"] == 2  # per_stock_cap=2 of 3 cands
+    n1 = len(calls)
+    # rerun same period: uuids already attempted -> skipped, no new charges
+    r2 = w.run_yanbaoke_weekly_topup(
+        conn=object(), dry_run=False, week_key="2026-W43",
+        output_dir=tmp_path, ledger_path=tmp_path / "ledger.json",
+        quota_ledger_path=quota, quota_period_key="2026-W43",
+        filter_fn=lambda df, **kw: df, write_db=False)
+    assert len(calls) == n1
+    assert r2["ledger"]["skipped_already_attempted"] >= 1
+
+
+def test_quota_budget_caps_period_total_attempts(tmp_path, monkeypatch):
+    from stock_research import yanbaoke_weekly_topup as w
+    from stock_research.yanbaoke_weekly_topup import record_download_intent
+
+    quota = tmp_path / "quota.json"
+    for i in range(23):  # already spent 23 of 25 this period
+        record_download_intent(quota, "2026-W43", f"old-{i}", "000003.SZ")
+    monkeypatch.setattr(w, "build_weekly_plan", lambda conn, **kw: {
+        "priority_queue": pd.DataFrame({
+            "ts_code": ["000001.SZ"], "stock_name": ["平安"],
+            "priority_bucket": ["no_coverage"]}),
+        "bucket_counts": {}, "existing_uuids": set(), "existing_keys": set()})
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.search_yanbaoke_reports",
+        lambda **kw: {"reports": pd.DataFrame([
+            {"uuid": f"u{i}", "title": f"R{i}", "broker": "中信",
+             "publish_date": "2026-10-15"} for i in range(5)])})
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.download_yanbaoke_report_pdf",
+        lambda *, uuid, output_dir, **kw: {"uuid": uuid, "status": "downloaded",
+            "pdf_path": str(tmp_path / f"{uuid}.pdf"), "filename": f"{uuid}.pdf"})
+    monkeypatch.setattr(
+        "stock_research.yanbaoke_reports.import_yanbaoke_report_downloads",
+        lambda downloads, **kw: {"summary": {"source_rows": len(downloads)}})
+    r = w.run_yanbaoke_weekly_topup(
+        conn=object(), dry_run=False, week_key="2026-W43", weekly_limit=25,
+        quota_budget=25, output_dir=tmp_path, filter_fn=lambda df, **kw: df,
+        quota_period_key="2026-W43",
+        ledger_path=tmp_path / "ledger.json", quota_ledger_path=quota,
+        write_db=False)
+    assert r["ledger"]["attempts_this_run"] == 2  # 25 - 23 spent
+    assert r["ledger"]["attempts_period_total"] == 25

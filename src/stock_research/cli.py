@@ -3865,6 +3865,10 @@ def build_parser() -> argparse.ArgumentParser:
     yanbaoke_weekly.add_argument("--search-window-days", type=int, default=45)
     yanbaoke_weekly.add_argument("--output-dir", default="outputs/research/yanbaoke_weekly")
     yanbaoke_weekly.add_argument("--ledger-path", default="outputs/research/yanbaoke_weekly/ledger.json")
+    yanbaoke_weekly.add_argument("--quota-ledger-path", default="outputs/research/yanbaoke_weekly/quota_ledger.json")
+    yanbaoke_weekly.add_argument("--quota-budget", type=int, help="max download attempts per quota period (default: weekly-limit)")
+    yanbaoke_weekly.add_argument("--quota-period-key", help="default: calendar month (monthly refresh)")
+    yanbaoke_weekly.add_argument("--institutions-path", default="config/hibor_institutions.csv")
     yanbaoke_weekly.add_argument("--download-dir")
     yanbaoke_weekly.add_argument("--service", default=SETTINGS.research_service)
     yanbaoke_weekly.add_argument("--write-db", action="store_true")
@@ -7578,6 +7582,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             service=args.service,
             dry_run=args.dry_run,
             write_db=args.write_db,
+            quota_ledger_path=args.quota_ledger_path,
+            quota_budget=args.quota_budget,
+            quota_period_key=args.quota_period_key,
+            institutions_path=args.institutions_path,
         )
         print(f"yanbaoke_weekly|week|{result['week_key']}")
         print(f"yanbaoke_weekly|dry_run|{result['dry_run']}")

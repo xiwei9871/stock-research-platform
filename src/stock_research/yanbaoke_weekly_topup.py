@@ -133,9 +133,16 @@ def dedupe_weekly_candidates(
 
     drop_reasons = []
     for _, row in frame.iterrows():
-        if row["uuid"] and row["uuid"] in set(existing_uuids):
+        key = row["_key"]
+        if not row["uuid"]:
+            drop_reasons.append("missing_uuid")
+        elif not str(key[1]):
+            drop_reasons.append("missing_broker")
+        elif not str(key[2]):
+            drop_reasons.append("missing_publish_date")
+        elif row["uuid"] in set(existing_uuids):
             drop_reasons.append("uuid_exists")
-        elif row["_key"] in set(existing_keys):
+        elif key in set(existing_keys):
             drop_reasons.append("composite_exists")
         else:
             drop_reasons.append("")
@@ -143,13 +150,13 @@ def dedupe_weekly_candidates(
     dropped = frame[frame["drop_reason"].ne("")].drop(
         columns=["_norm_title", "_key"]
     ).reset_index(drop=True)
-    kept = frame[frame["drop_reason"].eq("")].drop(
-        columns=["_norm_title", "_key", "drop_reason"]
-    ).reset_index(drop=True)
-    # within-batch dedup too (uuid + composite)
+    kept = frame[frame["drop_reason"].eq("")].reset_index(drop=True)
+    # within-batch dedup: uuid first, then full composite incl. normalized
+    # title so same broker+date *different* reports both survive.
     kept = kept.drop_duplicates(subset=["uuid"], keep="first")
-    kept = kept.drop_duplicates(
-        subset=["ts_code", "broker", "publish_date"], keep="first"
+    kept = kept.drop_duplicates(subset=["_key"], keep="first")
+    kept = kept.drop(
+        columns=["_norm_title", "_key", "drop_reason"]
     ).reset_index(drop=True)
     return kept, dropped
 
@@ -211,6 +218,75 @@ def choose_weekly_queue(
     ).reset_index(drop=True)
 
 
+def load_quota_ledger(path: str | Path) -> dict[str, Any]:
+    """Persistent per-quota-period download attempt ledger."""
+
+    p = Path(path)
+    if not p.exists():
+        return {"periods": {}}
+    return json.loads(p.read_text())
+
+
+def _write_quota_ledger(path: str | Path, ledger: dict[str, Any]) -> None:
+    import os
+    import tempfile
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=p.parent, suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        fh.write(json.dumps(ledger, ensure_ascii=False, indent=2))
+    os.replace(tmp, p)
+
+
+def record_download_intent(
+    path: str | Path, period: str, uuid: str, ts_code: str
+) -> bool:
+    """Atomically record a download intent BEFORE the API call.
+
+    Returns False if the uuid was already attempted this period — callers
+    must not issue a second (possibly charged) request for it.
+    """
+
+    ledger = load_quota_ledger(path)
+    slot = ledger["periods"].setdefault(period, {"attempts": {}})
+    if uuid in slot["attempts"]:
+        return False
+    slot["attempts"][uuid] = {
+        "ts_code": ts_code,
+        "status": "attempted",
+        "at": pd.Timestamp.now().isoformat(),
+        "error": None,
+    }
+    _write_quota_ledger(path, ledger)
+    return True
+
+
+def update_download_status(
+    path: str | Path,
+    period: str,
+    uuid: str,
+    status: str,
+    *,
+    error: str | None = None,
+) -> None:
+    ledger = load_quota_ledger(path)
+    attempt = ledger["periods"].setdefault(period, {"attempts": {}})["attempts"].setdefault(
+        uuid, {"ts_code": "", "at": pd.Timestamp.now().isoformat()}
+    )
+    attempt["status"] = status
+    attempt["error"] = error
+    _write_quota_ledger(path, ledger)
+
+
+def period_attempt_count(ledger: dict[str, Any], period: str) -> int:
+    return len(ledger.get("periods", {}).get(period, {}).get("attempts", {}))
+
+
+def attempted_uuids(ledger: dict[str, Any], period: str) -> set[str]:
+    return set(ledger.get("periods", {}).get(period, {}).get("attempts", {}))
+
+
 def load_weekly_ledger(path: str | Path) -> dict[str, Any]:
     p = Path(path)
     if not p.exists():
@@ -235,13 +311,30 @@ def load_report_coverage(conn: Any, ts_codes: list[str] | None = None) -> pd.Dat
 
     from stock_research.db import fetch_all
 
+    # distinct report identity = uuid when present else report_id, so legacy
+    # same-uuid/multi-report_id duplicates cannot inflate coverage.
     sql = """
-    SELECT e.ts_code, count(*) AS report_count,
+    SELECT e.ts_code,
+           count(DISTINCT COALESCE(NULLIF(s.metadata->'yanbaoke'->>'uuid',''), s.report_id))
+               AS report_count,
            max(e.report_date)::text AS last_report_date,
-           count(*) FILTER (
-               WHERE (e.metadata->'pdf_extract'->>'pdf_text_extract_chars')::int > 0
-           ) AS parsed_count
+           count(DISTINCT COALESCE(NULLIF(s.metadata->'yanbaoke'->>'uuid',''), s.report_id))
+               FILTER (WHERE s.metadata->'yanbaoke'->>'local_pdf_path' IS NOT NULL
+                       OR s.metadata->>'local_pdf_path' IS NOT NULL
+                       OR s.metadata->>'pdf_path' IS NOT NULL
+                       OR starts_with(s.source_url, 'file:'))
+               AS pdf_count,
+           count(DISTINCT e.report_id)
+               FILTER (WHERE (e.metadata->'pdf_extract'->>'pdf_text_extract_chars')::int > 0)
+               AS parsed_count,
+           count(DISTINCT e.report_id)
+               FILTER (WHERE (e.metadata->'pdf_extract'->>'pdf_text_extract_chars')::int > 0
+                       AND (NULLIF(btrim(e.company_view), '') IS NOT NULL
+                            OR NULLIF(btrim(e.risk_summary), '') IS NOT NULL
+                            OR NULLIF(btrim(e.industry_view), '') IS NOT NULL))
+               AS evidence_count
     FROM research.stock_report_event e
+    JOIN research.stock_report_source s ON s.report_id = e.report_id
     {where}
     GROUP BY e.ts_code
     """
@@ -295,6 +388,41 @@ def load_existing_report_keys(conn: Any) -> set[tuple[str, str, str, str]]:
         )
         for row in rows
     }
+
+
+def load_duplicate_uuid_inventory(conn: Any) -> pd.DataFrame:
+    """READ-ONLY inventory of legacy same-uuid -> multi-report_id duplicates.
+
+    One row per (uuid, report_id): pdf path, event count, downstream links.
+    No cleanup is performed — remediation needs an explicit approved path.
+    """
+
+    from stock_research.db import fetch_all
+
+    return pd.DataFrame(
+        fetch_all(
+            conn,
+            """
+            WITH dup AS (
+                SELECT metadata->'yanbaoke'->>'uuid' AS uuid
+                FROM research.stock_report_source
+                WHERE source_type = 'yanbaoke_api'
+                  AND NULLIF(metadata->'yanbaoke'->>'uuid','') IS NOT NULL
+                GROUP BY 1 HAVING count(DISTINCT report_id) > 1
+            )
+            SELECT d.uuid, s.report_id, s.broker, s.publish_date::text AS publish_date,
+                   s.report_title,
+                   s.metadata->'yanbaoke'->>'local_pdf_path' AS pdf_path,
+                   (SELECT count(*) FROM research.stock_report_event e
+                     WHERE e.report_id = s.report_id) AS event_count
+            FROM dup d
+            JOIN research.stock_report_source s
+              ON s.metadata->'yanbaoke'->>'uuid' = d.uuid
+            ORDER BY d.uuid, s.report_id
+            """,
+            [],
+        )
+    )
 
 
 def load_priority_universe(conn: Any) -> pd.DataFrame:
@@ -378,12 +506,21 @@ def run_yanbaoke_weekly_topup(
     download_dir_root: str | Path | None = None,
     import_fn: Any | None = None,
     conn: Any | None = None,
+    quota_ledger_path: str | Path | None = None,
+    quota_budget: int | None = None,
+    quota_period_key: str | None = None,
+    filter_fn: Any | None = None,
+    institutions_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """One weekly top-up cycle. ``dry_run=True`` emits the plan with zero API.
 
-    Quota accounting counts every download API *attempt* (failed calls may
-    still consume quota), never just successful downloads. The 25/week cap is
-    a plan budget — confirm the account's real refresh cycle before enabling.
+    Quota: every download *attempt* is persisted in ``quota_ledger_path``
+    BEFORE the API call, so a crash or rerun in the same ``quota_period_key``
+    can never re-issue (and possibly re-charge) the same request. Total
+    attempts per period are capped by ``quota_budget`` (default
+    ``weekly_limit``); ``confirmed_charged`` stays None until the account
+    balance is verified — attempts are a ceiling on possible charges, not a
+    measurement of them.
     """
 
     from stock_research.db import connect
@@ -418,6 +555,14 @@ def run_yanbaoke_weekly_topup(
             def search_fn(**kw):
                 return search_yanbaoke_reports(**kw)
 
+        if filter_fn is None:
+            from stock_research.yanbaoke_reports import filter_yanbaoke_reports
+
+            def filter_fn(reports, **kw):
+                if institutions_path is not None:
+                    kw.setdefault("institutions_path", institutions_path)
+                return filter_yanbaoke_reports(reports, **kw)
+
         end = pd.Timestamp.now().strftime("%Y-%m-%d")
         start = (pd.Timestamp.now() - pd.Timedelta(days=search_window_days)).strftime("%Y-%m-%d")
         candidate_rows = []
@@ -435,6 +580,14 @@ def run_yanbaoke_weekly_topup(
                 candidate_rows.append({"ts_code": ts_code, "search_error": str(exc)})
                 continue
             frame = result.get("reports")
+            if frame is None or frame.empty:
+                continue
+            # standardize real API fields (org_name->broker, time->publish_date,
+            # formats must include pdf, broker must match known institutions)
+            frame = filter_fn(
+                frame, ts_code=ts_code, stock_name=name,
+                start_date=start, end_date=end,
+            )
             if frame is None or frame.empty:
                 continue
             frame = frame.copy()
@@ -464,6 +617,25 @@ def run_yanbaoke_weekly_topup(
             per_stock_cap=per_stock_cap,
             per_broker_cap=per_broker_cap,
         )
+
+        # --- persistent quota gate ----------------------------------------
+        quota_path = Path(
+            quota_ledger_path or Path(ledger_path).parent / "quota_ledger.json"
+        )
+        # quota refreshes MONTHLY (verified: 2026-07-01 refresh in prior ops
+        # docs) — default period = calendar month, weekly_limit stays a plan cap.
+        period = quota_period_key or pd.Timestamp.now().strftime("%Y-%m")
+        quota_budget = int(quota_budget) if quota_budget is not None else weekly_limit
+        quota = load_quota_ledger(quota_path)
+        spent = period_attempt_count(quota, period)
+        allowed = max(0, quota_budget - spent)
+        already = attempted_uuids(quota, period)
+        pre_filter = len(chosen)
+        if already and not chosen.empty:
+            chosen = chosen[~chosen["uuid"].astype(str).isin(already)]
+        skipped_attempted = pre_filter - len(chosen)
+        if len(chosen) > allowed:
+            chosen = chosen.head(allowed)
         chosen_path = output / f"weekly_queue_{week}.csv"
         chosen.to_csv(chosen_path, index=False)
 
@@ -472,41 +644,55 @@ def run_yanbaoke_weekly_topup(
         downloads_dir.mkdir(parents=True, exist_ok=True)
         ledger = {
             "week_key": week,
+            "quota_period": period,
             "weekly_limit": weekly_limit,
+            "quota_budget": quota_budget,
             "search_calls": search_calls,
             "candidates_found": int(len(candidates)),
             "dedup_dropped": int(len(dropped)),
             "planned_downloads": int(len(chosen)),
-            "api_charged": 0,
+            "attempts_period_before": spent,
+            "attempts_this_run": 0,
+            "confirmed_charged": None,  # unknown until balance verification
+            "skipped_already_attempted": skipped_attempted,
             "downloaded": 0,
             "not_pdf": 0,
             "failed": 0,
             "imported": 0,
-            "remaining_quota": None,  # unknown until real balance endpoint
+            "remaining_quota": None,
             "carryover_uuids": [],
             "errors": [],
         }
         downloaded_rows = []
         for row in chosen.to_dict("records"):
             uuid = str(row.get("uuid") or "")
+            ts_code = str(row.get("ts_code") or "")
+            if uuid in already or not record_download_intent(
+                quota_path, period, uuid, ts_code
+            ):
+                ledger["skipped_already_attempted"] += 1
+                ledger["carryover_uuids"].append(uuid)
+                continue
+            ledger["attempts_this_run"] += 1
             try:
                 from stock_research.yanbaoke_reports import download_yanbaoke_report_pdf
 
                 result = download_yanbaoke_report_pdf(uuid=uuid, output_dir=downloads_dir)
-                ledger["api_charged"] += 1  # every attempt may consume quota
             except Exception as exc:  # noqa: BLE001
-                ledger["api_charged"] += 1
+                update_download_status(quota_path, period, uuid, "failed", error=str(exc))
                 ledger["failed"] += 1
                 ledger["errors"].append(f"{uuid}: {exc}")
                 ledger["carryover_uuids"].append(uuid)
                 continue
             status = str(result.get("status") or "")
+            update_download_status(quota_path, period, uuid, status or "not_pdf")
             if status == "downloaded":
                 ledger["downloaded"] += 1
                 downloaded_rows.append({**row, **result, "status": "downloaded"})
             else:
                 ledger["not_pdf"] += 1
                 ledger["carryover_uuids"].append(uuid)
+        ledger["attempts_period_total"] = spent + ledger["attempts_this_run"]
 
         if downloaded_rows:
             downloads_df = pd.DataFrame(downloaded_rows)
