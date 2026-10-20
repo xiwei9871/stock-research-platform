@@ -160,3 +160,177 @@ def test_partial_symbol_errors_do_not_block_a_date_with_matches():
     assert tdx_date_result_is_fatal({"matched_rows": 12, "failed_codes": 3}) is False
     assert tdx_date_result_is_fatal({"matched_rows": 0, "failed_codes": 3}) is True
     assert tdx_date_result_is_fatal({"matched_rows": 0, "failed_codes": 0}) is False
+
+
+def test_tdx_date_coverage_and_task_outcome_separate_execution_from_completeness():
+    from stock_research.tdx_auction_backfill import (
+        tdx_date_coverage,
+        tdx_date_result_is_complete,
+        tdx_task_outcome,
+    )
+
+    # request succeeded but data incomplete → partial, not success
+    partial = {"matched_rows": 3100, "requested_codes": 5181, "failed_codes": 0}
+    assert tdx_date_coverage(partial) == pytest.approx(3100 / 5181, abs=1e-4)
+    assert tdx_date_result_is_complete(partial) is False
+    assert tdx_task_outcome(partial) == "partial"
+
+    # healthy day: ~1% normal no-match (suspensions) still meets 98%
+    ok = {"matched_rows": 5141, "requested_codes": 5181, "failed_codes": 0}
+    assert tdx_task_outcome(ok) == "success"
+
+    # all-request-error day stays fatal regardless of coverage math
+    assert tdx_task_outcome(
+        {"matched_rows": 0, "requested_codes": 100, "failed_codes": 5}
+    ) == "fatal"
+
+    # boundary: exactly 98% passes, just below fails
+    assert tdx_task_outcome({"matched_rows": 98, "requested_codes": 100}) == "success"
+    assert tdx_task_outcome({"matched_rows": 97, "requested_codes": 100}) == "partial"
+
+    # threshold is configurable
+    assert tdx_task_outcome(
+        {"matched_rows": 900, "requested_codes": 1000},
+        min_coverage_ratio=0.85,
+    ) == "success"
+
+
+def test_run_once_marks_low_coverage_retriable_not_success(monkeypatch):
+    from stock_research import tdx_auction_watchdog as w
+
+    claimed = [
+        {"task_id": "t1", "start_date": "2026-10-20", "partition_key": "2026-10-20"},
+    ]
+    monkeypatch.setattr(w, "claim_backfill_tasks_for_service", lambda **kw: claimed)
+    monkeypatch.setattr(
+        w, "backfill_tdx_auction_date",
+        lambda *a, **kw: {
+            "trade_date": "2026-10-20", "requested_codes": 5181,
+            "matched_rows": 3100, "rows_written": 3100,
+            "missing_codes": 2081, "failed_codes": 0,
+            "unsupported_codes": 0, "excluded_codes": 0,
+        },
+    )
+    marks = {"success": [], "failed": []}
+    monkeypatch.setattr(
+        w, "mark_backfill_task_success_for_service",
+        lambda **kw: marks["success"].append(kw),
+    )
+    monkeypatch.setattr(
+        w, "mark_backfill_task_failed_for_service",
+        lambda **kw: marks["failed"].append(kw),
+    )
+    monkeypatch.setattr(
+        w.TdxAuctionBackfillAdapter, "_record_task_metrics",
+        lambda self, **kw: None,
+    )
+
+    adapter = w.TdxAuctionBackfillAdapter(start_date="2026-10-20", end_date="2026-10-20")
+    result = adapter.run_once(
+        scope={"run_id": "r1"}, max_jobs=1, workers=1, run_timeout_seconds=3600,
+    )
+
+    # partial coverage → retriable failure, NEVER success
+    assert marks["success"] == []
+    assert len(marks["failed"]) == 1
+    assert "coverage" in marks["failed"][0]["error_message"]
+    assert "3100" in marks["failed"][0]["error_message"]
+    assert result["success"] == 0
+    assert result["partial"] == 1
+
+
+def test_run_once_marks_healthy_coverage_success(monkeypatch):
+    from stock_research import tdx_auction_watchdog as w
+
+    monkeypatch.setattr(
+        w, "claim_backfill_tasks_for_service",
+        lambda **kw: [{"task_id": "t1", "start_date": "2026-10-19",
+                       "partition_key": "2026-10-19"}],
+    )
+    monkeypatch.setattr(
+        w, "backfill_tdx_auction_date",
+        lambda *a, **kw: {
+            "trade_date": "2026-10-19", "requested_codes": 5177,
+            "matched_rows": 5136, "rows_written": 5136,
+            "missing_codes": 41, "failed_codes": 0,
+            "unsupported_codes": 0, "excluded_codes": 0,
+        },
+    )
+    marks = {"success": [], "failed": []}
+    monkeypatch.setattr(
+        w, "mark_backfill_task_success_for_service",
+        lambda **kw: marks["success"].append(kw),
+    )
+    monkeypatch.setattr(
+        w, "mark_backfill_task_failed_for_service",
+        lambda **kw: marks["failed"].append(kw),
+    )
+    monkeypatch.setattr(
+        w.TdxAuctionBackfillAdapter, "_record_task_metrics",
+        lambda self, **kw: None,
+    )
+
+    adapter = w.TdxAuctionBackfillAdapter(start_date="2026-10-19", end_date="2026-10-19")
+    result = adapter.run_once(
+        scope={"run_id": "r1"}, max_jobs=1, workers=1, run_timeout_seconds=3600,
+    )
+
+    assert len(marks["success"]) == 1
+    assert marks["success"][0]["rows_written"] == 5136
+    assert marks["failed"] == []
+    assert result["success"] == 1
+    assert result["partial"] == 0
+
+
+def test_frontier_does_not_advance_past_incomplete_date():
+    from stock_research.tdx_auction_watchdog import TdxAuctionBackfillAdapter
+
+    adapter = TdxAuctionBackfillAdapter(start_date="2026-09-08", end_date="2026-10-20")
+    frontier = adapter.compute_frontier([
+        {"trade_date": "2026-10-16", "status": "success"},
+        {"trade_date": "2026-10-19", "status": "success"},
+        {"trade_date": "2026-10-20", "status": "failed"},  # partial, retryable
+    ])
+    assert frontier["completed_through"] == "2026-10-19"
+    assert frontier["currently_working_on"] == "2026-10-20"
+
+
+def test_run_once_fatal_still_marks_failed_with_symbol_detail(monkeypatch):
+    from stock_research import tdx_auction_watchdog as w
+
+    monkeypatch.setattr(
+        w, "claim_backfill_tasks_for_service",
+        lambda **kw: [{"task_id": "t1", "start_date": "2026-10-20",
+                       "partition_key": "2026-10-20"}],
+    )
+    monkeypatch.setattr(
+        w, "backfill_tdx_auction_date",
+        lambda *a, **kw: {
+            "trade_date": "2026-10-20", "requested_codes": 5181,
+            "matched_rows": 0, "rows_written": 0, "missing_codes": 0,
+            "failed_codes": 50, "unsupported_codes": 0, "excluded_codes": 0,
+            "failed_examples": [{"ts_code": "000001.SZ", "error": "timeout"}],
+        },
+    )
+    marks = {"success": [], "failed": []}
+    monkeypatch.setattr(
+        w, "mark_backfill_task_success_for_service",
+        lambda **kw: marks["success"].append(kw),
+    )
+    monkeypatch.setattr(
+        w, "mark_backfill_task_failed_for_service",
+        lambda **kw: marks["failed"].append(kw),
+    )
+    monkeypatch.setattr(
+        w.TdxAuctionBackfillAdapter, "_record_task_metrics",
+        lambda self, **kw: None,
+    )
+
+    adapter = w.TdxAuctionBackfillAdapter(start_date="2026-10-20", end_date="2026-10-20")
+    result = adapter.run_once(
+        scope={"run_id": "r1"}, max_jobs=1, workers=1, run_timeout_seconds=3600,
+    )
+
+    assert marks["success"] == []
+    assert len(marks["failed"]) == 1
+    assert result["failed"] == 1

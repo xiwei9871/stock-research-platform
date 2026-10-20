@@ -1142,6 +1142,7 @@ def add_tdx_auction_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--openclaw-bin", default="openclaw")
     parser.add_argument("--report-dry-run", action="store_true")
     parser.add_argument("--ledger-path", default=str(DEFAULT_MONTH_LEDGER))
+    parser.add_argument("--min-coverage-ratio", type=float, default=0.98)
 
 
 def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
@@ -1234,6 +1235,7 @@ def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
         openclaw_bin=args.openclaw_bin,
         report_dry_run=args.report_dry_run,
         ledger_path=args.ledger_path,
+        min_coverage_ratio=args.min_coverage_ratio,
     )
     run_result = result.get("run_result", {})
     post_summary = result["post_summary"]
@@ -1244,6 +1246,7 @@ def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
     print(f"tdx_auction_watchdog|rows_written|{post_summary.total_rows_written}")
     print(f"tdx_auction_watchdog|run_attempted|{run_result.get('attempted', 0)}")
     print(f"tdx_auction_watchdog|run_rows|{run_result.get('rows', 0)}")
+    print(f"tdx_auction_watchdog|run_partial|{run_result.get('partial', 0)}")
     print(f"tdx_auction_watchdog|run_requested_symbols|{run_result.get('requested_codes', 0)}")
     print(f"tdx_auction_watchdog|run_missing_symbols|{run_result.get('missing_codes', 0)}")
     print(f"tdx_auction_watchdog|run_failed_symbols|{run_result.get('failed_symbols', 0)}")

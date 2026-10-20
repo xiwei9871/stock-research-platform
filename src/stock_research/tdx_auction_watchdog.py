@@ -26,11 +26,14 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, execute, fetch_all
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.tdx_auction_backfill import (
+    DEFAULT_MIN_COVERAGE_RATIO,
     TDX_AUCTION_ENDPOINT,
     TDX_AUCTION_SOURCE,
     TDX_AUCTION_SOURCE_VERSION,
     backfill_tdx_auction_date,
+    tdx_date_coverage,
     tdx_date_result_is_fatal,
+    tdx_task_outcome,
 )
 
 
@@ -233,6 +236,7 @@ class TdxAuctionBackfillAdapter:
     retry_attempts: int = 2
     retry_sleep_seconds: float = 0.25
     max_pages: int = 100
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO
 
     task_name: str = "tdx_auction_backfill"
     dataset: str = TDX_AUCTION_DATASET
@@ -318,6 +322,10 @@ class TdxAuctionBackfillAdapter:
             "failed_symbols": int(result.get("failed_codes", 0) or 0),
             "unsupported_symbols": int(result.get("unsupported_codes", 0) or 0),
             "excluded_symbols": int(result.get("excluded_codes", 0) or 0),
+            "coverage_ratio": round(tdx_date_coverage(result), 6),
+            "completeness_status": tdx_task_outcome(
+                result, min_coverage_ratio=self.min_coverage_ratio
+            ),
             "failed_examples": result.get("failed_examples", [])[:20],
             "unsupported_examples": result.get("unsupported_examples", [])[:20],
         }
@@ -349,7 +357,7 @@ class TdxAuctionBackfillAdapter:
         if not claimed:
             return {"attempted": 0, "success": 0, "failed": 0, "rows": 0, "status": "completed", "timed_out": False}
         started = time.monotonic()
-        success = failed = rows = requested = missing = failed_symbols = unsupported_symbols = excluded_symbols = 0
+        success = failed = partial = rows = requested = missing = failed_symbols = unsupported_symbols = excluded_symbols = 0
         timed_out = False
         errors: list[str] = []
         for task in claimed:
@@ -376,10 +384,31 @@ class TdxAuctionBackfillAdapter:
                 unsupported_symbols += int(result.get("unsupported_codes", 0))
                 excluded_symbols += int(result.get("excluded_codes", 0))
                 rows += int(result.get("rows_written", 0))
-                if tdx_date_result_is_fatal(result):
+                outcome = tdx_task_outcome(
+                    result, min_coverage_ratio=self.min_coverage_ratio
+                )
+                if outcome == "fatal":
                     failed += 1
                     detail = result.get("failed_examples") or []
                     error = f"TDX symbol failures: {detail[:3]}"
+                    errors.append(f"{date_text}: {error}")
+                    mark_backfill_task_failed_for_service(
+                        task_id=str(task["task_id"]), error_message=error, service=self.service
+                    )
+                    self._record_task_metrics(task_id=str(task["task_id"]), result=result)
+                elif outcome == "partial":
+                    # Execution succeeded but coverage is below the completeness
+                    # floor. Keep written rows; mark the task retriable (failed)
+                    # so it re-enters the queue — never success, never advancing
+                    # the completed frontier.
+                    partial += 1
+                    coverage = tdx_date_coverage(result)
+                    error = (
+                        f"coverage {int(result.get('matched_rows', 0) or 0)}/"
+                        f"{int(result.get('requested_codes', 0) or 0)} = "
+                        f"{coverage:.1%} below required "
+                        f"{self.min_coverage_ratio:.0%}"
+                    )
                     errors.append(f"{date_text}: {error}")
                     mark_backfill_task_failed_for_service(
                         task_id=str(task["task_id"]), error_message=error, service=self.service
@@ -405,6 +434,7 @@ class TdxAuctionBackfillAdapter:
             "attempted": len(claimed),
             "success": success,
             "failed": failed,
+            "partial": partial,
             "rows": rows,
             "rows_written": rows,
             "requested_codes": requested,
@@ -434,6 +464,8 @@ class TdxAuctionBackfillAdapter:
             f"run_attempted={int(run_result.get('attempted', 0) or 0)}",
             f"run_success={int(run_result.get('success', 0) or 0)}",
             f"run_failed={int(run_result.get('failed', 0) or 0)}",
+            f"run_partial={int(run_result.get('partial', 0) or 0)}",
+            f"min_coverage_ratio={self.min_coverage_ratio}",
             f"run_rows={int(run_result.get('rows', 0) or 0)}",
             f"run_requested_symbols={int(run_result.get('requested_codes', 0) or 0)}",
             f"run_failed_symbols={int(run_result.get('failed_symbols', 0) or 0)}",
@@ -466,6 +498,7 @@ def run_tdx_auction_backfill_watchdog(
     report_dry_run: bool = False,
     ledger_path: str | Path = DEFAULT_MONTH_LEDGER,
     send: Callable[..., Any] = send_openclaw_feishu_message,
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
 ) -> dict[str, Any]:
     adapter = TdxAuctionBackfillAdapter(
         start_date=start_date,
@@ -478,6 +511,7 @@ def run_tdx_auction_backfill_watchdog(
         retry_attempts=retry_attempts,
         retry_sleep_seconds=retry_sleep_seconds,
         max_pages=max_pages,
+        min_coverage_ratio=min_coverage_ratio,
     )
     result = run_watchdog_once(
         adapter=adapter,

@@ -299,6 +299,47 @@ def tdx_date_result_is_fatal(result: dict[str, Any]) -> bool:
     return int(result.get("failed_codes", 0) or 0) > 0 and int(result.get("matched_rows", 0) or 0) == 0
 
 
+DEFAULT_MIN_COVERAGE_RATIO = 0.98
+
+
+def tdx_date_coverage(result: dict[str, Any]) -> float:
+    """Matched share of the requested eligible universe (0..1)."""
+
+    requested = int(result.get("requested_codes") or 0)
+    if requested <= 0:
+        return 0.0
+    matched = int(result.get("matched_rows", result.get("rows_written", 0)) or 0)
+    return matched / requested
+
+
+def tdx_date_result_is_complete(
+    result: dict[str, Any],
+    *,
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
+) -> bool:
+    """Data completeness is a separate gate from request success."""
+
+    return tdx_date_coverage(result) >= min_coverage_ratio
+
+
+def tdx_task_outcome(
+    result: dict[str, Any],
+    *,
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
+) -> str:
+    """Three-way outcome: ``fatal`` | ``partial`` | ``success``.
+
+    A date whose fetch ran fine but covered too little of the universe is
+    ``partial`` — retriable, never success, never advancing the frontier.
+    """
+
+    if tdx_date_result_is_fatal(result):
+        return "fatal"
+    if tdx_date_result_is_complete(result, min_coverage_ratio=min_coverage_ratio):
+        return "success"
+    return "partial"
+
+
 def upsert_tdx_auction_rows(conn: Any, rows: Iterable[dict[str, Any]]) -> int:
     """Write raw TDX payloads and canonical rows idempotently."""
 
@@ -456,6 +497,7 @@ def backfill_tdx_auction_date(
                 "unsupported_codes": 0,
                 "excluded_codes": excluded_codes,
                 "rows_written": 0,
+                "coverage_ratio": 0.0,
             }
         asset_by_code = {str(row["ts_code"]): row for row in assets}
         managed_client = _make_tdx_client(
@@ -498,6 +540,9 @@ def backfill_tdx_auction_date(
         "unsupported_codes": sum(result.is_unsupported_payload for result in results),
         "excluded_codes": excluded_codes,
         "rows_written": rows_written,
+        "coverage_ratio": (
+            len(rows) / len(results) if results else 0.0
+        ),
         "failed_examples": [
             {
                 "ts_code": result.ts_code,
