@@ -12,7 +12,7 @@ Date: 2026-10-20. 每项列出：变更、影响范围、前置条件、回滚�
 | 5 | **Intraday 特征调度接入**（platform_ready 插入 build-intraday-features-daily） | factor 两表恢复日更 | 隔离验证已通过（覆盖率=市场全量、幂等、分布正常） | 移除该步骤 | 当日 5,186×10 特征行落库 | 设计/待批准 |
 | 6 | **Intraday 历史回填**（backfill-intraday-features-daily 8-04→今） | factor 两表批量 upsert ~2.6M 行 | 分批+断点；隔离幂等已证 | 按日期删除重填 | 中间断档为0、覆盖率达标 | 设计/待批准 |
 | 7 | **TDX open_call 日更恢复** | `stock_auction_bar` open_call 增量 | 工具已从 `8dd57c88` 恢复 + 28 测试绿 + 真实只读抓取验证（9-08 可抓 99.2%，价格一致 100%）；host 脚本动态日期 + launchd StartCalendarInterval 最小修改 | 停用该步骤 | open_call:tdx Gate 项转 READY、当日覆盖≈5k | **待批准（调度+生产首抓）** |
-| 7a | **TDX 两日生产试补**（2026-09-08 + 2026-10-19，market+staging upsert） | `stock_auction_bar` open_call 2 日 | 只读验证已通过；备份快照+限定 source='tdx' DELETE 回滚 | 试补行删除 | matched≥99%、价格一致≥99.9%、Gate 当日 READY | **待批准（首次生产写）** |
+| 7a | **TDX 两日生产试补**（2026-09-08 + 2026-10-19，market+staging upsert） | `stock_auction_bar` open_call 2 日 | 只读验证已通过；备份快照+限定 source='tdx' DELETE 回滚 | 试补行删除 | matched≥99%、价格一致≥99.9%、Gate 当日 READY | **已批准并执行：PASS（matched 99.2%、价格一致 100%、0 冲突覆盖）** |
 | 7b | **TDX 缺口历史回填**（9-08→10-20 共 25 日中剩余 23 日） | `stock_auction_bar` open_call | 7a 通过后执行；单日窗口逐日 watchdog | 按日 DELETE source='tdx' | 全缺口日覆盖达标、零 failed | 待批准 |
 | 8 | **v2 适配版竞价增强因子**（研究版） | lhb_backtest 研究路径 | v2 detail：open 侧任意 source（TDX 优先）、`signal_last_5m_return` 显式命名、竞价专有字段置 NULL 不补零；与 v1 对拍已证明 0 Top5 翻转（79 日） | 不部署 v2，v1 行为不变 | 新旧版本差异报告稳定；PIT 边界验证 | **待批准（代码合并，非生产行为）** |
 | 8b | ~~Tushare 竞价恢复~~ | — | **已否决**：用户决定不购买权限；close_call 历史专有数据不可完整还原 → STATIC_FROZEN 保留研究限制 | — | — | 关闭 |

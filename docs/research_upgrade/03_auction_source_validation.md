@@ -169,6 +169,41 @@ Sweep 2026-10-19：19 项 = **14 READY / 4 DEGRADED / 1 NOT_EVALUATED**。
 
 批准后路径：试补通过 → 分批历史回填（9-08→10-20 余 23 日）→ 每日增量调度（plist 修改 + bootstrap）。
 
+### #7a 生产试补执行结果（2026-10-20，**PASS**）
+
+写入前检查：两表 schema 已完全兼容（`volume_unit`/`order_count`/`source IN ('tushare','tdx')`
+齐备，无迁移需求）；目标日期两表 0 条既有 TDX 记录（快照已导出，空）；部署仅调用
+`tdx-auction-backfill-watchdog` 单日期窗口（不动 Regime/Intraday 代码路径）。
+
+| 日期 | universe | matched→written | missing | failed | 价格一致率 | 耗时 |
+|---|---|---|---|---|---|---|
+| 2026-09-08 | 5,181 | **5,141（≥99% ✓）** | 38 | 0 | **100%**（5,141/5,141） | ~2min |
+| 2026-10-19 | 5,177 | **5,136（≥99% ✓）** | 41 | 0 | **100%**（5,136/5,136） | ~2min |
+
+验收明细（全部通过）：
+- market + staging 两表行数一致、distinct ts_code 一致、全 `source='tdx'`/`volume_unit='hand'`、
+  payload_hash 完整；PK 重复 0；无非目标日期写入（tdx 新行合计恰为 10,277 = 5,141+5,136）。
+- Tushare 历史行与其他日期 TDX 行未触碰。
+- 账本：`ingest.backfill_task` 两 run 各 1 task `success`、attempts=1。
+- 回滚谓词验证（未执行删除）：market `trade_date+auction_phase+source='tdx'` 与
+  staging `trade_date+auction_phase+source_endpoint='tdx:0x0fc6'` 各精确命中
+  5,141/5,141、5,136/5,136 —— 只覆盖本次写入行。
+- 两日全行快照已导出：`outputs/research/m0_8_tdx_trial_20261020/post_*.csv`（可恢复副本）。
+- Gate 单日识别：两日 `open_call:tdx` coverage = 5,141/5,136。
+- 整体 Gate 仍 DEGRADED（剩余 23 日缺失）——按约定不计为试补失败。
+
+**缺口更新：25 日中已恢复 2 日（9-08、10-19）；剩余 23 日待 #7b。**
+
+### #7b 分批回填实施方案（待批准）
+
+- 方式：同一 watchdog 单日窗口逐日执行（每 run 独立 run_id + 账本记录，天然断点续采）。
+- 批次建议：9 月缺口（9-09→9-30，约 15 个交易日）一批验收；10 月缺口（10-09→10-20，
+  约 8 个交易日）一批验收。每批后跑价格一致性+Gate 对账。
+- 预计耗时 ≈2min/日 → 每批 <1 小时。
+- 回滚：按日期+source/source_endpoint 精确 DELETE，与试补同构。
+- **每日增量启用是独立步骤**：host 脚本动态日期 + launchd `StartCalendarInterval`
+  修改、首次 cron 跑通验证，全部需单独批准（#7）。
+
 ### 最小改造方案（待正式集成审批）
 
 1. **TDX 日更恢复**：从 `8dd57c88` 恢复 tdx_auction_backfill/watchdog/host 脚本 + 测试；
