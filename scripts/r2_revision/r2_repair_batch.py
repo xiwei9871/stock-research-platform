@@ -278,6 +278,19 @@ def main() -> None:
                         written_at timestamptz DEFAULT now(),
                         PRIMARY KEY (batch_id, asset_id, trade_date, adjust_type))""")
                 cur.execute(
+                    """CREATE TABLE IF NOT EXISTS backup.r2_write_manifest_factor (
+                        batch_id text, asset_id text, trade_date date,
+                        source_version text, op text,
+                        written_at timestamptz DEFAULT now(),
+                        PRIMARY KEY (batch_id, asset_id, trade_date, source_version))""")
+                cur.execute(
+                    """CREATE TABLE IF NOT EXISTS backup.r2_write_manifest_action (
+                        batch_id text, asset_id text, event_date date,
+                        action_type text, source_version text, op text,
+                        written_at timestamptz DEFAULT now(),
+                        PRIMARY KEY (batch_id, asset_id, event_date,
+                                     action_type, source_version))""")
+                cur.execute(
                     "INSERT INTO backup.r2_batch_meta (batch_id) VALUES (%s) "
                     "ON CONFLICT (batch_id) DO NOTHING", [batch_id])
                 cur.execute(
@@ -348,8 +361,20 @@ def main() -> None:
                             arep[f"{adj}_updated"] = len(updates)
                     conn.commit()
                     with conn.cursor() as cur:
+                        # pre-rebuild factor keys for op classification
+                        pre_factor = keyset(conn, "market.adjustment_factor",
+                                            asset_id, ("trade_date", "source_version"))
                         cur.execute(REBUILD_FACTOR, [[asset_id]])
                         arep["factor_rows"] = cur.rowcount
+                        post_factor = keyset(conn, "market.adjustment_factor",
+                                             asset_id, ("trade_date", "source_version"))
+                        cur.executemany(
+                            """INSERT INTO backup.r2_write_manifest_factor
+                               (batch_id, asset_id, trade_date, source_version, op)
+                               VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                            [(batch_id, asset_id, td, sv,
+                              "update" if (td, sv) in pre_factor else "insert")
+                             for td, sv in post_factor])
                     conn.commit()
 
                     ver = post_diff_full(conn, asset_id, live_rows)
@@ -376,15 +401,50 @@ def main() -> None:
                    if a.startswith("CN:") and r.get("status") == "WRITTEN"]
         with connect("stock_research") as conn:
             with conn.cursor() as cur:
+                # pre-rebuild action keys for op classification
+                cur.execute(
+                    "SELECT asset_id, event_date, action_type, source_version "
+                    "FROM market.corporate_action WHERE asset_id=ANY(%s) "
+                    "AND source_version=%s AND event_date>='2026-01-01' "
+                    "AND event_date<=%s",
+                    [written, ACTION_SOURCE_VERSION, END])
+                pre_actions = {(str(r["asset_id"]), str(r["event_date"]),
+                                r["action_type"], r["source_version"])
+                               for r in cur.fetchall()}
                 cur.execute(
                     "DELETE FROM market.corporate_action "
                     "WHERE asset_id=ANY(%s) AND source_version=%s "
-                    "AND event_date>='2026-01-01' AND event_date<=%s",
+                    "AND event_date>='2026-01-01' AND event_date<=%s "
+                    "RETURNING asset_id, event_date, action_type, source_version",
                     [written, ACTION_SOURCE_VERSION, END])
-                stale_deleted = cur.rowcount
+                deleted_rows = cur.fetchall()
+                stale_deleted = len(deleted_rows)
             build_corporate_actions_from_factors(
                 conn, start_date="2026-01-01", end_date=END,
                 asset_ids=written, require_preclose_evidence=True)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT asset_id, event_date, action_type, source_version "
+                    "FROM market.corporate_action WHERE asset_id=ANY(%s) "
+                    "AND source_version=%s AND event_date>='2026-01-01' "
+                    "AND event_date<=%s",
+                    [written, ACTION_SOURCE_VERSION, END])
+                post_actions = {(str(r["asset_id"]), str(r["event_date"]),
+                                 r["action_type"], r["source_version"])
+                                for r in cur.fetchall()}
+                manifest_rows = [
+                    (batch_id, a, d, t, sv,
+                     "update" if (a, d, t, sv) in pre_actions else "insert")
+                    for a, d, t, sv in post_actions]
+                manifest_rows += [
+                    (batch_id, str(r[0]), str(r[1]), r[2], r[3], "delete")
+                    for r in deleted_rows]
+                cur.executemany(
+                    """INSERT INTO backup.r2_write_manifest_action
+                       (batch_id, asset_id, event_date, action_type,
+                        source_version, op)
+                       VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                    manifest_rows)
             conn.commit()
         for a in written:
             report[a]["events_rebuilt"] = True

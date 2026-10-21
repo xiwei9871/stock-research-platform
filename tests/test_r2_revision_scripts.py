@@ -37,9 +37,15 @@ def test_repair_writes_manifest_in_same_transaction():
 def test_rollback_manifest_ownership():
     src = (SCRIPTS / "r2_rollback_batch.py").read_text()
     # conflict guards before any write
-    assert "CONFLICT" in src and "aborting" in src
+    assert "CONFLICT" in src and "sys.exit(1)" in src
     # manifest-owned restore + delete, not asset-wide
     assert "m.op='update'" in src and "m.op='insert'" in src
+    # factor/action manifests also enforced
+    assert "r2_write_manifest_factor" in src and "r2_write_manifest_action" in src
+    # no-manifest batch refuses --apply
+    assert "refusing to auto-apply" in src
+    # post-rollback nonzero diffs abort the transaction
+    assert 'fail(f"post-rollback verification failed' in src
     # dry-run default, explicit --apply to commit
     assert 'apply = "--apply" in sys.argv' in src
     assert "dry-run only" in src
