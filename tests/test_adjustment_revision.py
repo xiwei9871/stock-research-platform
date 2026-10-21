@@ -51,6 +51,15 @@ def test_classify_already_correct():
     assert status == STATUS_ALREADY_CORRECT
 
 
+def test_classify_needs_review_when_diff_ratio_exceeds_threshold():
+    status = classify_asset_revision(
+        qfq_diff={"diff_count": 60, "missing_in_live": 0},
+        hfq_diff={"diff_count": 1, "missing_in_live": 0},
+        stored_rows=100,
+    )
+    assert status == STATUS_NEEDS_REVIEW
+
+
 def test_classify_needs_review_when_live_missing():
     status = classify_asset_revision(
         qfq_diff={"diff_count": 5, "missing_in_live": 2},

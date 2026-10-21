@@ -85,9 +85,9 @@ def test_build_corporate_actions_from_factors_detects_factor_changes(monkeypatch
     assert params == [
         "derived_actions_v1",
         "derived_factors_v1",
-        corporate_actions.DEFAULT_MIN_FACTOR_CHANGE,
         "2024-05-27",
         "2024-05-31",
+        corporate_actions.DEFAULT_MIN_FACTOR_CHANGE,
     ]
 
 
@@ -101,7 +101,21 @@ def test_build_corporate_actions_min_factor_change_override(monkeypatch):
     )
 
     _sql, params = conn.executed[0]
-    assert params[2] == 0.02
+    assert params[-1] == 0.02
+
+
+def test_build_corporate_actions_scoped_to_assets(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(corporate_actions, "execute", fake_execute)
+
+    corporate_actions.build_corporate_actions_from_factors(
+        conn,
+        asset_ids=["CN:SH:600016"],
+    )
+
+    sql, params = conn.executed[0]
+    assert "asset_id = ANY(%s)" in sql
+    assert params[2] == ["CN:SH:600016"]
 
 
 def test_service_wrappers_open_connection(monkeypatch):

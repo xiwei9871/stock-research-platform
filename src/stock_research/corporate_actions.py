@@ -106,15 +106,22 @@ def build_corporate_actions_from_factors(
     source_version: str = "derived_adjustment_factor_v1",
     factor_source_version: str = "derived_market_daily_bar_v1",
     min_factor_change: float = DEFAULT_MIN_FACTOR_CHANGE,
+    asset_ids: list[str] | None = None,
 ) -> None:
-    params = [source_version, factor_source_version, min_factor_change]
+    # placeholder order in sql: source_version, factor_source_version,
+    # then where_sql filter params, then min_factor_change (the last %s)
+    params = [source_version, factor_source_version]
     filters = ["factor_before IS NOT NULL"]
+    if asset_ids:
+        filters.append("asset_id = ANY(%s)")
+        params.append(asset_ids)
     if start_date:
         filters.append("event_date >= %s")
         params.append(start_date)
     if end_date:
         filters.append("event_date <= %s")
         params.append(end_date)
+    params.append(min_factor_change)
 
     where_sql = " AND ".join(filters)
     sql = f"""

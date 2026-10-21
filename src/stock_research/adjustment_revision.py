@@ -96,7 +96,7 @@ def classify_asset_revision(
     total_diff = qfq_diff["diff_count"] + hfq_diff["diff_count"]
     if qfq_diff["missing_in_live"] or hfq_diff["missing_in_live"]:
         return STATUS_NEEDS_REVIEW
-    if stored_rows and total_diff / max(stored_rows, 1) > REVIEW_MAX_DIFF_RATIO and not total_diff:
+    if stored_rows and total_diff / max(stored_rows, 1) > REVIEW_MAX_DIFF_RATIO:
         return STATUS_NEEDS_REVIEW
     if total_diff == 0:
         return STATUS_ALREADY_CORRECT
