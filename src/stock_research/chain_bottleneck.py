@@ -205,7 +205,20 @@ def build_node_dossier(
     snapshot = dict(input_snapshot or {})
     snapshot["evidence_set_sha256"] = fingerprint
     snapshot["rule_version"] = RULE_VERSION
-    dossier_fp = _dossier_fingerprint(as_of_key, fingerprint, f"node-{RULE_VERSION}")
+    t3_sha = ""
+    if t3:
+        from stock_research.chain_t3_evidence import t3_fingerprint
+
+        t3_sha = t3_fingerprint(
+            t3.get("segment_records") or (),
+            t3.get("rival_supply") or (),
+            t3.get("customer_validation") or (),
+            t3.get("orders") or (),
+        )
+        snapshot["t3_sha256"] = t3_sha
+    dossier_fp = _dossier_fingerprint(
+        as_of_key, fingerprint + (t3_sha or ""), f"node-{RULE_VERSION}"
+    )
 
     return {
         "node_id": node_id,
@@ -222,7 +235,16 @@ def build_node_dossier(
         ],
         "research_gaps": _node_gaps(aspects_out),
         "value_matrix": value_matrix,
-        "t3_facts": t3,
+        "t3_facts": (
+            {
+                k: [
+                    (r.__dict__ if not isinstance(r, dict) else r)
+                    for r in v
+                ]
+                for k, v in t3.items()
+            }
+            if t3 else None
+        ),
         "conclusion": {
             "node_verdict": node_verdict,
             "confidence": node_conf,

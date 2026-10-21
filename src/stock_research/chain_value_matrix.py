@@ -11,7 +11,12 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from stock_research.chain_t3_evidence import segment_cell, segment_records_for
+from stock_research.chain_t3_evidence import (
+    order_cell,
+    segment_cell,
+    segment_records_for,
+    validation_cell,
+)
 
 # Matrix columns → what they attest
 MATRIX_COLUMNS: dict[str, str] = {
@@ -131,6 +136,8 @@ def build_value_matrix(
     dossier_by_code: dict[str, dict[str, Any]],
     node_product_lines: set[str] | None = None,
     segment_records: Sequence[Any] = (),
+    validation_records: Sequence[Any] = (),
+    order_records: Sequence[Any] = (),
 ) -> dict[str, Any]:
     """Assemble the node × company matrix.
 
@@ -163,6 +170,7 @@ def build_value_matrix(
             )
             continue
         if dossier is None:
+            # 无 CAP-01 画像的公司仍可独立呈现 T3 候选经营事实（不推六维结论）。
             rows.append(
                 {
                     "stock_code": code,
@@ -171,9 +179,19 @@ def build_value_matrix(
                     "priority_score": member.get("priority_score"),
                     "dossier": "missing",
                     "tech_participation": "unknown",
-                    "validation_delivery": "unknown",
-                    "verified_orders": "none_seen",
-                    "revenue_profit": "unknown",
+                    "validation_delivery": (
+                        validation_cell(validation_records, code, node_product_lines, as_of)["state"]
+                        if validation_records else "unknown"
+                    ),
+                    "verified_orders": (
+                        order_cell(order_records, code, node_product_lines, as_of)
+                        if order_records else "none_seen"
+                    ),
+                    "revenue_profit": (
+                        segment_cell(
+                            segment_records_for(segment_records, code, node_product_lines), as_of
+                        ) if segment_records else "unknown"
+                    ),
                     "concept_only_risk": "unevaluated",
                     "dossier_fingerprint": "",
                 }
@@ -196,11 +214,19 @@ def build_value_matrix(
                 "dossier": "present",
                 "overall_verdict": (dossier.get("conclusion") or {}).get("overall_verdict", ""),
                 "tech_participation": _dim_verdict(dossier, "tech_moat"),
-                "verified_orders": _order_claim_state(dossier, node_product_lines),
+                "verified_orders": (
+                    order_cell(order_records, code, node_product_lines, as_of)
+                    if order_records
+                    else _order_claim_state(dossier, node_product_lines)
+                ),
                 "revenue_profit": segment_cell(
-                    segment_records_for(segment_records, code, node_product_lines)
+                    segment_records_for(segment_records, code, node_product_lines), as_of
                 ) if segment_records else _dim_verdict(dossier, "financial_realization"),
-                "validation_delivery": _validation_delivery_cell(dossier, node_product_lines),
+                "validation_delivery": (
+                    validation_cell(validation_records, code, node_product_lines, as_of)["state"]
+                    if validation_records
+                    else _validation_delivery_cell(dossier, node_product_lines)
+                ),
                 "concept_only_risk": "high" if concept_only else "low",
                 "dossier_fingerprint": dossier.get("dossier_fingerprint", ""),
             }

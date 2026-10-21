@@ -213,9 +213,9 @@
       "claim_text": "液冷供给者不止一家（非独家供应格局）",
       "evidence_ids": [
         "n_ev_m1_roster",
-        "rival_301018_liquid",
-        "rival_603757_pump",
-        "rival_002050_sanhua"
+        "rival_301018_liquid_roster",
+        "rival_603757_pump_roster",
+        "rival_002050_sanhua_roster"
       ],
       "claim_role": "market_structure"
     }

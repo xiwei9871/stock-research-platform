@@ -311,13 +311,13 @@ def _seg(rid="seg1", code="002837", line="dc_liquid_cooling", scope="product_lin
 
 def test_segment_cell_states():
     # 精确产品线披露
-    assert segment_cell([_seg()])["state"] == "disclosed"
+    assert segment_cell([_seg(review="accepted")])["state"] == "disclosed"
     # 更宽口径段（含该线但未拆）
-    assert segment_cell([_seg(scope="segment")])["state"] == "disclosed_broader_scope"
+    assert segment_cell([_seg(scope="segment", review="accepted")])["state"] == "disclosed_broader_scope"
     # 明确未披露
-    assert segment_cell([_seg(scope="undisclosed")])["state"] == "undisclosed"
+    assert segment_cell([_seg(scope="undisclosed", review="accepted")])["state"] == "undisclosed"
     # 未抽取 ≠ 未披露
-    assert segment_cell([_seg(scope="unextracted")])["state"] == "unextracted"
+    assert segment_cell([_seg(scope="unextracted", review="accepted")])["state"] == "unextracted"
     assert segment_cell([])["state"] == "missing"
 
 
@@ -364,3 +364,73 @@ def test_t3_records_roundtrip(tmp_path):
     p.write_text('{"segment_records":[{"record_id":"s1","stock_code":"002837","product_line":"x","product_line_label":"X线","report_period":"2025FY","disclosure_scope":"product_line","source_id":"src1","revenue":100}],"rival_supply":[{"record_id":"r1","rival_stock_code":"301018","rival_name":"申菱","node_id":"n1","supply_facts":"facts","source_id":"s2"}]}')
     t3 = load_t3_records(p)
     assert len(t3["segment_records"]) == 1 and len(t3["rival_supply"]) == 1
+
+
+# ---------- T3 收口: pending隔离 / PIT / source_type / 指纹 / 板块订单归因 ----------
+
+from stock_research.chain_t3_evidence import (
+    CustomerValidationRecord, OrderRecord, validation_cell, order_cell, t3_fingerprint,
+)
+
+
+def test_segment_pending_not_in_trusted_state():
+    """pending 分产品数字只进 candidate_facts，state 不被提升。"""
+    rec = _seg("a", "002837", "dc_liquid_cooling", scope="product_line", review="pending")
+    cell = segment_cell([rec])
+    assert cell["state"] == "pending_review"
+    assert cell["facts"] == [] and cell["candidate_facts"]
+    acc = _seg("b", "002837", "dc_liquid_cooling", scope="product_line", review="accepted")
+    cell2 = segment_cell([rec, acc])
+    assert cell2["state"] == "disclosed" and len(cell2["candidate_facts"]) == 1
+
+
+def test_segment_pit_future_ingest_excluded():
+    """as_of 历史时点读不到未来入库的 T3 数字。"""
+    rec = _seg("a", "002837", "dc_liquid_cooling", review="accepted")
+    rec2 = SegmentRevenueRecord(**{**rec.__dict__, "ingested_at": "2026-11-01"})
+    assert segment_cell([rec2], as_of="2026-10-21")["state"] == "missing"
+    assert segment_cell([rec2], as_of="2026-11-02")["state"] == "disclosed"
+
+
+def test_rival_source_type_preserved():
+    """券商线索不得被标成 company_filing。"""
+    rec = RivalSupplyRecord(
+        record_id="rv", rival_stock_code="603757", rival_name="大元", node_id="n1",
+        supply_facts="x", source_id="B_dayuan", source_type="broker_report",
+        reliability_level="S3", review_status="lead_only",
+        published_at="2026-08-19", ingested_at="2026-10-19",
+    )
+    _ev, src = rival_supply_as_evidence(rec)
+    assert src.source_type == "broker_report" and src.reliability_level == "S3"
+
+
+def test_t3_fingerprint_changes_with_content_and_review():
+    a = _seg("a", "002837", "x", review="pending")
+    b = _seg("a", "002837", "x", review="accepted")
+    assert t3_fingerprint([a], []) != t3_fingerprint([b], [])
+    c = SegmentRevenueRecord(**{**a.__dict__, "revenue": 999})
+    assert t3_fingerprint([a], []) != t3_fingerprint([c], [])
+
+
+def test_board_order_not_product_line_order():
+    """板块订单+72%不得归因为液冷单线订单。"""
+    rec = OrderRecord(
+        record_id="o1", stock_code="301018", product_line="dc_liquid_cooling",
+        stage="contracted", scope="industry_board", review_status="accepted",
+        published_at="2026-04-27", ingested_at="2026-10-19",
+    )
+    cell = order_cell([rec], "301018", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell["state"] == "contracted_at_industry_board"  # 明示口径，不升级
+    rec2 = OrderRecord(**{**rec.__dict__, "scope": "product_line"})
+    assert order_cell([rec2], "301018", {"dc_liquid_cooling"}, "2026-10-21")["state"] == "verified_contracted"
+
+
+def test_validation_stage_tiers():
+    rec = CustomerValidationRecord(
+        record_id="c1", stock_code="002837", product_line="dc_liquid_cooling",
+        stage="validated", customer="Intel/NVIDIA MGX", review_status="accepted",
+        published_at="2026-04-21", ingested_at="2026-10-19",
+    )
+    assert validation_cell([rec], "002837", {"dc_liquid_cooling"}, "2026-10-21")["state"] == "validated"
+    lead = CustomerValidationRecord(**{**rec.__dict__, "review_status": "lead_only"})
+    assert validation_cell([lead], "002837", {"dc_liquid_cooling"}, "2026-10-21")["state"] == "pending_review"

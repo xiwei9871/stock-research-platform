@@ -1272,8 +1272,19 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
     for rec in t3["rival_supply"]:
         if rec.node_id != case["node_id"]:
             continue
-        ev, src = rival_supply_as_evidence(rec)
+        # 双行：{rid} refute→稀缺性claim；{rid}_roster support→market_structure claim
+        ev, src = rival_supply_as_evidence(rec, direction="refute")
         extra_evidence.append(ev)
+        from stock_research.company_intelligence import CompanyEvidence as _CE
+        roster = _CE(
+            evidence_id=rec.record_id + "_roster",
+            source_id=ev.source_id, dimension=ev.dimension,
+            direction="support", excerpt=ev.excerpt,
+            page_or_section=ev.page_or_section, confidence=ev.confidence,
+            review_status=ev.review_status, checklist_item="供应格局",
+            evidence_scope="node", product_line="",
+        )
+        extra_evidence.append(roster)
         extra_sources[src.source_id] = src
         rival_map[rec.record_id] = rec
     matrix = build_value_matrix(
@@ -1284,6 +1295,8 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
         dossier_by_code=dossier_by_code,
         node_product_lines=case.get("product_lines"),
         segment_records=t3["segment_records"],
+        validation_records=t3.get("customer_validation") or (),
+        order_records=t3.get("orders") or (),
     )
     dossier = build_node_dossier(
         node_id=case["node_id"],
@@ -1296,8 +1309,10 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
         product_lines=case.get("product_lines"),
         value_matrix=matrix,
         t3={
-            "segment_records": [r.__dict__ for r in t3["segment_records"]],
-            "rival_supply": [r.__dict__ for r in t3["rival_supply"]],
+            "segment_records": t3["segment_records"],
+            "rival_supply": t3["rival_supply"],
+            "customer_validation": t3.get("customer_validation") or (),
+            "orders": t3.get("orders") or (),
         },
         input_snapshot=case["input_snapshot"],
     )
