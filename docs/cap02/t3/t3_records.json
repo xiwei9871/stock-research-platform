@@ -79,7 +79,8 @@
       "published_at": "2026-04-18",
       "ingested_at": "2026-10-21",
       "excerpt": "北方华创年报cninfo PDF未入库本地（source_file路径缺失）；ru_*摘录层无营业收入构成表——分产品收入不可判定为'未披露'，只能判为'未抽取'缺口",
-      "note": "DATA线任务：补002371年报分产品表（电子工艺装备/电子元器件分部）"
+      "note": "cninfo年报PDF曾于likely_core_36回填目录入库后文件缺失(2026-10-19目录清空)；ru_*仅含p14-43经营讨论摘录，无分产品收入表——缺口需重新采集",
+      "review_status": "pending"
     },
     {
       "record_id": "seg_688686_mv_2025FY",
@@ -122,6 +123,67 @@
       "excerpt": "分行业：数据服务行业 营业收入2,343,264,576.37元 占55.67% 同比+51.42%（含液冷/风冷/相变/主机系列，液冷未单独拆数）；数据服务板块新增订单同比增长约72%",
       "review_status": "accepted",
       "note": "核验:直读2025年报p15原表：数据服务行业2,343,264,576.37元/55.67%/+51.42%；p10新增订单+72%为板块口径——一致"
+    },
+    {
+      "record_id": "seg_002371_total_2025FY",
+      "stock_code": "002371",
+      "product_line": "semi_front_end",
+      "product_line_label": "公司整体营业收入",
+      "report_period": "2025FY",
+      "disclosure_scope": "company_total",
+      "revenue": 39353000000,
+      "revenue_yoy": 30.9,
+      "currency": "CNY",
+      "unit": "元",
+      "source_id": "bocom_002371_20260506",
+      "source_type": "broker_report",
+      "reliability_level": "S3",
+      "uri": "/Users/xiwei/stock_research/data/manual/yanbaoke_reports_serenity_p1_20260608/20260506-交银国际证券-北方华创-002371.SZ-营收持续高增长_毛利率1Q26反弹_6页_366kb.pdf",
+      "page_or_section": "财务数据一览表",
+      "published_at": "2026-05-06",
+      "available_at": "2026-05-06",
+      "ingested_at": "2026-10-21",
+      "review_status": "pending",
+      "excerpt": "交银国际2026-05-06报告财务数据一览：2025年收入39,353百万元(+30.9%)、净利5,522百万元；引用公司披露口径——券商二手引用，分产品表仍缺失",
+      "note": "券商引用公司披露总数；年报原表未入库，不作accepted依据"
+    },
+    {
+      "record_id": "seg_002837_liquid_line_undisclosed",
+      "stock_code": "002837",
+      "product_line": "dc_liquid_cooling",
+      "product_line_label": "液冷单线（未拆分）",
+      "report_period": "2025FY",
+      "disclosure_scope": "undisclosed",
+      "source_id": "ru_002837_ar2025_seg",
+      "source_type": "company_filing",
+      "reliability_level": "S1",
+      "uri": "outputs/research/tech_bottleneck_expansion_queue_primary_source_backfill_v1/cninfo_primary_source_pdfs/002837_英维克_2026-04-21_年报_2025年年度报告_1225131813.pdf",
+      "page_or_section": "年报p15-16分产品表",
+      "published_at": "2026-04-21",
+      "available_at": "2026-04-21",
+      "ingested_at": "2026-10-21",
+      "review_status": "accepted",
+      "excerpt": "年报分产品表仅披露机房温控/机柜温控/其他三大类；机房温控含液冷但未拆分液冷单线收入——已核实未单独披露，不推算",
+      "note": "液冷单线收入未单独披露（已核实）"
+    },
+    {
+      "record_id": "seg_301018_liquid_line_undisclosed",
+      "stock_code": "301018",
+      "product_line": "dc_liquid_cooling",
+      "product_line_label": "液冷单线（未拆分）",
+      "report_period": "2025FY",
+      "disclosure_scope": "undisclosed",
+      "source_id": "ru_301018_ar2025_rival",
+      "source_type": "company_filing",
+      "reliability_level": "S1",
+      "uri": "outputs/research/tech_bottleneck_expansion_queue_primary_source_backfill_v1/cninfo_primary_source_pdfs/301018_申菱环境_2026-04-27_年报_2025年年度报告_1225181199.pdf",
+      "page_or_section": "年报p10-15",
+      "published_at": "2026-04-27",
+      "available_at": "2026-04-27",
+      "ingested_at": "2026-10-21",
+      "review_status": "accepted",
+      "excerpt": "数据服务板块含液冷/风冷/相变等多类产品，年报未拆分液冷单线收入——已核实未单独披露，不推算",
+      "note": "液冷单线收入未单独披露（已核实）"
     }
   ],
   "rival_supply": [
@@ -221,7 +283,7 @@
       "record_id": "cust_301018_topcust",
       "stock_code": "301018",
       "product_line": "dc_liquid_cooling",
-      "stage": "validated",
+      "stage": "customer_relationship",
       "customer": "H公司/字节/腾讯/阿里/主要COLO商",
       "scope": "industry_board",
       "report_period": "2025FY",
@@ -232,7 +294,8 @@
       "available_at": "2026-04-27",
       "ingested_at": "2026-10-21",
       "review_status": "accepted",
-      "excerpt": "年报p10：与H公司、字节、腾讯、阿里以及主要COLO商等重要头部客户的合作粘性进一步强化——数据服务板块客户关系，未点名液冷产品级认证"
+      "excerpt": "年报p10：与H公司、字节、腾讯、阿里以及主要COLO商等重要头部客户的合作粘性进一步强化——数据服务板块客户关系，未点名液冷产品级认证",
+      "note": "板块客户关系披露事实；未点名液冷产品级认证/验证通过"
     },
     {
       "record_id": "cust_688686_yuejiang",

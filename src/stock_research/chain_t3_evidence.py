@@ -56,6 +56,8 @@ class SegmentRevenueRecord:
     ingested_at: str = ""
     review_status: str = "pending"
     note: str = ""
+    source_type: str = "company_filing"   # broker_report 等次级来源如实标注
+    reliability_level: str = "S1"
 
 
 @dataclass(frozen=True)
@@ -164,7 +166,11 @@ def segment_cell(
             "page": r.page_or_section,
         }
 
-    candidates = [_fact(r) for r in pending if r.disclosure_scope != "unextracted"]
+    def _why(r: SegmentRevenueRecord) -> str:
+        return "incomplete_source" if not _source_ok(r) else "review_not_accepted"
+
+    candidates = [{**_fact(r), "demotion_reason": _why(r)}
+                  for r in pending if r.disclosure_scope != "unextracted"]
     if not scoped:
         state = (
             "unextracted"
@@ -173,12 +179,15 @@ def segment_cell(
         )
         return {"state": state, "facts": [], "candidate_facts": candidates}
     exact = [r for r in scoped if r.disclosure_scope == "product_line"]
+    broader = [r for r in scoped if r.disclosure_scope in ("segment", "industry_board", "company_total")]
     if exact:
         state = "disclosed"
+    elif broader:
+        state = "disclosed_broader_scope"  # segment/board number exists, line not split
     elif any(r.disclosure_scope == "undisclosed" for r in scoped):
         state = "undisclosed"
     else:
-        state = "disclosed_broader_scope"  # segment/board number exists, line not split
+        state = "disclosed_broader_scope"
     return {"state": state, "facts": [_fact(r) for r in scoped], "candidate_facts": candidates}
 
 
@@ -253,6 +262,7 @@ class CustomerValidationRecord:
     ingested_at: str = ""
     review_status: str = "pending"
     excerpt: str = ""
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -273,6 +283,7 @@ class OrderRecord:
     ingested_at: str = ""
     review_status: str = "pending"
     excerpt: str = ""
+    note: str = ""
 
 
 def _source_ok(r: Any) -> bool:
@@ -342,13 +353,18 @@ def validation_cell(
     ]
     accepted = [r for r in rows if r.review_status == "accepted" and _source_ok(r)]
     stage_rank = {s: i for i, s in enumerate(VALIDATION_STAGES)}
-    pl = [r for r in accepted if r.scope == "product_line"]
+    pl = [r for r in accepted if r.scope == "product_line" and r.stage in VALIDATION_STAGES]
     best = max(pl, key=lambda r: stage_rank.get(r.stage, -1), default=None)
+    rel = [r for r in accepted if r.stage == "customer_relationship"]
     if best:
         state = best.stage
+    elif rel:
+        # 客户关系披露事实（板块/公司级）——不冒产品认证级
+        state = f"customer_relationship_disclosed_at_{rel[0].scope}"
     else:
-        # 板块/公司级客户关系 ≠ 产品线认证：明示口径命名空间
-        other = max(accepted, key=lambda r: stage_rank.get(r.stage, -1), default=None)
+        other = max(
+            (r for r in accepted if r.stage in VALIDATION_STAGES),
+            key=lambda r: stage_rank.get(r.stage, -1), default=None)
         state = (
             f"{other.stage}_at_{other.scope}" if other
             else ("pending_review" if rows else "none_seen")
@@ -358,8 +374,11 @@ def validation_cell(
         "validated_by": [r.customer for r in pl if r.customer],
         "candidates": [
             {"record_id": r.record_id, "stage": r.stage, "customer": r.customer,
-             "review_status": r.review_status}
-            for r in rows if r.review_status != "accepted"
+             "review_status": r.review_status,
+             "demotion_reason": (
+                 "incomplete_source" if not _source_ok(r)
+                 else "review_not_accepted")}
+            for r in rows if not (r.review_status == "accepted" and _source_ok(r))
         ],
     }
 
@@ -411,7 +430,10 @@ def order_cell(
         "no_major_contract_disclosure": bool(nodisc),
         "candidates": [
             {"record_id": r.record_id, "stage": r.stage, "scope": r.scope,
-             "review_status": r.review_status}
-            for r in rows if r.review_status != "accepted"
+             "review_status": r.review_status,
+             "demotion_reason": (
+                 "incomplete_source" if not _source_ok(r)
+                 else "review_not_accepted")}
+            for r in rows if not (r.review_status == "accepted" and _source_ok(r))
         ],
     }

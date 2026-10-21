@@ -61,3 +61,44 @@ done
 ```
 
 边界：research_only、零生产写入、无信号/准入变更、未部署。
+
+
+## DATA 线证据补全（2026-10-21 二轮）
+
+### 新增一手/次级来源核验结果
+
+| 目标 | 结果 | 处置 |
+|---|---|---|
+| 002371 年报 PDF | cninfo 回填目录文件已于 10-19 清空；ru_* 仅含 p14-43 经营讨论，无分产品表 | 维持 `unextracted`（附缺失原因）；缺口未关闭 |
+| 002371 FY2025 总营收 | 交银国际 2026-05-06 券商报告：39,353M(+30.9%)，净利 5,522M | `pending` 候选（source_type=broker_report/S3，不冒充 filing；不进可信结论） |
+| 002050 三花 | 全库零覆盖（仅他司年报中作为客户被提及） | `missing` 缺口未关闭 |
+| 603757 大元 | ru_* 仅 2022 半年报（民用屏蔽泵），无液冷/CDU 一手内容 | `lead_only` 缺口未关闭（仅券商线索） |
+| 英维克液冷单线收入 | 年报仅披露机房温控/机柜温控两大类 | `undisclosed` 已核实（accepted 事实级，不推算） |
+| 申菱液冷单线收入 | 数据服务板块含多类产品未拆分 | `undisclosed` 已核实（同上） |
+
+### 语义校准
+
+- `cust_301018_topcust` → `customer_relationship_disclosed_at_industry_board`（板块客户关系事实级，不冒产品认证）
+- `demotion_reason` 透传：`incomplete_source` / `review_not_accepted`
+- `SegmentRevenueRecord` + `source_type`/`reliability_level`；`undisclosed` 排 `broader` 之后（有板块数据不误报未披露）
+
+### 自动统计（t3_audit_stats）
+
+`{"accepted": 13, "lead_only": 4, "n": 19, "pending": 2}`
+
+- +2 accepted（英维克/申菱液冷单线 undisclosed 事实级记录）
+- +1 pending（002371 券商引用总营收候选）
+
+### 三节点矩阵变化
+
+- 301018 valdel: `validated_at_industry_board` → **`customer_relationship_disclosed_at_industry_board`**
+- 002371 rev: unextracted + 候选 `seg_002371_total_2025FY`（review_not_accepted）
+- 002837/301018 rev 仍 `disclosed_broader_scope`（液冷单线 undisclosed 已核实事实入 facts）
+- 节点判定不变：unverified / unverified / needs_evidence
+
+### 未关闭缺口（继续交 DATA 线）
+
+1. 002371 年报分产品表（需重新采集 cninfo PDF 或可信表格）
+2. 三花智控一手披露（需新采集：年报/公告/定增问询）
+3. 大元泵业 CDU 泵适配/认证（需新采集：年报或定点公告）
+4. 液冷单线收入拆分：两家公司均已核实"未单独披露"——**缺口转化为已核实结论**，除非中报/定增文件拆分否则永久缺口
