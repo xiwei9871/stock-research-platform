@@ -110,6 +110,7 @@ def build_node_dossier(
     member_companies: Sequence[dict[str, Any]] = (),
     product_lines: set[str] | None = None,
     value_matrix: dict[str, Any] | None = None,
+    t3: dict[str, Any] | None = None,
     input_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Deterministic node-level bottleneck dossier."""
@@ -221,6 +222,7 @@ def build_node_dossier(
         ],
         "research_gaps": _node_gaps(aspects_out),
         "value_matrix": value_matrix,
+        "t3_facts": t3,
         "conclusion": {
             "node_verdict": node_verdict,
             "confidence": node_conf,
@@ -396,4 +398,5 @@ def load_node_case(path: str | Path) -> dict[str, Any]:
         "evidence": tuple(CompanyEvidence(**row) for row in spec.get("evidence") or []),
         "sources": tuple(CompanySource(**row) for row in spec.get("sources") or []),
         "input_snapshot": spec.get("input_snapshot") or {},
+        "t3_records_path": spec.get("t3_records_path") or "",
     }

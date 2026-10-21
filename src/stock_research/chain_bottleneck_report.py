@@ -105,18 +105,41 @@ def render_node_markdown(dossier: dict[str, Any]) -> str:
         )
         lines.append("|---|---|" + "---|" * (len(cols) + 1))
         for r in matrix["rows"]:
+            rp = r.get("revenue_profit")
+            if isinstance(rp, dict):
+                bits = []
+                for f_ in rp.get("facts", []):
+                    rev = f"{f_['revenue']/1e8:.2f}亿" if f_.get("revenue") else "-"
+                    gm = f" 毛利率{f_['gross_margin']*100:.1f}%" if f_.get("gross_margin") else ""
+                    flag = "〔待核验〕" if f_.get("review_status") == "pending" else ""
+                    bits.append(f"{f_['label']} {rev}{gm}({f_['scope']}){flag}")
+                rp_txt = rp.get("state", "missing") + ("；".join(bits) and "；" + "；".join(bits))
+            else:
+                rp_txt = str(rp)
             lines.append(
                 f"| {r['stock_code']} | {r['company_name']} "
                 f"| {_VERDICT_LABEL.get(r['tech_participation'], r['tech_participation'])} "
                 f"| {_VERDICT_LABEL.get(r['validation_delivery'], r['validation_delivery'])} "
                 f"| {r['verified_orders']} "
-                f"| {_VERDICT_LABEL.get(r['revenue_profit'], r['revenue_profit'])} "
+                f"| {rp_txt} "
                 f"| {r['concept_only_risk']} | {r.get('dossier_fingerprint','')[:10]} |"
             )
         lines.append("")
         lines.append("注：分产品收入未披露的公司如实标 needs_evidence，不推算收入份额。")
         lines.append("")
 
+    t3 = dossier.get("t3_facts") or {}
+    if t3.get("rival_supply"):
+        lines.append("## 五点五、竞争供给核查（T3-I4，待核验）")
+        lines.append("")
+        lines.append("| 竞对 | 阶段 | 供给事实 | 替代性 | 审核 |")
+        lines.append("|---|---|---|---|---|")
+        for r in t3["rival_supply"]:
+            lines.append(
+                f"| {r['rival_name']}({r['rival_stock_code']}) | {r.get('stage','')} "
+                f"| {r['supply_facts'][:80]} | {r['substitution_note'][:50]} | {r['review_status']} |"
+            )
+        lines.append("")
     lines.append("## 五、研究缺口（交 DATA 线）")
     lines.append("")
     lines.append("| 门槛 | 缺口 | 原因 | 优先级 |")

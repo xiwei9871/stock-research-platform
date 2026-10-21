@@ -288,3 +288,79 @@ def test_ess_delivery_not_dc_cooling_delivery():
                              "verdict_weight": "counted", "product_line": ""}],
     }
     assert _order_claim_state(dossier2, {"dc_liquid_cooling"}) == "node_attribution_unknown"
+
+
+# ---------- CAP-02-T3: segment revenue + rival supply interface ----------
+
+from stock_research.chain_t3_evidence import (
+    SegmentRevenueRecord, RivalSupplyRecord,
+    load_t3_records, segment_cell, segment_records_for, rival_supply_as_evidence,
+)
+
+
+def _seg(rid="seg1", code="002837", line="dc_liquid_cooling", scope="product_line",
+         revenue=1e9, gm=0.3, review="pending"):
+    return SegmentRevenueRecord(
+        record_id=rid, stock_code=code, product_line=line,
+        product_line_label=line, report_period="2025FY",
+        disclosure_scope=scope, revenue=revenue, gross_margin=gm,
+        source_id="s1", published_at="2026-04-21", ingested_at="2026-10-21",
+        review_status=review,
+    )
+
+
+def test_segment_cell_states():
+    # 精确产品线披露
+    assert segment_cell([_seg()])["state"] == "disclosed"
+    # 更宽口径段（含该线但未拆）
+    assert segment_cell([_seg(scope="segment")])["state"] == "disclosed_broader_scope"
+    # 明确未披露
+    assert segment_cell([_seg(scope="undisclosed")])["state"] == "undisclosed"
+    # 未抽取 ≠ 未披露
+    assert segment_cell([_seg(scope="unextracted")])["state"] == "unextracted"
+    assert segment_cell([])["state"] == "missing"
+
+
+def test_segment_records_node_filter():
+    recs = [_seg("a", "002837", "dc_liquid_cooling"),
+            _seg("b", "002837", "ess_thermal"),
+            _seg("c", "002371", "semi_front_end")]
+    out = segment_records_for(recs, "002837", {"dc_liquid_cooling"})
+    assert [r.record_id for r in out] == ["a"]
+
+
+def test_rival_record_becomes_pending_node_evidence():
+    rec = RivalSupplyRecord(
+        record_id="rv1", rival_stock_code="301018", rival_name="申菱",
+        node_id="n1", stage="量产", supply_facts="CDU全套+产能爬坡",
+        source_id="s_riv", published_at="2026-04-27", ingested_at="2026-10-19",
+        review_status="pending",
+    )
+    ev, src = rival_supply_as_evidence(rec)
+    assert ev.evidence_scope == "node"
+    assert ev.review_status == "pending"
+    # pending 竞对证据进入待验证列表，不参与论点计数
+    d = _node([ev], [src], [_nc("nc1", "process_irreplaceability", ["rv1"], role="non_substitutability")])
+    assert d["node_claims"][0]["verdict"] == "needs_evidence"
+    assert "rv1" in d["node_claims"][0]["unverified_evidence_ids"]
+
+
+def test_validation_delivery_node_filtered():
+    """机房/储能交付证据不能给半导体节点供货。"""
+    from stock_research.chain_value_matrix import _validation_delivery_cell
+    dossier = {
+        "claims": [{"claim_id": "c1", "dimension": "commercialization",
+                    "verdict": "partially_supported", "evidence_ids": ["e1"]}],
+        "evidence_matrix": [{"evidence_id": "e1", "checklist_item": "实际交付",
+                             "verdict_weight": "counted", "product_line": "ess_thermal"}],
+        "dimensions": {"commercialization": {"verdict": "partially_supported"}},
+    }
+    assert _validation_delivery_cell(dossier, {"semi_front_end"}) == "node_attribution_unknown"
+    assert _validation_delivery_cell(dossier, {"ess_thermal"}) == "partially_supported"
+
+
+def test_t3_records_roundtrip(tmp_path):
+    p = tmp_path / "t3.json"
+    p.write_text('{"segment_records":[{"record_id":"s1","stock_code":"002837","product_line":"x","product_line_label":"X线","report_period":"2025FY","disclosure_scope":"product_line","source_id":"src1","revenue":100}],"rival_supply":[{"record_id":"r1","rival_stock_code":"301018","rival_name":"申菱","node_id":"n1","supply_facts":"facts","source_id":"s2"}]}')
+    t3 = load_t3_records(p)
+    assert len(t3["segment_records"]) == 1 and len(t3["rival_supply"]) == 1

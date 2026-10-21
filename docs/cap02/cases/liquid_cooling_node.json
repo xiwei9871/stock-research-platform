@@ -1,7 +1,7 @@
 {
   "node_id": "ai_power_liquid_cooling",
   "node_name": "数据中心液冷环节",
-  "as_of": "2026-10-20",
+  "as_of": "2026-10-21",
   "member_companies": [
     {
       "stock_code": "002837",
@@ -116,10 +116,10 @@
       "source_id": "N_m1_moat_deepening",
       "dimension": "process_irreplaceability",
       "direction": "refute",
-      "excerpt": "M1核查：具备液冷供给能力的上市公司不止一家（申菱/三花/大元等）；各家液冷收入均未单独拆分披露，节点真实供需缺口无量化一手数据。",
+      "excerpt": "M1核查：具备液冷供给能力的上市公司不止一家（申菱/三花/大元等）；各家液冷收入均未单独拆分披露，节点真实供需缺口无量化一手数据。（内部核查摘要，仅作来源关联）",
       "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1",
       "confidence": "medium",
-      "review_status": "accepted",
+      "review_status": "lead_only",
       "checklist_item": "替代路线存在性",
       "evidence_scope": "node"
     },
@@ -177,7 +177,10 @@
         "n_ev_guojin_landscape",
         "n_ev_maglev_alt",
         "n_ev_dayuan_pump",
-        "n_ev_m1_supplier_count"
+        "n_ev_m1_supplier_count",
+        "rival_301018_liquid",
+        "rival_603757_pump",
+        "rival_002050_sanhua"
       ],
       "claim_role": "non_substitutability"
     },
@@ -209,7 +212,10 @@
       "dimension": "process_irreplaceability",
       "claim_text": "液冷供给者不止一家（非独家供应格局）",
       "evidence_ids": [
-        "n_ev_m1_roster"
+        "n_ev_m1_roster",
+        "rival_301018_liquid",
+        "rival_603757_pump",
+        "rival_002050_sanhua"
       ],
       "claim_role": "market_structure"
     }
@@ -220,5 +226,6 @@
   },
   "product_lines": [
     "dc_liquid_cooling"
-  ]
+  ],
+  "t3_records_path": "docs/cap02/t3/t3_records.json"
 }

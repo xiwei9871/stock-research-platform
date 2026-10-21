@@ -1,7 +1,7 @@
 {
   "node_id": "humanoid_vision_sensing",
   "node_name": "人形机器人视觉感知环节",
-  "as_of": "2026-10-20",
+  "as_of": "2026-10-21",
   "member_companies": [
     {
       "stock_code": "688686",
@@ -126,5 +126,6 @@
   },
   "product_lines": [
     "humanoid_vision"
-  ]
+  ],
+  "t3_records_path": "docs/cap02/t3/t3_records.json"
 }

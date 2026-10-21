@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
+from stock_research.chain_t3_evidence import segment_cell, segment_records_for
+
 # Matrix columns → what they attest
 MATRIX_COLUMNS: dict[str, str] = {
     "tech_participation": "技术与产业链参与",
@@ -90,6 +92,36 @@ def _order_claim_state(
     return "none_seen"
 
 
+def _validation_delivery_cell(
+    dossier: dict[str, Any],
+    node_product_lines: set[str] | None,
+) -> str:
+    """认证/交付 cell, node-filtered: only evidence attributable to the node's
+    product lines may tier it up; otherwise node_attribution_unknown."""
+    claims = dossier.get("claims") or []
+    matrix = {row["evidence_id"]: row for row in dossier.get("evidence_matrix") or []}
+    comm = [c for c in claims if c.get("dimension") == "commercialization"]
+    if node_product_lines is None:
+        return _dim_verdict(dossier, "commercialization")
+    attributable = False
+    for claim in comm:
+        for eid in claim.get("evidence_ids") or []:
+            row = matrix.get(eid)
+            if not row:
+                continue
+            if (row.get("product_line") or "") in node_product_lines:
+                attributable = True
+                if row.get("verdict_weight") == "counted" and claim.get("verdict") in {
+                    "confirmed", "partially_supported"
+                }:
+                    return claim["verdict"]
+    if attributable:
+        return "needs_evidence"
+    if comm:
+        return "node_attribution_unknown"
+    return _dim_verdict(dossier, "commercialization")
+
+
 def build_value_matrix(
     *,
     node_id: str,
@@ -98,6 +130,7 @@ def build_value_matrix(
     member_companies: Sequence[dict[str, Any]],
     dossier_by_code: dict[str, dict[str, Any]],
     node_product_lines: set[str] | None = None,
+    segment_records: Sequence[Any] = (),
 ) -> dict[str, Any]:
     """Assemble the node × company matrix.
 
@@ -163,9 +196,11 @@ def build_value_matrix(
                 "dossier": "present",
                 "overall_verdict": (dossier.get("conclusion") or {}).get("overall_verdict", ""),
                 "tech_participation": _dim_verdict(dossier, "tech_moat"),
-                "validation_delivery": _dim_verdict(dossier, "commercialization"),
                 "verified_orders": _order_claim_state(dossier, node_product_lines),
-                "revenue_profit": _dim_verdict(dossier, "financial_realization"),
+                "revenue_profit": segment_cell(
+                    segment_records_for(segment_records, code, node_product_lines)
+                ) if segment_records else _dim_verdict(dossier, "financial_realization"),
+                "validation_delivery": _validation_delivery_cell(dossier, node_product_lines),
                 "concept_only_risk": "high" if concept_only else "low",
                 "dossier_fingerprint": dossier.get("dossier_fingerprint", ""),
             }

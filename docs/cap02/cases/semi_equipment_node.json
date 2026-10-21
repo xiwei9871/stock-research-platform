@@ -1,7 +1,7 @@
 {
   "node_id": "semi_front_end_equipment",
   "node_name": "半导体前道设备环节",
-  "as_of": "2026-10-20",
+  "as_of": "2026-10-21",
   "member_companies": [
     {
       "stock_code": "002371",
@@ -147,5 +147,6 @@
   },
   "product_lines": [
     "semi_front_end"
-  ]
+  ],
+  "t3_records_path": "docs/cap02/t3/t3_records.json"
 }

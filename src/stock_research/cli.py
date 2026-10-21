@@ -1256,6 +1256,26 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
     case = load_node_case(args.case)
     member_codes = [str(m.get("stock_code") or "") for m in case["member_companies"]]
     dossier_by_code = load_dossiers(args.dossier_dir, member_codes)
+
+    from stock_research.chain_t3_evidence import (
+        load_t3_records, rival_supply_as_evidence,
+    )
+
+    t3 = {"segment_records": (), "rival_supply": ()}
+    if case.get("t3_records_path"):
+        t3 = load_t3_records(case["t3_records_path"])
+    # Rival-supply records convert into node-scope evidence + sources.
+    extra_evidence = list(case["evidence"])
+    extra_sources = {s.source_id: s for s in case["sources"]}
+    node_claims = list(case["node_claims"])
+    rival_map = {}
+    for rec in t3["rival_supply"]:
+        if rec.node_id != case["node_id"]:
+            continue
+        ev, src = rival_supply_as_evidence(rec)
+        extra_evidence.append(ev)
+        extra_sources[src.source_id] = src
+        rival_map[rec.record_id] = rec
     matrix = build_value_matrix(
         node_id=case["node_id"],
         node_name=case["node_name"],
@@ -1263,17 +1283,22 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
         member_companies=case["member_companies"],
         dossier_by_code=dossier_by_code,
         node_product_lines=case.get("product_lines"),
+        segment_records=t3["segment_records"],
     )
     dossier = build_node_dossier(
         node_id=case["node_id"],
         node_name=case["node_name"],
         as_of=case["as_of"],
-        node_claims=case["node_claims"],
-        evidence=case["evidence"],
-        sources=case["sources"],
+        node_claims=node_claims,
+        evidence=extra_evidence,
+        sources=list(extra_sources.values()),
         member_companies=case["member_companies"],
         product_lines=case.get("product_lines"),
         value_matrix=matrix,
+        t3={
+            "segment_records": [r.__dict__ for r in t3["segment_records"]],
+            "rival_supply": [r.__dict__ for r in t3["rival_supply"]],
+        },
         input_snapshot=case["input_snapshot"],
     )
     paths = write_node_outputs(dossier, args.output_dir, code_sha=args.code_sha)

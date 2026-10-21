@@ -2,6 +2,16 @@
 
 日期：2026-10-21 ｜ 分支：`feat/cap-01-company-intelligence` ｜ research-only
 
+## 〇、R2.1+T3 结果速览（2026-10-21）
+
+| 节点 | 判定 | revenue_profit（T3-I1 真实分产品） | verified_orders |
+|---|---|---|---|
+| 液冷 | bottleneck_unverified | 002837: **机房温控 34.48亿/毛利28.36%（segment含液冷未拆，pending）**；申菱：数据服务 23.43亿 +51.42%（industry_board，pending） | 002837 node_attribution_unknown |
+| 半导体设备 | bottleneck_unverified | 002371: **unextracted**（年报分产品表未入库，非"未披露"） | verified_delivery（千台里程碑，semi_front_end 归属） |
+| 人形视觉 | needs_evidence | 688686: **missing**（机器视觉 9.60亿/65.54% 披露但无人形线） | node_attribution_unknown |
+
+T3-I4 竞对：申菱一手披露"CDU 全序列+液冷智造基地投产+CDU 厂商第一"（pending 待核验）→ 进入 nc_process_scarce 待验证队列；大元/三花一手披露缺失→lead_only。M1 内部摘要在 refute 方向降级为 lead_only（仅保留来源关联），roster 事实仍 accepted。
+
 ## 一、节点判定结果（R2 修正后）
 
 R2 变更：液冷 `bottleneck_rejected` → `bottleneck_unverified`（多供应商存在只反驳'独家工艺'论点，不反驳产能缺口；无产能证据时不得否定节点）。`verified_orders` 改为严格分级（verified_order/verified_delivery/production_claimed/unverified）——量产≠订单，交付里程碑≠订单；新增 dossier as_of 兼容性检查，未来公司画像不得进入历史节点矩阵。
