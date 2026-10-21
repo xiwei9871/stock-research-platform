@@ -398,15 +398,16 @@ def main() -> None:
         from stock_research.corporate_actions import (
             build_corporate_actions_from_factors)
         written = [a for a, r in report.items()
-                   if a.startswith("CN:") and r.get("status") == "WRITTEN"]
+                   if a.startswith("CN:")
+                   and r.get("status") in ("WRITTEN", "COMPLETE")]
         with connect("stock_research") as conn:
             with conn.cursor() as cur:
-                # pre-rebuild action keys for op classification
+                # pre-rebuild action keys for op classification (full history:
+                # legacy derivation produced noise back to the 1990s)
                 cur.execute(
                     "SELECT asset_id, event_date, action_type, source_version "
                     "FROM market.corporate_action WHERE asset_id=ANY(%s) "
-                    "AND source_version=%s AND event_date>='2026-01-01' "
-                    "AND event_date<=%s",
+                    "AND source_version=%s AND event_date<=%s",
                     [written, ACTION_SOURCE_VERSION, END])
                 pre_actions = {(str(r["asset_id"]), str(r["event_date"]),
                                 r["action_type"], r["source_version"])
@@ -414,20 +415,19 @@ def main() -> None:
                 cur.execute(
                     "DELETE FROM market.corporate_action "
                     "WHERE asset_id=ANY(%s) AND source_version=%s "
-                    "AND event_date>='2026-01-01' AND event_date<=%s "
+                    "AND event_date<=%s "
                     "RETURNING asset_id, event_date, action_type, source_version",
                     [written, ACTION_SOURCE_VERSION, END])
                 deleted_rows = cur.fetchall()
                 stale_deleted = len(deleted_rows)
             build_corporate_actions_from_factors(
-                conn, start_date="2026-01-01", end_date=END,
+                conn, start_date="1990-01-01", end_date=END,
                 asset_ids=written, require_preclose_evidence=True)
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT asset_id, event_date, action_type, source_version "
                     "FROM market.corporate_action WHERE asset_id=ANY(%s) "
-                    "AND source_version=%s AND event_date>='2026-01-01' "
-                    "AND event_date<=%s",
+                    "AND source_version=%s AND event_date<=%s",
                     [written, ACTION_SOURCE_VERSION, END])
                 post_actions = {(str(r["asset_id"]), str(r["event_date"]),
                                  r["action_type"], r["source_version"])
@@ -437,7 +437,8 @@ def main() -> None:
                      "update" if (a, d, t, sv) in pre_actions else "insert")
                     for a, d, t, sv in post_actions]
                 manifest_rows += [
-                    (batch_id, str(r[0]), str(r[1]), r[2], r[3], "delete")
+                    (batch_id, str(r["asset_id"]), str(r["event_date"]),
+                     r["action_type"], r["source_version"], "delete")
                     for r in deleted_rows]
                 cur.executemany(
                     """INSERT INTO backup.r2_write_manifest_action
