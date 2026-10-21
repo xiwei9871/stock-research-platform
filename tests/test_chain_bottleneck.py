@@ -417,7 +417,8 @@ def test_board_order_not_product_line_order():
     rec = OrderRecord(
         record_id="o1", stock_code="301018", product_line="dc_liquid_cooling",
         stage="contracted", scope="industry_board", review_status="accepted",
-        published_at="2026-04-27", ingested_at="2026-10-19",
+        source_id="s1", page_or_section="p10", published_at="2026-04-27",
+        ingested_at="2026-10-19",
     )
     cell = order_cell([rec], "301018", {"dc_liquid_cooling"}, "2026-10-21")
     assert cell["state"] == "contracted_at_industry_board"  # 明示口径，不升级
@@ -429,8 +430,89 @@ def test_validation_stage_tiers():
     rec = CustomerValidationRecord(
         record_id="c1", stock_code="002837", product_line="dc_liquid_cooling",
         stage="validated", customer="Intel/NVIDIA MGX", review_status="accepted",
-        published_at="2026-04-21", ingested_at="2026-10-19",
+        source_id="s1", page_or_section="p9", published_at="2026-04-21",
+        ingested_at="2026-10-19",
     )
     assert validation_cell([rec], "002837", {"dc_liquid_cooling"}, "2026-10-21")["state"] == "validated"
     lead = CustomerValidationRecord(**{**rec.__dict__, "review_status": "lead_only"})
     assert validation_cell([lead], "002837", {"dc_liquid_cooling"}, "2026-10-21")["state"] == "pending_review"
+
+
+# ---------- T3 终校: 三处语义边界 + 订单优先级 ----------
+
+def _ord(**kw):
+    base = dict(record_id="o", stock_code="X", product_line="dc_liquid_cooling",
+                stage="contracted", scope="product_line", source_id="S1",
+                page_or_section="p1", published_at="2026-04-01",
+                available_at="2026-04-01", ingested_at="2026-10-19",
+                review_status="accepted")
+    base.update(kw); return OrderRecord(**base)
+
+
+def _cv(**kw):
+    base = dict(record_id="c", stock_code="X", product_line="dc_liquid_cooling",
+                stage="validated", customer="cust", scope="product_line",
+                source_id="S1", page_or_section="p1", published_at="2026-04-01",
+                available_at="2026-04-01", ingested_at="2026-10-19",
+                review_status="accepted")
+    base.update(kw); return CustomerValidationRecord(**base)
+
+
+def test_no_major_contract_disclosure_does_not_override_orders():
+    """'重大合同不适用'只说明披露项不适用，不得覆盖已核实订单。"""
+    nodisc = _ord(record_id="n", stage="no_major_contract_disclosure", scope="company_total")
+    cell = order_cell([nodisc], "X", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell["state"] == "no_major_contract_disclosure"
+    real = _ord(record_id="r", stage="contracted")
+    cell2 = order_cell([nodisc, real], "X", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell2["state"] == "verified_contracted"
+    assert cell2["no_major_contract_disclosure"] is True  # 事实保留但不覆盖
+
+
+def test_board_order_growth_not_contracted():
+    """板块新增订单+72%是增长事实，不是可识别合同。"""
+    g = _ord(stage="growth", scope="industry_board")
+    cell = order_cell([g], "X", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell["state"] == "order_growth_at_industry_board"
+    assert cell["order_growth_facts"]
+
+
+def test_board_customer_relations_not_product_validated():
+    """板块客户关系≠液冷产品级认证。"""
+    b = _cv(scope="industry_board")
+    cell = validation_cell([b], "X", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell["state"] == "validated_at_industry_board"
+    pl = _cv(record_id="c2", scope="product_line", stage="ecosystem")
+    cell2 = validation_cell([b, pl], "X", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell2["state"] == "ecosystem"  # 生态成员<validated，分级不合并
+
+
+def test_rival_refute_capped_without_substitution_verified():
+    """产品序列披露不自动构成已接受的'有效替代'反证。"""
+    rec = RivalSupplyRecord(
+        record_id="rv", rival_stock_code="301018", rival_name="申菱", node_id="n1",
+        supply_facts="CDU全序列+智造基地", source_id="S_shl", source_type="company_filing",
+        reliability_level="S1", review_status="accepted",
+        published_at="2026-04-27", available_at="2026-04-27", ingested_at="2026-10-19",
+    )
+    ev, _ = rival_supply_as_evidence(rec, direction="refute")
+    assert ev.review_status == "pending"  # 封顶待核验
+    rec2 = RivalSupplyRecord(**{**rec.__dict__, "substitution_verified": True})
+    ev2, _ = rival_supply_as_evidence(rec2, direction="refute")
+    assert ev2.review_status == "accepted"  # 有适配/产能实证才放行
+
+
+def test_incomplete_source_cannot_be_accepted():
+    """I2/I3 缺来源字段的'accepted'记录降级为候选。"""
+    bad = _cv(uri="", page_or_section="", source_id="")
+    cell = validation_cell([bad], "X", {"dc_liquid_cooling"}, "2026-10-21")
+    assert cell["state"] == "pending_review"
+
+
+def test_t3_audit_stats_counts():
+    t3 = {"segment_records": [_seg(review="accepted"), _seg(rid="x2")],
+          "rival_supply": [], "customer_validation": [_cv()], "orders": [_ord(stage="growth")]}
+    from stock_research.chain_t3_evidence import t3_audit_stats
+    st = t3_audit_stats(t3)
+    assert st["totals"]["accepted"] == 3 and st["totals"]["pending"] == 1
+    assert st["totals"]["n"] == 4

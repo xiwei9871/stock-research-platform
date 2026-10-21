@@ -77,6 +77,9 @@ class RivalSupplyRecord:
     ingested_at: str = ""
     review_status: str = "pending"
     excerpt: str = ""
+    # 明确适配/性能/产能/认证证据支持"有效替代"时才为 True；
+    # 仅披露产品序列不自动构成可替代供给反证。
+    substitution_verified: bool = False
 
 
 def load_t3_records(path: str | Path) -> dict[str, Any]:
@@ -116,22 +119,20 @@ def segment_records_for(
 
 
 def _pit_ok(rec: Any, as_of: str | None) -> bool:
-    """Same PIT rule as evidence: a record ingestible after the cutoff is
-    future knowledge and excluded.  Missing dates are excluded too (no
-    silent pass)."""
+    """CAP-01 口径：published_at / available_at / ingested_at 任一超截止日
+    → 未来知识排除；发表晚于入库的矛盾 → 保守排除；全部缺失 → 排除。"""
     if not as_of:
         return True
     cutoff = str(as_of)
     ing = str(getattr(rec, "ingested_at", "") or "")
     pub = str(getattr(rec, "published_at", "") or "")
-    # Contradictory metadata → excluded (conservative).
+    avl = str(getattr(rec, "available_at", "") or "")
     if pub and ing and pub > ing and len(pub) >= 10 and len(ing) >= 10:
         return False
-    if ing:
-        return ing[:10] <= cutoff
-    if pub:
-        return pub[:10] <= cutoff
-    return False
+    dates = [d for d in (pub, avl, ing) if len(d) >= 10]
+    if not dates:
+        return False
+    return all(d[:10] <= cutoff for d in dates)
 
 
 def segment_cell(
@@ -193,6 +194,11 @@ def rival_supply_as_evidence(
     itself says so) — they display in the queue but cannot swing a verdict
     until a human verifies the primary text.
     """
+    # 反证（可替代供给）方向：无明确替代验证证据 → 封顶 pending，
+    # 产品序列披露本身不构成"有效替代能力"的已核实反证。
+    status = record.review_status
+    if direction == "refute" and status == "accepted" and not record.substitution_verified:
+        status = "pending"
     ev = CompanyEvidence(
         evidence_id=record.record_id,
         source_id=record.source_id,
@@ -201,7 +207,7 @@ def rival_supply_as_evidence(
         excerpt=record.excerpt or record.supply_facts,
         page_or_section=record.page_or_section,
         confidence="medium",
-        review_status=record.review_status,
+        review_status=status,
         checklist_item="供应格局",
         evidence_scope="node",
         product_line="",
@@ -224,8 +230,10 @@ def rival_supply_as_evidence(
 # T3-I2 customer validation / T3-I3 orders — same contract, stricter tiers
 # ---------------------------------------------------------------------------
 
-VALIDATION_STAGES = ("contact", "sampling", "in_validation", "validated", "mass_delivery")
+VALIDATION_STAGES = ("contact", "sampling", "in_validation", "ecosystem", "validated", "mass_delivery")
 ORDER_STAGES = ("intent", "framework", "awarded", "contracted", "delivered", "revenue_recognized")
+# 非合同阶段事实：聚合订单增长 / 明示无重大合同披露（不占订单阶段位）
+ORDER_FACT_STAGES = ("growth", "no_major_contract_disclosure")
 
 
 @dataclass(frozen=True)
@@ -235,11 +243,13 @@ class CustomerValidationRecord:
     product_line: str
     stage: str                    # VALIDATION_STAGES
     customer: str = ""            # named only when the filing names it
+    scope: str = "product_line"   # product_line | industry_board | company
     report_period: str = ""
     source_id: str = ""
     uri: str = ""
     page_or_section: str = ""
     published_at: str = ""
+    available_at: str = ""
     ingested_at: str = ""
     review_status: str = "pending"
     excerpt: str = ""
@@ -259,9 +269,42 @@ class OrderRecord:
     uri: str = ""
     page_or_section: str = ""
     published_at: str = ""
+    available_at: str = ""
     ingested_at: str = ""
     review_status: str = "pending"
     excerpt: str = ""
+
+
+def _source_ok(r: Any) -> bool:
+    """完整来源校验：accepted 必须有 source_id + (uri 或 page) + 发布/入库日期。"""
+    return bool(
+        getattr(r, "source_id", "")
+        and (getattr(r, "uri", "") or getattr(r, "page_or_section", ""))
+        and getattr(r, "published_at", "")
+        and getattr(r, "ingested_at", "")
+    )
+
+
+def t3_audit_stats(t3: dict[str, Any]) -> dict[str, Any]:
+    """自动审核统计——对账用，计数直出记录本身。"""
+    out: dict[str, Any] = {"by_kind": {}, "totals": {}}
+    kinds = {
+        "segment_records": t3.get("segment_records") or (),
+        "rival_supply": t3.get("rival_supply") or (),
+        "customer_validation": t3.get("customer_validation") or (),
+        "orders": t3.get("orders") or (),
+    }
+    totals: dict[str, int] = {}
+    for kind, rows in kinds.items():
+        c: dict[str, int] = {}
+        for r in rows:
+            c[r.review_status] = c.get(r.review_status, 0) + 1
+            totals[r.review_status] = totals.get(r.review_status, 0) + 1
+        c["n"] = len(rows)
+        out["by_kind"][kind] = c
+    totals["n"] = sum(len(rows) for rows in kinds.values())
+    out["totals"] = totals
+    return out
 
 
 def t3_fingerprint(
@@ -297,15 +340,22 @@ def validation_cell(
         and (node_product_lines is None or r.product_line in node_product_lines)
         and _pit_ok(r, as_of)
     ]
-    accepted = [r for r in rows if r.review_status == "accepted"]
+    accepted = [r for r in rows if r.review_status == "accepted" and _source_ok(r)]
     stage_rank = {s: i for i, s in enumerate(VALIDATION_STAGES)}
-    best = max(accepted, key=lambda r: stage_rank.get(r.stage, -1), default=None)
-    state = (
-        best.stage if best else ("pending_review" if rows else "none_seen")
-    )
+    pl = [r for r in accepted if r.scope == "product_line"]
+    best = max(pl, key=lambda r: stage_rank.get(r.stage, -1), default=None)
+    if best:
+        state = best.stage
+    else:
+        # 板块/公司级客户关系 ≠ 产品线认证：明示口径命名空间
+        other = max(accepted, key=lambda r: stage_rank.get(r.stage, -1), default=None)
+        state = (
+            f"{other.stage}_at_{other.scope}" if other
+            else ("pending_review" if rows else "none_seen")
+        )
     return {
         "state": state,
-        "validated_by": [r.customer for r in accepted if r.customer],
+        "validated_by": [r.customer for r in pl if r.customer],
         "candidates": [
             {"record_id": r.record_id, "stage": r.stage, "customer": r.customer,
              "review_status": r.review_status}
@@ -330,18 +380,23 @@ def order_cell(
         and (node_product_lines is None or r.product_line in node_product_lines)
         and _pit_ok(r, as_of)
     ]
-    accepted = [r for r in rows if r.review_status == "accepted"]
+    accepted = [r for r in rows if r.review_status == "accepted" and _source_ok(r)]
     rank = {s: i for i, s in enumerate(ORDER_STAGES)}
-    if any(r.stage == "none_disclosed" for r in accepted):
-        return {"state": "none_disclosed", "best": None, "candidates": []}
-    best = max(accepted, key=lambda r: rank.get(r.stage, -1), default=None)
-    if best and best.stage not in ORDER_STAGES:
-        best = None
+    real = [r for r in accepted if r.stage in ORDER_STAGES]
+    best = max(real, key=lambda r: rank.get(r.stage, -1), default=None)
+    growth = [r for r in accepted if r.stage == "growth"]
+    nodisc = [r for r in accepted if r.stage == "no_major_contract_disclosure"]
     if best and best.scope != "product_line":
         # 板块/更大口径订单 → 明示口径，不归因为产品线订单
         state = f"{best.stage}_at_{best.scope}"
     elif best:
         state = f"verified_{best.stage}"
+    elif growth:
+        g = max(growth, key=lambda r: r.report_period)
+        state = f"order_growth_at_{g.scope}"
+    elif nodisc:
+        # "重大合同履行不适用"仅说明该披露项不适用，不否定普通订单存在
+        state = "no_major_contract_disclosure"
     else:
         state = "pending_review" if rows else "none_seen"
     return {
@@ -349,6 +404,11 @@ def order_cell(
         "best": ({"record_id": best.record_id, "stage": best.stage,
                   "amount": best.amount, "scope": best.scope,
                   "counterparty": best.counterparty} if best else None),
+        "order_growth_facts": [
+            {"record_id": r.record_id, "scope": r.scope, "excerpt": r.excerpt}
+            for r in growth
+        ],
+        "no_major_contract_disclosure": bool(nodisc),
         "candidates": [
             {"record_id": r.record_id, "stage": r.stage, "scope": r.scope,
              "review_status": r.review_status}

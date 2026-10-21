@@ -1258,7 +1258,7 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
     dossier_by_code = load_dossiers(args.dossier_dir, member_codes)
 
     from stock_research.chain_t3_evidence import (
-        load_t3_records, rival_supply_as_evidence,
+        load_t3_records, rival_supply_as_evidence, t3_audit_stats,
     )
 
     t3 = {"segment_records": (), "rival_supply": ()}
@@ -1269,6 +1269,8 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
     extra_sources = {s.source_id: s for s in case["sources"]}
     node_claims = list(case["node_claims"])
     rival_map = {}
+    audit = t3_audit_stats(t3)
+    print(f"t3_audit|{json.dumps(audit['totals'], ensure_ascii=False, sort_keys=True)}")
     for rec in t3["rival_supply"]:
         if rec.node_id != case["node_id"]:
             continue
@@ -1281,7 +1283,7 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
             source_id=ev.source_id, dimension=ev.dimension,
             direction="support", excerpt=ev.excerpt,
             page_or_section=ev.page_or_section, confidence=ev.confidence,
-            review_status=ev.review_status, checklist_item="供应格局",
+            review_status=rec.review_status, checklist_item="供应格局",
             evidence_scope="node", product_line="",
         )
         extra_evidence.append(roster)
