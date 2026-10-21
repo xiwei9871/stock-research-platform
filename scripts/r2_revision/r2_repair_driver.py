@@ -25,6 +25,9 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, "scripts/r2_revision")
+from baostock_guard import is_blacklist_error  # noqa: E402
+
 BASE = "outputs/research/data01r1_finance_q2_20261020"
 SETS_FILE = f"{BASE}/r2_disjoint_sets.json"
 LOCK_FILE = f"{BASE}/r2_repair_driver.lock"
@@ -124,6 +127,17 @@ def main() -> None:
                     elapsed = time.time() - t0
                     out = (proc.stderr or "") + (proc.stdout or "")
                     if elapsed < FAST_FAIL_S and "login failed" in out:
+                        if is_blacklist_error(out):
+                            # fail-closed: server-side blacklist — pause
+                            # everything and exit; a human must unblock
+                            # before any task retries
+                            open(PAUSE_FLAG, "w").write(
+                                f"blacklist@{time.strftime('%F %T')}")
+                            print("!! baostock BLACKLIST detected — pause "
+                                  "flag written, driver exits. Do NOT retry "
+                                  "until server-side unblock is confirmed.",
+                                  flush=True)
+                            return
                         fast_fail = True
             except subprocess.TimeoutExpired:
                 print(f"!! batch {batch_id} TIMEOUT after {BATCH_TIMEOUT_S}s — "

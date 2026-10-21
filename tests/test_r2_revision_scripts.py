@@ -118,6 +118,32 @@ def test_feature_pending_per_asset_date_not_date_scoped():
                         "2026-10-19|CN:B", "2026-10-20|CN:B"}
 
 
+def test_feature_outcome_marks_only_verified_done():
+    m = _import_downstream()
+    want = ["2026-10-19", "2026-10-20", "2026-10-21"]
+    # d19 emitted+verified -> done; d20 emitted but not verified -> pending;
+    # d21 not emitted and no bar -> skipped
+    out = m.ledger_feature_outcome(
+        emitted={"2026-10-19", "2026-10-20"},
+        verified={"2026-10-19"},
+        bar_dates={"2026-10-19", "2026-10-20"},
+        want_dates=want, sig="s1")
+    assert out["2026-10-19"]["status"] == "done"
+    assert "2026-10-20" not in out          # stays pending
+    assert out["2026-10-21"]["status"] == "skipped"
+    # pending semantics: skipped/done resolve, missing stays pending
+    ledger = {f"{d}|CN:A": v for d, v in out.items()}
+    todo = m.decide_feature_pending(["CN:A"], want, {"CN:A": "s1"}, ledger)
+    assert set(todo) == {"2026-10-20|CN:A"}
+    # rerun is idempotent — done at same sig never re-pends
+    ledger["2026-10-20|CN:A"] = {"factor_sig": "s1", "status": "done"}
+    todo = m.decide_feature_pending(["CN:A"], want, {"CN:A": "s1"}, ledger)
+    assert not todo
+    # upstream sig bump re-pends everything (incl. skipped -> re-evaluate)
+    todo = m.decide_feature_pending(["CN:A"], want, {"CN:A": "s2"}, ledger)
+    assert set(todo) == {f"{d}|CN:A" for d in want}
+
+
 def test_window_merge_state_machine():
     src = (SCRIPTS / "r2_merge_sets.py").read_text()
     # atomic replace, disjoint check, reclassification + verdict moves

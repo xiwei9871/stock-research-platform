@@ -29,6 +29,7 @@ from stock_research.minute_backfill import (  # noqa: E402
     derive_qfq_minute_bars_from_raw_job)
 from stock_research.technical_feature_store import (  # noqa: E402
     _build_technical_feature_rows_for_assets,
+    _date_string,
     upsert_stock_technical_features_daily,
     TECHNICAL_FEATURE_TABLE_COLUMNS)
 import pandas as pd  # noqa: E402
@@ -121,6 +122,26 @@ def decide_feature_pending(assets: list[str], dates: list[str],
             if ledger.get(key, {}).get("factor_sig") != sigs[a]:
                 todo[key] = {"asset": a, "date": d, "sig": sigs[a]}
     return todo
+
+
+def ledger_feature_outcome(emitted: set, verified: set, bar_dates: set,
+                           want_dates: list[str],
+                           sig: str) -> dict[str, dict]:
+    """Pure: per-date ledger entries after one asset's rebuild.
+    - emitted+verified -> done
+    - emitted but not verified -> NOT marked (stays pending)
+    - not emitted and no bar that day -> skipped
+    - not emitted on a traded day -> NOT marked (anomaly, pending)
+    """
+    out = {}
+    for d in want_dates:
+        if d in emitted and d in verified:
+            out[d] = {"factor_sig": sig, "status": "done"}
+        elif d in emitted:
+            continue
+        elif d not in bar_dates:
+            out[d] = {"factor_sig": sig, "status": "skipped"}
+    return out
 
 
 def _load_ledger(path: str) -> dict:
@@ -254,14 +275,44 @@ def phase_features(assets: list[str], start: str, end: str) -> None:
             if not sub.empty:
                 sub = sub.reindex(columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
                 upsert_stock_technical_features_daily(sub)
-            for d in want_dates:
-                ledger[f"{d}|{asset_id}"] = {"factor_sig": sigs[asset_id]}
+            # verify written rows before marking done — only dates whose
+            # feature rows are actually present in the table count as done
+            emitted = {_date_string(x) for x in sub["trade_date"]}
+            verify = {r["d"] for r in fetch_all(
+                conn, "SELECT trade_date::text d"
+                      " FROM factor.stock_technical_features_daily"
+                      " WHERE asset_id=%s AND calc_version='full_history_v1'"
+                      " AND trade_date=ANY(%s)",
+                [asset_id, sorted(emitted)])}
+            bar_dates = {str(r["trade_date"]) for r in rows}
+            for d, entry in ledger_feature_outcome(
+                    emitted, verify, bar_dates, want_dates,
+                    sigs[asset_id]).items():
+                ledger[f"{d}|{asset_id}"] = entry
+            # version pin: asset flips to full_history_v1 for consumers
+            # only when EVERY stored bar date has a verified feature row —
+            # partial rebuilds never silently take over
+            if bar_dates and bar_dates <= (emitted & verify):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO factor.technical_feature_rebuild_state
+                           (asset_id, version, complete, factor_sig,
+                            rows_written, updated_at)
+                           VALUES (%s,'full_history_v1',true,%s,%s,now())
+                           ON CONFLICT (asset_id) DO UPDATE SET
+                             version=EXCLUDED.version,
+                             complete=EXCLUDED.complete,
+                             factor_sig=EXCLUDED.factor_sig,
+                             rows_written=EXCLUDED.rows_written,
+                             updated_at=EXCLUDED.updated_at""",
+                        [asset_id, sigs[asset_id], len(emitted & verify)])
             conn.commit()
             if n % 5 == 0:
                 with open(FEAT_PROGRESS, "w") as f:
                     json.dump(ledger, f)
                 print(f"[{n}/{len(need)}] {asset_id} features rows="
-                      f"{len(sub)} ({time.time()-t0:.0f}s)", flush=True)
+                      f"{len(sub)} verified={len(verify & set(want_dates))}"
+                      f" ({time.time()-t0:.0f}s)", flush=True)
         with open(FEAT_PROGRESS, "w") as f:
             json.dump(ledger, f)
     print(f"features phase done: {len(need)} assets, "

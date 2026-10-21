@@ -54,11 +54,22 @@ def baostock_processes(exclude_pid: int | None = None) -> list[str]:
     return hits
 
 
+def baostock_endpoint() -> tuple[str, int]:
+    """Endpoint actually used by the installed baostock client —
+    read its own constants instead of guessing."""
+    try:
+        import baostock.common.contants as cons
+        return cons.BAOSTOCK_SERVER_IP, int(cons.BAOSTOCK_SERVER_PORT)
+    except Exception:
+        return "public-api.baostock.com", 10030
+
+
 def baostock_connections() -> list[str]:
-    """ESTABLISHED TCP sessions to baostock service host."""
+    """ESTABLISHED TCP sessions to the real baostock service endpoint."""
+    host, port = baostock_endpoint()
     try:
         ips = {ai[4][0] for ai in socket.getaddrinfo(
-            "www.baostock.com", 443, socket.AF_INET)}
+            host, port, socket.AF_INET)}
     except socket.gaierror:
         return []
     out = subprocess.run(
@@ -66,7 +77,7 @@ def baostock_connections() -> list[str]:
         capture_output=True, text=True)
     hits = []
     for line in out.stdout.splitlines():
-        if any(f"->{ip}:" in line for ip in ips):
+        if any(f"->{ip}:{port}" in line for ip in ips):
             hits.append(line.strip()[:160])
     return hits
 
@@ -82,3 +93,23 @@ def assert_baostock_free(exclude_pid: int | None = None) -> None:
         sys.exit("FATAL: baostock session already in use — "
                  "single-worker constraint violated; kill stale "
                  "processes before login")
+
+
+BLACKLIST_CODES = ("10001011", "黑名单")
+
+
+def is_blacklist_error(text: str) -> bool:
+    return any(c in (text or "") for c in BLACKLIST_CODES)
+
+
+def controlled_login_probe() -> bool:
+    """Single login + logout probe. Returns True if baostock accepts us.
+    Used after a suspected unblock — never loops, one attempt only."""
+    import baostock as bs
+    r = bs.login()
+    if r.error_code != "0":
+        print(f"probe login failed {r.error_code} {r.error_msg}", flush=True)
+        return False
+    bs.logout()
+    print("probe login OK", flush=True)
+    return True
