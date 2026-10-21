@@ -213,8 +213,8 @@ def test_claim_level_verdicts_keep_distinct_propositions_separate():
     by_id = {c["claim_id"]: c for c in d["claims"]}
     assert by_id["c_uniqueness"]["verdict"] == "contradicted"
     assert by_id["c_capability"]["verdict"] == "partially_supported"
-    # 维度聚合：一个论点被推翻 + 一个有支持 → contested，而非整体 contradicted
-    assert d["dimensions"]["competitive_edge"]["verdict"] == "contested"
+    # 维度聚合（R1.1）：不同论点一正一负 → mixed（结论分化），不是 contested（真冲突）
+    assert d["dimensions"]["competitive_edge"]["verdict"] == "mixed"
 
 
 def test_lead_only_cannot_contradict_or_confirm():
@@ -363,3 +363,68 @@ def test_dimension_without_claims_uses_pool_floor():
     d = _build2(evidence, [_src2("s1")], [])
     assert d["dimensions"]["chain_position"]["verdict"] == "needs_evidence"
     assert d["dimensions"]["tech_moat"]["verdict"] == "unknown"
+
+
+# ---------- CAP-01-R1.1: mixed vs contested, dimension-binding check, dossier fp ----------
+
+
+def test_capability_supported_plus_uniqueness_refuted_is_mixed_not_contested():
+    """能力论点获支持 + 独占性论点被反驳 → 维度 mixed，非 contested，不升级为整体冲突。"""
+    evidence = [
+        _ev2("e_cap", "competitive_edge", "support", "accepted", "s_f"),
+        _ev2("e_ref", "competitive_edge", "refute", "accepted", "s_b"),
+    ]
+    sources = [_src2("s_f"), _src2("s_b", "broker_report", "券商A")]
+    claims = [
+        _claim2("c_capability", "competitive_edge", ["e_cap"]),
+        _claim2("c_uniqueness", "competitive_edge", ["e_ref"]),
+    ]
+    d = _build2(evidence, sources, claims)
+    by_id = {c["claim_id"]: c for c in d["claims"]}
+    assert by_id["c_capability"]["verdict"] == "partially_supported"
+    assert by_id["c_uniqueness"]["verdict"] == "contradicted"
+    dim = d["dimensions"]["competitive_edge"]
+    assert dim["verdict"] == "mixed"
+    assert d["conclusion"]["overall_verdict"] != "contested"
+
+
+def test_same_claim_internal_conflict_is_contested():
+    """同一论点内部正反证据并存 → claim contested → 维度 contested（真冲突）。"""
+    evidence = [
+        _ev2("e1", "tech_moat", "support", "accepted", "s_f"),
+        _ev2("e2", "tech_moat", "refute", "accepted", "s_b"),
+    ]
+    sources = [_src2("s_f"), _src2("s_b", "broker_report", "券商A")]
+    claims = [_claim2("c1", "tech_moat", ["e1", "e2"])]
+    d = _build2(evidence, sources, claims)
+    assert d["claims"][0]["verdict"] == "contested"
+    assert d["dimensions"]["tech_moat"]["verdict"] == "contested"
+
+
+def test_cross_dimension_binding_reported_and_excluded():
+    """跨维度错误绑定 → 报 binding_error，该证据不参与判定。"""
+    evidence = [_ev2("e1", "commercialization", "support", "accepted", "s_f")]
+    claims = [_claim2("c1", "tech_moat", ["e1"])]
+    d = _build2(evidence, [_src2("s_f")], claims)
+    assert d["claims"][0]["verdict"] == "unknown"
+    assert d["claims"][0]["binding_errors"] == ["e1"]
+    assert "c1:e1" in d["binding_warnings"]
+
+
+def test_dossier_fingerprint_varies_with_as_of_and_rule_version():
+    """dossier_fingerprint 含 as_of + 证据集指纹 + 规则版本；证据指纹独立保留。"""
+    ev = [_ev2("e1", src="s1")]
+    d1 = _build2(ev, [_src2("s1")], [_claim2("c1", "tech_moat", ["e1"])], as_of="2026-10-20")
+    d2 = _build2(ev, [_src2("s1")], [_claim2("c1", "tech_moat", ["e1"])], as_of="2026-10-21")
+    assert d1["dossier_fingerprint"] != d2["dossier_fingerprint"]
+    assert d1["input_snapshot"]["evidence_set_sha256"] == d2["input_snapshot"]["evidence_set_sha256"]
+    assert d1["dossier_fingerprint"] != d1["input_snapshot"]["evidence_set_sha256"]
+
+
+def test_contradictory_dates_are_pit_uncertain():
+    """发表日期晚于入库日期 = 元数据矛盾 → pit_uncertain，不猜放行。"""
+    evidence = [_ev2("e1", "tech_moat", "support", "accepted", "s1")]
+    sources = [_src2("s1", published="2026-12-01", ingested="2026-09-22")]
+    d = _build2(evidence, sources, [_claim2("c1", "tech_moat", ["e1"])])
+    assert "e1" in d["pit_uncertain"]
+    assert d["claims"][0]["verdict"] == "unknown"

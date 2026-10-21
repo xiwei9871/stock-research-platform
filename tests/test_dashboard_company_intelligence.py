@@ -18,6 +18,7 @@ def _write_dossier(root: Path, code: str = "002837") -> Path:
         "as_of": "2026-10-20",
         "generated_at": "2026-10-20T09:00:00+00:00",
         "provenance": {"code_sha": "abc1234"},
+        "dossier_fingerprint": "fp_dossier_v1",
         "input_snapshot": {"code_sha": "abc1234", "evidence_set_sha256": "deadbeef0123"},
         "conclusion": {"overall_verdict": "contested", "confidence": 0.35},
         "dimensions": {},
@@ -164,4 +165,5 @@ def test_review_record_pins_dossier_fingerprint(dossier_dir, client):
         json={"claim_id": "c1", "review_status": "accepted", "reviewer": "r", "comment": "ok"},
     )
     items = client.get("/api/research/company-intelligence/stocks/002837/reviews").json()["items"]
-    assert items[0]["dossier_fingerprint"]  # 绑定当时证据集指纹，形成可追溯审核版本
+    assert items[0]["dossier_fingerprint"] == "fp_dossier_v1"
+    assert items[0]["evidence_fingerprint"] == "deadbeef0123"  # 双指纹可追溯

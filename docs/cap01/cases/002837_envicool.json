@@ -343,9 +343,9 @@
       "dimension": "chain_position",
       "claim_text": "公司是数据中心/算力温控链条的关键节点供应商（覆盖头部互联网与运营商客户）",
       "evidence_ids": [
-        "ru_002837_758",
         "ru_002837_769",
-        "ru_002837_773"
+        "ru_002837_758_x_chain",
+        "ru_002837_773_x_chain"
       ]
     },
     {
@@ -373,8 +373,8 @@
       "dimension": "competitive_edge",
       "claim_text": "'全链条'液冷供给能力构成相对同行的差异化优势",
       "evidence_ids": [
-        "ru_002837_755",
-        "ru_002837_768"
+        "ru_002837_755_x_edge",
+        "ru_002837_768_x_edge"
       ]
     },
     {
@@ -426,5 +426,33 @@
     "date_basis": "interim=文件名日期2025-08-19；annual=标题'2025年年度报告'(年)；broker=M1文档页码引用",
     "note": "all filing excerpts pending human verification; broker leads are single-source unverified claims",
     "r1_revision": "claim级判定修正：独占性/差异化/性能优势拆分；未披露类证据改判unclear；lead_only不进判定"
-  }
+  },
+  "evidence_facets": [
+    {
+      "from": "ru_002837_758",
+      "as_evidence_id": "ru_002837_758_x_chain",
+      "dimension": "chain_position",
+      "direction": "support",
+      "checklist_item": "产业链关键节点"
+    },
+    {
+      "from": "ru_002837_773",
+      "as_evidence_id": "ru_002837_773_x_chain",
+      "dimension": "chain_position",
+      "direction": "support",
+      "checklist_item": "供应约束"
+    },
+    {
+      "from": "ru_002837_755",
+      "as_evidence_id": "ru_002837_755_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    },
+    {
+      "from": "ru_002837_768",
+      "as_evidence_id": "ru_002837_768_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    }
+  ]
 }

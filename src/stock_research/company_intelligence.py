@@ -55,6 +55,7 @@ VERDICTS = {
     "partially_supported",
     "contested",
     "contradicted",
+    "mixed",
     "needs_evidence",
     "unknown",
 }
@@ -64,9 +65,14 @@ _CONFIDENCE_BY_VERDICT = {
     "partially_supported": 0.5,
     "contested": 0.35,
     "contradicted": 0.4,
+    "mixed": 0.45,
     "needs_evidence": 0.15,
     "unknown": 0.0,
 }
+
+# Deterministic rule version stamped into every dossier fingerprint — bump when
+# adjudication semantics change so verdicts stay reproducible.
+RULE_VERSION = "cap01-r1.1"
 
 # Dimensions that gate an overall positive conclusion: without evidence of
 # real commercialization and financial delivery the dossier must not read as
@@ -98,6 +104,10 @@ class CompanyEvidence:
     confidence: str = "medium"        # high | medium | low
     review_status: str = "pending"    # pending | accepted | rejected | lead_only
     checklist_item: str = ""
+    # "company" = about one firm's capability; "node" = about the industry-chain
+    # link itself (capacity, queues, alternatives).  Node claims may only bind
+    # node-scope evidence — a strong company never auto-proves a bottleneck.
+    evidence_scope: str = "company"
 
 
 @dataclass(frozen=True)
@@ -169,6 +179,12 @@ def _pit_status(source: CompanySource | None, as_of_key: str) -> tuple[str, str]
     if source is None:
         return "uncertain", "no_source"
     ing_lo, ing_hi, _ = _date_bound(source.ingested_at)
+    pub_lo, _pub_hi, _pp = _date_bound(source.published_at)
+    # Metadata contradiction: the earliest possible publication is later than
+    # the latest possible ingestion — the dates cannot both be true, so mark
+    # uncertain instead of guessing which one to trust.
+    if pub_lo and ing_hi and pub_lo > ing_hi:
+        return "uncertain", "contradictory_dates"
     if ing_lo and ing_lo > as_of_key:
         return "post_asof", "ingested_at"
     if ing_hi and ing_hi <= as_of_key:
@@ -241,10 +257,15 @@ def _claim_verdict(
     in_scope_ids: set[str],
     sources_by_id: dict[str, CompanySource],
 ) -> dict[str, Any]:
-    linked = [
-        eid for eid in claim.evidence_ids
-        if eid in evidence_by_id and eid in in_scope_ids
-    ]
+    linked: list[str] = []
+    binding_errors: list[str] = []
+    for eid in claim.evidence_ids:
+        if eid not in evidence_by_id or eid not in in_scope_ids:
+            continue
+        if evidence_by_id[eid].dimension != claim.dimension:
+            binding_errors.append(eid)
+            continue
+        linked.append(eid)
     linked_evs = [evidence_by_id[eid] for eid in linked]
     counted = [ev for ev in linked_evs if _verdict_tier(ev) == "counted"]
     support = [ev for ev in counted if ev.direction == "support"]
@@ -278,6 +299,7 @@ def _claim_verdict(
         "refute_count": len(refute),
         "unclear_count": len(linked) - len(support) - len(refute),
         "unverified_evidence_ids": unverified,
+        "binding_errors": binding_errors,
     }
 
 
@@ -287,17 +309,22 @@ def _dimension_verdict(
 ) -> str:
     """Aggregate claim verdicts into the dimension verdict.
 
-    Distinct claims keep their own verdicts; the dimension reflects the mix:
-    contradicted claims drag the dimension to ``contradicted`` only when
-    nothing else is supported — otherwise the mix is ``contested``.
+    ``contested`` is reserved for a *real* conflict: a single claim carrying
+    both support and refute evidence.  Different claims landing on opposite
+    sides (e.g. capability supported, uniqueness refuted) is a **mixed**
+    outcome, not an evidence conflict.
     """
     if not claim_verdicts:
         return "needs_evidence" if pool_size else "unknown"
     if all(v == "unknown" for v in claim_verdicts):
-        return "unknown"
+        return "needs_evidence" if pool_size else "unknown"
     supported = {"confirmed", "partially_supported"}
     if any(v == "contradicted" for v in claim_verdicts):
-        return "contested" if any(v in supported for v in claim_verdicts) else "contradicted"
+        if all(v == "contradicted" for v in claim_verdicts):
+            return "contradicted"
+        if any(v in supported for v in claim_verdicts):
+            return "mixed"
+        return "contradicted"
     if any(v == "contested" for v in claim_verdicts):
         return "contested"
     if all(v == "confirmed" for v in claim_verdicts):
@@ -359,11 +386,15 @@ def build_company_dossier(
 
     claim_evidence_links: dict[str, list[str]] = {}
     claims_out: list[dict[str, Any]] = []
+    binding_warnings: list[str] = []
     claim_verdicts_by_dim: dict[str, list[str]] = {d: [] for d in DIMENSIONS}
     for claim in claims:
         row = _claim_verdict(claim, evidence_by_id, in_scope_ids, sources_by_id)
         claim_evidence_links[claim.claim_id] = row["evidence_ids"]
         claims_out.append(row)
+        binding_warnings.extend(
+            f"{claim.claim_id}:{eid}" for eid in row["binding_errors"]
+        )
         if claim.dimension in claim_verdicts_by_dim:
             claim_verdicts_by_dim[claim.dimension].append(row["verdict"])
 
@@ -449,11 +480,17 @@ def build_company_dossier(
     fingerprint = _input_fingerprint(claims, evidence, sources)
     snapshot = dict(input_snapshot or {})
     snapshot["evidence_set_sha256"] = fingerprint
+    snapshot["rule_version"] = RULE_VERSION
+    dossier_fingerprint = _dossier_fingerprint(
+        as_of_key, fingerprint, RULE_VERSION
+    )
 
     return {
         "company_code": company_code,
         "company_name": company_name,
         "as_of": as_of_key,
+        "dossier_fingerprint": dossier_fingerprint,
+        "binding_warnings": binding_warnings,
         "theme_context": theme_context or {},
         "profile": _profile(dimensions_out, claims_out),
         "dimensions": dimensions_out,
@@ -572,16 +609,18 @@ def _profile(
 def _overall_verdict(dimensions: dict[str, dict[str, Any]]) -> tuple[str, float]:
     verdicts = {d: dim["verdict"] for d, dim in dimensions.items()}
     confirmed = sum(1 for v in verdicts.values() if v == "confirmed")
-    contested_or_contra = any(
-        v in {"contested", "contradicted"} for v in verdicts.values()
-    )
     gates_unmet = any(
         verdicts[d] in {"unknown", "needs_evidence"} for d in _GATE_DIMENSIONS
     )
     if all(v == "confirmed" for v in verdicts.values()):
         return "established", 0.8
-    if contested_or_contra:
+    # A true same-proposition conflict marks the whole dossier contested; a
+    # fully contradicted dimension marks it contradicted.  ``mixed`` (distinct
+    # propositions landing on different sides) does neither.
+    if any(v == "contested" for v in verdicts.values()):
         return "contested", 0.35
+    if any(v == "contradicted" for v in verdicts.values()):
+        return "contradicted", 0.3
     if gates_unmet:
         if all(v == "unknown" for v in verdicts.values()):
             return "unknown", 0.0
@@ -597,9 +636,11 @@ def _main_uncertainties(dimensions: dict[str, dict[str, Any]]) -> list[str]:
         if dim["verdict"] in {"unknown", "needs_evidence"}:
             items.append(f"{DIMENSIONS[dimension]}:证据不足({dim['verdict']})")
         elif dim["verdict"] == "contested":
-            items.append(f"{DIMENSIONS[dimension]}:正反证据冲突待裁定")
+            items.append(f"{DIMENSIONS[dimension]}:同一论点正反证据冲突待裁定")
         elif dim["verdict"] == "contradicted":
             items.append(f"{DIMENSIONS[dimension]}:存在反驳证据")
+        elif dim["verdict"] == "mixed":
+            items.append(f"{DIMENSIONS[dimension]}:不同论点结论分化")
     return items
 
 
@@ -647,6 +688,7 @@ def _input_fingerprint(
                     e.confidence,
                     e.review_status,
                     e.checklist_item,
+                    e.evidence_scope,
                 )
                 for e in evidence
             ),
@@ -664,6 +706,22 @@ def _input_fingerprint(
                 )
                 for s in sources
             ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _dossier_fingerprint(as_of_key: str, evidence_sha256: str, rule_version: str) -> str:
+    """Version fingerprint of the dossier *result*: evidence set + research
+    cutoff + adjudication rule version.  Same evidence under a different
+    ``as_of`` yields a different dossier fingerprint."""
+    canonical = json.dumps(
+        {
+            "as_of": as_of_key,
+            "evidence_set_sha256": evidence_sha256,
+            "rule_version": rule_version,
         },
         ensure_ascii=False,
         sort_keys=True,

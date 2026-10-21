@@ -207,6 +207,29 @@ def load_case_input(path: str | Path) -> CompanyInput:
     for row in spec.get("extra_evidence") or []:
         evidence.append(CompanyEvidence(**row))
 
+    # Dimension-facet copies: one real excerpt can legitimately inform a claim
+    # in another dimension, but R1.1 forbids cross-dimension claim bindings.
+    # ``evidence_facets`` clones the excerpt under a new evidence_id tagged to
+    # the target dimension, keeping source provenance (dates/publisher) intact.
+    by_id = {ev.evidence_id: ev for ev in evidence}
+    for facet in spec.get("evidence_facets") or []:
+        base = by_id.get(facet["from"])
+        if base is None:
+            raise KeyError(f"evidence_facet source not found: {facet['from']}")
+        clone = CompanyEvidence(
+            evidence_id=facet["as_evidence_id"],
+            source_id=base.source_id,
+            dimension=facet["dimension"],
+            direction=facet.get("direction", base.direction),
+            excerpt=base.excerpt,
+            page_or_section=base.page_or_section,
+            confidence=facet.get("confidence", base.confidence),
+            review_status=base.review_status,
+            checklist_item=facet.get("checklist_item", base.checklist_item),
+        )
+        evidence.append(clone)
+        by_id[clone.evidence_id] = clone
+
     evidence_overrides = spec.get("evidence_overrides") or {}
     if evidence_overrides:
         evidence = [

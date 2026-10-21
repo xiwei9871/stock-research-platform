@@ -14,6 +14,7 @@ _VERDICT_LABEL = {
     "partially_supported": "部分支持",
     "contested": "正反冲突",
     "contradicted": "存在反证",
+    "mixed": "结论分化",
     "needs_evidence": "需要补证",
     "unknown": "未知",
     "established": "成立",

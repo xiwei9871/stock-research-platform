@@ -157,7 +157,7 @@
       "dimension": "chain_position",
       "claim_text": "公司是人形机器人视觉感知环节的关键节点供应商",
       "evidence_ids": [
-        "ru_688686_5906"
+        "ru_688686_5906_x_chain"
       ]
     },
     {
@@ -182,5 +182,13 @@
     "negative_control_rationale": "Theme mapping priority_score=98.0、dependency 高关联；但现有摘录仅见工业机器视觉主业与'提前布局机器人赛道'的定位表述，无任何客户/订单/收入级机器人证据",
     "note": "5906页'提前布局机器人赛道'为定位性表述(unclear)，不构成商业化证据——本案例刻意测试引擎是否因主题高关联而自动给正面结论",
     "r1_revision": "加入越疆合作真实线索(lead_only)：验证有合作接触≠商业化证据，claim仍应needs_evidence"
-  }
+  },
+  "evidence_facets": [
+    {
+      "from": "ru_688686_5906",
+      "as_evidence_id": "ru_688686_5906_x_chain",
+      "dimension": "chain_position",
+      "direction": "unclear"
+    }
+  ]
 }

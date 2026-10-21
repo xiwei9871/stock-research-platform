@@ -242,9 +242,9 @@
       "dimension": "competitive_edge",
       "claim_text": "公司作为国内半导体设备平台型龙头，其覆盖广度构成持续竞争优势",
       "evidence_ids": [
-        "ru_002371_424",
-        "ru_002371_425",
-        "ru_002371_426",
+        "ru_002371_424_x_edge",
+        "ru_002371_425_x_edge",
+        "ru_002371_426_x_edge",
         "ev_puda_compete"
       ]
     },
@@ -280,5 +280,25 @@
     "date_basis": "interim=2025-08(标题推断)；annual=标题'2025年年度报告'(年)",
     "note": "客户验证(下游fab认证)在现有摘录中未见具名证据→保留为gap",
     "r1_revision": "claim级判定：客户验证独立claim(无具名证据)；分部收入缺失改判unclear→needs_evidence；竞对证据lead_only不推翻龙头论点"
-  }
+  },
+  "evidence_facets": [
+    {
+      "from": "ru_002371_424",
+      "as_evidence_id": "ru_002371_424_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    },
+    {
+      "from": "ru_002371_425",
+      "as_evidence_id": "ru_002371_425_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    },
+    {
+      "from": "ru_002371_426",
+      "as_evidence_id": "ru_002371_426_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    }
+  ]
 }

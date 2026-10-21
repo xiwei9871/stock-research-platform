@@ -1248,6 +1248,39 @@ def run_company_intelligence_dossier_command(args: argparse.Namespace) -> None:
     )
 
 
+def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
+    from stock_research.chain_bottleneck import build_node_dossier, load_node_case
+    from stock_research.chain_bottleneck_report import write_node_outputs
+    from stock_research.chain_value_matrix import build_value_matrix, load_dossiers
+
+    case = load_node_case(args.case)
+    member_codes = [str(m.get("stock_code") or "") for m in case["member_companies"]]
+    dossier_by_code = load_dossiers(args.dossier_dir, member_codes)
+    matrix = build_value_matrix(
+        node_id=case["node_id"],
+        node_name=case["node_name"],
+        as_of=case["as_of"],
+        member_companies=case["member_companies"],
+        dossier_by_code=dossier_by_code,
+    )
+    dossier = build_node_dossier(
+        node_id=case["node_id"],
+        node_name=case["node_name"],
+        as_of=case["as_of"],
+        node_claims=case["node_claims"],
+        evidence=case["evidence"],
+        sources=case["sources"],
+        member_companies=case["member_companies"],
+        value_matrix=matrix,
+        input_snapshot=case["input_snapshot"],
+    )
+    paths = write_node_outputs(dossier, args.output_dir, code_sha=args.code_sha)
+    print(f"chain_bottleneck|json|{paths['json']}")
+    print(f"chain_bottleneck|markdown|{paths['markdown']}")
+    print(f"chain_bottleneck|node_verdict|{dossier['conclusion']['node_verdict']}")
+    print(f"chain_bottleneck|gaps|{len(dossier['research_gaps'])}")
+
+
 def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
     from stock_research.tdx_auction_backfill import TDX_AUCTION_SOURCE_VERSION
     from stock_research.tdx_auction_watchdog import load_daily_backfill_scope
@@ -2271,6 +2304,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir", default="outputs/research/company_intelligence"
     )
     company_intel.add_argument("--code-sha", default="")
+
+    node_intel = subparsers.add_parser("chain-bottleneck-dossier")
+    node_intel.add_argument("--case", required=True, help="node case JSON path")
+    node_intel.add_argument(
+        "--dossier-dir",
+        default="outputs/research/company_intelligence",
+        help="directory holding member-company CAP-01 dossiers for the value matrix",
+    )
+    node_intel.add_argument(
+        "--output-dir", default="outputs/research/chain_bottleneck"
+    )
+    node_intel.add_argument("--code-sha", default="")
 
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
@@ -9500,6 +9545,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         run_tdx_auction_watchdog_command(args)
     elif args.command == "company-intelligence-dossier":
         run_company_intelligence_dossier_command(args)
+    elif args.command == "chain-bottleneck-dossier":
+        run_chain_bottleneck_dossier_command(args)
     elif args.command == "backfill-watchdog":
         if args.adapter == "minute":
             run_minute_backfill_watchdog_command(args)

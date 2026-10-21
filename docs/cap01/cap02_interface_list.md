@@ -5,7 +5,7 @@ CAP-01 三案例运行后，引擎以下结构化缺口需要 DATA 线/CAP-02 �
 ## P0 — 直接影响判定正确性
 
 1. **分部/分产品收入毛利接口**
-   - 现状：定期报告摘录中"液冷收入""各设备线收入"未单独披露 → 英维克、北方华创 `financial_realization` 均被判 contradicted
+   - 现状：定期报告摘录中"液冷收入""各设备线收入"未单独披露 → 英维克、北方华创 `financial_realization` 均判 needs_evidence（R1 起：未披露=信息不足而非反证）
    - 需要：`segment_revenue(ts_code, product_line) → {revenue, gross_margin, period, source_page}`
    - 来源：年报分部报告、经营讨论分产品表（docling 结构化抽取）
 

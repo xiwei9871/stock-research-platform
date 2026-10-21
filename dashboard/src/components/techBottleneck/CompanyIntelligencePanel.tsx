@@ -27,6 +27,7 @@ const VERDICT_LABELS: Record<string, string> = {
   partially_supported: '部分支持',
   contested: '正反冲突',
   contradicted: '存在反证',
+  mixed: '结论分化',
   needs_evidence: '需补证据',
   unknown: '未知',
   unverified: '未证实',
