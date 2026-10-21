@@ -122,9 +122,17 @@ def verify(conn, asset_id: str) -> dict:
 
 
 def main() -> None:
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    sets = json.load(open(f"{BASE}/r2_disjoint_sets.json"))
-    pool = sets["NEEDS_REVIEW"][:n] if n else sets["NEEDS_REVIEW"]
+    sample_path = f"{BASE}/r2_review_sample.json"
+    if len(sys.argv) > 1 and sys.argv[1] == "all":
+        pool = json.load(open(f"{BASE}/r2_disjoint_sets.json"))["NEEDS_REVIEW"]
+    elif len(sys.argv) > 1 and sys.argv[1].isdigit():
+        pool = json.load(open(f"{BASE}/r2_disjoint_sets.json"))[
+            "NEEDS_REVIEW"][:int(sys.argv[1])]
+    elif os.path.exists(sample_path):
+        pool = json.load(open(sample_path))["sample"]
+        print("using stratified sample:", len(pool))
+    else:
+        pool = json.load(open(f"{BASE}/r2_disjoint_sets.json"))["NEEDS_REVIEW"]
     seen = set()
     if os.path.exists(OUT):
         for line in open(OUT):
