@@ -53,14 +53,37 @@ def fetch(code, flag, start):
     return rows
 
 
-def verify(asset_id: str) -> dict:
+def verify(conn, asset_id: str) -> dict:
     _, exch, sym = asset_id.split(":")
     code = f"{exch.lower()}.{sym}"
     raw = fetch(code, "3", "1990-01-01")
     qfq = fetch(code, "2", "1990-01-01")
     hfq = fetch(code, "1", "1990-01-01")
     res = {"asset_id": asset_id, "reasons": []}
-    live_dates = {r["date"] for r in qfq}
+    # stored-vs-live date-set comparison on all three series
+    for adj, rows in (("raw", raw), ("qfq", qfq), ("hfq", hfq)):
+        stored_dates = {str(r["trade_date"]) for r in fetch_all(
+            conn, "SELECT trade_date FROM market_daily_bar "
+                  "WHERE asset_id=%s AND adjust_type=%s AND trade_date<=%s",
+            [asset_id, adj, END])}
+        live_d = {r["date"] for r in rows}
+        missing_live = stored_dates - live_d
+        extra_live = live_d - stored_dates
+        res[f"{adj}_stored"] = len(stored_dates)
+        res[f"{adj}_live"] = len(live_d)
+        res[f"{adj}_missing_live"] = len(missing_live)
+        res[f"{adj}_extra_live"] = len(extra_live)
+        if missing_live:
+            res["reasons"].append(
+                f"{adj}_live_missing_stored_dates={len(missing_live)}")
+        if len(extra_live) > 30:
+            # live legitimately extends past stored END only by new days;
+            # large excess means a different listing/calendar -> conflict
+            res["reasons"].append(f"{adj}_extra_live_dates={len(extra_live)}")
+    # raw vs qfq vs hfq should share the same live date set
+    if {r["date"] for r in raw} != {r["date"] for r in qfq} or \
+            {r["date"] for r in raw} != {r["date"] for r in hfq}:
+        res["reasons"].append("live_date_sets_diverge_across_adjust_types")
     bad = sum(1 for r in qfq + hfq if r["close"] is None or r["close"] <= 0)
     if bad:
         res["reasons"].append(f"degenerate_closes={bad}")
@@ -115,16 +138,17 @@ def main() -> None:
     if login.error_code != "0":
         raise SystemExit(f"login failed {login.error_code}")
     try:
-        for i, a in enumerate(todo, 1):
-            try:
-                res = verify(a)
-            except Exception as exc:
-                res = {"asset_id": a, "verdict": "ERROR",
-                       "reasons": [str(exc)[:200]]}
-            with open(OUT, "a") as f:
-                f.write(json.dumps(res, ensure_ascii=False) + "\n")
-            if i % 25 == 0:
-                print(f"{i}/{len(todo)} {res['verdict']}", flush=True)
+        with connect("stock_research") as conn:
+            for i, a in enumerate(todo, 1):
+                try:
+                    res = verify(conn, a)
+                except Exception as exc:
+                    res = {"asset_id": a, "verdict": "ERROR",
+                           "reasons": [str(exc)[:200]]}
+                with open(OUT, "a") as f:
+                    f.write(json.dumps(res, ensure_ascii=False) + "\n")
+                if i % 25 == 0:
+                    print(f"{i}/{len(todo)} {res['verdict']}", flush=True)
     finally:
         bs.logout()
 

@@ -272,6 +272,12 @@ def main() -> None:
                     """CREATE TABLE IF NOT EXISTS backup.r2_batch_meta (
                         batch_id text PRIMARY KEY, created_at timestamptz DEFAULT now())""")
                 cur.execute(
+                    """CREATE TABLE IF NOT EXISTS backup.r2_write_manifest (
+                        batch_id text, asset_id text, trade_date date,
+                        adjust_type text, op text,
+                        written_at timestamptz DEFAULT now(),
+                        PRIMARY KEY (batch_id, asset_id, trade_date, adjust_type))""")
+                cur.execute(
                     "INSERT INTO backup.r2_batch_meta (batch_id) VALUES (%s) "
                     "ON CONFLICT (batch_id) DO NOTHING", [batch_id])
                 cur.execute(
@@ -297,7 +303,8 @@ def main() -> None:
                             factor_backup, action_backup)
                     conn.commit()
                     arep["backup_gate"] = gate
-                    if gate != "OK":
+                    if gate not in ("OK", "OK_ALREADY_REPAIRED"):
+                        # BACKUP_UNCERTAIN -> never write; NO_STORED_ROWS -> nothing to do
                         arep["status"] = gate
                         report[asset_id] = arep
                         print(f"{asset_id}: {gate}", flush=True)
@@ -318,10 +325,25 @@ def main() -> None:
                                 "SELECT * FROM market_daily_bar WHERE asset_id=%s "
                                 "AND adjust_type=%s AND trade_date<=%s",
                                 [asset_id, adj, END])
+                            stored_keys = {(x["asset_id"], str(x["trade_date"]),
+                                            x["adjust_type"]) for x in stored}
                             updates = diff_driven_update_rows(stored, live)
                             assert_no_raw_rows(updates)
                             if updates:
+                                # manifest rows in SAME txn as upsert:
+                                # batch ownership is provable per row
                                 cur.executemany(UPSERT, updates)
+                                cur.executemany(
+                                    """INSERT INTO backup.r2_write_manifest
+                                       (batch_id, asset_id, trade_date, adjust_type, op)
+                                       VALUES (%s,%s,%s,%s,%s)
+                                       ON CONFLICT DO NOTHING""",
+                                    [(batch_id, u["asset_id"], u["trade_date"],
+                                      u["adjust_type"],
+                                      "update" if (u["asset_id"], str(u["trade_date"]),
+                                                   u["adjust_type"]) in stored_keys
+                                      else "insert")
+                                     for u in updates])
                             arep[f"{adj}_live"] = len(live)
                             arep[f"{adj}_updated"] = len(updates)
                     conn.commit()

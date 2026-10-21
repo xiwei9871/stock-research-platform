@@ -1,20 +1,28 @@
-"""R2 rollback v3 — surgically restores what a repair batch modified.
+"""R2 rollback v4 — manifest-owned surgical rollback.
 
-Safety rules:
-- daily bars: restore every backup row via upsert; DELETE only rows whose
-  key is absent from the backup AND whose source is the revision tag —
-  i.e. rows this batch actually inserted. Rows written later by other
-  pipelines (different source) are never touched, even on the same asset.
-- adjustment_factor: upsert backup rows; delete only rows for batch
-  assets with updated_at > batch meta created_at (created during repair)
-  whose key is absent from backup.
-- corporate_action: restore backup rows; delete only derived events for
-  batch assets created after meta time whose key is absent from backup.
-  Other sources' events are never touched.
-- everything runs in ONE transaction; row-level verification prints
-  remaining diffs before commit.
+Daily bars: batch ownership comes from backup.r2_write_manifest
+(batch_id, asset_id, trade_date, adjust_type, op):
+  - op='update' keys -> restore the batch backup pre-image
+  - op='insert' keys -> delete only those rows, and only while they still
+    carry this batch's write evidence
 
-Usage: r2_rollback_batch.py <batch_id>
+Conflict guards (abort without writing anything):
+  - another LATER batch's manifest claims the same key -> rolling back
+    would clobber that batch's work -> refuse
+  - a manifest update-key is missing from the backup table -> backup is
+    inconsistent -> refuse
+  - current row changed after this batch's write by a non-revision
+    source (another pipeline) -> refuse
+
+Legacy batches without a manifest fall back to backup-driven restore:
+upsert every backup row + delete revision-sourced rows absent from
+backup (v3 semantics), with a loud warning.
+
+Factor/action tables: restore from backup; extras deleted only when
+post-meta AND absent from backup (unchanged from v3).
+
+Usage: r2_rollback_batch.py <batch_id> [--apply]
+  default is dry-run (counts only); --apply commits.
 """
 from __future__ import annotations
 
@@ -32,6 +40,7 @@ DERIVED_ACTION_VERSION = "derived_adjustment_factor_v1"
 
 def main() -> None:
     batch_id = sys.argv[1]
+    apply = "--apply" in sys.argv
     b = f"backup.market_daily_bar_r2_{batch_id}"
     fb = f"backup.adjustment_factor_r2_{batch_id}"
     ab = f"backup.corporate_action_r2_{batch_id}"
@@ -42,35 +51,117 @@ def main() -> None:
             conn, "SELECT created_at FROM backup.r2_batch_meta WHERE batch_id=%s",
             [batch_id])
         meta_ts = meta[0]["created_at"] if meta else None
-        print(f"rolling back {len(assets)} assets from {b} meta_ts={meta_ts}")
+        manifest = fetch_all(
+            conn, "SELECT asset_id, trade_date, adjust_type, op FROM "
+                  "backup.r2_write_manifest WHERE batch_id=%s", [batch_id])
+        print(f"rollback {batch_id}: {len(assets)} assets, manifest rows="
+              f"{len(manifest)}, meta_ts={meta_ts}, apply={apply}")
+
+        if manifest:
+            keys = {(r["asset_id"], str(r["trade_date"]), r["adjust_type"])
+                    for r in manifest}
+            # conflict: a LATER batch wrote any of our keys
+            conflicts = fetch_all(
+                conn, """SELECT batch_id, count(*) c FROM backup.r2_write_manifest
+                         WHERE batch_id <> %s AND (asset_id, trade_date, adjust_type)
+                           IN (SELECT asset_id, trade_date, adjust_type
+                               FROM backup.r2_write_manifest WHERE batch_id=%s)
+                         GROUP BY batch_id""", [batch_id, batch_id])
+            if conflicts:
+                print("CONFLICT: later batches also wrote shared keys:",
+                      conflicts)
+                print("aborting — restore would clobber them; resolve manually")
+                return
+            backup_keys = {tuple(str(r[c]) for c in ("asset_id", "trade_date", "adjust_type"))
+                           for r in fetch_all(
+                               conn, f"SELECT asset_id, trade_date, adjust_type FROM {b}")}
+            missing_preimage = [k for k, r in zip(
+                [(r['asset_id'], str(r['trade_date']), r['adjust_type']) for r in manifest],
+                manifest) if r["op"] == "update" and k not in backup_keys]
+            if missing_preimage:
+                print("CONFLICT: update-keys without backup pre-image:",
+                      missing_preimage[:5])
+                return
+            # foreign write = manifest key whose current row differs from
+            # BOTH the backup pre-image and is not revision-sourced —
+            # i.e. a third party changed it after our write. Rows already
+            # at backup values (idempotent re-rollback) are not conflicts.
+            foreign = fetch_all(
+                conn, f"""SELECT count(*) c FROM market_daily_bar s
+                         JOIN backup.r2_write_manifest m
+                           ON m.asset_id=s.asset_id AND m.trade_date=s.trade_date
+                          AND m.adjust_type=s.adjust_type
+                         JOIN {b} bk ON bk.asset_id=s.asset_id
+                           AND bk.trade_date=s.trade_date
+                           AND bk.adjust_type=s.adjust_type
+                         WHERE m.batch_id=%s AND s.source <> %s
+                           AND (s.open IS DISTINCT FROM bk.open OR
+                                s.high IS DISTINCT FROM bk.high OR
+                                s.low IS DISTINCT FROM bk.low OR
+                                s.close IS DISTINCT FROM bk.close OR
+                                s.preclose IS DISTINCT FROM bk.preclose OR
+                                s.volume IS DISTINCT FROM bk.volume OR
+                                s.amount IS DISTINCT FROM bk.amount)""",
+                [batch_id, REVISION_SOURCE])
+            if foreign[0]["c"]:
+                print(f"CONFLICT: {foreign[0]['c']} manifest keys overwritten "
+                      "by non-revision source with different values — aborting")
+                return
+
         with conn.cursor() as cur:
-            # 1) restore backup rows (only rows the batch modified have
-            #    backup pre-images; others are skipped by NOT EXISTS below)
-            cur.execute(
-                f"""INSERT INTO market_daily_bar ({COLUMNS})
-                    SELECT {COLUMNS} FROM {b}
-                    ON CONFLICT (asset_id, trade_date, adjust_type) DO UPDATE SET
-                        open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
-                        close=EXCLUDED.close, preclose=EXCLUDED.preclose,
-                        volume=EXCLUDED.volume, amount=EXCLUDED.amount,
-                        turnover_rate=EXCLUDED.turnover_rate,
-                        pct_chg=EXCLUDED.pct_chg, trade_status=EXCLUDED.trade_status,
-                        is_st=EXCLUDED.is_st, source=EXCLUDED.source,
-                        updated_at=EXCLUDED.updated_at""")
-            print("daily rows restored:", cur.rowcount)
-            # 2) delete ONLY rows this batch inserted (revision source AND
-            #    key absent from backup) — other pipelines' later rows kept
-            cur.execute(
-                f"""DELETE FROM market_daily_bar s
-                    WHERE s.asset_id = ANY(%s) AND s.adjust_type IN ('qfq','hfq')
-                      AND s.source = %s
-                      AND NOT EXISTS (
-                          SELECT 1 FROM {b} bk WHERE bk.asset_id=s.asset_id
-                            AND bk.trade_date=s.trade_date
-                            AND bk.adjust_type=s.adjust_type)""",
-                [assets, REVISION_SOURCE])
-            print("batch-inserted rows deleted:", cur.rowcount)
-            # 3) factor: restore backup, drop repair-created extras
+            if manifest:
+                # manifest-owned restore: update-keys <- backup, insert-keys -> delete
+                bk_cols = ", ".join(f"bk.{c.strip()}" for c in COLUMNS.split(","))
+                cur.execute(
+                    f"""INSERT INTO market_daily_bar ({COLUMNS})
+                        SELECT {bk_cols} FROM {b} bk
+                        JOIN backup.r2_write_manifest m
+                          ON m.batch_id=%s AND m.asset_id=bk.asset_id
+                         AND m.trade_date=bk.trade_date AND m.adjust_type=bk.adjust_type
+                        WHERE m.op='update'
+                        ON CONFLICT (asset_id, trade_date, adjust_type) DO UPDATE SET
+                            open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
+                            close=EXCLUDED.close, preclose=EXCLUDED.preclose,
+                            volume=EXCLUDED.volume, amount=EXCLUDED.amount,
+                            turnover_rate=EXCLUDED.turnover_rate,
+                            pct_chg=EXCLUDED.pct_chg,
+                            trade_status=EXCLUDED.trade_status,
+                            is_st=EXCLUDED.is_st, source=EXCLUDED.source,
+                            updated_at=EXCLUDED.updated_at""", [batch_id])
+                print("manifest update-keys restored:", cur.rowcount)
+                cur.execute(
+                    """DELETE FROM market_daily_bar s
+                       USING backup.r2_write_manifest m
+                       WHERE m.batch_id=%s AND m.op='insert'
+                         AND s.asset_id=m.asset_id AND s.trade_date=m.trade_date
+                         AND s.adjust_type=m.adjust_type
+                         AND s.source=%s""",
+                    [batch_id, REVISION_SOURCE])
+                print("manifest insert-keys deleted:", cur.rowcount)
+            else:
+                print("!! no manifest — legacy backup-driven restore")
+                cur.execute(
+                    f"""INSERT INTO market_daily_bar ({COLUMNS})
+                        SELECT {COLUMNS} FROM {b}
+                        ON CONFLICT (asset_id, trade_date, adjust_type) DO UPDATE SET
+                            open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
+                            close=EXCLUDED.close, preclose=EXCLUDED.preclose,
+                            volume=EXCLUDED.volume, amount=EXCLUDED.amount,
+                            turnover_rate=EXCLUDED.turnover_rate,
+                            pct_chg=EXCLUDED.pct_chg, trade_status=EXCLUDED.trade_status,
+                            is_st=EXCLUDED.is_st, source=EXCLUDED.source,
+                            updated_at=EXCLUDED.updated_at""")
+                print("daily rows restored:", cur.rowcount)
+                cur.execute(
+                    f"""DELETE FROM market_daily_bar s
+                        WHERE s.asset_id = ANY(%s) AND s.adjust_type IN ('qfq','hfq')
+                          AND s.source = %s
+                          AND NOT EXISTS (
+                              SELECT 1 FROM {b} bk WHERE bk.asset_id=s.asset_id
+                                AND bk.trade_date=s.trade_date
+                                AND bk.adjust_type=s.adjust_type)""",
+                    [assets, REVISION_SOURCE])
+                print("batch-inserted rows deleted:", cur.rowcount)
             cur.execute(
                 f"""INSERT INTO market.adjustment_factor
                     SELECT * FROM {fb}
@@ -81,8 +172,7 @@ def main() -> None:
                         updated_at=EXCLUDED.updated_at""")
             print("factor rows restored:", cur.rowcount)
             if meta_ts is None:
-                print("!! no batch meta — skipping factor/action extras deletion "
-                      "(conservative: extra rows retained, review manually)")
+                print("!! no batch meta — skipping factor/action extras deletion")
             else:
                 cur.execute(
                     f"""DELETE FROM market.adjustment_factor s
@@ -94,7 +184,6 @@ def main() -> None:
                                 AND bk.source_version=s.source_version)""",
                     [assets, meta_ts])
                 print("factor extras deleted:", cur.rowcount)
-            # 4) corporate_action: restore backup, drop repair-created extras
             cur.execute(
                 f"INSERT INTO market.corporate_action SELECT * FROM {ab} "
                 "ON CONFLICT (asset_id, event_date, action_type, source_version) "
@@ -114,8 +203,6 @@ def main() -> None:
                                 AND bk.source_version=s.source_version)""",
                     [assets, DERIVED_ACTION_VERSION, meta_ts])
                 print("action extras deleted:", cur.rowcount)
-            # 5) row-level verification: stored qfq/hfq rows for batch
-            #    assets must equal backup on every restored key
             cur.execute(
                 f"""SELECT count(*) c FROM market_daily_bar s
                     JOIN {b} bk ON bk.asset_id=s.asset_id
@@ -130,8 +217,12 @@ def main() -> None:
                         s.amount IS DISTINCT FROM bk.amount)""",
                 [assets])
             print("post-rollback daily diffs:", cur.fetchone()["c"])
-        conn.commit()
-        print("rollback committed")
+        if apply:
+            conn.commit()
+            print("rollback committed")
+        else:
+            conn.rollback()
+            print("dry-run only — pass --apply to commit")
 
 
 if __name__ == "__main__":
