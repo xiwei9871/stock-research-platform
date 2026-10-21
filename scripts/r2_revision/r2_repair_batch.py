@@ -1,20 +1,24 @@
-"""R2 controlled batch repair for CONFIRMED_DIRTY assets (hardened v2).
+"""R2 controlled batch repair for CONFIRMED_DIRTY assets (hardened v3).
 
 Per asset, strictly in order:
-  1. backup gate — backup table must already cover the asset's ORIGINAL
-     stored qfq/hfq rows; missing keys are topped up from the live table
-     ONLY when the asset has no prior revision writes (otherwise the copy
-     would record post-repair values as originals → asset skipped as
-     BACKUP_UNCERTAIN instead).
+  1. backup gate — backup tables must provably cover the FULL PRIMARY-KEY
+     SET of every row the repair may modify (daily qfq/hfq, factors,
+     actions). Missing keys are topped up from the live table ONLY when
+     the asset carries no prior revision writes; otherwise the copy would
+     record post-repair values as originals -> asset skipped as
+     BACKUP_UNCERTAIN.
   2. fetch live qfq+hfq from baostock (full history, one shot per asset).
   3. diff-driven upsert of changed rows only; raw rows are never written.
   4. scoped adjustment_factor rebuild for the asset.
-  5. in-loop post-diff: re-read stored closes and compare against the
-     live rows already in memory — zero extra baostock calls; asset is
-     marked COMPLETE only when writes committed AND post_diff == 0.
+  5. in-loop post-diff on ALL core price fields (not just close) plus
+     date-set completeness vs live — zero extra baostock calls.
+     -> status WRITTEN.
 
-After all assets: scoped corporate_action rebuild (asset_ids=only this
-batch, min_factor_change filters float noise), incremental JSON report.
+After all assets: batch meta row + scoped corporate_action rebuild that
+first deletes stale derived events for THIS batch's assets in-window
+(asset_ids scope + source_version filter), then rebuilds. Assets flip to
+COMPLETE only when the event rebuild succeeded — report JSON is written
+incrementally after every asset, so resume is always consistent.
 
 Usage: r2_repair_batch.py <batch_id> <asset_id,asset_id,...|file:path>
 """
@@ -26,13 +30,17 @@ import sys
 import time
 from typing import Any
 
-import baostock as bs
+# socket hang guard MUST precede bs.login(): setdefaulttimeout only
+# applies to sockets created AFTER the call, including baostock's own.
+import socket
+socket.setdefaulttimeout(120)
+
+import baostock as bs  # noqa: E402
 
 sys.path.insert(0, "src")
 from stock_research.adjustment_revision import (  # noqa: E402
     assert_no_raw_rows,
     diff_driven_update_rows,
-    diff_stored_vs_live,
 )
 from stock_research.db import connect, fetch_all  # noqa: E402
 
@@ -41,6 +49,11 @@ END = "2026-10-20"
 FIELDS = "date,code,open,high,low,close,preclose,volume,amount,turn,pctChg,tradestatus,isST"
 ADJUSTFLAG = {"qfq": "2", "hfq": "1"}
 REVISION_SOURCE = "baostock_revision_r2"
+FACTOR_SOURCE_VERSION = "derived_market_daily_bar_v1"
+ACTION_SOURCE_VERSION = "derived_adjustment_factor_v1"
+PRICE_FIELDS = ("open", "high", "low", "close", "preclose",
+                "volume", "amount", "turnover_rate", "pct_chg")
+DIFF_TOLERANCE = 0.0005
 
 
 def bs_code(asset_id: str) -> str:
@@ -110,45 +123,117 @@ ON CONFLICT (asset_id, trade_date, source_version) DO UPDATE SET
     hfq_factor=EXCLUDED.hfq_factor, updated_at=now()
 """
 
-# top-up only keys absent from the backup — never overwrite originals
-BACKUP_TOPUP = """
-INSERT INTO {backup_table}
-SELECT s.* FROM market_daily_bar s
-WHERE s.asset_id = %s AND s.adjust_type IN ('qfq','hfq')
-  AND NOT EXISTS (
-      SELECT 1 FROM {backup_table} b
-      WHERE b.asset_id = s.asset_id AND b.trade_date = s.trade_date
-        AND b.adjust_type = s.adjust_type)
-"""
+
+def keyset(conn, table: str, asset_id: str, key_cols: tuple[str, ...],
+           extra: str = "", params: list | None = None) -> set[tuple]:
+    cols = ", ".join(key_cols)
+    sql = f"SELECT {cols} FROM {table} WHERE asset_id=%s {extra}"
+    return {tuple(str(r[c]) for c in key_cols) for r in
+            fetch_all(conn, sql, [asset_id] + (params or []))}
 
 
-def ensure_asset_backup(cur, conn, asset_id: str, backup_table: str) -> str:
-    """Return 'OK' when the backup provably covers the asset's original
-    stored qfq/hfq rows; otherwise 'BACKUP_UNCERTAIN' (caller skips)."""
-    stored = fetch_all(
-        conn,
-        "SELECT count(*) c FROM market_daily_bar "
-        "WHERE asset_id=%s AND adjust_type IN ('qfq','hfq')", [asset_id])[0]["c"]
-    if stored == 0:
+def ensure_asset_backup(cur, conn, asset_id: str,
+                        backup_table: str, factor_backup: str,
+                        action_backup: str) -> str:
+    """Full key-set backup gate across daily/factor/action tables.
+    Returns 'OK', 'NO_STORED_ROWS', or 'BACKUP_UNCERTAIN'."""
+    bar_keys = keyset(conn, "market_daily_bar", asset_id,
+                      ("trade_date", "adjust_type"),
+                      "AND adjust_type IN ('qfq','hfq')")
+    if not bar_keys:
         return "NO_STORED_ROWS"
-    backed = fetch_all(
-        conn,
-        f"SELECT count(*) c FROM {backup_table} WHERE asset_id=%s", [asset_id])[0]["c"]
-    if backed >= stored:
+    bak_keys = keyset(conn, backup_table, asset_id,
+                      ("trade_date", "adjust_type"))
+    factor_keys = keyset(conn, "market.adjustment_factor", asset_id,
+                         ("trade_date", "source_version"))
+    factor_bak = keyset(conn, factor_backup, asset_id,
+                        ("trade_date", "source_version"))
+    action_keys = keyset(conn, "market.corporate_action", asset_id,
+                         ("event_date", "action_type", "source_version"))
+    action_bak = keyset(conn, action_backup, asset_id,
+                        ("event_date", "action_type", "source_version"))
+    missing_bars = bar_keys - bak_keys
+    missing_factors = factor_keys - factor_bak
+    missing_actions = action_keys - action_bak
+    if not (missing_bars or missing_factors or missing_actions):
         return "OK"
     revised = fetch_all(
-        conn,
-        "SELECT count(*) c FROM market_daily_bar "
-        "WHERE asset_id=%s AND source=%s", [asset_id, REVISION_SOURCE])[0]["c"]
+        conn, "SELECT count(*) c FROM market_daily_bar "
+              "WHERE asset_id=%s AND source=%s",
+        [asset_id, REVISION_SOURCE])[0]["c"]
     if revised:
-        # partially repaired earlier; a top-up would snapshot post-repair
-        # values as 'originals' — refuse rather than corrupt the backup
         return "BACKUP_UNCERTAIN"
-    cur.execute(BACKUP_TOPUP.format(backup_table=backup_table), [asset_id])
-    backed = fetch_all(
-        conn,
-        f"SELECT count(*) c FROM {backup_table} WHERE asset_id=%s", [asset_id])[0]["c"]
-    return "OK" if backed >= stored else "BACKUP_UNCERTAIN"
+    if missing_bars:
+        cur.execute(
+            f"""INSERT INTO {backup_table}
+                SELECT s.* FROM market_daily_bar s
+                WHERE s.asset_id=%s AND s.adjust_type IN ('qfq','hfq')
+                  AND (s.trade_date::text, s.adjust_type) <> ALL (
+                      SELECT (b.trade_date::text, b.adjust_type)
+                      FROM {backup_table} b WHERE b.asset_id=%s)""",
+            [asset_id, asset_id])
+    if missing_factors:
+        cur.execute(
+            f"""INSERT INTO {factor_backup}
+                SELECT s.* FROM market.adjustment_factor s
+                WHERE s.asset_id=%s
+                  AND (s.trade_date::text, s.source_version) <> ALL (
+                      SELECT (b.trade_date::text, b.source_version)
+                      FROM {factor_backup} b WHERE b.asset_id=%s)""",
+            [asset_id, asset_id])
+    if missing_actions:
+        cur.execute(
+            f"""INSERT INTO {action_backup}
+                SELECT s.* FROM market.corporate_action s
+                WHERE s.asset_id=%s
+                  AND (s.event_date::text, s.action_type, s.source_version) <> ALL (
+                      SELECT (b.event_date::text, b.action_type, b.source_version)
+                      FROM {action_backup} b WHERE b.asset_id=%s)""",
+            [asset_id, asset_id])
+    # re-verify full coverage
+    ok_bars = not (bar_keys - keyset(conn, backup_table, asset_id,
+                                     ("trade_date", "adjust_type")))
+    ok_fac = not (factor_keys - keyset(conn, factor_backup, asset_id,
+                                       ("trade_date", "source_version")))
+    ok_act = not (action_keys - keyset(conn, action_backup, asset_id,
+                                       ("event_date", "action_type", "source_version")))
+    return "OK" if (ok_bars and ok_fac and ok_act) else "BACKUP_UNCERTAIN"
+
+
+def post_diff_full(conn, asset_id: str, live_rows: dict[str, list]) -> dict:
+    """Compare stored vs live on all core price fields + date sets."""
+    out = {}
+    for adj in ADJUSTFLAG:
+        stored = {str(x["trade_date"]): x for x in fetch_all(
+            conn, "SELECT trade_date,open,high,low,close,preclose,volume,"
+                  "amount,turnover_rate,pct_chg FROM market_daily_bar "
+                  "WHERE asset_id=%s AND adjust_type=%s AND trade_date<=%s",
+            [asset_id, adj, END])}
+        live = {x["trade_date"]: x for x in live_rows[adj]}
+        diffs = []
+        for d, s in stored.items():
+            lv = live.get(d)
+            if lv is None:
+                diffs.append(d)
+                continue
+            for f in PRICE_FIELDS:
+                sv, lvv = s.get(f), lv.get(f)
+                if sv is None and lvv is None:
+                    continue
+                if sv is None or lvv is None:
+                    diffs.append(d)
+                    break
+                try:
+                    if abs(float(lvv) - float(sv)) > max(abs(float(sv)) * DIFF_TOLERANCE, 1e-9):
+                        diffs.append(d)
+                        break
+                except (TypeError, ValueError):
+                    if str(sv) != str(lvv):
+                        diffs.append(d)
+                        break
+        missing_dates = [d for d in live if d not in stored]
+        out[adj] = {"field_diffs": len(diffs), "missing_dates": len(missing_dates)}
+    return out
 
 
 def main() -> None:
@@ -169,14 +254,17 @@ def main() -> None:
     login = bs.login()
     if login.error_code != "0":
         raise SystemExit(f"login failed {login.error_code} {login.error_msg}")
-    import socket
-    socket.setdefaulttimeout(120)  # baostock socket hang guard
     t0 = time.time()
     try:
         with connect("stock_research") as conn:
             with conn.cursor() as cur:
                 cur.execute("CREATE SCHEMA IF NOT EXISTS backup")
-                # keep ORIGINAL pre-repair backup on retry
+                cur.execute(
+                    """CREATE TABLE IF NOT EXISTS backup.r2_batch_meta (
+                        batch_id text PRIMARY KEY, created_at timestamptz DEFAULT now())""")
+                cur.execute(
+                    "INSERT INTO backup.r2_batch_meta (batch_id) VALUES (%s) "
+                    "ON CONFLICT (batch_id) DO NOTHING", [batch_id])
                 cur.execute(
                     f"CREATE TABLE IF NOT EXISTS {backup_table} AS SELECT * FROM market_daily_bar "
                     "WHERE asset_id = ANY(%s) AND adjust_type IN ('qfq','hfq')", [assets])
@@ -190,13 +278,14 @@ def main() -> None:
             print(f"backups: {backup_table} {factor_backup} {action_backup}", flush=True)
 
             for asset_id in assets:
-                if report.get(asset_id, {}).get("status") == "COMPLETE":
-                    print(f"{asset_id}: already COMPLETE, skip", flush=True)
+                if report.get(asset_id, {}).get("status") in ("COMPLETE", "WRITTEN"):
                     continue
                 arep: dict[str, Any] = {"status": "STARTED"}
                 try:
                     with conn.cursor() as cur:
-                        gate = ensure_asset_backup(cur, conn, asset_id, backup_table)
+                        gate = ensure_asset_backup(
+                            cur, conn, asset_id, backup_table,
+                            factor_backup, action_backup)
                     conn.commit()
                     arep["backup_gate"] = gate
                     if gate != "OK":
@@ -232,17 +321,11 @@ def main() -> None:
                         arep["factor_rows"] = cur.rowcount
                     conn.commit()
 
-                    # post-diff using live rows already fetched (no extra API)
-                    ver = {}
-                    for adj in ADJUSTFLAG:
-                        stored = {str(x["trade_date"]): float(x["close"]) for x in fetch_all(
-                            conn, "SELECT trade_date, close FROM market_daily_bar "
-                            "WHERE asset_id=%s AND adjust_type=%s AND trade_date<=%s",
-                            [asset_id, adj, END])}
-                        live_close = {x["trade_date"]: x["close"] for x in live_rows[adj]}
-                        ver[adj] = diff_stored_vs_live(stored, live_close)["diff_count"]
+                    ver = post_diff_full(conn, asset_id, live_rows)
                     arep["post_diff"] = ver
-                    arep["status"] = "COMPLETE" if not (ver["qfq"] or ver["hfq"]) else "POST_DIFF"
+                    bad = any(v["field_diffs"] or v["missing_dates"]
+                              for v in ver.values())
+                    arep["status"] = "POST_DIFF" if bad else "WRITTEN"
                 except Exception as exc:  # per-asset isolation
                     conn.rollback()
                     arep["status"] = "ERROR"
@@ -253,15 +336,31 @@ def main() -> None:
                 print(f"{asset_id}: {arep['status']} qfq+{arep.get('qfq_updated')} "
                       f"hfq+{arep.get('hfq_updated')}", flush=True)
 
-        # scoped corporate-action rebuild for THIS batch only
-        from stock_research.corporate_actions import build_corporate_actions_from_factors
-        complete = [a for a, r in report.items()
-                    if a.startswith("CN:") and r.get("status") == "COMPLETE"]
+        # scoped corporate-action rebuild for THIS batch only:
+        # delete stale derived events for batch assets in-window first,
+        # then rebuild — no residue, no market-wide churn
+        from stock_research.corporate_actions import (
+            build_corporate_actions_from_factors)
+        written = [a for a, r in report.items()
+                   if a.startswith("CN:") and r.get("status") == "WRITTEN"]
         with connect("stock_research") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM market.corporate_action "
+                    "WHERE asset_id=ANY(%s) AND source_version=%s "
+                    "AND event_date>='2026-01-01' AND event_date<=%s",
+                    [written, ACTION_SOURCE_VERSION, END])
+                stale_deleted = cur.rowcount
             build_corporate_actions_from_factors(
-                conn, start_date="2026-01-01", end_date=END, asset_ids=complete)
+                conn, start_date="2026-01-01", end_date=END,
+                asset_ids=written)
+            conn.commit()
+        for a in written:
+            report[a]["events_rebuilt"] = True
+            report[a]["status"] = "COMPLETE"
         report["__meta"] = {"batch_id": batch_id, "assets": len(assets),
-                            "complete": len(complete),
+                            "complete": len(written),
+                            "stale_events_deleted": stale_deleted,
                             "elapsed_s": round(time.time() - t0, 1),
                             "backup_table": backup_table}
     finally:
