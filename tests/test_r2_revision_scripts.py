@@ -57,6 +57,69 @@ def test_rollback_manifest_ownership():
     assert "dry-run only" in src
 
 
+# --- downstream rebuild checkpoint semantics (version-aware, incremental) ---
+
+def _import_downstream():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "r2_downstream_rebuild",
+        SCRIPTS / "r2_downstream_rebuild.py")
+    mod = importlib.util.module_from_spec(spec)
+    import sys as _s
+    _s.path.insert(0, "src")
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_minute_pending_new_asset_and_sig_change():
+    m = _import_downstream()
+    groups = {"CN:A": [{"freq": "5min", "source": "baostock"}],
+              "CN:B": [{"freq": "5min", "source": "baostock"}]}
+    sigs = {"CN:A": "100:t1", "CN:B": "50:t2"}
+    # asset A done at old sig -> pending (repaired factors changed)
+    # asset B never done -> pending
+    ledger = {"CN:A|5min|baostock": {"factor_sig": "99:t0"}}
+    todo = m.decide_minute_pending(groups, sigs, ledger)
+    assert set(todo) == {"CN:A|5min|baostock", "CN:B|5min|baostock"}
+    # A at current sig -> only B pending
+    ledger["CN:A|5min|baostock"]["factor_sig"] = "100:t1"
+    todo = m.decide_minute_pending(groups, sigs, ledger)
+    assert set(todo) == {"CN:B|5min|baostock"}
+    # new asset C joins later -> enqueued despite prior completions
+    groups["CN:C"] = [{"freq": "5min", "source": "baostock"}]
+    sigs["CN:C"] = "10:t3"
+    todo = m.decide_minute_pending(groups, sigs, ledger)
+    assert set(todo) == {"CN:B|5min|baostock", "CN:C|5min|baostock"}
+
+
+def test_feature_pending_per_asset_date_not_date_scoped():
+    m = _import_downstream()
+    assets, dates = ["CN:A", "CN:B"], ["2026-10-19", "2026-10-20"]
+    sigs = {"CN:A": "s1", "CN:B": "s2"}
+    # date fully computed for A only -> B must still be pending on both dates
+    ledger = {"2026-10-19|CN:A": {"factor_sig": "s1"},
+              "2026-10-20|CN:A": {"factor_sig": "s1"}}
+    todo = m.decide_feature_pending(assets, dates, sigs, ledger)
+    assert set(todo) == {"2026-10-19|CN:B", "2026-10-20|CN:B"}
+    # A's factors re-repaired (sig bump) -> A re-enters pending
+    sigs["CN:A"] = "s1b"
+    todo = m.decide_feature_pending(assets, dates, sigs, ledger)
+    assert set(todo) == {"2026-10-19|CN:A", "2026-10-20|CN:A",
+                        "2026-10-19|CN:B", "2026-10-20|CN:B"}
+
+
+def test_window_merge_state_machine():
+    src = (SCRIPTS / "r2_merge_sets.py").read_text()
+    # atomic replace, disjoint check, reclassification + verdict moves
+    assert "os.replace" in src and "AUTO_RELEASABLE" in src
+    assert '"CONFIRMED_DIRTY", "review_verified"' in src
+    assert "FATAL: sets overlap" in src
+    win = (SCRIPTS / "r2_baostock_window.sh").read_text()
+    # real child-process check before baostock use, then merge step
+    assert "pgrep -f 'r2_repair_batch.py'" in win
+    assert "r2_merge_sets.py" in win
+
+
 def test_review_verify_date_coverage():
     src = (SCRIPTS / "r2_review_verify.py").read_text()
     # stored-vs-live date comparison for all three series

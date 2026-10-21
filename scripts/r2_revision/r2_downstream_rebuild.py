@@ -60,73 +60,151 @@ def load_asset_list(path: str | None) -> list[str]:
     return sorted(completed_assets())
 
 
+def factor_sig(conn, asset_id: str) -> str:
+    """Upstream-revision signature for one asset's derived factors.
+
+    Any repair/rebuild touching this asset's factor rows changes
+    max(updated_at) (and usually count) — downstream work keyed on this
+    signature becomes stale and must recompute.
+    """
+    r = fetch_all(
+        conn, "SELECT count(*) c, max(updated_at) mx"
+              " FROM market.adjustment_factor WHERE asset_id=%s"
+              " AND source_version='derived_market_daily_bar_v1'",
+        [asset_id])[0]
+    return f"{r['c']}:{r['mx']}"
+
+
+def decide_minute_pending(asset_groups: dict[str, list[dict]],
+                          sigs: dict[str, str],
+                          ledger: dict) -> dict[str, dict]:
+    """Pure: which minute jobs are pending given per-asset raw groups,
+    current factor signatures, and the completion ledger.
+    Key = asset|freq|source; pending when ledger sig != current sig."""
+    todo = {}
+    for asset_id, groups in asset_groups.items():
+        for g in groups:
+            key = f"{asset_id}|{g['freq']}|{g['source']}"
+            if ledger.get(key, {}).get("factor_sig") != sigs[asset_id]:
+                todo[key] = {"asset": asset_id, "freq": g["freq"],
+                             "source": g["source"], "sig": sigs[asset_id]}
+    return todo
+
+
+def decide_feature_pending(assets: list[str], dates: list[str],
+                           sigs: dict[str, str],
+                           ledger: dict) -> dict[str, dict]:
+    """Pure: {date|asset: {'asset','date','sig'}} needing recompute —
+    skips only exact (asset, date, unchanged-sig) completions, never
+    whole dates."""
+    todo = {}
+    for d in dates:
+        for a in assets:
+            key = f"{d}|{a}"
+            if ledger.get(key, {}).get("factor_sig") != sigs[a]:
+                todo[key] = {"asset": a, "date": d, "sig": sigs[a]}
+    return todo
+
+
+def _load_ledger(path: str) -> dict:
+    if os.path.exists(path):
+        raw = json.load(open(path))
+        return raw if isinstance(raw, dict) else {}
+    return {}
+
+
+def pending_minute_keys(assets: list[str], conn) -> dict[str, dict]:
+    ledger = _load_ledger(PROGRESS)
+    groups, sigs = {}, {}
+    for asset_id in assets:
+        gs = fetch_all(
+            conn, "SELECT DISTINCT freq, source FROM market.stock_minute_bar"
+                  " WHERE asset_id=%s AND adjust_type='raw'",
+            [asset_id])
+        if gs:
+            groups[asset_id] = gs
+            sigs[asset_id] = factor_sig(conn, asset_id)
+    return decide_minute_pending(groups, sigs, ledger)
+
+
+def pending_feature_keys(assets: list[str], dates: list[str],
+                         conn) -> tuple[dict[str, dict], dict[str, str]]:
+    ledger = _load_ledger(FEAT_PROGRESS)
+    sigs = {a: factor_sig(conn, a) for a in assets}
+    return decide_feature_pending(assets, dates, sigs, ledger), sigs
+
+
 def phase_minute(assets: list[str], dry_run: bool) -> None:
-    done = set()
-    if os.path.exists(PROGRESS):
-        done = set(json.load(open(PROGRESS)))
     t0 = time.time()
     n = 0
     gaps: list[str] = []
     with connect("stock_research") as conn:
-        for asset_id in assets:
-            if asset_id in done:
-                continue
-            groups = fetch_all(
-                conn, "SELECT ts_code, freq, source, min(trade_date) mn,"
-                      " max(trade_date) mx, count(*) c"
-                      " FROM market.stock_minute_bar"
+        todo = pending_minute_keys(assets, conn)
+        print(f"minute pending keys: {len(todo)}")
+        ledger = {}
+        if os.path.exists(PROGRESS):
+            raw = json.load(open(PROGRESS))
+            ledger = raw if isinstance(raw, dict) else {}
+        for key, job_info in todo.items():
+            asset_id = job_info["asset"]
+            rng = fetch_all(
+                conn, "SELECT ts_code, min(trade_date) mn, max(trade_date) mx,"
+                      " count(*) c FROM market.stock_minute_bar"
                       " WHERE asset_id=%s AND adjust_type='raw'"
-                      " GROUP BY ts_code, freq, source",
-                [asset_id])
-            total_up = 0
-            failed = False
-            for g in groups:
-                job = {"asset_id": asset_id, "ts_code": g["ts_code"],
-                       "start_date": str(g["mn"]), "end_date": str(g["mx"]),
-                       "freq": g["freq"], "source": g["source"]}
-                if dry_run:
-                    print(f"  {asset_id} {g['freq']}/{g['source']} "
-                          f"{g['mn']}..{g['mx']} raw={g['c']}")
-                    continue
-                try:
-                    res = derive_qfq_minute_bars_from_raw_job(conn, job)
-                except RuntimeError as exc:
-                    # raw rows on dates lacking a non-NULL factor (e.g. raw
-                    # daily gap) abort the whole asset — roll back and log
-                    conn.rollback()
-                    print(f"  FACTOR_GAP {asset_id}: {exc}", flush=True)
-                    gaps.append(asset_id)
-                    failed = True
-                    break
-                total_up += int(res or 0)
-            if not dry_run and not failed:
-                conn.commit()
-                done.add(asset_id)
-                n += 1
-                if n % 10 == 0:
-                    with open(PROGRESS, "w") as f:
-                        json.dump(sorted(done), f)
-                    print(f"[{n}] {asset_id} qfq-minute rows +{total_up} "
-                          f"({time.time()-t0:.0f}s)", flush=True)
+                      " AND freq=%s AND source=%s GROUP BY ts_code",
+                [asset_id, job_info["freq"], job_info["source"]])
+            if not rng:
+                continue
+            g = rng[0]
+            job = {"asset_id": asset_id, "ts_code": g["ts_code"],
+                   "start_date": str(g["mn"]), "end_date": str(g["mx"]),
+                   "freq": job_info["freq"], "source": job_info["source"]}
+            if dry_run:
+                print(f"  {asset_id} {job_info['freq']}/{job_info['source']} "
+                      f"{g['mn']}..{g['mx']} raw={g['c']} sig={job_info['sig']}")
+                continue
+            try:
+                res = derive_qfq_minute_bars_from_raw_job(conn, job)
+            except RuntimeError as exc:
+                # raw rows on dates lacking a non-NULL factor (e.g. raw
+                # daily gap) abort this job — roll back and log
+                conn.rollback()
+                print(f"  FACTOR_GAP {asset_id} {key}: {exc}", flush=True)
+                gaps.append(key)
+                continue
+            conn.commit()
+            ledger[key] = {"factor_sig": job_info["sig"],
+                           "rows": int(res or 0)}
+            n += 1
+            if n % 10 == 0:
+                with open(PROGRESS, "w") as f:
+                    json.dump(ledger, f)
+                print(f"[{n}] {key} qfq-minute rows +{res} "
+                      f"({time.time()-t0:.0f}s)", flush=True)
     if not dry_run:
         with open(PROGRESS, "w") as f:
-            json.dump(sorted(done), f)
-    print(f"minute phase done: {n} assets processed, "
-          f"{len(gaps)} factor-gap assets skipped")
+            json.dump(ledger, f)
+    print(f"minute phase done: {n} jobs processed, "
+          f"{len(gaps)} factor-gap jobs skipped")
 
 
 def phase_features(assets: list[str], start: str, end: str) -> None:
-    done_dates = set()
-    if os.path.exists(FEAT_PROGRESS):
-        done_dates = set(json.load(open(FEAT_PROGRESS)))
     with connect("stock_research") as conn:
         dates = [str(r["trade_date"]) for r in fetch_all(
             conn, "SELECT DISTINCT trade_date FROM market_daily_bar"
                   " WHERE adjust_type='raw' AND trade_date BETWEEN %s AND %s"
                   " ORDER BY 1", [start, end])]
+        todo, sigs = pending_feature_keys(assets, dates, conn)
+        print(f"feature pending keys: {len(todo)} "
+              f"(across {len({v['date'] for v in todo.values()})} dates)")
+        ledger = {}
+        if os.path.exists(FEAT_PROGRESS):
+            raw = json.load(open(FEAT_PROGRESS))
+            ledger = raw if isinstance(raw, dict) else {}
         t0 = time.time()
         for i, d in enumerate(dates):
-            if d in done_dates:
+            day_assets = [a for a in assets if f"{d}|{a}" in todo]
+            if not day_assets:
                 continue
             rows = fetch_all(
                 conn, """SELECT trade_date, asset_id, open, high, low, close,
@@ -137,9 +215,8 @@ def phase_features(assets: list[str], start: str, end: str) -> None:
                              SELECT DISTINCT trade_date FROM market_daily_bar
                              WHERE adjust_type='raw' AND trade_date <= %s
                              ORDER BY trade_date DESC LIMIT %s)""",
-                [assets, d, LOOKBACK])
+                [day_assets, d, LOOKBACK])
             if not rows:
-                done_dates.add(d)
                 continue
             frame = pd.DataFrame(rows)
             grouped = frame.groupby("asset_id", sort=False, group_keys=False)
@@ -151,16 +228,17 @@ def phase_features(assets: list[str], start: str, end: str) -> None:
             df = pd.DataFrame(built, columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
             if not df.empty:
                 upsert_stock_technical_features_daily(df)
+            for a in (str(x["asset_id"]) for x in built):
+                ledger[f"{d}|{a}"] = {"factor_sig": sigs[a]}
             conn.commit()
-            done_dates.add(d)
             if i % 20 == 0:
                 with open(FEAT_PROGRESS, "w") as f:
-                    json.dump(sorted(done_dates), f)
+                    json.dump(ledger, f)
                 print(f"[{i}/{len(dates)}] {d} features rows={len(df)} "
                       f"({time.time()-t0:.0f}s)", flush=True)
         with open(FEAT_PROGRESS, "w") as f:
-            json.dump(sorted(done_dates), f)
-    print(f"features phase done: {len(dates)} dates")
+            json.dump(ledger, f)
+    print(f"features phase done: {len(dates)} dates scanned")
 
 
 def main() -> None:
