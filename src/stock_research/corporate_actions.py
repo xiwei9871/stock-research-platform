@@ -86,6 +86,7 @@ def build_corporate_actions_from_factors_for_service(
     source_version: str = "derived_adjustment_factor_v1",
     factor_source_version: str = "derived_market_daily_bar_v1",
     min_factor_change: float = DEFAULT_MIN_FACTOR_CHANGE,
+    require_preclose_evidence: bool = False,
     service: str = SETTINGS.research_service,
 ) -> None:
     with connect(service) as conn:
@@ -96,6 +97,7 @@ def build_corporate_actions_from_factors_for_service(
             source_version=source_version,
             factor_source_version=factor_source_version,
             min_factor_change=min_factor_change,
+            require_preclose_evidence=require_preclose_evidence,
         )
 
 
@@ -107,6 +109,7 @@ def build_corporate_actions_from_factors(
     factor_source_version: str = "derived_market_daily_bar_v1",
     min_factor_change: float = DEFAULT_MIN_FACTOR_CHANGE,
     asset_ids: list[str] | None = None,
+    require_preclose_evidence: bool = False,
 ) -> None:
     # placeholder order in sql: source_version, factor_source_version,
     # then where_sql filter params, then min_factor_change (the last %s)
@@ -124,6 +127,25 @@ def build_corporate_actions_from_factors(
     params.append(min_factor_change)
 
     where_sql = " AND ".join(filters)
+    # corroboration: a real ex-rights day also moves the exchange-adjusted
+    # raw preclose vs the previous raw close (same signal, independent field)
+    preclose_evidence = ""
+    if require_preclose_evidence:
+        preclose_evidence = """
+      AND EXISTS (
+          SELECT 1 FROM market_daily_bar cur
+          JOIN LATERAL (
+              SELECT close FROM market_daily_bar p
+              WHERE p.asset_id = cur.asset_id AND p.adjust_type = 'raw'
+                AND p.trade_date < cur.trade_date
+              ORDER BY p.trade_date DESC LIMIT 1
+          ) prev ON TRUE
+          WHERE cur.asset_id = changes.asset_id
+            AND cur.trade_date = changes.event_date
+            AND cur.adjust_type = 'raw'
+            AND ABS(cur.preclose - prev.close)
+                / NULLIF(prev.close, 0) > 0.001
+      )"""
     sql = f"""
     INSERT INTO market.corporate_action (
         asset_id,
@@ -158,6 +180,7 @@ def build_corporate_actions_from_factors(
     WHERE {where_sql}
       AND factor_after IS DISTINCT FROM factor_before
       AND ABS(factor_after / NULLIF(factor_before, 0) - 1) >= %s
+      {preclose_evidence}
     ON CONFLICT (asset_id, event_date, action_type, source_version) DO UPDATE SET
         factor_before = EXCLUDED.factor_before,
         factor_after = EXCLUDED.factor_after,

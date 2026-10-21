@@ -353,7 +353,7 @@ def main() -> None:
                 stale_deleted = cur.rowcount
             build_corporate_actions_from_factors(
                 conn, start_date="2026-01-01", end_date=END,
-                asset_ids=written)
+                asset_ids=written, require_preclose_evidence=True)
             conn.commit()
         for a in written:
             report[a]["events_rebuilt"] = True

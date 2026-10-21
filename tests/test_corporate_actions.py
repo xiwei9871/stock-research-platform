@@ -104,6 +104,24 @@ def test_build_corporate_actions_min_factor_change_override(monkeypatch):
     assert params[-1] == 0.02
 
 
+def test_build_corporate_actions_preclose_evidence(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(corporate_actions, "execute", fake_execute)
+
+    corporate_actions.build_corporate_actions_from_factors(
+        conn,
+        require_preclose_evidence=True,
+    )
+
+    sql, _ = conn.executed[0]
+    assert "JOIN LATERAL" in sql
+    assert "cur.adjust_type = 'raw'" in sql
+
+    conn2 = FakeConnection()
+    corporate_actions.build_corporate_actions_from_factors(conn2)
+    assert "JOIN LATERAL" not in conn2.executed[0][0]
+
+
 def test_build_corporate_actions_scoped_to_assets(monkeypatch):
     conn = FakeConnection()
     monkeypatch.setattr(corporate_actions, "execute", fake_execute)
@@ -165,6 +183,7 @@ def test_service_wrappers_open_connection(monkeypatch):
                 "source_version": "actions_v1",
                 "factor_source_version": "factors_v1",
                 "min_factor_change": corporate_actions.DEFAULT_MIN_FACTOR_CHANGE,
+                "require_preclose_evidence": False,
             },
         ),
     ]
