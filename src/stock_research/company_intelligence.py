@@ -108,6 +108,11 @@ class CompanyEvidence:
     # link itself (capacity, queues, alternatives).  Node claims may only bind
     # node-scope evidence — a strong company never auto-proves a bottleneck.
     evidence_scope: str = "company"
+    # Product-line attribution for commercialization evidence.  Empty means
+    # the excerpt can't be tied to a specific product line — the value matrix
+    # treats it as node_attribution_unknown instead of letting a storage-ESS
+    # delivery masquerade as a data-center liquid-cooling delivery.
+    product_line: str = ""
 
 
 @dataclass(frozen=True)
@@ -117,6 +122,11 @@ class ResearchClaim:
     claim_text: str
     evidence_ids: tuple[str, ...] = ()
     review_status: str = "pending"
+    # Node-scoped economics role (supply_scarcity / non_substitutability /
+    # market_structure / entry_barrier / hype).  Company dossiers leave it
+    # empty; the chain-bottleneck engine uses it to keep a descriptive fact
+    # (e.g. "multiple suppliers exist") from posing as scarcity evidence.
+    claim_role: str = ""
 
 
 @dataclass(frozen=True)
@@ -575,6 +585,8 @@ def _matrix_row(
         "direction": ev.direction,
         "page_or_section": ev.page_or_section,
         "checklist_item": ev.checklist_item,
+        "evidence_scope": ev.evidence_scope,
+        "product_line": ev.product_line,
         "confidence": ev.confidence,
         "review_status": ev.review_status,
         "verdict_weight": verdict_weight,
@@ -674,6 +686,7 @@ def _input_fingerprint(
                     c.claim_text,
                     tuple(sorted(c.evidence_ids)),
                     c.review_status,
+                    c.claim_role,
                 )
                 for c in claims
             ),
@@ -689,6 +702,7 @@ def _input_fingerprint(
                     e.review_status,
                     e.checklist_item,
                     e.evidence_scope,
+                    e.product_line,
                 )
                 for e in evidence
             ),

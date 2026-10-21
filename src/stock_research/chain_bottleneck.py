@@ -67,6 +67,37 @@ _CORE_ASPECTS = (
     "performance_gap",
 )
 
+# Economics roles for node claims (R2.1).  Only claims that assert an actual
+# bottleneck mechanism — supply scarcity or effective non-substitutability —
+# can establish or reject the node.  Descriptive market-structure facts
+# (supplier counts, landscape) and generic barriers can never stand in for
+# scarcity evidence.
+NODE_CLAIM_ROLES = {
+    "supply_scarcity",
+    "non_substitutability",
+    "market_structure",
+    "entry_barrier",
+    "hype",
+}
+_SCARCITY_ROLES = {"supply_scarcity", "non_substitutability"}
+_BARRIER_ROLES = {"entry_barrier"}
+
+
+def _claim_role(claim_row: dict[str, Any], node_claim: ResearchClaim | None) -> str:
+    role = node_claim.claim_role if node_claim is not None else ""
+    if role in NODE_CLAIM_ROLES:
+        return role
+    # Unlabeled claims default by aspect so legacy specs degrade to
+    # descriptive roles rather than posing as scarcity evidence.
+    default = {
+        "capacity_constraint": "market_structure",
+        "process_irreplaceability": "market_structure",
+        "certification_barrier": "entry_barrier",
+        "performance_gap": "entry_barrier",
+        "hype_only": "hype",
+    }
+    return default.get(claim_row.get("dimension") or "", "market_structure")
+
 
 def build_node_dossier(
     *,
@@ -77,6 +108,7 @@ def build_node_dossier(
     evidence: Sequence[CompanyEvidence],
     sources: Sequence[CompanySource],
     member_companies: Sequence[dict[str, Any]] = (),
+    product_lines: set[str] | None = None,
     value_matrix: dict[str, Any] | None = None,
     input_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -134,6 +166,7 @@ def build_node_dossier(
         row = _claim_verdict(narrowed, evidence_by_id, in_scope_ids, sources_by_id)
         row["scope_binding_errors"] = scope_errors + row["binding_errors"]
         row["binding_errors"] = row["scope_binding_errors"]
+        row["claim_role"] = _claim_role(row, claim)
         claims_out.append(row)
         binding_warnings.extend(f"{claim.claim_id}:{eid}" for eid in scope_errors)
         binding_warnings.extend(
@@ -179,6 +212,7 @@ def build_node_dossier(
         "as_of": as_of_key,
         "dossier_fingerprint": dossier_fp,
         "member_companies": list(member_companies),
+        "product_lines": sorted(product_lines or ()),
         "aspects": aspects_out,
         "node_claims": claims_out,
         "evidence_matrix": [
@@ -223,24 +257,32 @@ def _node_verdict(
       verified hype.  Two generic partials can never establish it.
     """
     supported = {"confirmed", "partially_supported"}
-    by_aspect: dict[str, list[str]] = {a: [] for a in NODE_ASPECTS}
-    for c in claims:
-        if c["dimension"] in by_aspect:
-            by_aspect[c["dimension"]].append(c["verdict"])
-
-    cap = by_aspect["capacity_constraint"]
-    proc = by_aspect["process_irreplaceability"]
-    cert = by_aspect["certification_barrier"]
-    perf = by_aspect["performance_gap"]
-    core = cap + proc + cert + perf
+    core_claims = [c for c in claims if c["dimension"] in _CORE_ASPECTS]
+    core = [c["verdict"] for c in core_claims]
     hype = aspects["hype_only"]["verdict"]
 
     if any(v == "contested" for v in core):
         return "contested", 0.35
-    if any(v == "contradicted" for v in cap):
+    # Rejection needs the *bottleneck proposition itself* (supply_scarcity or
+    # non_substitutability role) contradicted — a local market-structure or
+    # generic capacity claim being refuted never kills the node.
+    scarcity_claims = [c for c in core_claims if c.get("claim_role") in _SCARCITY_ROLES]
+    # Only an affirmed refutation of the *supply-constraint* proposition
+    # rejects the node.  A refuted non-substitutability claim kills that one
+    # mechanism but capacity may still bind — surface it, don't reject.
+    if any(
+        c["verdict"] == "contradicted" and c.get("claim_role") == "supply_scarcity"
+        for c in core_claims
+    ):
         return "bottleneck_rejected", 0.3
-    scarcity_support = any(v in supported for v in cap + proc)
-    n_supported = sum(1 for v in core if v in supported)
+    scarcity_support = any(c["verdict"] in supported for c in scarcity_claims)
+    # Established: real scarcity/non-substitutability support plus at least
+    # one additional supported barrier/scarcity claim, and no verified hype.
+    n_supported = sum(
+        1
+        for c in core_claims
+        if c["verdict"] in supported and c.get("claim_role") in _SCARCITY_ROLES | _BARRIER_ROLES
+    )
     if scarcity_support and n_supported >= 2 and hype not in supported:
         return "bottleneck_established", 0.7
     if all(v == "unknown" for v in core):
@@ -297,6 +339,7 @@ def _node_matrix_row(
         "aspect": ev.dimension,
         "direction": ev.direction,
         "evidence_scope": ev.evidence_scope,
+        "product_line": ev.product_line,
         "page_or_section": ev.page_or_section,
         "checklist_item": ev.checklist_item,
         "confidence": ev.confidence,
@@ -338,6 +381,7 @@ def load_node_case(path: str | Path) -> dict[str, Any]:
         "node_name": spec.get("node_name") or spec["node_id"],
         "as_of": spec["as_of"],
         "member_companies": spec.get("member_companies") or [],
+        "product_lines": set(spec.get("product_lines") or ()),
         "node_claims": tuple(
             ResearchClaim(
                 claim_id=c["claim_id"],
@@ -345,6 +389,7 @@ def load_node_case(path: str | Path) -> dict[str, Any]:
                 claim_text=c["claim_text"],
                 evidence_ids=tuple(c.get("evidence_ids") or ()),
                 review_status=c.get("review_status", "pending"),
+                claim_role=c.get("claim_role", ""),
             )
             for c in spec.get("node_claims") or []
         ),

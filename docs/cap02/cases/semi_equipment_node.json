@@ -3,58 +3,149 @@
   "node_name": "半导体前道设备环节",
   "as_of": "2026-10-20",
   "member_companies": [
-    {"stock_code": "002371", "company_name": "北方华创", "mapping_type": "direct_product", "priority_score": 95.0},
-    {"stock_code": "688037", "company_name": "芯源微(北方华创子公司)", "mapping_type": "subsidiary", "priority_score": 80.0}
+    {
+      "stock_code": "002371",
+      "company_name": "北方华创",
+      "mapping_type": "direct_product",
+      "priority_score": 95.0
+    },
+    {
+      "stock_code": "688037",
+      "company_name": "芯源微(北方华创子公司)",
+      "mapping_type": "subsidiary",
+      "priority_score": 80.0
+    }
   ],
   "sources": [
-    {"source_id": "B_puda_huaxin_20260410", "source_type": "broker_report",
-     "title": "普达特：清洗+LPCVD双驱国产替代（华鑫证券）", "publisher": "华鑫证券",
-     "published_at": "2026-04-10", "available_at": "2026-10-19", "ingested_at": "2026-10-19", "reliability_level": "S3"},
-    {"source_id": "ru_002371_428", "source_type": "company_filing",
-     "title": "北方华创2025年年度报告", "publisher": "公司披露",
-     "published_at": "2026", "available_at": "", "ingested_at": "2026-09-22", "reliability_level": "S1"},
-    {"source_id": "N_m1_node_evidence", "source_type": "industry_data",
-     "title": "M1 半导设备节点证据深化核查", "publisher": "内部研究",
-     "published_at": "2026-10-20", "available_at": "2026-10-20", "ingested_at": "2026-10-20", "reliability_level": "S2"}
+    {
+      "source_id": "B_puda_huaxin_20260410",
+      "source_type": "broker_report",
+      "title": "普达特：清洗+LPCVD双驱国产替代（华鑫证券）",
+      "publisher": "华鑫证券",
+      "published_at": "2026-04-10",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "ru_002371_428",
+      "source_type": "company_filing",
+      "title": "北方华创2025年年度报告",
+      "publisher": "公司披露",
+      "published_at": "2026",
+      "available_at": "",
+      "ingested_at": "2026-09-22",
+      "reliability_level": "S1"
+    },
+    {
+      "source_id": "N_m1_node_evidence",
+      "source_type": "industry_data",
+      "title": "M1 半导设备节点证据深化核查",
+      "publisher": "内部研究",
+      "published_at": "2026-10-20",
+      "available_at": "2026-10-20",
+      "ingested_at": "2026-10-20",
+      "reliability_level": "S2"
+    }
   ],
   "evidence": [
-    {"evidence_id": "n_ev_naura_industry", "source_id": "ru_002371_428",
-     "dimension": "capacity_constraint", "direction": "support",
-     "excerpt": "北方华创年报行业段：国内半导体设备国产化率仍低，AI算力驱动晶圆厂扩产周期——环节需求扩张但国产化率低（行业级表述摘自公司年报）。",
-     "page_or_section": "年报行业讨论段", "confidence": "medium", "review_status": "accepted",
-     "checklist_item": "供需缺口/排队", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_puda_alternative", "source_id": "B_puda_huaxin_20260410",
-     "dimension": "process_irreplaceability", "direction": "refute",
-     "excerpt": "普达特在清洗设备与LPCVD热处理设备形成'双驱'布局并主打国产替代（华鑫 p24）——清洗/炉管环节国产供给不止一家。",
-     "page_or_section": "第 24 页", "confidence": "medium", "review_status": "lead_only",
-     "checklist_item": "替代路线存在性", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_m1_cert", "source_id": "N_m1_node_evidence",
-     "dimension": "certification_barrier", "direction": "unclear",
-     "excerpt": "M1核查：晶圆厂设备验证周期长为行业常识，但现有语料未见具体机台的验证周期、验证失败率或可引用的一手披露——认证壁垒存在性待一手证据。",
-     "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §2", "confidence": "medium",
-     "review_status": "accepted", "checklist_item": "认证周期", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_naura_milestone", "source_id": "ru_002371_428",
-     "dimension": "capacity_constraint", "direction": "support",
-     "excerpt": "北方华创立式炉/PVD/刻蚀均达第1000台交付里程碑——单一公司交付规模证据。",
-     "page_or_section": "年报产品段", "confidence": "high", "review_status": "accepted",
-     "evidence_scope": "company"}
+    {
+      "evidence_id": "n_ev_naura_industry",
+      "source_id": "ru_002371_428",
+      "dimension": "capacity_constraint",
+      "direction": "support",
+      "excerpt": "北方华创年报行业段：国内半导体设备国产化率仍低，AI算力驱动晶圆厂扩产周期——环节需求扩张但国产化率低（行业级表述摘自公司年报）。",
+      "page_or_section": "年报行业讨论段",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "供需缺口/排队",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_puda_alternative",
+      "source_id": "B_puda_huaxin_20260410",
+      "dimension": "process_irreplaceability",
+      "direction": "refute",
+      "excerpt": "普达特在清洗设备与LPCVD热处理设备形成'双驱'布局并主打国产替代（华鑫 p24）——清洗/炉管环节国产供给不止一家。",
+      "page_or_section": "第 24 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "替代路线存在性",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_m1_cert",
+      "source_id": "N_m1_node_evidence",
+      "dimension": "certification_barrier",
+      "direction": "unclear",
+      "excerpt": "M1核查：晶圆厂设备验证周期长为行业常识，但现有语料未见具体机台的验证周期、验证失败率或可引用的一手披露——认证壁垒存在性待一手证据。",
+      "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §2",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "认证周期",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_naura_milestone",
+      "source_id": "ru_002371_428",
+      "dimension": "capacity_constraint",
+      "direction": "support",
+      "excerpt": "北方华创立式炉/PVD/刻蚀均达第1000台交付里程碑——单一公司交付规模证据。",
+      "page_or_section": "年报产品段",
+      "confidence": "high",
+      "review_status": "accepted",
+      "evidence_scope": "company"
+    }
   ],
   "node_claims": [
-    {"claim_id": "nc_import_substitution_demand", "dimension": "capacity_constraint",
-     "claim_text": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
-     "evidence_ids": ["n_ev_naura_industry", "n_ev_naura_milestone"]},
-    {"claim_id": "nc_process_monopoly", "dimension": "process_irreplaceability",
-     "claim_text": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
-     "evidence_ids": ["n_ev_puda_alternative"]},
-    {"claim_id": "nc_cert_barrier", "dimension": "certification_barrier",
-     "claim_text": "晶圆厂产线验证周期长构成后进入者壁垒",
-     "evidence_ids": ["n_ev_m1_cert"]},
-    {"claim_id": "nc_perf_gap", "dimension": "performance_gap",
-     "claim_text": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
-     "evidence_ids": []},
-    {"claim_id": "nc_hype_component", "dimension": "hype_only",
-     "claim_text": "国产替代主题存在概念关联超过实际供给约束的成分",
-     "evidence_ids": []}
+    {
+      "claim_id": "nc_import_substitution_demand",
+      "dimension": "capacity_constraint",
+      "claim_text": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+      "evidence_ids": [
+        "n_ev_naura_industry",
+        "n_ev_naura_milestone"
+      ],
+      "claim_role": "supply_scarcity"
+    },
+    {
+      "claim_id": "nc_process_monopoly",
+      "dimension": "process_irreplaceability",
+      "claim_text": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+      "evidence_ids": [
+        "n_ev_puda_alternative"
+      ],
+      "claim_role": "non_substitutability"
+    },
+    {
+      "claim_id": "nc_cert_barrier",
+      "dimension": "certification_barrier",
+      "claim_text": "晶圆厂产线验证周期长构成后进入者壁垒",
+      "evidence_ids": [
+        "n_ev_m1_cert"
+      ],
+      "claim_role": "entry_barrier"
+    },
+    {
+      "claim_id": "nc_perf_gap",
+      "dimension": "performance_gap",
+      "claim_text": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+      "evidence_ids": [],
+      "claim_role": "entry_barrier"
+    },
+    {
+      "claim_id": "nc_hype_component",
+      "dimension": "hype_only",
+      "claim_text": "国产替代主题存在概念关联超过实际供给约束的成分",
+      "evidence_ids": [],
+      "claim_role": "hype"
+    }
   ],
-  "input_snapshot": {"case": "cap02-t1-semi-equipment", "note": "公司交付里程碑(company scope)绑定产能缺口论点→应被剔除"}
+  "input_snapshot": {
+    "case": "cap02-t1-semi-equipment",
+    "note": "公司交付里程碑(company scope)绑定产能缺口论点→应被剔除"
+  },
+  "product_lines": [
+    "semi_front_end"
+  ]
 }

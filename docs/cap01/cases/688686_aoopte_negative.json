@@ -67,43 +67,52 @@
     "ru_688686_5889": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "自研技术/知识产权"
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "machine_vision"
     },
     "ru_688686_5898": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "自研技术/知识产权"
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "machine_vision"
     },
     "ru_688686_5909": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "自研技术/知识产权"
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "machine_vision"
     },
     "ru_688686_5897": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "关键工艺"
+      "checklist_item": "关键工艺",
+      "product_line": "machine_vision"
     },
     "ru_688686_5894": {
       "dimension": "commercialization",
-      "direction": "unclear"
+      "direction": "unclear",
+      "product_line": "machine_vision"
     },
     "ru_688686_5895": {
       "dimension": "commercialization",
-      "direction": "unclear"
+      "direction": "unclear",
+      "product_line": "machine_vision"
     },
     "ru_688686_5899": {
       "dimension": "financial_realization",
-      "direction": "unclear"
+      "direction": "unclear",
+      "product_line": "machine_vision"
     },
     "ru_688686_5906": {
       "dimension": "commercialization",
-      "direction": "unclear"
+      "direction": "unclear",
+      "product_line": "machine_vision"
     },
     "ru_688686_5910": {
       "dimension": "risk_counter",
       "direction": "support",
-      "checklist_item": "竞争对手突破"
+      "checklist_item": "竞争对手突破",
+      "product_line": "machine_vision"
     }
   },
   "extra_sources": [
@@ -128,7 +137,8 @@
       "page_or_section": "报告标题/摘要",
       "confidence": "low",
       "review_status": "lead_only",
-      "checklist_item": "客户验证"
+      "checklist_item": "客户验证",
+      "product_line": "humanoid_vision"
     }
   ],
   "claims": [

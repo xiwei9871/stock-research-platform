@@ -226,6 +226,8 @@ def load_case_input(path: str | Path) -> CompanyInput:
             confidence=facet.get("confidence", base.confidence),
             review_status=base.review_status,
             checklist_item=facet.get("checklist_item", base.checklist_item),
+            evidence_scope=base.evidence_scope,
+            product_line=facet.get("product_line", base.product_line),
         )
         evidence.append(clone)
         by_id[clone.evidence_id] = clone
@@ -282,6 +284,8 @@ def _apply_evidence_override(
         confidence=fields["confidence"],
         review_status=fields["review_status"],
         checklist_item=fields["checklist_item"],
+        evidence_scope=override.get("evidence_scope", ev.evidence_scope),
+        product_line=override.get("product_line", ev.product_line),
     )
 
 

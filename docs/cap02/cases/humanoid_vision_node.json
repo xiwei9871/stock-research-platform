@@ -3,52 +3,128 @@
   "node_name": "人形机器人视觉感知环节",
   "as_of": "2026-10-20",
   "member_companies": [
-    {"stock_code": "688686", "company_name": "奥普特", "mapping_type": "dependency", "priority_score": 98.0}
+    {
+      "stock_code": "688686",
+      "company_name": "奥普特",
+      "mapping_type": "dependency",
+      "priority_score": 98.0
+    }
   ],
   "sources": [
-    {"source_id": "public_web_929553c10b516ee2", "source_type": "broker_report",
-     "title": "奥普特(688686)：下游需求复苏 与越疆开展机器人业务合作", "publisher": "公开网络检索（研报线索）",
-     "published_at": "2025-11-02", "available_at": "", "ingested_at": "", "reliability_level": "S3"},
-    {"source_id": "ru_688686_5906", "source_type": "company_filing",
-     "title": "奥普特2025年年度报告", "publisher": "公司披露",
-     "published_at": "2026", "available_at": "", "ingested_at": "2026-09-22", "reliability_level": "S1"},
-    {"source_id": "N_m1_theme_mapping", "source_type": "industry_data",
-     "title": "主题映射表（theme_company_mappings）", "publisher": "内部研究",
-     "published_at": "2026-10-19", "available_at": "2026-10-19", "ingested_at": "2026-10-19", "reliability_level": "S2"}
+    {
+      "source_id": "public_web_929553c10b516ee2",
+      "source_type": "broker_report",
+      "title": "奥普特(688686)：下游需求复苏 与越疆开展机器人业务合作",
+      "publisher": "公开网络检索（研报线索）",
+      "published_at": "2025-11-02",
+      "available_at": "",
+      "ingested_at": "",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "ru_688686_5906",
+      "source_type": "company_filing",
+      "title": "奥普特2025年年度报告",
+      "publisher": "公司披露",
+      "published_at": "2026",
+      "available_at": "",
+      "ingested_at": "2026-09-22",
+      "reliability_level": "S1"
+    },
+    {
+      "source_id": "N_m1_theme_mapping",
+      "source_type": "industry_data",
+      "title": "主题映射表（theme_company_mappings）",
+      "publisher": "内部研究",
+      "published_at": "2026-10-19",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S2"
+    }
   ],
   "evidence": [
-    {"evidence_id": "n_ev_yuejiang_lead", "source_id": "public_web_929553c10b516ee2",
-     "dimension": "capacity_constraint", "direction": "support",
-     "excerpt": "券商点评：奥普特'与越疆开展机器人业务合作'——公司级合作接触线索。",
-     "page_or_section": "报告标题/摘要", "confidence": "low", "review_status": "lead_only",
-     "evidence_scope": "company"},
-    {"evidence_id": "n_ev_aoopte_layout", "source_id": "ru_688686_5906",
-     "dimension": "capacity_constraint", "direction": "unclear",
-     "excerpt": "奥普特年报：'提前布局机器人赛道，补齐感知、精密运动控制核心部件'——公司级定位性表述，无节点供需信息。",
-     "page_or_section": "第 26 页", "confidence": "high", "review_status": "accepted",
-     "evidence_scope": "company"},
-    {"evidence_id": "n_ev_theme_score", "source_id": "N_m1_theme_mapping",
-     "dimension": "hype_only", "direction": "support",
-     "excerpt": "主题映射表显示奥普特在人形机器人主题 priority_score=98.0（dependency 高关联），但截至本日无机器人业务收入/订单一手披露——主题关联显著高于可验证供给证据。",
-     "page_or_section": "theme_company_mappings.csv", "confidence": "medium", "review_status": "accepted",
-     "checklist_item": "概念标的占比", "evidence_scope": "node"}
+    {
+      "evidence_id": "n_ev_yuejiang_lead",
+      "source_id": "public_web_929553c10b516ee2",
+      "dimension": "capacity_constraint",
+      "direction": "support",
+      "excerpt": "券商点评：奥普特'与越疆开展机器人业务合作'——公司级合作接触线索。",
+      "page_or_section": "报告标题/摘要",
+      "confidence": "low",
+      "review_status": "lead_only",
+      "evidence_scope": "company"
+    },
+    {
+      "evidence_id": "n_ev_aoopte_layout",
+      "source_id": "ru_688686_5906",
+      "dimension": "capacity_constraint",
+      "direction": "unclear",
+      "excerpt": "奥普特年报：'提前布局机器人赛道，补齐感知、精密运动控制核心部件'——公司级定位性表述，无节点供需信息。",
+      "page_or_section": "第 26 页",
+      "confidence": "high",
+      "review_status": "accepted",
+      "evidence_scope": "company"
+    },
+    {
+      "evidence_id": "n_ev_theme_score",
+      "source_id": "N_m1_theme_mapping",
+      "dimension": "hype_only",
+      "direction": "support",
+      "excerpt": "主题映射表显示奥普特在人形机器人主题 priority_score=98.0（dependency 高关联），但截至本日无机器人业务收入/订单一手披露——主题关联显著高于可验证供给证据。",
+      "page_or_section": "theme_company_mappings.csv",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "概念标的占比",
+      "evidence_scope": "node"
+    }
   ],
   "node_claims": [
-    {"claim_id": "nc_vision_capacity", "dimension": "capacity_constraint",
-     "claim_text": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
-     "evidence_ids": ["n_ev_yuejiang_lead", "n_ev_aoopte_layout"]},
-    {"claim_id": "nc_vision_process", "dimension": "process_irreplaceability",
-     "claim_text": "机器人视觉感知工艺难以被替代",
-     "evidence_ids": []},
-    {"claim_id": "nc_vision_cert", "dimension": "certification_barrier",
-     "claim_text": "主机厂视觉部件认证周期长构成壁垒",
-     "evidence_ids": []},
-    {"claim_id": "nc_vision_perf", "dimension": "performance_gap",
-     "claim_text": "节点内视觉方案间存在可量化性能差异",
-     "evidence_ids": []},
-    {"claim_id": "nc_vision_hype", "dimension": "hype_only",
-     "claim_text": "节点当前热度主要来自主题映射与概念关联而非供给证据",
-     "evidence_ids": ["n_ev_theme_score"]}
+    {
+      "claim_id": "nc_vision_capacity",
+      "dimension": "capacity_constraint",
+      "claim_text": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+      "evidence_ids": [
+        "n_ev_yuejiang_lead",
+        "n_ev_aoopte_layout"
+      ],
+      "claim_role": "supply_scarcity"
+    },
+    {
+      "claim_id": "nc_vision_process",
+      "dimension": "process_irreplaceability",
+      "claim_text": "机器人视觉感知工艺难以被替代",
+      "evidence_ids": [],
+      "claim_role": "non_substitutability"
+    },
+    {
+      "claim_id": "nc_vision_cert",
+      "dimension": "certification_barrier",
+      "claim_text": "主机厂视觉部件认证周期长构成壁垒",
+      "evidence_ids": [],
+      "claim_role": "entry_barrier"
+    },
+    {
+      "claim_id": "nc_vision_perf",
+      "dimension": "performance_gap",
+      "claim_text": "节点内视觉方案间存在可量化性能差异",
+      "evidence_ids": [],
+      "claim_role": "entry_barrier"
+    },
+    {
+      "claim_id": "nc_vision_hype",
+      "dimension": "hype_only",
+      "claim_text": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+      "evidence_ids": [
+        "n_ev_theme_score"
+      ],
+      "claim_role": "hype"
+    }
   ],
-  "input_snapshot": {"case": "cap02-t1-humanoid-vision", "note": "负向对照节点：两条公司级证据全部被scope剔除，节点判定必须由节点级证据驱动"}
+  "input_snapshot": {
+    "case": "cap02-t1-humanoid-vision",
+    "note": "负向对照节点：两条公司级证据全部被scope剔除，节点判定必须由节点级证据驱动"
+  },
+  "product_lines": [
+    "humanoid_vision"
+  ]
 }

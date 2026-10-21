@@ -33,18 +33,28 @@ _DELIVERY_CHECKLIST_ITEMS = {"实际交付", "交付里程碑", "批量交付"}
 _PRODUCTION_CHECKLIST_ITEMS = {"量产阶段", "量产/订单"}
 
 
-def _order_claim_state(dossier: dict[str, Any]) -> str:
-    """Commercialization cell with strict evidence tiers.
+def _order_claim_state(
+    dossier: dict[str, Any],
+    node_product_lines: set[str] | None = None,
+) -> str:
+    """Commercialization cell with strict evidence tiers AND node attribution.
 
     ``verified_order`` — bound counted evidence explicitly about orders or
     awarded contracts; ``verified_delivery`` — explicit delivery/batch
-    delivery evidence; ``production_claimed`` — mass-production statements
-    only; ``unverified`` — claims exist but no usable evidence; ``none_seen``.
+    delivery evidence; ``production_claimed`` — mass-production statements;
+    ``unverified`` — claims exist but no usable evidence; ``none_seen`` —
+    no commercialization claims at all.
+
+    When ``node_product_lines`` is provided, evidence whose ``product_line``
+    is empty or belongs to another line (storage-ESS vs data-center cooling)
+    can never tier up; if such unattributable evidence exists the cell reads
+    ``node_attribution_unknown`` — honest, not silent exclusion.
     """
     claims = dossier.get("claims") or []
     matrix = {row["evidence_id"]: row for row in dossier.get("evidence_matrix") or []}
     order_claims = [c for c in claims if c.get("dimension") == "commercialization"]
     tier = 0  # 4 order, 3 delivery, 2 production, 1 claims-only
+    unattributed = False
     for claim in order_claims:
         counted = claim.get("verdict") in {"confirmed", "partially_supported"}
         claim_tier = 0
@@ -52,6 +62,10 @@ def _order_claim_state(dossier: dict[str, Any]) -> str:
             row = matrix.get(eid)
             if not row or row.get("verdict_weight") != "counted":
                 continue
+            if node_product_lines is not None:
+                if (row.get("product_line") or "") not in node_product_lines:
+                    unattributed = True
+                    continue
             item = row.get("checklist_item") or ""
             if item in _ORDER_CHECKLIST_ITEMS:
                 claim_tier = max(claim_tier, 4)
@@ -69,6 +83,8 @@ def _order_claim_state(dossier: dict[str, Any]) -> str:
         return "verified_delivery"
     if tier == 2:
         return "production_claimed"
+    if unattributed and node_product_lines is not None:
+        return "node_attribution_unknown"
     if order_claims:
         return "unverified"
     return "none_seen"
@@ -81,6 +97,7 @@ def build_value_matrix(
     as_of: str,
     member_companies: Sequence[dict[str, Any]],
     dossier_by_code: dict[str, dict[str, Any]],
+    node_product_lines: set[str] | None = None,
 ) -> dict[str, Any]:
     """Assemble the node × company matrix.
 
@@ -147,7 +164,7 @@ def build_value_matrix(
                 "overall_verdict": (dossier.get("conclusion") or {}).get("overall_verdict", ""),
                 "tech_participation": _dim_verdict(dossier, "tech_moat"),
                 "validation_delivery": _dim_verdict(dossier, "commercialization"),
-                "verified_orders": _order_claim_state(dossier),
+                "verified_orders": _order_claim_state(dossier, node_product_lines),
                 "revenue_profit": _dim_verdict(dossier, "financial_realization"),
                 "concept_only_risk": "high" if concept_only else "low",
                 "dossier_fingerprint": dossier.get("dossier_fingerprint", ""),

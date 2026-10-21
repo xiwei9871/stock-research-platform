@@ -28,9 +28,10 @@ def _nev(eid, aspect="capacity_constraint", direction="support", scope="node",
     )
 
 
-def _nc(cid, aspect, eids):
+def _nc(cid, aspect, eids, role=""):
     return ResearchClaim(claim_id=cid, dimension=aspect,
-                         claim_text=f"node claim {cid}", evidence_ids=tuple(eids))
+                         claim_text=f"node claim {cid}", evidence_ids=tuple(eids),
+                         claim_role=role)
 
 
 def _node(evidence, sources, claims, members=(), as_of="2026-10-20"):
@@ -58,8 +59,8 @@ def test_two_core_aspects_supported_establishes_bottleneck():
         _nev("e_proc", "process_irreplaceability", "support", checklist="工艺独有性"),
     ]
     d = _node(ev, [_src("src_e_cap"), _src("src_e_proc")],
-              [_nc("nc_cap", "capacity_constraint", ["e_cap"]),
-               _nc("nc_proc", "process_irreplaceability", ["e_proc"])])
+              [_nc("nc_cap", "capacity_constraint", ["e_cap"], role="supply_scarcity"),
+               _nc("nc_proc", "process_irreplaceability", ["e_proc"], role="non_substitutability")])
     assert d["conclusion"]["node_verdict"] == "bottleneck_established"
 
 
@@ -71,9 +72,9 @@ def test_hype_supported_blocks_established():
         _nev("e_hype", "hype_only", "support"),
     ]
     d = _node(ev, [_src("src_e_cap"), _src("src_e_proc"), _src("src_e_hype")],
-              [_nc("nc_cap", "capacity_constraint", ["e_cap"]),
-               _nc("nc_proc", "process_irreplaceability", ["e_proc"]),
-               _nc("nc_hype", "hype_only", ["e_hype"])])
+              [_nc("nc_cap", "capacity_constraint", ["e_cap"], role="supply_scarcity"),
+               _nc("nc_proc", "process_irreplaceability", ["e_proc"], role="non_substitutability"),
+               _nc("nc_hype", "hype_only", ["e_hype"], role="hype")])
     assert d["conclusion"]["node_verdict"] == "bottleneck_unverified"
 
 
@@ -171,7 +172,7 @@ def test_scarcity_claim_affirmatively_refuted_is_rejected():
         _nev("e_glut", "capacity_constraint", "refute", review="accepted", src="s_r"),
     ]
     d = _node(ev, [_src("s_r")],
-              [_nc("nc_capacity", "capacity_constraint", ["e_glut"])])
+              [_nc("nc_capacity", "capacity_constraint", ["e_glut"], role="supply_scarcity")])
     assert d["conclusion"]["node_verdict"] == "bottleneck_rejected"
 
 
@@ -195,8 +196,8 @@ def test_scarcity_plus_second_core_establishes_bottleneck():
         _nev("e_cert", "certification_barrier", "support", checklist="认证周期"),
     ]
     d = _node(ev, [_src("src_e_cap"), _src("src_e_cert")],
-              [_nc("nc_cap", "capacity_constraint", ["e_cap"]),
-               _nc("nc_cert", "certification_barrier", ["e_cert"])])
+              [_nc("nc_cap", "capacity_constraint", ["e_cap"], role="supply_scarcity"),
+               _nc("nc_cert", "certification_barrier", ["e_cert"], role="entry_barrier")])
     assert d["conclusion"]["node_verdict"] == "bottleneck_established"
 
 
@@ -246,3 +247,44 @@ def test_future_company_dossier_excluded_from_historical_node_matrix():
     assert row["dossier"] == "pit_incompatible"
     assert row["tech_participation"] == "excluded"
     assert row["verified_orders"] == "excluded"
+
+
+def test_market_structure_plus_barrier_cannot_establish():
+    """多供应商事实（market_structure）+ 认证壁垒（entry_barrier）获支持 → 不得 established。"""
+    ev = [
+        _nev("e_roster", "process_irreplaceability", "support"),
+        _nev("e_cert", "certification_barrier", "support"),
+    ]
+    d = _node(ev, [_src("src_e_roster"), _src("src_e_cert")],
+              [_nc("nc_roster", "process_irreplaceability", ["e_roster"], role="market_structure"),
+               _nc("nc_cert", "certification_barrier", ["e_cert"], role="entry_barrier")])
+    assert d["conclusion"]["node_verdict"] != "bottleneck_established"
+    assert d["conclusion"]["node_verdict"] == "bottleneck_unverified"
+
+
+def test_local_capacity_claim_refuted_not_rejected():
+    """market_structure 角色的局部产能 claim 被反证 → 不构成瓶颈主张否定 → 非 rejected。"""
+    ev = [_nev("e1", "capacity_constraint", "refute", review="accepted", src="s_r")]
+    d = _node(ev, [_src("s_r")],
+              [_nc("nc_cap", "capacity_constraint", ["e1"], role="market_structure")])
+    assert d["conclusion"]["node_verdict"] != "bottleneck_rejected"
+
+
+def test_ess_delivery_not_dc_cooling_delivery():
+    """储能温控交付证据不能证明数据中心液冷节点交付。"""
+    from stock_research.chain_value_matrix import _order_claim_state
+    dossier = {
+        "claims": [{"claim_id": "c1", "dimension": "commercialization",
+                    "verdict": "partially_supported", "evidence_ids": ["e1"]}],
+        "evidence_matrix": [{"evidence_id": "e1", "checklist_item": "实际交付",
+                             "verdict_weight": "counted", "product_line": "ess_thermal"}],
+    }
+    assert _order_claim_state(dossier, {"dc_liquid_cooling"}) == "node_attribution_unknown"
+    assert _order_claim_state(dossier, {"ess_thermal"}) == "verified_delivery"
+    dossier2 = {
+        "claims": [{"claim_id": "c1", "dimension": "commercialization",
+                    "verdict": "partially_supported", "evidence_ids": ["e1"]}],
+        "evidence_matrix": [{"evidence_id": "e1", "checklist_item": "实际交付",
+                             "verdict_weight": "counted", "product_line": ""}],
+    }
+    assert _order_claim_state(dossier2, {"dc_liquid_cooling"}) == "node_attribution_unknown"

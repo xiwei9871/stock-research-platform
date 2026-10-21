@@ -86,27 +86,32 @@
     "ru_002371_424": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "自研技术/知识产权"
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "semi_front_end"
     },
     "ru_002371_426": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "关键工艺"
+      "checklist_item": "关键工艺",
+      "product_line": "semi_front_end"
     },
     "ru_002371_425": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "交付里程碑"
+      "checklist_item": "交付里程碑",
+      "product_line": "semi_front_end"
     },
     "ru_002371_412": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "交付里程碑"
+      "checklist_item": "交付里程碑",
+      "product_line": "semi_front_end"
     },
     "ru_002371_428": {
       "dimension": "chain_position",
       "direction": "support",
-      "checklist_item": "产业链关键节点"
+      "checklist_item": "产业链关键节点",
+      "product_line": "semi_front_end"
     },
     "ru_002371_419": {
       "dimension": "chain_position",

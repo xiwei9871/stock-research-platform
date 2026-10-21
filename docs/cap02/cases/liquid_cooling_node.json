@@ -166,7 +166,8 @@
       "claim_text": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
       "evidence_ids": [
         "n_ev_envicool_filing"
-      ]
+      ],
+      "claim_role": "supply_scarcity"
     },
     {
       "claim_id": "nc_process_scarce",
@@ -177,19 +178,22 @@
         "n_ev_maglev_alt",
         "n_ev_dayuan_pump",
         "n_ev_m1_supplier_count"
-      ]
+      ],
+      "claim_role": "non_substitutability"
     },
     {
       "claim_id": "nc_cert_barrier",
       "dimension": "certification_barrier",
       "claim_text": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
-      "evidence_ids": []
+      "evidence_ids": [],
+      "claim_role": "entry_barrier"
     },
     {
       "claim_id": "nc_perf_gap",
       "dimension": "performance_gap",
       "claim_text": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
-      "evidence_ids": []
+      "evidence_ids": [],
+      "claim_role": "entry_barrier"
     },
     {
       "claim_id": "nc_hype_component",
@@ -197,7 +201,8 @@
       "claim_text": "节点热度中存在概念关联超过供给证据的炒作成分",
       "evidence_ids": [
         "n_ev_m1_hype"
-      ]
+      ],
+      "claim_role": "hype"
     },
     {
       "claim_id": "nc_nonexclusive_suppliers",
@@ -205,11 +210,15 @@
       "claim_text": "液冷供给者不止一家（非独家供应格局）",
       "evidence_ids": [
         "n_ev_m1_roster"
-      ]
+      ],
+      "claim_role": "market_structure"
     }
   ],
   "input_snapshot": {
     "case": "cap02-t1-liquid-cooling",
     "note": "R2修正：供应商名单事实独立成已核实论点；M1反驳仅针对'工艺难以被绕开'，不否定产能缺口；冷板/CDU/泵子环节拆分列为缺口"
-  }
+  },
+  "product_lines": [
+    "dc_liquid_cooling"
+  ]
 }

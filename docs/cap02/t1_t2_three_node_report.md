@@ -6,11 +6,13 @@
 
 R2 变更：液冷 `bottleneck_rejected` → `bottleneck_unverified`（多供应商存在只反驳'独家工艺'论点，不反驳产能缺口；无产能证据时不得否定节点）。`verified_orders` 改为严格分级（verified_order/verified_delivery/production_claimed/unverified）——量产≠订单，交付里程碑≠订单；新增 dossier as_of 兼容性检查，未来公司画像不得进入历史节点矩阵。
 
+R2.1 变更（本次）：节点 claim 增加 `claim_role`（supply_scarcity/non_substitutability/market_structure/entry_barrier/hype）。`bottleneck_established` 只允许 supply_scarcity/non_substitutability 角色 claim 触发；`bottleneck_rejected` 仅限 supply_scarcity 主张被 counted 证据反驳——非独家性被反驳只杀该机制不杀节点。价值矩阵商业化证据增加 `product_line` 归因：储能温控(BattCool)交付不再计入数据中心液冷节点（002837 → `node_attribution_unknown`），北方华创前道设备交付正确归属（002371 → `verified_delivery`）。
+
 ## 一、节点判定结果
 
 | 节点 | 判定 | 置信度 | 成员画像 |
 |---|---|---|---|
-| 数据中心液冷环节 `ai_power_liquid_cooling` | **bottleneck_unverified** | 0.30 | 英维克(unverified)、申菱/三花(无画像) |
+| 数据中心液冷环节 `ai_power_liquid_cooling` | **bottleneck_unverified** | 0.30 | 英维克(unverified，订单格 node_attribution_unknown)、申菱/三花(无画像) |
 | 半导体前道设备 `semi_front_end_equipment` | **bottleneck_unverified** | 0.30 | 北方华创(needs_evidence) |
 | 人形机器人视觉感知 `humanoid_vision_sensing` | **needs_evidence** | 0.15 | 奥普特(needs_evidence, concept_only=high) |
 

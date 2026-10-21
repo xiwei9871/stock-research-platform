@@ -99,7 +99,8 @@
     "ru_002837_768": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "自研技术/知识产权"
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "dc_liquid_cooling"
     },
     "ru_002837_754": {
       "dimension": "tech_moat",
@@ -109,7 +110,8 @@
     "ru_002837_755": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "自研技术/知识产权"
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "dc_liquid_cooling"
     },
     "ru_002837_773": {
       "dimension": "tech_moat",
@@ -119,7 +121,8 @@
     "ru_002837_777": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "量产阶段"
+      "checklist_item": "量产阶段",
+      "product_line": "dc_liquid_cooling"
     },
     "ru_002837_769": {
       "dimension": "chain_position",
@@ -129,32 +132,38 @@
     "ru_002837_753": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "客户验证"
+      "checklist_item": "客户验证",
+      "product_line": "dc_liquid_cooling"
     },
     "ru_002837_758": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "客户验证"
+      "checklist_item": "客户验证",
+      "product_line": "dc_liquid_cooling"
     },
     "ru_002837_776": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "量产阶段"
+      "checklist_item": "量产阶段",
+      "product_line": "ess_thermal"
     },
     "ru_002837_752": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "实际交付"
+      "checklist_item": "实际交付",
+      "product_line": "ess_thermal"
     },
     "ru_002837_778": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "量产阶段"
+      "checklist_item": "量产阶段",
+      "product_line": "ess_thermal"
     },
     "ru_002837_779": {
       "dimension": "financial_realization",
       "direction": "support",
-      "checklist_item": "量产阶段"
+      "checklist_item": "量产阶段",
+      "product_line": "dc_liquid_cooling"
     },
     "ru_002837_759": {
       "dimension": "risk_counter",
@@ -325,7 +334,8 @@
       "page_or_section": "报告标题/摘要",
       "confidence": "low",
       "review_status": "lead_only",
-      "checklist_item": "客户验证"
+      "checklist_item": "客户验证",
+      "product_line": "dc_liquid_cooling"
     }
   ],
   "claims": [

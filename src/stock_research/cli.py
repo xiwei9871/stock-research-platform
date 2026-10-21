@@ -1262,6 +1262,7 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
         as_of=case["as_of"],
         member_companies=case["member_companies"],
         dossier_by_code=dossier_by_code,
+        node_product_lines=case.get("product_lines"),
     )
     dossier = build_node_dossier(
         node_id=case["node_id"],
@@ -1271,6 +1272,7 @@ def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
         evidence=case["evidence"],
         sources=case["sources"],
         member_companies=case["member_companies"],
+        product_lines=case.get("product_lines"),
         value_matrix=matrix,
         input_snapshot=case["input_snapshot"],
     )
