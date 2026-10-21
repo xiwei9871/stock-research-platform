@@ -165,7 +165,7 @@ def build_node_dossier(
             ],
         }
 
-    node_verdict, node_conf = _node_verdict(aspects_out)
+    node_verdict, node_conf = _node_verdict(aspects_out, claims_out)
 
     fingerprint = _input_fingerprint(node_claims, evidence, sources)
     snapshot = dict(input_snapshot or {})
@@ -205,27 +205,48 @@ def build_node_dossier(
     }
 
 
-def _node_verdict(aspects: dict[str, dict[str, Any]]) -> tuple[str, float]:
-    """Overall node call.
+def _node_verdict(
+    aspects: dict[str, dict[str, Any]],
+    claims: list[dict[str, Any]],
+) -> tuple[str, float]:
+    """Conservative overall node call — three distinct propositions are kept
+    separate: (a) supply scarcity (capacity_constraint claims), (b) effective
+    substitutability limit (process_irreplaceability claims), (c) generic
+    barriers (certification/performance).  Refuting one mechanism never
+    refutes the node.
 
-    ``bottleneck_established`` needs ≥2 core aspects at partially_supported or
-    better AND no verified hype signal.  A capable member company never
-    substitutes for node-level evidence.
+    - ``bottleneck_rejected`` only when a *capacity/supply* claim is
+      contradicted by counted node-scope evidence — affirmative refutation of
+      the actual bottleneck proposition.
+    - ``bottleneck_established`` needs real scarcity evidence: ≥1 supported
+      capacity **or** process claim, ≥2 supported core claims overall, and no
+      verified hype.  Two generic partials can never establish it.
     """
-    core = {a: aspects[a]["verdict"] for a in _CORE_ASPECTS}
-    hype = aspects["hype_only"]["verdict"]
     supported = {"confirmed", "partially_supported"}
-    n_supported = sum(1 for v in core.values() if v in supported)
-    if any(v == "contradicted" for v in core.values()):
-        return "bottleneck_rejected", 0.3
-    if any(v == "contested" for v in core.values()):
+    by_aspect: dict[str, list[str]] = {a: [] for a in NODE_ASPECTS}
+    for c in claims:
+        if c["dimension"] in by_aspect:
+            by_aspect[c["dimension"]].append(c["verdict"])
+
+    cap = by_aspect["capacity_constraint"]
+    proc = by_aspect["process_irreplaceability"]
+    cert = by_aspect["certification_barrier"]
+    perf = by_aspect["performance_gap"]
+    core = cap + proc + cert + perf
+    hype = aspects["hype_only"]["verdict"]
+
+    if any(v == "contested" for v in core):
         return "contested", 0.35
-    if n_supported >= 2 and hype not in supported:
+    if any(v == "contradicted" for v in cap):
+        return "bottleneck_rejected", 0.3
+    scarcity_support = any(v in supported for v in cap + proc)
+    n_supported = sum(1 for v in core if v in supported)
+    if scarcity_support and n_supported >= 2 and hype not in supported:
         return "bottleneck_established", 0.7
-    if n_supported >= 1:
+    if all(v == "unknown" for v in core):
+        return "unknown" if not core else "needs_evidence", 0.0 if not core else 0.15
+    if any(v in supported | {"contradicted", "mixed"} for v in core):
         return "bottleneck_unverified", 0.3
-    if all(v == "unknown" for v in core.values()) and hype == "unknown":
-        return "unknown", 0.0
     return "needs_evidence", 0.15
 
 

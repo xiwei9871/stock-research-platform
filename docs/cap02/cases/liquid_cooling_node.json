@@ -3,75 +3,213 @@
   "node_name": "数据中心液冷环节",
   "as_of": "2026-10-20",
   "member_companies": [
-    {"stock_code": "002837", "company_name": "英维克", "mapping_type": "direct_product", "priority_score": 78.8},
-    {"stock_code": "301018", "company_name": "申菱环境", "mapping_type": "direct_product", "priority_score": 70.0},
-    {"stock_code": "002050", "company_name": "三花智控", "mapping_type": "direct_product", "priority_score": 65.0}
+    {
+      "stock_code": "002837",
+      "company_name": "英维克",
+      "mapping_type": "direct_product",
+      "priority_score": 78.8
+    },
+    {
+      "stock_code": "301018",
+      "company_name": "申菱环境",
+      "mapping_type": "direct_product",
+      "priority_score": 70.0
+    },
+    {
+      "stock_code": "002050",
+      "company_name": "三花智控",
+      "mapping_type": "direct_product",
+      "priority_score": 65.0
+    }
   ],
   "sources": [
-    {"source_id": "B_guojin_liquid_20261010", "source_type": "broker_report",
-     "title": "数据中心液冷行业报告（国金证券）", "publisher": "国金证券",
-     "published_at": "2026-10-10", "available_at": "2026-10-19", "ingested_at": "2026-10-19", "reliability_level": "S3"},
-    {"source_id": "B_maglev_huayuan_20260728", "source_type": "broker_report",
-     "title": "磁悬浮离心压缩机行业报告（华源证券）", "publisher": "华源证券",
-     "published_at": "2026-07-28", "available_at": "2026-10-19", "ingested_at": "2026-10-19", "reliability_level": "S3"},
-    {"source_id": "B_dayuan_huayuan_20260819", "source_type": "broker_report",
-     "title": "大元泵业报告（华源证券）", "publisher": "华源证券",
-     "published_at": "2026-08-19", "available_at": "2026-10-19", "ingested_at": "2026-10-19", "reliability_level": "S3"},
-    {"source_id": "N_m1_moat_deepening", "source_type": "industry_data",
-     "title": "M1 主题护城河证据深化核查记录", "publisher": "内部研究",
-     "published_at": "2026-10-20", "available_at": "2026-10-20", "ingested_at": "2026-10-20", "reliability_level": "S2"},
-    {"source_id": "ru_002837_759", "source_type": "company_filing",
-     "title": "英维克2025年年度报告", "publisher": "公司披露",
-     "published_at": "2026", "available_at": "", "ingested_at": "2026-09-22", "reliability_level": "S1"}
+    {
+      "source_id": "B_guojin_liquid_20261010",
+      "source_type": "broker_report",
+      "title": "数据中心液冷行业报告（国金证券）",
+      "publisher": "国金证券",
+      "published_at": "2026-10-10",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "B_maglev_huayuan_20260728",
+      "source_type": "broker_report",
+      "title": "磁悬浮离心压缩机行业报告（华源证券）",
+      "publisher": "华源证券",
+      "published_at": "2026-07-28",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "B_dayuan_huayuan_20260819",
+      "source_type": "broker_report",
+      "title": "大元泵业报告（华源证券）",
+      "publisher": "华源证券",
+      "published_at": "2026-08-19",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "N_m1_moat_deepening",
+      "source_type": "industry_data",
+      "title": "M1 主题护城河证据深化核查记录",
+      "publisher": "内部研究",
+      "published_at": "2026-10-20",
+      "available_at": "2026-10-20",
+      "ingested_at": "2026-10-20",
+      "reliability_level": "S2"
+    },
+    {
+      "source_id": "ru_002837_759",
+      "source_type": "company_filing",
+      "title": "英维克2025年年度报告",
+      "publisher": "公司披露",
+      "published_at": "2026",
+      "available_at": "",
+      "ingested_at": "2026-09-22",
+      "reliability_level": "S1"
+    }
   ],
   "evidence": [
-    {"evidence_id": "n_ev_guojin_landscape", "source_id": "B_guojin_liquid_20261010",
-     "dimension": "process_irreplaceability", "direction": "refute",
-     "excerpt": "国金液冷行业报告描绘'风液同源'数据中心全链条冷却图谱，液冷环路各环节存在多家供应商——全链条/冷板工艺非独家。",
-     "page_or_section": "第 1-3 页", "confidence": "medium", "review_status": "lead_only",
-     "checklist_item": "替代路线存在性", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_maglev_alt", "source_id": "B_maglev_huayuan_20260728",
-     "dimension": "process_irreplaceability", "direction": "refute",
-     "excerpt": "磁悬浮离心压缩机 IPLV 提升42%、电机功率较螺杆机降低30%——能效更优的替代制冷路线存在。",
-     "page_or_section": "第 1,12 页", "confidence": "medium", "review_status": "lead_only",
-     "checklist_item": "替代路线存在性", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_dayuan_pump", "source_id": "B_dayuan_huayuan_20260819",
-     "dimension": "process_irreplaceability", "direction": "refute",
-     "excerpt": "大元泵业屏蔽泵零泄漏、体积缩短≥60%、研报声称适配 NVIDIA Kyber CDU 并经 Google 2MW CDU 确认（单一来源）——泵环节存在独立替代供给。",
-     "page_or_section": "第 11-12 页", "confidence": "low", "review_status": "lead_only",
-     "checklist_item": "替代路线存在性", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_m1_supplier_count", "source_id": "N_m1_moat_deepening",
-     "dimension": "process_irreplaceability", "direction": "refute",
-     "excerpt": "M1核查：具备液冷供给能力的上市公司不止一家（申菱/三花/大元等）；各家液冷收入均未单独拆分披露，节点真实供需缺口无量化一手数据。",
-     "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1", "confidence": "medium",
-     "review_status": "accepted", "checklist_item": "替代路线存在性", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_m1_hype", "source_id": "N_m1_moat_deepening",
-     "dimension": "hype_only", "direction": "support",
-     "excerpt": "M1核查：液冷主题热度高、多公司被映射为'液冷概念'，但缺乏任一环节产能/交期紧张的一手披露——存在概念关联超过供给证据的成分。",
-     "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1", "confidence": "medium",
-     "review_status": "accepted", "checklist_item": "概念标的占比", "evidence_scope": "node"},
-    {"evidence_id": "n_ev_envicool_filing", "source_id": "ru_002837_759",
-     "dimension": "capacity_constraint", "direction": "support",
-     "excerpt": "英维克年报'竞争加剧'风险段：若市场竞争加剧，公司产品价格及毛利率或承压——公司级风险提示，不构成节点产能证据。",
-     "page_or_section": "第 20 页", "confidence": "high", "review_status": "accepted",
-     "evidence_scope": "company"}
+    {
+      "evidence_id": "n_ev_guojin_landscape",
+      "source_id": "B_guojin_liquid_20261010",
+      "dimension": "process_irreplaceability",
+      "direction": "refute",
+      "excerpt": "国金液冷行业报告描绘'风液同源'数据中心全链条冷却图谱，液冷环路各环节存在多家供应商——全链条/冷板工艺非独家。",
+      "page_or_section": "第 1-3 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "替代路线存在性",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_maglev_alt",
+      "source_id": "B_maglev_huayuan_20260728",
+      "dimension": "process_irreplaceability",
+      "direction": "refute",
+      "excerpt": "磁悬浮离心压缩机 IPLV 提升42%、电机功率较螺杆机降低30%——能效更优的替代制冷路线存在。",
+      "page_or_section": "第 1,12 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "替代路线存在性",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_dayuan_pump",
+      "source_id": "B_dayuan_huayuan_20260819",
+      "dimension": "process_irreplaceability",
+      "direction": "refute",
+      "excerpt": "大元泵业屏蔽泵零泄漏、体积缩短≥60%、研报声称适配 NVIDIA Kyber CDU 并经 Google 2MW CDU 确认（单一来源）——泵环节存在独立替代供给。",
+      "page_or_section": "第 11-12 页",
+      "confidence": "low",
+      "review_status": "lead_only",
+      "checklist_item": "替代路线存在性",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_m1_supplier_count",
+      "source_id": "N_m1_moat_deepening",
+      "dimension": "process_irreplaceability",
+      "direction": "refute",
+      "excerpt": "M1核查：具备液冷供给能力的上市公司不止一家（申菱/三花/大元等）；各家液冷收入均未单独拆分披露，节点真实供需缺口无量化一手数据。",
+      "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "替代路线存在性",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_m1_hype",
+      "source_id": "N_m1_moat_deepening",
+      "dimension": "hype_only",
+      "direction": "support",
+      "excerpt": "M1核查：液冷主题热度高、多公司被映射为'液冷概念'，但缺乏任一环节产能/交期紧张的一手披露——存在概念关联超过供给证据的成分。",
+      "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "概念标的占比",
+      "evidence_scope": "node"
+    },
+    {
+      "evidence_id": "n_ev_envicool_filing",
+      "source_id": "ru_002837_759",
+      "dimension": "capacity_constraint",
+      "direction": "support",
+      "excerpt": "英维克年报'竞争加剧'风险段：若市场竞争加剧，公司产品价格及毛利率或承压——公司级风险提示，不构成节点产能证据。",
+      "page_or_section": "第 20 页",
+      "confidence": "high",
+      "review_status": "accepted",
+      "evidence_scope": "company"
+    },
+    {
+      "evidence_id": "n_ev_m1_roster",
+      "source_id": "N_m1_moat_deepening",
+      "dimension": "process_irreplaceability",
+      "direction": "support",
+      "excerpt": "M1核查：具备液冷供给能力的上市公司名单可核实——申菱环境、三花智控、大元泵业等；该事实仅证明'供给者不止一家'，不证明供需无缺口。",
+      "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "工艺独有性",
+      "evidence_scope": "node"
+    }
   ],
   "node_claims": [
-    {"claim_id": "nc_capacity_gap", "dimension": "capacity_constraint",
-     "claim_text": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
-     "evidence_ids": ["n_ev_envicool_filing"]},
-    {"claim_id": "nc_process_scarce", "dimension": "process_irreplaceability",
-     "claim_text": "液冷冷板/全链条工艺在当前供给格局下难以被替代方案或同类供应商绕开",
-     "evidence_ids": ["n_ev_guojin_landscape", "n_ev_maglev_alt", "n_ev_dayuan_pump", "n_ev_m1_supplier_count"]},
-    {"claim_id": "nc_cert_barrier", "dimension": "certification_barrier",
-     "claim_text": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
-     "evidence_ids": []},
-    {"claim_id": "nc_perf_gap", "dimension": "performance_gap",
-     "claim_text": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
-     "evidence_ids": []},
-    {"claim_id": "nc_hype_component", "dimension": "hype_only",
-     "claim_text": "节点热度中存在概念关联超过供给证据的炒作成分",
-     "evidence_ids": ["n_ev_m1_hype"]}
+    {
+      "claim_id": "nc_capacity_gap",
+      "dimension": "capacity_constraint",
+      "claim_text": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
+      "evidence_ids": [
+        "n_ev_envicool_filing"
+      ]
+    },
+    {
+      "claim_id": "nc_process_scarce",
+      "dimension": "process_irreplaceability",
+      "claim_text": "液冷冷板/全链条工艺在当前供给格局下难以被替代方案或同类供应商绕开",
+      "evidence_ids": [
+        "n_ev_guojin_landscape",
+        "n_ev_maglev_alt",
+        "n_ev_dayuan_pump",
+        "n_ev_m1_supplier_count"
+      ]
+    },
+    {
+      "claim_id": "nc_cert_barrier",
+      "dimension": "certification_barrier",
+      "claim_text": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
+      "evidence_ids": []
+    },
+    {
+      "claim_id": "nc_perf_gap",
+      "dimension": "performance_gap",
+      "claim_text": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
+      "evidence_ids": []
+    },
+    {
+      "claim_id": "nc_hype_component",
+      "dimension": "hype_only",
+      "claim_text": "节点热度中存在概念关联超过供给证据的炒作成分",
+      "evidence_ids": [
+        "n_ev_m1_hype"
+      ]
+    },
+    {
+      "claim_id": "nc_nonexclusive_suppliers",
+      "dimension": "process_irreplaceability",
+      "claim_text": "液冷供给者不止一家（非独家供应格局）",
+      "evidence_ids": [
+        "n_ev_m1_roster"
+      ]
+    }
   ],
-  "input_snapshot": {"case": "cap02-t1-liquid-cooling", "note": "公司级证据(英维克年报风险段)被故意绑定到节点论点以验证scope剔除规则"}
+  "input_snapshot": {
+    "case": "cap02-t1-liquid-cooling",
+    "note": "R2修正：供应商名单事实独立成已核实论点；M1反驳仅针对'工艺难以被绕开'，不否定产能缺口；冷板/CDU/泵子环节拆分列为缺口"
+  }
 }

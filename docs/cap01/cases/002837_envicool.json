@@ -119,7 +119,7 @@
     "ru_002837_777": {
       "dimension": "tech_moat",
       "direction": "support",
-      "checklist_item": "关键工艺"
+      "checklist_item": "量产阶段"
     },
     "ru_002837_769": {
       "dimension": "chain_position",
@@ -139,21 +139,22 @@
     "ru_002837_776": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "客户验证"
+      "checklist_item": "量产阶段"
     },
     "ru_002837_752": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "量产/订单"
+      "checklist_item": "实际交付"
     },
     "ru_002837_778": {
       "dimension": "commercialization",
       "direction": "support",
-      "checklist_item": "量产/订单"
+      "checklist_item": "量产阶段"
     },
     "ru_002837_779": {
       "dimension": "financial_realization",
-      "direction": "support"
+      "direction": "support",
+      "checklist_item": "量产阶段"
     },
     "ru_002837_759": {
       "dimension": "risk_counter",

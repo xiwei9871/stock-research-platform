@@ -25,27 +25,52 @@ def _dim_verdict(dossier: dict[str, Any], dimension: str) -> str:
     return (dossier.get("dimensions") or {}).get(dimension, {}).get("verdict", "unknown")
 
 
+# Granular commercialization evidence tiers.  Order-level proof is strictly
+# separated from delivery milestones and mere mass-production claims — a
+# "量产" statement never upgrades to a verified order.
+_ORDER_CHECKLIST_ITEMS = {"已确认订单", "中标合同", "订单"}
+_DELIVERY_CHECKLIST_ITEMS = {"实际交付", "交付里程碑", "批量交付"}
+_PRODUCTION_CHECKLIST_ITEMS = {"量产阶段", "量产/订单"}
+
+
 def _order_claim_state(dossier: dict[str, Any]) -> str:
-    """Verified-order cell: any commercialization claim bound to 量产/订单
-    checklist evidence that reached at least partial support."""
+    """Commercialization cell with strict evidence tiers.
+
+    ``verified_order`` — bound counted evidence explicitly about orders or
+    awarded contracts; ``verified_delivery`` — explicit delivery/batch
+    delivery evidence; ``production_claimed`` — mass-production statements
+    only; ``unverified`` — claims exist but no usable evidence; ``none_seen``.
+    """
     claims = dossier.get("claims") or []
     matrix = {row["evidence_id"]: row for row in dossier.get("evidence_matrix") or []}
     order_claims = [c for c in claims if c.get("dimension") == "commercialization"]
-    has_verified = False
-    has_any = False
+    tier = 0  # 4 order, 3 delivery, 2 production, 1 claims-only
     for claim in order_claims:
+        counted = claim.get("verdict") in {"confirmed", "partially_supported"}
+        claim_tier = 0
         for eid in claim.get("evidence_ids") or []:
             row = matrix.get(eid)
-            if not row:
+            if not row or row.get("verdict_weight") != "counted":
                 continue
-            if row.get("checklist_item") == "量产/订单":
-                has_any = True
-                if claim.get("verdict") in {"confirmed", "partially_supported"}:
-                    has_verified = True
-    if has_verified:
-        return "verified"
-    if has_any or order_claims:
-        return "claimed_unverified"
+            item = row.get("checklist_item") or ""
+            if item in _ORDER_CHECKLIST_ITEMS:
+                claim_tier = max(claim_tier, 4)
+            elif item in _DELIVERY_CHECKLIST_ITEMS:
+                claim_tier = max(claim_tier, 3)
+            elif item in _PRODUCTION_CHECKLIST_ITEMS:
+                claim_tier = max(claim_tier, 2)
+        if counted:
+            tier = max(tier, claim_tier)
+        elif claim_tier:
+            tier = max(tier, 1)
+    if tier >= 4:
+        return "verified_order"
+    if tier == 3:
+        return "verified_delivery"
+    if tier == 2:
+        return "production_claimed"
+    if order_claims:
+        return "unverified"
     return "none_seen"
 
 
@@ -67,6 +92,26 @@ def build_value_matrix(
     for member in member_companies:
         code = str(member.get("stock_code") or "")
         dossier = dossier_by_code.get(code)
+        if dossier is not None and str(dossier.get("as_of") or "") > str(as_of):
+            # A company dossier cut *after* the node research date is future
+            # knowledge — never let it contaminate a historical matrix.
+            rows.append(
+                {
+                    "stock_code": code,
+                    "company_name": dossier.get("company_name") or member.get("company_name", ""),
+                    "mapping_type": member.get("mapping_type", ""),
+                    "priority_score": member.get("priority_score"),
+                    "dossier": "pit_incompatible",
+                    "dossier_as_of": dossier.get("as_of"),
+                    "tech_participation": "excluded",
+                    "validation_delivery": "excluded",
+                    "verified_orders": "excluded",
+                    "revenue_profit": "excluded",
+                    "concept_only_risk": "unevaluated",
+                    "dossier_fingerprint": dossier.get("dossier_fingerprint", ""),
+                }
+            )
+            continue
         if dossier is None:
             rows.append(
                 {
