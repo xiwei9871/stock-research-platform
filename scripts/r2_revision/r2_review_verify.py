@@ -23,7 +23,8 @@ import sys
 import socket
 socket.setdefaulttimeout(120)
 
-import baostock as bs  # noqa: E402
+import baostock as bs
+from baostock_guard import assert_baostock_free  # noqa: E402  # noqa: E402
 
 sys.path.insert(0, "src")
 from stock_research.db import connect, fetch_all  # noqa: E402
@@ -142,6 +143,7 @@ def main() -> None:
                 pass
     todo = [a for a in pool if a not in seen]
     print(f"review pool {len(pool)} | todo {len(todo)}")
+    assert_baostock_free()
     login = bs.login()
     if login.error_code != "0":
         raise SystemExit(f"login failed {login.error_code}")

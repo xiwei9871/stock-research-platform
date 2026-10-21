@@ -75,19 +75,36 @@ def factor_sig(conn, asset_id: str) -> str:
     return f"{r['c']}:{r['mx']}"
 
 
+def raw_minute_sig(conn, asset_id: str, freq: str, source: str) -> str:
+    """Upstream signature for a job's raw minute input — re-ingested raw
+    bars change count/max(updated_at) and force re-derivation."""
+    r = fetch_all(
+        conn, "SELECT count(*) c, max(updated_at) mx"
+              " FROM market.stock_minute_bar WHERE asset_id=%s"
+              " AND adjust_type='raw' AND freq=%s AND source=%s",
+        [asset_id, freq, source])[0]
+    return f"{r['c']}:{r['mx']}"
+
+
 def decide_minute_pending(asset_groups: dict[str, list[dict]],
                           sigs: dict[str, str],
+                          raw_sigs: dict[str, str],
                           ledger: dict) -> dict[str, dict]:
     """Pure: which minute jobs are pending given per-asset raw groups,
-    current factor signatures, and the completion ledger.
-    Key = asset|freq|source; pending when ledger sig != current sig."""
+    factor signatures AND raw-minute signatures, and the ledger.
+    Key = asset|freq|source; pending when either upstream signature
+    differs from what the ledger recorded."""
     todo = {}
     for asset_id, groups in asset_groups.items():
         for g in groups:
             key = f"{asset_id}|{g['freq']}|{g['source']}"
-            if ledger.get(key, {}).get("factor_sig") != sigs[asset_id]:
+            want = {"factor_sig": sigs[asset_id],
+                    "raw_sig": raw_sigs.get(key, "")}
+            got = ledger.get(key, {})
+            if (got.get("factor_sig") != want["factor_sig"]
+                    or got.get("raw_sig") != want["raw_sig"]):
                 todo[key] = {"asset": asset_id, "freq": g["freq"],
-                             "source": g["source"], "sig": sigs[asset_id]}
+                             "source": g["source"], **want}
     return todo
 
 
@@ -115,7 +132,7 @@ def _load_ledger(path: str) -> dict:
 
 def pending_minute_keys(assets: list[str], conn) -> dict[str, dict]:
     ledger = _load_ledger(PROGRESS)
-    groups, sigs = {}, {}
+    groups, sigs, raw_sigs = {}, {}, {}
     for asset_id in assets:
         gs = fetch_all(
             conn, "SELECT DISTINCT freq, source FROM market.stock_minute_bar"
@@ -124,7 +141,11 @@ def pending_minute_keys(assets: list[str], conn) -> dict[str, dict]:
         if gs:
             groups[asset_id] = gs
             sigs[asset_id] = factor_sig(conn, asset_id)
-    return decide_minute_pending(groups, sigs, ledger)
+            for g in gs:
+                key = f"{asset_id}|{g['freq']}|{g['source']}"
+                raw_sigs[key] = raw_minute_sig(
+                    conn, asset_id, g["freq"], g["source"])
+    return decide_minute_pending(groups, sigs, raw_sigs, ledger)
 
 
 def pending_feature_keys(assets: list[str], dates: list[str],
@@ -161,7 +182,8 @@ def phase_minute(assets: list[str], dry_run: bool) -> None:
                    "freq": job_info["freq"], "source": job_info["source"]}
             if dry_run:
                 print(f"  {asset_id} {job_info['freq']}/{job_info['source']} "
-                      f"{g['mn']}..{g['mx']} raw={g['c']} sig={job_info['sig']}")
+                      f"{g['mn']}..{g['mx']} raw={g['c']} "
+                      f"sig={job_info['factor_sig']}|{job_info['raw_sig']}")
                 continue
             try:
                 res = derive_qfq_minute_bars_from_raw_job(conn, job)
@@ -173,7 +195,8 @@ def phase_minute(assets: list[str], dry_run: bool) -> None:
                 gaps.append(key)
                 continue
             conn.commit()
-            ledger[key] = {"factor_sig": job_info["sig"],
+            ledger[key] = {"factor_sig": job_info["factor_sig"],
+                           "raw_sig": job_info["raw_sig"],
                            "rows": int(res or 0)}
             n += 1
             if n % 10 == 0:
@@ -189,56 +212,60 @@ def phase_minute(assets: list[str], dry_run: bool) -> None:
 
 
 def phase_features(assets: list[str], start: str, end: str) -> None:
+    """Per-asset FULL-HISTORY feature recompute, upsert only rows in
+    [start,end]. Full history is required for cumulative indicators
+    (OBV = cumsum; a 260-day window introduces systematic level bias)
+    and is also the convention-correct baseline since EMA/MACD/KDJ are
+    warmup-converged (verified identical to within 1e-4)."""
+    from stock_research.technical_features import (
+        compute_daily_technical_features)
+    t0 = time.time()
     with connect("stock_research") as conn:
-        dates = [str(r["trade_date"]) for r in fetch_all(
+        dates = {str(r["trade_date"]) for r in fetch_all(
             conn, "SELECT DISTINCT trade_date FROM market_daily_bar"
-                  " WHERE adjust_type='raw' AND trade_date BETWEEN %s AND %s"
-                  " ORDER BY 1", [start, end])]
-        todo, sigs = pending_feature_keys(assets, dates, conn)
+                  " WHERE adjust_type='raw' AND trade_date BETWEEN %s AND %s",
+            [start, end])}
+        todo, sigs = pending_feature_keys(assets, sorted(dates), conn)
         print(f"feature pending keys: {len(todo)} "
-              f"(across {len({v['date'] for v in todo.values()})} dates)")
-        ledger = {}
-        if os.path.exists(FEAT_PROGRESS):
-            raw = json.load(open(FEAT_PROGRESS))
-            ledger = raw if isinstance(raw, dict) else {}
-        t0 = time.time()
-        for i, d in enumerate(dates):
-            day_assets = [a for a in assets if f"{d}|{a}" in todo]
-            if not day_assets:
-                continue
+              f"(across {len(dates)} dates)")
+        ledger = _load_ledger(FEAT_PROGRESS)
+        # group pending by asset -> dates needed
+        need: dict[str, list[str]] = {}
+        for k in todo:
+            a, d = todo[k]["asset"], todo[k]["date"]
+            need.setdefault(a, []).append(d)
+        for n, (asset_id, want_dates) in enumerate(sorted(need.items()), 1):
             rows = fetch_all(
-                conn, """SELECT trade_date, asset_id, open, high, low, close,
-                         preclose, volume, amount, turnover_rate
-                         FROM market_daily_bar
-                         WHERE adjust_type='qfq' AND asset_id=ANY(%s)
-                           AND trade_date IN (
-                             SELECT DISTINCT trade_date FROM market_daily_bar
-                             WHERE adjust_type='raw' AND trade_date <= %s
-                             ORDER BY trade_date DESC LIMIT %s)""",
-                [day_assets, d, LOOKBACK])
+                conn, "SELECT trade_date, open, high, low, close, preclose,"
+                      " volume, amount, turnover_rate FROM market_daily_bar"
+                      " WHERE asset_id=%s AND adjust_type='qfq'"
+                      " AND trade_date<=%s ORDER BY trade_date",
+                [asset_id, end])
             if not rows:
                 continue
-            frame = pd.DataFrame(rows)
-            grouped = frame.groupby("asset_id", sort=False, group_keys=False)
-            built = _build_technical_feature_rows_for_assets(
-                ((str(a), g) for a, g in grouped),
-                normalized_trade_date=d,
-                adjust_type="qfq",
-                source_data_version=SOURCE_VERSION)
-            df = pd.DataFrame(built, columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
-            if not df.empty:
-                upsert_stock_technical_features_daily(df)
-            for a in (str(x["asset_id"]) for x in built):
-                ledger[f"{d}|{a}"] = {"factor_sig": sigs[a]}
+            feats = compute_daily_technical_features(pd.DataFrame(rows))
+            feats["asset_id"] = asset_id
+            feats["ts_code"] = asset_id
+            feats["adjust_type"] = "qfq"
+            feats["source"] = "r2_downstream_rebuild"
+            feats["source_data_version"] = SOURCE_VERSION
+            feats["calc_version"] = "full_history_v1"
+            sub = feats[feats["trade_date"].map(str).isin(want_dates)]
+            if not sub.empty:
+                sub = sub.reindex(columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+                upsert_stock_technical_features_daily(sub)
+            for d in want_dates:
+                ledger[f"{d}|{asset_id}"] = {"factor_sig": sigs[asset_id]}
             conn.commit()
-            if i % 20 == 0:
+            if n % 5 == 0:
                 with open(FEAT_PROGRESS, "w") as f:
                     json.dump(ledger, f)
-                print(f"[{i}/{len(dates)}] {d} features rows={len(df)} "
-                      f"({time.time()-t0:.0f}s)", flush=True)
+                print(f"[{n}/{len(need)}] {asset_id} features rows="
+                      f"{len(sub)} ({time.time()-t0:.0f}s)", flush=True)
         with open(FEAT_PROGRESS, "w") as f:
             json.dump(ledger, f)
-    print(f"features phase done: {len(dates)} dates scanned")
+    print(f"features phase done: {len(need)} assets, "
+          f"{sum(len(v) for v in need.values())} asset-dates")
 
 
 def main() -> None:

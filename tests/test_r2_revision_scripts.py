@@ -76,19 +76,29 @@ def test_minute_pending_new_asset_and_sig_change():
     groups = {"CN:A": [{"freq": "5min", "source": "baostock"}],
               "CN:B": [{"freq": "5min", "source": "baostock"}]}
     sigs = {"CN:A": "100:t1", "CN:B": "50:t2"}
+    raw_sigs = {"CN:A|5min|baostock": "r1",
+                "CN:B|5min|baostock": "r2"}
     # asset A done at old sig -> pending (repaired factors changed)
     # asset B never done -> pending
-    ledger = {"CN:A|5min|baostock": {"factor_sig": "99:t0"}}
-    todo = m.decide_minute_pending(groups, sigs, ledger)
+    ledger = {"CN:A|5min|baostock": {"factor_sig": "99:t0",
+                                    "raw_sig": "r1"}}
+    todo = m.decide_minute_pending(groups, sigs, raw_sigs, ledger)
     assert set(todo) == {"CN:A|5min|baostock", "CN:B|5min|baostock"}
-    # A at current sig -> only B pending
-    ledger["CN:A|5min|baostock"]["factor_sig"] = "100:t1"
-    todo = m.decide_minute_pending(groups, sigs, ledger)
+    # A at current factor+raw sigs -> only B pending
+    ledger["CN:A|5min|baostock"] = {"factor_sig": "100:t1",
+                                    "raw_sig": "r1"}
+    todo = m.decide_minute_pending(groups, sigs, raw_sigs, ledger)
     assert set(todo) == {"CN:B|5min|baostock"}
+    # raw minute bars re-ingested for A (raw sig bump) -> A pending again
+    raw_sigs["CN:A|5min|baostock"] = "r1b"
+    todo = m.decide_minute_pending(groups, sigs, raw_sigs, ledger)
+    assert set(todo) == {"CN:A|5min|baostock", "CN:B|5min|baostock"}
     # new asset C joins later -> enqueued despite prior completions
+    raw_sigs["CN:A|5min|baostock"] = "r1"
     groups["CN:C"] = [{"freq": "5min", "source": "baostock"}]
     sigs["CN:C"] = "10:t3"
-    todo = m.decide_minute_pending(groups, sigs, ledger)
+    raw_sigs["CN:C|5min|baostock"] = "r3"
+    todo = m.decide_minute_pending(groups, sigs, raw_sigs, ledger)
     assert set(todo) == {"CN:B|5min|baostock", "CN:C|5min|baostock"}
 
 

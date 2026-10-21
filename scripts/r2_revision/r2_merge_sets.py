@@ -43,6 +43,7 @@ def main() -> None:
             verdicts[r["asset_id"]] = r["verdict"]
 
     before = {k: len(v) for k, v in sets.items()}
+    universe_before = set().union(*sets.values()) if sets else set()
     moves = []
 
     def move(asset: str, new_status: str, reason: str) -> None:
@@ -60,10 +61,15 @@ def main() -> None:
         moves.append({"asset": asset, "from": None,
                       "to": new_status, "reason": reason})
 
-    # 1) reclassification results override prior status
+    # 1) reclassification overrides ONLY assets that were actually
+    #    re-attempted (previously ERROR or brand-new); unchanged assets
+    #    keep their post-fix status — stale CSV statuses must not revert
+    #    corrected classifications
     for status, assets in fresh.items():
         for a in assets:
-            move(a, status, "reclassified")
+            prior = next((k for k in STATUS_KEYS if a in sets[k]), None)
+            if prior == "ERROR" or prior is None:
+                move(a, status, "reclassified")
 
     # 2) REVIEW verdicts: releasable -> dirty queue; others stay review
     for a, v in verdicts.items():
@@ -80,6 +86,13 @@ def main() -> None:
         if overlap:
             sys.exit(f"FATAL: sets overlap {k}: {sorted(overlap)[:5]}")
         seen |= sets[k]
+    # universe conservation: no asset lost, none invented
+    universe_after = set().union(*sets.values()) if sets else set()
+    if universe_after != universe_before:
+        lost = universe_before - universe_after
+        gained = universe_after - universe_before
+        sys.exit(f"FATAL: universe changed lost={sorted(lost)[:5]} "
+                 f"gained={sorted(gained)[:5]}")
     after = {k: len(v) for k, v in sets.items()}
 
     report = {"before": before, "after": after,

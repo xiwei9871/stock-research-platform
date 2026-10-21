@@ -65,6 +65,12 @@ Prefer targeted reads over full-file reads.
   sources with `workers=1`. Do not parallelize baostock sessions — concurrent
   logins/fetches cause `10002007` connection failures. Prefer one sequential
   baostock downloader at a time host-wide.
+- Baostock enforces a host/session blacklist: repeated rapid logins or session
+  churn returns `10001011 黑名单用户，请与管理员联系` (observed 2026-10-21
+  after ~70 R2 batch logins plus a stale hung session). While blacklisted,
+  EVERY login fails — drivers must back off instead of burning retry loops.
+  Before starting any baostock work, ensure no stale baostock client process
+  is still running (e.g. `pgrep -f baostock`-using scripts).
 - Baostock rejects logins in its evening settlement window (~17:00-19:00
   observed). `run_minute5_stage` and `run_retry_failed_stage` absorb this via
   `login_baostock_with_retry_window`: retryable refusals sleep

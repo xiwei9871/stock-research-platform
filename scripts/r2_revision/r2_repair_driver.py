@@ -32,6 +32,12 @@ PAUSE_FLAG = f"{BASE}/r2_driver_pause.flag"
 REPAIR_SCRIPT = "scripts/r2_revision/r2_repair_batch.py"
 CHUNK = 100
 BATCH_TIMEOUT_S = 60 * 60
+# a batch that dies this fast with a login failure means baostock is
+# refusing us (blacklist/settlement) — back off instead of burning
+# through the remaining queue one failed batch per second.
+FAST_FAIL_S = 120
+LOGIN_BACKOFF_S = 600
+MAX_CONSEC_FAST_FAILS = 6
 
 
 LEGACY_WHITELIST = f"{BASE}/r2_legacy_verified.txt"
@@ -80,6 +86,7 @@ def main() -> None:
     dirty = set(json.load(open(SETS_FILE))["CONFIRMED_DIRTY"])
     batch_no = next_batch_no()
 
+    consec_fast_fails = 0
     for pass_no in range(3):
         done = completed_assets()
         remaining = sorted(dirty - done)
@@ -87,7 +94,8 @@ def main() -> None:
             break
         print(f"confirmed dirty: {len(dirty)} | pass {pass_no+1} "
               f"remaining: {len(remaining)}", flush=True)
-        for i in range(0, len(remaining), CHUNK):
+        i = 0
+        while i < len(remaining):
             if os.path.exists(PAUSE_FLAG):
                 print("pause flag present — stopping after current batch", flush=True)
                 return
@@ -100,6 +108,7 @@ def main() -> None:
             print(f"=== batch {batch_id} ({len(chunk)} assets) "
                   f"start {time.strftime('%H:%M:%S')}", flush=True)
             t0 = time.time()
+            fast_fail = False
             try:
                 proc = subprocess.run(
                     [sys.executable, REPAIR_SCRIPT, batch_id, f"file:{list_path}"],
@@ -112,11 +121,30 @@ def main() -> None:
                 if proc.returncode != 0:
                     print(f"!! batch {batch_id} exit={proc.returncode} "
                           f"stderr={proc.stderr[-300:] if proc.stderr else ''}", flush=True)
+                    elapsed = time.time() - t0
+                    out = (proc.stderr or "") + (proc.stdout or "")
+                    if elapsed < FAST_FAIL_S and "login failed" in out:
+                        fast_fail = True
             except subprocess.TimeoutExpired:
                 print(f"!! batch {batch_id} TIMEOUT after {BATCH_TIMEOUT_S}s — "
                       "committed assets still safe (per-asset commits)", flush=True)
             print(f"=== batch {batch_id} done in {time.time()-t0:.0f}s "
                   f"total_complete={len(completed_assets())}", flush=True)
+            if fast_fail:
+                consec_fast_fails += 1
+                if consec_fast_fails > MAX_CONSEC_FAST_FAILS:
+                    print(f"!! {consec_fast_fails} consecutive login "
+                          "failures — baostock refusing; driver exits, "
+                          "resume manually after unblock", flush=True)
+                    return
+                print(f"!! baostock login refused — backing off "
+                      f"{LOGIN_BACKOFF_S}s then retrying batch {batch_id}",
+                      flush=True)
+                batch_no -= 1  # reuse same batch id on retry
+                time.sleep(LOGIN_BACKOFF_S)
+                continue  # same chunk index — do not advance
+            consec_fast_fails = 0
+            i += CHUNK
     print("driver finished")
 
 

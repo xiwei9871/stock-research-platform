@@ -35,7 +35,8 @@ from typing import Any
 import socket
 socket.setdefaulttimeout(120)
 
-import baostock as bs  # noqa: E402
+import baostock as bs
+from baostock_guard import assert_baostock_free  # noqa: E402  # noqa: E402
 
 sys.path.insert(0, "src")
 from stock_research.adjustment_revision import (  # noqa: E402
@@ -260,6 +261,7 @@ def main() -> None:
     if os.path.exists(report_path):
         report = json.load(open(report_path))
 
+    assert_baostock_free()
     login = bs.login()
     if login.error_code != "0":
         raise SystemExit(f"login failed {login.error_code} {login.error_msg}")
