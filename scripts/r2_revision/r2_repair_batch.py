@@ -137,13 +137,21 @@ def ensure_asset_backup(cur, conn, asset_id: str,
                         action_backup: str) -> str:
     """Full key-set backup gate across daily/factor/action tables.
     Returns 'OK', 'NO_STORED_ROWS', or 'BACKUP_UNCERTAIN'."""
+    # only NON-revision stored rows need original backups — revision-sourced
+    # rows are repair outputs (rollback removes them by source, or restores
+    # their pre-image from backup on the same key)
     bar_keys = keyset(conn, "market_daily_bar", asset_id,
                       ("trade_date", "adjust_type"),
-                      "AND adjust_type IN ('qfq','hfq')")
+                      "AND adjust_type IN ('qfq','hfq') AND source <> %s",
+                      [REVISION_SOURCE])
     if not bar_keys:
-        return "NO_STORED_ROWS"
+        no_rev = keyset(conn, "market_daily_bar", asset_id,
+                        ("trade_date", "adjust_type"),
+                        "AND adjust_type IN ('qfq','hfq')")
+        return "NO_STORED_ROWS" if not no_rev else "OK_ALREADY_REPAIRED"
     bak_keys = keyset(conn, backup_table, asset_id,
                       ("trade_date", "adjust_type"))
+    missing_bars = bar_keys - bak_keys
     factor_keys = keyset(conn, "market.adjustment_factor", asset_id,
                          ("trade_date", "source_version"))
     factor_bak = keyset(conn, factor_backup, asset_id,
@@ -152,7 +160,6 @@ def ensure_asset_backup(cur, conn, asset_id: str,
                          ("event_date", "action_type", "source_version"))
     action_bak = keyset(conn, action_backup, asset_id,
                         ("event_date", "action_type", "source_version"))
-    missing_bars = bar_keys - bak_keys
     missing_factors = factor_keys - factor_bak
     missing_actions = action_keys - action_bak
     if not (missing_bars or missing_factors or missing_actions):
@@ -162,7 +169,9 @@ def ensure_asset_backup(cur, conn, asset_id: str,
               "WHERE asset_id=%s AND source=%s",
         [asset_id, REVISION_SOURCE])[0]["c"]
     if revised:
-        return "BACKUP_UNCERTAIN"
+        # already repaired elsewhere: acceptable ONLY if the originals are
+        # still provably backed (missing bars would mean never backed up)
+        return "OK_ALREADY_REPAIRED" if not missing_bars else "BACKUP_UNCERTAIN"
     if missing_bars:
         cur.execute(
             f"""INSERT INTO {backup_table}
