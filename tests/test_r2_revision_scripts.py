@@ -42,6 +42,12 @@ def test_rollback_manifest_ownership():
     assert "m.op='update'" in src and "m.op='insert'" in src
     # factor/action manifests also enforced
     assert "r2_write_manifest_factor" in src and "r2_write_manifest_action" in src
+    # cross-batch shared-key conflicts checked for all three manifest tables
+    assert src.count("shared factor keys") == 1 and src.count("shared action keys") == 1
+    # pre-image existence checked for factor/action update/delete ops
+    assert "factor manifest keys lack" in src and "action manifest keys lack" in src
+    # post-rollback verification on all three tables
+    assert "post-rollback factor diffs" in src and "post-rollback action diffs" in src
     # no-manifest batch refuses --apply
     assert "refusing to auto-apply" in src
     # post-rollback nonzero diffs abort the transaction

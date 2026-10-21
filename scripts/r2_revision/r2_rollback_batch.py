@@ -133,6 +133,42 @@ def main() -> None:
                 fail(f"CONFLICT: {foreign[0]['c']} manifest keys overwritten by "
                      "foreign (non-revision) source with different values")
 
+        # factor/action: same ownership proofs — shared keys across batches
+        # and pre-image existence for update/delete ops
+        for later in key_conflicts(conn, batch_id, "r2_write_manifest_factor",
+                                   ("asset_id", "trade_date", "source_version")):
+            fail(f"CONFLICT: batch {later['batch_id']} also wrote "
+                 f"{later['c']} shared factor keys — resolve first")
+        for later in key_conflicts(conn, batch_id, "r2_write_manifest_action",
+                                   ("asset_id", "event_date", "action_type",
+                                    "source_version")):
+            fail(f"CONFLICT: batch {later['batch_id']} also wrote "
+                 f"{later['c']} shared action keys — resolve first")
+        if factors:
+            factor_bk = {tuple(str(r[c]) for c in
+                               ("asset_id", "trade_date", "source_version"))
+                         for r in fetch_all(
+                             conn, f"SELECT asset_id, trade_date, source_version FROM {fb}")}
+            missing = [r for r in factors if r["op"] in ("update", "delete")
+                       and (r["asset_id"], str(r["trade_date"]),
+                            r["source_version"]) not in factor_bk]
+            if missing:
+                fail(f"CONFLICT: {len(missing)} factor manifest keys lack "
+                     f"backup pre-image e.g. {missing[:3]}")
+        if actions:
+            action_bk = {tuple(str(r[c]) for c in
+                               ("asset_id", "event_date", "action_type",
+                                "source_version"))
+                         for r in fetch_all(
+                             conn, f"SELECT asset_id, event_date, action_type,"
+                                   f" source_version FROM {ab}")}
+            missing = [r for r in actions if r["op"] in ("update", "delete")
+                       and (r["asset_id"], str(r["event_date"]),
+                            r["action_type"], r["source_version"]) not in action_bk]
+            if missing:
+                fail(f"CONFLICT: {len(missing)} action manifest keys lack "
+                     f"backup pre-image e.g. {missing[:3]}")
+
         with conn.cursor() as cur:
             # ---- daily bars ----
             if bars:
@@ -234,9 +270,86 @@ def main() -> None:
                 [assets])
             diffs = cur.fetchone()["c"]
             print("post-rollback daily diffs:", diffs)
-            if diffs:
+            if bars:
+                cur.execute(
+                    f"""SELECT count(*) c FROM market_daily_bar s
+                        JOIN {mb} m ON m.batch_id=%s AND m.op='insert'
+                          AND s.asset_id=m.asset_id AND s.trade_date=m.trade_date
+                          AND s.adjust_type=m.adjust_type""", [batch_id])
+                insert_left = cur.fetchone()["c"]
+                print("bar insert-keys still present:", insert_left)
+                diffs += insert_left
+            factor_diffs = 0
+            if factors:
+                cur.execute(
+                    f"""SELECT count(*) c FROM market.adjustment_factor s
+                        JOIN {fb} bk ON bk.asset_id=s.asset_id
+                          AND bk.trade_date=s.trade_date
+                          AND bk.source_version=s.source_version
+                        JOIN {mf} m ON m.batch_id=%s AND m.asset_id=s.asset_id
+                          AND m.trade_date=s.trade_date
+                          AND m.source_version=s.source_version
+                          AND m.op IN ('update','delete')
+                        WHERE s.raw_close IS DISTINCT FROM bk.raw_close
+                           OR s.qfq_close IS DISTINCT FROM bk.qfq_close
+                           OR s.hfq_close IS DISTINCT FROM bk.hfq_close
+                           OR s.qfq_factor IS DISTINCT FROM bk.qfq_factor
+                           OR s.hfq_factor IS DISTINCT FROM bk.hfq_factor""",
+                    [batch_id])
+                factor_diffs = cur.fetchone()["c"]
+                cur.execute(
+                    f"""SELECT count(*) c FROM {mf} m
+                        LEFT JOIN market.adjustment_factor s
+                          ON s.asset_id=m.asset_id AND s.trade_date=m.trade_date
+                         AND s.source_version=m.source_version
+                        WHERE m.batch_id=%s AND m.op IN ('update','delete')
+                          AND s.asset_id IS NULL""", [batch_id])
+                factor_diffs += cur.fetchone()["c"]
+                cur.execute(
+                    f"""SELECT count(*) c FROM market.adjustment_factor s
+                        JOIN {mf} m ON m.batch_id=%s AND m.op='insert'
+                          AND s.asset_id=m.asset_id AND s.trade_date=m.trade_date
+                          AND s.source_version=m.source_version""", [batch_id])
+                factor_diffs += cur.fetchone()["c"]
+                print("post-rollback factor diffs:", factor_diffs)
+            action_diffs = 0
+            if actions:
+                cur.execute(
+                    f"""SELECT count(*) c FROM market.corporate_action s
+                        JOIN {ab} bk ON bk.asset_id=s.asset_id
+                          AND bk.event_date=s.event_date
+                          AND bk.action_type=s.action_type
+                          AND bk.source_version=s.source_version
+                        JOIN {ma} m ON m.batch_id=%s AND m.asset_id=s.asset_id
+                          AND m.event_date=s.event_date
+                          AND m.action_type=s.action_type
+                          AND m.source_version=s.source_version
+                          AND m.op IN ('update','delete')
+                        WHERE s.factor_before IS DISTINCT FROM bk.factor_before
+                           OR s.factor_after IS DISTINCT FROM bk.factor_after""",
+                    [batch_id])
+                action_diffs = cur.fetchone()["c"]
+                cur.execute(
+                    f"""SELECT count(*) c FROM {ma} m
+                        LEFT JOIN market.corporate_action s
+                          ON s.asset_id=m.asset_id AND s.event_date=m.event_date
+                         AND s.action_type=m.action_type
+                         AND s.source_version=m.source_version
+                        WHERE m.batch_id=%s AND m.op IN ('update','delete')
+                          AND s.asset_id IS NULL""", [batch_id])
+                action_diffs += cur.fetchone()["c"]
+                cur.execute(
+                    f"""SELECT count(*) c FROM market.corporate_action s
+                        JOIN {ma} m ON m.batch_id=%s AND m.op='insert'
+                          AND s.asset_id=m.asset_id AND s.event_date=m.event_date
+                          AND s.action_type=m.action_type
+                          AND s.source_version=m.source_version""", [batch_id])
+                action_diffs += cur.fetchone()["c"]
+                print("post-rollback action diffs:", action_diffs)
+            if diffs or factor_diffs or action_diffs:
                 cur.execute("ROLLBACK")
-                fail(f"post-rollback verification failed: {diffs} diffs — "
+                fail(f"post-rollback verification failed: bars={diffs} "
+                     f"factors={factor_diffs} actions={action_diffs} — "
                      "transaction rolled back, nothing committed")
         if apply:
             conn.commit()
