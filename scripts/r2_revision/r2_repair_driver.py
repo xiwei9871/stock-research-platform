@@ -35,17 +35,28 @@ BATCH_TIMEOUT_S = 60 * 60
 
 
 def completed_assets() -> set[str]:
+    """Report-COMPLETE assets, plus legacy repairs identified by revision
+    source rows (b1/b2/samples predate per-asset status reports and were
+    verified by separate post-diff runs)."""
     done: set[str] = set()
     for p in glob.glob(f"{BASE}/r2_repair_*.json"):
         try:
             d = json.load(open(p))
         except (OSError, json.JSONDecodeError):
             continue
+        if isinstance(d, dict):
+            done.update(
+                k for k, v in d.items()
+                if k.startswith("CN:") and isinstance(v, dict)
+                and v.get("status") == "COMPLETE"
+            )
+    sys.path.insert(0, "src")
+    from stock_research.db import connect, fetch_all
+    with connect("stock_research") as conn:
         done.update(
-            k for k, v in d.items()
-            if k.startswith("CN:") and isinstance(v, dict)
-            and v.get("status") == "COMPLETE"
-        )
+            r["asset_id"] for r in fetch_all(
+                conn, "SELECT DISTINCT asset_id FROM market_daily_bar "
+                      "WHERE source='baostock_revision_r2'"))
     return done
 
 
