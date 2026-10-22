@@ -90,7 +90,16 @@ cap-chain-smoke --theme liquid_cooling --cases <3 子节点> --as-of 2026-10-22
 4. CAP-09 统一入口可在 dashboard 打开任一信封；
 5. 接口断裂 / 重复归因 / 语义不一致问题清零（比数据完整优先）。
 
-## 八、边界
+## 八、R0.1 语义收口（2026-10-22）
+
+- **P0-1**：CAP-04 视图改按 `claim_role`（supply_scarcity / non_substitutability / market_structure / entry_barrier / hype）分类——dimension 与 role 不混用；market_structure role 引用 process_irreplaceability 证据仍归格局视图
+- **P0-2**：CAP-05 `value_capture_verdict` R0 一律 `not_evaluated`（`disclosed_broader_scope`≠子节点收入兑现；`verified_delivered`≠可识别合同/收入确认）；rev/delivery/order 三格保持独立
+- **P0-3**：`case.as_of` 必须与请求 `as_of` 一致（无可重建快照 → 不一致即 not_evaluated+错误）；单节点失败生成错误信封、其余节点继续；CAP-03 `product_lines` 输出 JSON 数组，坏 case 入 `invalid_cases`
+- **P1**：backlog 按 (node_id,kind,item,owner) 去重 + `source_capabilities` 列贡献 CAP；CAP-07 基线缺口归属 `CAP-07`（运行状态，非外部数据缺口）；CAP-08 支持按 claim_id 去重（`support_claim_count`）
+
+**三主题 R0.1 smoke（去重后）**：液冷 17 / 半导体 6 / 人形 3 条缺口，全链 `cap-chain-smoke` 可复现（`r0_smoke_*.json`）。
+
+## 九、边界
 
 - research_only：`used_for_signal=False` / `used_for_admission=False` 全链路透传；
 - 不重建已稳定基础设施（CAP-01/02 引擎、dashboard、StrategyLab 全部复用）；

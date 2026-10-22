@@ -16,7 +16,9 @@
      {
       "node_id": "liquid_cooling_cdu_system",
       "name": "CDU整机及系统集成",
-      "product_lines": "{'cdu_system'}",
+      "product_lines": [
+       "cdu_system"
+      ],
       "members": [
        "002837",
        "301018"
@@ -25,7 +27,9 @@
      {
       "node_id": "liquid_cooling_coldplate_manifold",
       "name": "冷板/Manifold/快接头",
-      "product_lines": "{'coldplate_manifold'}",
+      "product_lines": [
+       "coldplate_manifold"
+      ],
       "members": [
        "002837",
        "301018"
@@ -34,7 +38,9 @@
      {
       "node_id": "liquid_cooling_pump_components",
       "name": "屏蔽泵及液体循环组件",
-      "product_lines": "{'pump_components'}",
+      "product_lines": [
+       "pump_components"
+      ],
       "members": [
        "603757"
       ]
@@ -72,12 +78,13 @@
       "node_id": "liquid_cooling_pump_components"
      }
     ],
-    "task_count": 5
+    "task_count": 5,
+    "invalid_cases": []
    },
    "evidence_refs": [],
    "uncertainties": [],
    "data_gaps": [],
-   "fingerprint": "fc15fc92d120b3d1d1f7572ed6795434ec3138a32021896efdad37f1bb84fa8b",
+   "fingerprint": "927297b902d65ea7b34dd3886eaa18881be0caf4a33cb7d51ee6d90147a06d0c",
    "rule_version": "cap00-r0",
    "research_only": true,
    "used_for_signal": false,
@@ -97,33 +104,26 @@
     "findings": {
      "node_verdict": "bottleneck_unverified",
      "views": {
-      "scarcity": [
-       {
-        "claim_id": "nc_multi_supplier",
-        "dimension": "process_irreplaceability",
-        "claim_role": "market_structure",
-        "verdict": "partially_supported",
-        "claim_text": "CDU整机存在多家已验证供应商"
-       }
-      ],
-      "substitutability": [
-       {
-        "claim_id": "nc_multi_supplier",
-        "dimension": "process_irreplaceability",
-        "claim_role": "market_structure",
-        "verdict": "partially_supported",
-        "claim_text": "CDU整机存在多家已验证供应商"
-       }
-      ],
-      "market_structure": [],
-      "entry_barriers": [
+      "supply_scarcity": [
        {
         "claim_id": "nc_supply_scarce",
         "dimension": "capacity_constraint",
         "claim_role": "supply_scarcity",
         "verdict": "unknown",
         "claim_text": "CDU整机是否存在有效供给约束"
-       },
+       }
+      ],
+      "non_substitutability": [],
+      "market_structure": [
+       {
+        "claim_id": "nc_multi_supplier",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "CDU整机存在多家已验证供应商"
+       }
+      ],
+      "entry_barrier": [
        {
         "claim_id": "nc_cert_barrier",
         "dimension": "certification_barrier",
@@ -132,7 +132,7 @@
         "claim_text": "客户认证周期是否构成进入壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）"
        }
       ],
-      "hype_check": [
+      "hype": [
        {
         "claim_id": "nc_hype",
         "dimension": "hype_only",
@@ -140,7 +140,8 @@
         "verdict": "unknown",
         "claim_text": "是否存在概念关联成分"
        }
-      ]
+      ],
+      "unclassified": []
      },
      "claim_count": 4
     },
@@ -154,7 +155,7 @@
      "nc_hype=unknown"
     ],
     "data_gaps": [],
-    "fingerprint": "6fa7afbeba38a0350de1c09feb93eefe45aa0958e5ba5623c7252ef52ba32436",
+    "fingerprint": "71c74de18e877ff2ab418608ba6cbd93af9582c1feb8540d212bcf00898790b1",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
@@ -175,14 +176,22 @@
        "margin_state": "unknown",
        "delivery_state": "validated",
        "order_state": "none_seen",
-       "value_capture_verdict": "not_evaluated"
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
       },
       "301018": {
        "revenue_state": "missing",
        "margin_state": "unknown",
        "delivery_state": "none_seen",
        "order_state": "none_seen",
-       "value_capture_verdict": "not_evaluated"
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
       }
      },
      "member_count": 2
@@ -227,13 +236,13 @@
       "note": ""
      }
     ],
-    "fingerprint": "9df92f09271e606289ffea62360fa212985b6a418c7884fbf7764ea2a7a968b2",
+    "fingerprint": "3960adbec45a00bc7ddb3cff77a36a1c19364cae09a7888ac61d0405f52a615c",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "6fa7afbeba38a0350de1c09feb93eefe45aa0958e5ba5623c7252ef52ba32436"
+     "71c74de18e877ff2ab418608ba6cbd93af9582c1feb8540d212bcf00898790b1"
     ]
    },
    "CAP-06": {
@@ -277,14 +286,14 @@
     "evidence_refs": [],
     "uncertainties": [],
     "data_gaps": [],
-    "fingerprint": "38d464cdc5ba4b44e97e17af075777d59a80ce50466bdb2467d17a3150fb71e3",
+    "fingerprint": "5987cbd4b15cb2872c3c52626013bd97b69711d3def745d06fe94fb756798942",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "6fa7afbeba38a0350de1c09feb93eefe45aa0958e5ba5623c7252ef52ba32436",
-     "9df92f09271e606289ffea62360fa212985b6a418c7884fbf7764ea2a7a968b2"
+     "71c74de18e877ff2ab418608ba6cbd93af9582c1feb8540d212bcf00898790b1",
+     "3960adbec45a00bc7ddb3cff77a36a1c19364cae09a7888ac61d0405f52a615c"
     ]
    },
    "CAP-07": {
@@ -303,11 +312,11 @@
      {
       "kind": "missing_source",
       "item": "baseline_fingerprint:liquid_cooling_cdu_system",
-      "owner": "DATA",
-      "note": "store prior envelope fingerprint"
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
      }
     ],
-    "fingerprint": "75d69011c13217f7b2413ad608d8364c0e908e13864d751246821658c22446b3",
+    "fingerprint": "94ddcf0cb65cccb9a5b79aa100709934fbde4f4daf7a7430ecbc0eeb8b9acc9a",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
@@ -323,9 +332,9 @@
     "status": "ok",
     "findings": {
      "supports": [
-      "CAP-04:nc_multi_supplier=partially_supported",
       "CAP-04:nc_multi_supplier=partially_supported"
      ],
+     "support_claim_count": 1,
      "uncertainties": [
       "CAP-04:nc_supply_scarce=unknown",
       "CAP-04:nc_cert_barrier=unknown",
@@ -392,20 +401,20 @@
      {
       "kind": "missing_source",
       "item": "baseline_fingerprint:liquid_cooling_cdu_system",
-      "owner": "DATA",
-      "note": "store prior envelope fingerprint"
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
      }
     ],
-    "fingerprint": "21a4fbea217ac35f74a20ca395cc803b84fd8dee73bcbbfd7be23d43d68e2962",
+    "fingerprint": "cc658216b801bfb63a3295df69063b572f143cdc4d40621b9e1bba28d0e1e793",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "6fa7afbeba38a0350de1c09feb93eefe45aa0958e5ba5623c7252ef52ba32436",
-     "9df92f09271e606289ffea62360fa212985b6a418c7884fbf7764ea2a7a968b2",
-     "38d464cdc5ba4b44e97e17af075777d59a80ce50466bdb2467d17a3150fb71e3",
-     "75d69011c13217f7b2413ad608d8364c0e908e13864d751246821658c22446b3"
+     "71c74de18e877ff2ab418608ba6cbd93af9582c1feb8540d212bcf00898790b1",
+     "3960adbec45a00bc7ddb3cff77a36a1c19364cae09a7888ac61d0405f52a615c",
+     "5987cbd4b15cb2872c3c52626013bd97b69711d3def745d06fe94fb756798942",
+     "94ddcf0cb65cccb9a5b79aa100709934fbde4f4daf7a7430ecbc0eeb8b9acc9a"
     ]
    }
   },
@@ -420,33 +429,26 @@
     "findings": {
      "node_verdict": "bottleneck_unverified",
      "views": {
-      "scarcity": [
-       {
-        "claim_id": "nc_multi_supplier",
-        "dimension": "process_irreplaceability",
-        "claim_role": "market_structure",
-        "verdict": "partially_supported",
-        "claim_text": "冷板/Manifold/快接头存在多家已验证供应商"
-       }
-      ],
-      "substitutability": [
-       {
-        "claim_id": "nc_multi_supplier",
-        "dimension": "process_irreplaceability",
-        "claim_role": "market_structure",
-        "verdict": "partially_supported",
-        "claim_text": "冷板/Manifold/快接头存在多家已验证供应商"
-       }
-      ],
-      "market_structure": [],
-      "entry_barriers": [
+      "supply_scarcity": [
        {
         "claim_id": "nc_supply_scarce",
         "dimension": "capacity_constraint",
         "claim_role": "supply_scarcity",
         "verdict": "unknown",
         "claim_text": "冷板/快接头是否存在有效供给约束"
-       },
+       }
+      ],
+      "non_substitutability": [],
+      "market_structure": [
+       {
+        "claim_id": "nc_multi_supplier",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "冷板/Manifold/快接头存在多家已验证供应商"
+       }
+      ],
+      "entry_barrier": [
        {
         "claim_id": "nc_cert_barrier",
         "dimension": "certification_barrier",
@@ -455,7 +457,7 @@
         "claim_text": "认证壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）"
        }
       ],
-      "hype_check": [
+      "hype": [
        {
         "claim_id": "nc_hype",
         "dimension": "hype_only",
@@ -463,7 +465,8 @@
         "verdict": "unknown",
         "claim_text": "概念关联"
        }
-      ]
+      ],
+      "unclassified": []
      },
      "claim_count": 4
     },
@@ -477,7 +480,7 @@
      "nc_hype=unknown"
     ],
     "data_gaps": [],
-    "fingerprint": "6db1dcfb0029a6101f0342f97c6d2d89e75b80039d9fa7dfca0d7ac34248b56c",
+    "fingerprint": "ec40c529e8b5b732ea3aee365daf69958f99106001416b6ebcfccf5474f37308",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
@@ -498,14 +501,22 @@
        "margin_state": "unknown",
        "delivery_state": "validated",
        "order_state": "none_seen",
-       "value_capture_verdict": "not_evaluated"
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
       },
       "301018": {
        "revenue_state": "missing",
        "margin_state": "unknown",
        "delivery_state": "none_seen",
        "order_state": "none_seen",
-       "value_capture_verdict": "not_evaluated"
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
       }
      },
      "member_count": 2
@@ -550,13 +561,13 @@
       "note": ""
      }
     ],
-    "fingerprint": "f72b1ba717b0ce6abef3e71b32369f2071df30ee3a2ca276a80aef49095a9823",
+    "fingerprint": "9d7b5b5e285b6702f7385acbf86c413de396888649fed46b36a7f11a2fee1a2e",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "6db1dcfb0029a6101f0342f97c6d2d89e75b80039d9fa7dfca0d7ac34248b56c"
+     "ec40c529e8b5b732ea3aee365daf69958f99106001416b6ebcfccf5474f37308"
     ]
    },
    "CAP-06": {
@@ -600,14 +611,14 @@
     "evidence_refs": [],
     "uncertainties": [],
     "data_gaps": [],
-    "fingerprint": "dd49c92e4872366fb59dae5ba39f29dc603deeadb294a99bb3f24d013e338041",
+    "fingerprint": "f1da965d6bbfcb0cb8fdc120512702f5e113f96208f3edf7957772ebed99ef0d",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "6db1dcfb0029a6101f0342f97c6d2d89e75b80039d9fa7dfca0d7ac34248b56c",
-     "f72b1ba717b0ce6abef3e71b32369f2071df30ee3a2ca276a80aef49095a9823"
+     "ec40c529e8b5b732ea3aee365daf69958f99106001416b6ebcfccf5474f37308",
+     "9d7b5b5e285b6702f7385acbf86c413de396888649fed46b36a7f11a2fee1a2e"
     ]
    },
    "CAP-07": {
@@ -626,11 +637,11 @@
      {
       "kind": "missing_source",
       "item": "baseline_fingerprint:liquid_cooling_coldplate_manifold",
-      "owner": "DATA",
-      "note": "store prior envelope fingerprint"
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
      }
     ],
-    "fingerprint": "aee40ed8bb2da30d99550277247cb384719a10d0ae682bf52b96b3f781a2538b",
+    "fingerprint": "e90df477bd4a878375585c6c9dcc5072685c41db93c248cf249d45e6c0ecbcc2",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
@@ -646,9 +657,9 @@
     "status": "ok",
     "findings": {
      "supports": [
-      "CAP-04:nc_multi_supplier=partially_supported",
       "CAP-04:nc_multi_supplier=partially_supported"
      ],
+     "support_claim_count": 1,
      "uncertainties": [
       "CAP-04:nc_supply_scarce=unknown",
       "CAP-04:nc_cert_barrier=unknown",
@@ -715,20 +726,20 @@
      {
       "kind": "missing_source",
       "item": "baseline_fingerprint:liquid_cooling_coldplate_manifold",
-      "owner": "DATA",
-      "note": "store prior envelope fingerprint"
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
      }
     ],
-    "fingerprint": "21f4f65c21cf7ca1933b380dddd24c280ef56e9052dd81da8827bd20b7eaf776",
+    "fingerprint": "39342765cb339919f135c6ac2fc46eb0d7ce13ed72e06f438d498fffb89a0353",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "6db1dcfb0029a6101f0342f97c6d2d89e75b80039d9fa7dfca0d7ac34248b56c",
-     "f72b1ba717b0ce6abef3e71b32369f2071df30ee3a2ca276a80aef49095a9823",
-     "dd49c92e4872366fb59dae5ba39f29dc603deeadb294a99bb3f24d013e338041",
-     "aee40ed8bb2da30d99550277247cb384719a10d0ae682bf52b96b3f781a2538b"
+     "ec40c529e8b5b732ea3aee365daf69958f99106001416b6ebcfccf5474f37308",
+     "9d7b5b5e285b6702f7385acbf86c413de396888649fed46b36a7f11a2fee1a2e",
+     "f1da965d6bbfcb0cb8fdc120512702f5e113f96208f3edf7957772ebed99ef0d",
+     "e90df477bd4a878375585c6c9dcc5072685c41db93c248cf249d45e6c0ecbcc2"
     ]
    }
   },
@@ -743,33 +754,26 @@
     "findings": {
      "node_verdict": "bottleneck_unverified",
      "views": {
-      "scarcity": [
-       {
-        "claim_id": "nc_multi_supplier",
-        "dimension": "process_irreplaceability",
-        "claim_role": "market_structure",
-        "verdict": "partially_supported",
-        "claim_text": "CDU泵存在多家供应商（含外资在位者）"
-       }
-      ],
-      "substitutability": [
-       {
-        "claim_id": "nc_multi_supplier",
-        "dimension": "process_irreplaceability",
-        "claim_role": "market_structure",
-        "verdict": "partially_supported",
-        "claim_text": "CDU泵存在多家供应商（含外资在位者）"
-       }
-      ],
-      "market_structure": [],
-      "entry_barriers": [
+      "supply_scarcity": [
        {
         "claim_id": "nc_supply_scarce",
         "dimension": "capacity_constraint",
         "claim_role": "supply_scarcity",
         "verdict": "unknown",
         "claim_text": "CDU泵组件是否存在有效供给约束"
-       },
+       }
+      ],
+      "non_substitutability": [],
+      "market_structure": [
+       {
+        "claim_id": "nc_multi_supplier",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "CDU泵存在多家供应商（含外资在位者）"
+       }
+      ],
+      "entry_barrier": [
        {
         "claim_id": "nc_cert_barrier",
         "dimension": "certification_barrier",
@@ -778,7 +782,7 @@
         "claim_text": "UL等认证及大批量交付壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）"
        }
       ],
-      "hype_check": [
+      "hype": [
        {
         "claim_id": "nc_hype",
         "dimension": "hype_only",
@@ -786,7 +790,8 @@
         "verdict": "unknown",
         "claim_text": "概念关联"
        }
-      ]
+      ],
+      "unclassified": []
      },
      "claim_count": 4
     },
@@ -800,7 +805,7 @@
      "nc_hype=unknown"
     ],
     "data_gaps": [],
-    "fingerprint": "d755f109c9a9426df0673f8032b3153a84e7344daad038081d0de878051a8fc9",
+    "fingerprint": "8c2672d31b969924501c6aeaefb6b27760a0b77d6f330254fc1275bbf0568d60",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
@@ -821,7 +826,11 @@
        "margin_state": "unknown",
        "delivery_state": "mass_delivery",
        "order_state": "verified_delivered",
-       "value_capture_verdict": "not_evaluated"
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
       }
      },
      "member_count": 1
@@ -842,13 +851,13 @@
       "note": ""
      }
     ],
-    "fingerprint": "6ce14b59559cf596d05721df003cb05fdc3948c6ce2d08805b9814c5e3a96ea5",
+    "fingerprint": "0b8683979f74a6e071bc3ccba56bf21f2ef8b5f29db00bd918e9fc32074a6db1",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "d755f109c9a9426df0673f8032b3153a84e7344daad038081d0de878051a8fc9"
+     "8c2672d31b969924501c6aeaefb6b27760a0b77d6f330254fc1275bbf0568d60"
     ]
    },
    "CAP-06": {
@@ -879,14 +888,14 @@
     "evidence_refs": [],
     "uncertainties": [],
     "data_gaps": [],
-    "fingerprint": "00ec8c60952f0dc0c082c95706d2bc904921c426c3c5b77174a84e33b9f320fb",
+    "fingerprint": "bd01327d0a4689979ae6c8b28d4bcf2f9241d426c1afa9be7df7a841f8dd468d",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "d755f109c9a9426df0673f8032b3153a84e7344daad038081d0de878051a8fc9",
-     "6ce14b59559cf596d05721df003cb05fdc3948c6ce2d08805b9814c5e3a96ea5"
+     "8c2672d31b969924501c6aeaefb6b27760a0b77d6f330254fc1275bbf0568d60",
+     "0b8683979f74a6e071bc3ccba56bf21f2ef8b5f29db00bd918e9fc32074a6db1"
     ]
    },
    "CAP-07": {
@@ -905,11 +914,11 @@
      {
       "kind": "missing_source",
       "item": "baseline_fingerprint:liquid_cooling_pump_components",
-      "owner": "DATA",
-      "note": "store prior envelope fingerprint"
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
      }
     ],
-    "fingerprint": "e258e03ac95361c625ffa66e0d949a16ae53cfd1c6b7fd10ea77cd46b4d69e45",
+    "fingerprint": "62d819c20a1f3dd00f29c74d3107ad8ca2f252a8f15a394bf4cd00dc643a855d",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
@@ -925,9 +934,9 @@
     "status": "ok",
     "findings": {
      "supports": [
-      "CAP-04:nc_multi_supplier=partially_supported",
       "CAP-04:nc_multi_supplier=partially_supported"
      ],
+     "support_claim_count": 1,
      "uncertainties": [
       "CAP-04:nc_supply_scarce=unknown",
       "CAP-04:nc_cert_barrier=unknown",
@@ -962,296 +971,212 @@
      {
       "kind": "missing_source",
       "item": "baseline_fingerprint:liquid_cooling_pump_components",
-      "owner": "DATA",
-      "note": "store prior envelope fingerprint"
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
      }
     ],
-    "fingerprint": "82a73967576683faeb5b79d9b30e153966be51cd8619ef91f8e2d213aed3bd02",
+    "fingerprint": "25647d33656e7b3d7cbcdfcfcfa36e65176067851ed531add5d968c743c8ba31",
     "rule_version": "cap00-r0",
     "research_only": true,
     "used_for_signal": false,
     "used_for_admission": false,
     "upstream_fingerprints": [
-     "d755f109c9a9426df0673f8032b3153a84e7344daad038081d0de878051a8fc9",
-     "6ce14b59559cf596d05721df003cb05fdc3948c6ce2d08805b9814c5e3a96ea5",
-     "00ec8c60952f0dc0c082c95706d2bc904921c426c3c5b77174a84e33b9f320fb",
-     "e258e03ac95361c625ffa66e0d949a16ae53cfd1c6b7fd10ea77cd46b4d69e45"
+     "8c2672d31b969924501c6aeaefb6b27760a0b77d6f330254fc1275bbf0568d60",
+     "0b8683979f74a6e071bc3ccba56bf21f2ef8b5f29db00bd918e9fc32074a6db1",
+     "bd01327d0a4689979ae6c8b28d4bcf2f9241d426c1afa9be7df7a841f8dd468d",
+     "62d819c20a1f3dd00f29c74d3107ad8ca2f252a8f15a394bf4cd00dc643a855d"
     ]
    }
   }
  },
+ "errors": [],
  "gap_backlog": [
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "product_revenue:002837",
    "owner": "DATA",
-   "note": "rev_state=missing"
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "product_gross_margin:002837",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "verifiable_order:002837",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "product_revenue:301018",
    "owner": "DATA",
-   "note": "rev_state=missing"
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "product_gross_margin:301018",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "verifiable_order:301018",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-07",
    "kind": "missing_source",
    "item": "baseline_fingerprint:liquid_cooling_cdu_system",
-   "owner": "DATA",
-   "note": "store prior envelope fingerprint"
+   "owner": "CAP-07",
+   "note": "capability run-state, not external data",
+   "source_capabilities": [
+    "CAP-07",
+    "CAP-08"
+   ]
   },
   {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
+   "node_id": "liquid_cooling_coldplate_manifold",
    "kind": "missing_source",
    "item": "product_revenue:002837",
    "owner": "DATA",
-   "note": "rev_state=missing"
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
+   "node_id": "liquid_cooling_coldplate_manifold",
    "kind": "missing_source",
    "item": "product_gross_margin:002837",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
+   "node_id": "liquid_cooling_coldplate_manifold",
    "kind": "missing_source",
    "item": "verifiable_order:002837",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
+   "node_id": "liquid_cooling_coldplate_manifold",
    "kind": "missing_source",
    "item": "product_revenue:301018",
    "owner": "DATA",
-   "note": "rev_state=missing"
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
+   "node_id": "liquid_cooling_coldplate_manifold",
    "kind": "missing_source",
    "item": "product_gross_margin:301018",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
+   "node_id": "liquid_cooling_coldplate_manifold",
    "kind": "missing_source",
    "item": "verifiable_order:301018",
    "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_cdu_system",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "baseline_fingerprint:liquid_cooling_cdu_system",
-   "owner": "DATA",
-   "note": "store prior envelope fingerprint"
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-05",
-   "kind": "missing_source",
-   "item": "product_revenue:002837",
-   "owner": "DATA",
-   "note": "rev_state=missing"
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-05",
-   "kind": "missing_source",
-   "item": "product_gross_margin:002837",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-05",
-   "kind": "missing_source",
-   "item": "verifiable_order:002837",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-05",
-   "kind": "missing_source",
-   "item": "product_revenue:301018",
-   "owner": "DATA",
-   "note": "rev_state=missing"
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-05",
-   "kind": "missing_source",
-   "item": "product_gross_margin:301018",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-05",
-   "kind": "missing_source",
-   "item": "verifiable_order:301018",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-07",
    "kind": "missing_source",
    "item": "baseline_fingerprint:liquid_cooling_coldplate_manifold",
-   "owner": "DATA",
-   "note": "store prior envelope fingerprint"
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "product_revenue:002837",
-   "owner": "DATA",
-   "note": "rev_state=missing"
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "product_gross_margin:002837",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "verifiable_order:002837",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "product_revenue:301018",
-   "owner": "DATA",
-   "note": "rev_state=missing"
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "product_gross_margin:301018",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "verifiable_order:301018",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_coldplate_manifold",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "baseline_fingerprint:liquid_cooling_coldplate_manifold",
-   "owner": "DATA",
-   "note": "store prior envelope fingerprint"
+   "owner": "CAP-07",
+   "note": "capability run-state, not external data",
+   "source_capabilities": [
+    "CAP-07",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_pump_components",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "product_revenue:603757",
    "owner": "DATA",
-   "note": "rev_state=missing"
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_pump_components",
-   "capability": "CAP-05",
    "kind": "missing_source",
    "item": "product_gross_margin:603757",
    "owner": "DATA",
-   "note": ""
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
   },
   {
    "node_id": "liquid_cooling_pump_components",
-   "capability": "CAP-07",
    "kind": "missing_source",
    "item": "baseline_fingerprint:liquid_cooling_pump_components",
-   "owner": "DATA",
-   "note": "store prior envelope fingerprint"
-  },
-  {
-   "node_id": "liquid_cooling_pump_components",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "product_revenue:603757",
-   "owner": "DATA",
-   "note": "rev_state=missing"
-  },
-  {
-   "node_id": "liquid_cooling_pump_components",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "product_gross_margin:603757",
-   "owner": "DATA",
-   "note": ""
-  },
-  {
-   "node_id": "liquid_cooling_pump_components",
-   "capability": "CAP-08",
-   "kind": "missing_source",
-   "item": "baseline_fingerprint:liquid_cooling_pump_components",
-   "owner": "DATA",
-   "note": "store prior envelope fingerprint"
+   "owner": "CAP-07",
+   "note": "capability run-state, not external data",
+   "source_capabilities": [
+    "CAP-07",
+    "CAP-08"
+   ]
   }
  ],
  "research_only": true,

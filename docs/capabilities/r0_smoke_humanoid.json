@@ -1,0 +1,343 @@
+{
+ "theme_id": "humanoid",
+ "as_of": "2026-10-21",
+ "run_id": "cap00-2026-10-21",
+ "envelopes": {
+  "CAP-03": {
+   "capability_id": "CAP-03",
+   "subject_type": "theme",
+   "subject_id": "humanoid",
+   "as_of": "2026-10-21",
+   "run_id": "cap00-2026-10-21",
+   "status": "ok",
+   "findings": {
+    "theme_id": "humanoid",
+    "nodes": [
+     {
+      "node_id": "humanoid_vision_sensing",
+      "name": "人形机器人视觉感知环节",
+      "product_lines": [
+       "humanoid_vision"
+      ],
+      "members": [
+       "688686"
+      ]
+     }
+    ],
+    "research_tasks": [
+     {
+      "subject_type": "company",
+      "subject_id": "688686",
+      "capability": "CAP-01",
+      "node_id": "humanoid_vision_sensing"
+     }
+    ],
+    "task_count": 1,
+    "invalid_cases": []
+   },
+   "evidence_refs": [],
+   "uncertainties": [],
+   "data_gaps": [],
+   "fingerprint": "a9caebf31a267fdfaa6ca2fc3f5b5a2923fd7bfede909bb22eb77439ae8c2df1",
+   "rule_version": "cap00-r0",
+   "research_only": true,
+   "used_for_signal": false,
+   "used_for_admission": false,
+   "upstream_fingerprints": []
+  }
+ },
+ "per_node": {
+  "humanoid_vision_sensing": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-21",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "needs_evidence",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_vision_capacity",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈"
+       }
+      ],
+      "non_substitutability": [
+       {
+        "claim_id": "nc_vision_process",
+        "dimension": "process_irreplaceability",
+        "claim_role": "non_substitutability",
+        "verdict": "unknown",
+        "claim_text": "机器人视觉感知工艺难以被替代"
+       }
+      ],
+      "market_structure": [],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_vision_cert",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "主机厂视觉部件认证周期长构成壁垒"
+       },
+       {
+        "claim_id": "nc_vision_perf",
+        "dimension": "performance_gap",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "节点内视觉方案间存在可量化性能差异"
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_vision_hype",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "partially_supported",
+        "claim_text": "节点当前热度主要来自主题映射与概念关联而非供给证据"
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 5
+    },
+    "evidence_refs": [
+     "n_ev_theme_score"
+    ],
+    "uncertainties": [
+     "nc_vision_capacity=unknown",
+     "nc_vision_process=unknown",
+     "nc_vision_cert=unknown",
+     "nc_vision_perf=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "3efe8d469fe1536506d57c76ae14fc8d7c385e30e1bf3164796aeb18bd22a569",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-21",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "688686": {
+       "revenue_state": "missing",
+       "margin_state": "unknown",
+       "delivery_state": "pending_review",
+       "order_state": "pending_review",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
+      }
+     },
+     "member_count": 1
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688686",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688686",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "021acdac8d4e25bdb9f227d5ccaa417f50503a21657248451cca9ae4ef6e99ec",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "3efe8d469fe1536506d57c76ae14fc8d7c385e30e1bf3164796aeb18bd22a569"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-21",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "688686": {
+       "company_name": "奥普特",
+       "overall_verdict": "needs_evidence",
+       "tech_participation": "partially_supported",
+       "delivery": "pending_review",
+       "revenue": "missing",
+       "order": "pending_review",
+       "concept_only_risk": "high",
+       "moat_dimensions": {
+        "tech_moat": "partially_supported",
+        "competitive_advantage": null
+       }
+      }
+     },
+     "note": "component delivery ≠ full-system substitution; product cert ≠ customer cert"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "de0998095d71fae478316f6423927c7ff638e42e585729c2a2f78e790a40db5f",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "3efe8d469fe1536506d57c76ae14fc8d7c385e30e1bf3164796aeb18bd22a569",
+     "021acdac8d4e25bdb9f227d5ccaa417f50503a21657248451cca9ae4ef6e99ec"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-21",
+    "status": "unknown",
+    "findings": {
+     "note": "no baseline fingerprint — cannot diff"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "baseline_fingerprint:humanoid_vision_sensing",
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
+     }
+    ],
+    "fingerprint": "53a09bd516f3f664816a872314fc7874ef46f4bf7d8df4bde37d6dc813a2f98f",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-21",
+    "status": "ok",
+    "findings": {
+     "supports": [
+      "CAP-04:nc_vision_hype=partially_supported"
+     ],
+     "support_claim_count": 1,
+     "uncertainties": [
+      "CAP-04:nc_vision_capacity=unknown",
+      "CAP-04:nc_vision_process=unknown",
+      "CAP-04:nc_vision_cert=unknown",
+      "CAP-04:nc_vision_perf=unknown"
+     ],
+     "next_verification": [
+      "baseline_fingerprint:humanoid_vision_sensing",
+      "product_gross_margin:688686",
+      "product_revenue:688686"
+     ],
+     "research_priority": [
+      "product_revenue:688686",
+      "product_gross_margin:688686",
+      "baseline_fingerprint:humanoid_vision_sensing"
+     ]
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688686",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688686",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "baseline_fingerprint:humanoid_vision_sensing",
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
+     }
+    ],
+    "fingerprint": "22d62ef203f82cad1ddf19344b38aa8775bf0951c9a5f95944c22a2d4379ff56",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "3efe8d469fe1536506d57c76ae14fc8d7c385e30e1bf3164796aeb18bd22a569",
+     "021acdac8d4e25bdb9f227d5ccaa417f50503a21657248451cca9ae4ef6e99ec",
+     "de0998095d71fae478316f6423927c7ff638e42e585729c2a2f78e790a40db5f",
+     "53a09bd516f3f664816a872314fc7874ef46f4bf7d8df4bde37d6dc813a2f98f"
+    ]
+   }
+  }
+ },
+ "errors": [],
+ "gap_backlog": [
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "product_revenue:688686",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "product_gross_margin:688686",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "baseline_fingerprint:humanoid_vision_sensing",
+   "owner": "CAP-07",
+   "note": "capability run-state, not external data",
+   "source_capabilities": [
+    "CAP-07",
+    "CAP-08"
+   ]
+  }
+ ],
+ "research_only": true,
+ "used_for_signal": false,
+ "used_for_admission": false
+}

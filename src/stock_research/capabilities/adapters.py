@@ -86,15 +86,24 @@ def _cell_state(v: Any) -> str:
     return str(v or "missing")
 
 
-def _claim_verdicts(claims: list[dict[str, Any]], dims: set[str]) -> list[dict[str, Any]]:
-    return [
-        {
-            "claim_id": c["claim_id"], "dimension": c.get("dimension"),
-            "claim_role": c.get("claim_role"), "verdict": c.get("verdict"),
-            "claim_text": c.get("claim_text"),
-        }
-        for c in claims if c.get("dimension") in dims
-    ]
+_NODE_CLAIM_ROLES = {
+    "supply_scarcity", "non_substitutability", "market_structure",
+    "entry_barrier", "hype",
+}
+
+
+def _claims_by_role(claims: list[dict[str, Any]], roles: set[str],
+                    invert: bool = False) -> list[dict[str, Any]]:
+    out = []
+    for c in claims:
+        role = c.get("claim_role") or "market_structure"
+        if (role not in _NODE_CLAIM_ROLES) if invert else (role in roles):
+            out.append({
+                "claim_id": c["claim_id"], "dimension": c.get("dimension"),
+                "claim_role": role, "verdict": c.get("verdict"),
+                "claim_text": c.get("claim_text"),
+            })
+    return out
 
 
 def cap03_orchestrate(
@@ -106,15 +115,17 @@ def cap03_orchestrate(
     """Theme → nodes → companies → research-task orchestration (R0)."""
     nodes: list[dict[str, Any]] = []
     tasks: list[dict[str, str]] = []
+    invalid: list[dict[str, str]] = []
     for p in case_paths:
         try:
             case = load_node_case(p)
-        except Exception:
+        except Exception as exc:
+            invalid.append({"case_path": p, "error": str(exc)})
             continue
         members = [m["stock_code"] for m in case.get("member_companies", [])]
         nodes.append({
             "node_id": case["node_id"], "name": case["node_name"],
-            "product_lines": case.get("product_lines", []),
+            "product_lines": sorted(case.get("product_lines") or []),
             "members": members,
         })
         for m in members:
@@ -122,16 +133,25 @@ def cap03_orchestrate(
                 "subject_type": "company", "subject_id": str(m),
                 "capability": "CAP-01", "node_id": case["node_id"],
             })
+    if nodes and invalid:
+        status = "partial"
+    elif nodes:
+        status = "ok"
+    else:
+        status = "unknown"
     return make_envelope(
         "CAP-03", "theme", theme_id, as_of, run_id,
-        status="ok" if nodes else "unknown",
+        status=status,
         findings={
             "theme_id": theme_id,
             "nodes": nodes,
             "research_tasks": tasks,
             "task_count": len(tasks),
+            "invalid_cases": invalid,
         },
-        uncertainties=() if nodes else ("no node cases provided",),
+        uncertainties=tuple(
+            f"invalid_case:{i['case_path']}:{i['error']}" for i in invalid
+        ) or (() if nodes else ("no node cases provided",)),
         data_gaps=[] if nodes else [DataGap(
             kind=GAP_MISSING_SOURCE, item=f"node_cases:{theme_id}",
             note="theme→node case files missing")],
@@ -146,12 +166,17 @@ def cap04_tech_supply(
     dossier, dossier_by_code = _build_node_dossier(case_path, dossier_dir)
     node_id = dossier["node_id"]
     claims = dossier["node_claims"]
+    # P0-1: views classify by claim_role (frozen five-role taxonomy), never
+    # by evidence dimension.  A market_structure claim can cite
+    # process_irreplaceability evidence — it is still a roster fact, not
+    # scarcity/substitutability proof.
     views = {
-        "scarcity": _claim_verdicts(claims, {"technology_capability", "process_irreplaceability"}),
-        "substitutability": _claim_verdicts(claims, {"process_irreplaceability"}),
-        "market_structure": _claim_verdicts(claims, {"market_structure"}),
-        "entry_barriers": _claim_verdicts(claims, {"entry_barrier", "certification_barrier", "capacity_constraint"}),
-        "hype_check": _claim_verdicts(claims, {"hype_only"}),
+        "supply_scarcity": _claims_by_role(claims, {"supply_scarcity"}),
+        "non_substitutability": _claims_by_role(claims, {"non_substitutability"}),
+        "market_structure": _claims_by_role(claims, {"market_structure"}),
+        "entry_barrier": _claims_by_role(claims, {"entry_barrier"}),
+        "hype": _claims_by_role(claims, {"hype"}),
+        "unclassified": _claims_by_role(claims, set(), invert=True),
     }
     env = make_envelope(
         "CAP-04", "node", node_id, as_of, run_id,
@@ -190,12 +215,16 @@ def cap05_value_economics(
             "margin_state": "unknown",  # 分产品毛利无独立矩阵列 — 如实标注
             "delivery_state": del_state,
             "order_state": ord_state,
-            "value_capture_verdict": (
-                "verified"
-                if rev_state in {"disclosed", "disclosed_broader_scope"}
-                and ord_state in {"verified_contracted", "verified_delivered"}
-                else "not_evaluated"
-            ),
+            # P0-2: R0 stays conservative.  disclosed_broader_scope only proves
+            # a larger segment exists; verified_delivered is a delivery fact,
+            # not an identifiable contract or revenue recognition.  Until a
+            # precisely product_line-attributed revenue record exists, no
+            # value-capture claim is made.
+            "value_capture_verdict": "not_evaluated",
+            "value_capture_requires": [
+                "product_line_attributed_revenue",
+                "operating_evidence(margin/order/cash)",
+            ],
         }
         if rev_state == "unextracted":
             gaps.append(DataGap(kind=GAP_UNPARSED, item=f"product_revenue:{code}",
@@ -265,7 +294,8 @@ def cap07_changes(
             findings={"note": "no baseline fingerprint — cannot diff"},
             data_gaps=[DataGap(kind=GAP_MISSING_SOURCE,
                                item=f"baseline_fingerprint:{subject_id}",
-                               note="store prior envelope fingerprint")],
+                               owner="CAP-07",
+                               note="capability run-state, not external data")],
         )
     changed = current_fingerprint not in base
     return make_envelope(
@@ -285,24 +315,29 @@ def cap08_synthesis(
     as_of: str, run_id: str,
 ) -> ResearchEnvelope:
     """Comprehensive verdict: supports / refutes / gaps / priorities (R0)."""
-    supports: list[str] = []
+    # P1: dedupe by claim_id — a claim visible in two CAP-04 views must not
+    # be counted as independent confirmation twice.
+    supports: dict[str, str] = {}
     uncertainties: list[str] = []
     gaps: list[DataGap] = []
     for env in upstream:
         for view in (env.findings.get("views") or {}).values():
             for c in view:
                 if c.get("verdict") in {"confirmed", "partially_supported"}:
-                    supports.append(f"{env.capability_id}:{c['claim_id']}={c['verdict']}")
+                    cid = c.get("claim_id") or "?"
+                    supports.setdefault(cid, f"{env.capability_id}:{cid}={c['verdict']}")
         for code, e in (env.findings.get("economics") or {}).items():
             if e.get("value_capture_verdict") == "verified":
-                supports.append(f"{env.capability_id}:{code}:value_capture")
+                supports.setdefault(
+                    f"vc:{code}", f"{env.capability_id}:{code}:value_capture")
         uncertainties.extend(f"{env.capability_id}:{u}" for u in env.uncertainties)
         gaps.extend(env.data_gaps)
     status = "ok" if supports else ("partial" if upstream else "unknown")
     return make_envelope(
         "CAP-08", "node", subject_id, as_of, run_id, status=status,
         findings={
-            "supports": supports,
+            "supports": list(supports.values()),
+            "support_claim_count": len(supports),
             "uncertainties": uncertainties,
             "next_verification": sorted({g.item for g in gaps})[:10],
             "research_priority": [
