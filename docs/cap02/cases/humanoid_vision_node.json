@@ -127,5 +127,6 @@
   "product_lines": [
     "humanoid_vision"
   ],
-  "t3_records_path": "docs/cap02/t3/t3_records.json"
+  "t3_records_path": "docs/cap02/t3/t3_records.json",
+  "theme_node_id": "head_vision"
 }

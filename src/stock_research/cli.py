@@ -2364,9 +2364,14 @@ def build_parser() -> argparse.ArgumentParser:
     cap_chain = subparsers.add_parser("cap-chain-smoke")
     cap_chain.add_argument("--theme", required=True, help="theme_id label")
     cap_chain.add_argument(
-        "--cases", required=True,
+        "--cases", default="",
         help="comma-separated node case JSON paths",
     )
+    cap_chain.add_argument(
+        "--theme-db", action="store_true",
+        help="auto-orchestrate cases from the theme package (CAP-03 R1)",
+    )
+    cap_chain.add_argument("--case-dir", default="docs/cap02/cases")
     cap_chain.add_argument(
         "--dossier-dir",
         default="outputs/research/company_intelligence",
@@ -9605,15 +9610,32 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "chain-bottleneck-dossier":
         run_chain_bottleneck_dossier_command(args)
     elif args.command == "cap-chain-smoke":
-        from stock_research.capabilities.pipeline import run_research_chain
+        if getattr(args, "theme_db", False):
+            from stock_research.capabilities.pipeline import run_theme_chain
 
-        out = run_research_chain(
-            args.theme,
-            [p.strip() for p in args.cases.split(",") if p.strip()],
-            args.dossier_dir,
-            args.as_of,
-            run_id=f"cap00-{args.as_of}",
-        )
+            out = run_theme_chain(
+                args.theme,
+                args.dossier_dir,
+                args.as_of,
+                run_id=f"cap00-{args.as_of}",
+                case_dir=args.case_dir,
+            )
+            e3 = out["envelopes"]["CAP-03"]["findings"]
+            print(
+                f"cap_smoke|cap03|nodes={e3.get('node_count')}"
+                f"|with_cases={e3.get('nodes_with_cases')}"
+                f"|tasks={e3.get('task_count')}"
+            )
+        else:
+            from stock_research.capabilities.pipeline import run_research_chain
+
+            out = run_research_chain(
+                args.theme,
+                [p.strip() for p in args.cases.split(",") if p.strip()],
+                args.dossier_dir,
+                args.as_of,
+                run_id=f"cap00-{args.as_of}",
+            )
         if args.output:
             from pathlib import Path as _P
 

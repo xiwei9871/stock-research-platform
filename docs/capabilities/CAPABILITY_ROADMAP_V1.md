@@ -99,7 +99,15 @@ cap-chain-smoke --theme liquid_cooling --cases <3 子节点> --as-of 2026-10-22
 
 **三主题 R0.1 smoke（去重后）**：液冷 17 / 半导体 6 / 人形 3 条缺口，全链 `cap-chain-smoke` 可复现（`r0_smoke_*.json`）。
 
-## 九、边界
+## 九、R1 首批增量（2026-10-22）
+
+- **CAP-03 R1**：`cap03_orchestrate_theme` / `run_theme_chain` / `cap-chain-smoke --theme-db`——从主题包读节点（13/21 nodes，按 bottleneck/value score 排序）+ 公司映射 + 自动匹配 case 文件（`theme_node_id` 显式链接 > node_id 相等 > derived_from 谱系 > 子节点前缀）；无 case 节点入 `node_case:*` 缺口，不静默跳过
+- **CAP-08 R1**：按 claim_role 三分——`supports`（scarcity/non_substitutability/entry_barrier）/ `refutes`（confirmed market_structure=多供应商格局反证稀缺叙事）/ `hype_risks`（炒作论点支持≠价值利好，人形 `nc_vision_hype` 已正确归风险桶）
+- **as_of 语义精化**：信封以案例自身 PIT 标注；晚案例数据答早请求 → not_evaluated；早案例答晚请求允许（如实标注 10-21）
+
+**三主题 smoke**（`r1_smoke_*.json`）：ai_power cap03 `ok`（4 case 自动发现，12 node_case 缺口）/ humanoid `ok`（head_vision 链接生效）/ semi_equipment（无主题包 → case 模式跑通）。
+
+## 十、边界
 
 - research_only：`used_for_signal=False` / `used_for_admission=False` 全链路透传；
 - 不重建已稳定基础设施（CAP-01/02 引擎、dashboard、StrategyLab 全部复用）；

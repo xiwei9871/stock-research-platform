@@ -170,14 +170,24 @@ def test_cap08_dedupes_support_by_claim_id():
         assert s["support_claim_count"] == len(s["supports"])
 
 
-def test_pipeline_as_of_mismatch_degrades_not_silent():
-    """P0-3: 案例 as_of 与请求不一致 → not_evaluated + 错误说明。"""
+def test_pipeline_as_of_violation_degrades_not_silent():
+    """P0-3: 晚案例数据不得生成早时点信封 → not_evaluated + 错误说明。"""
     out = run_research_chain(
         "liquid_cooling", SUBNODE_CASES[:1], DOSSIER_DIR, "2026-01-01", RUN_ID)
     assert out["errors"]
     key = next(iter(out["per_node"]))
     assert out["per_node"][key]["CAP-04"]["status"] == "not_evaluated"
-    assert "as_of mismatch" in out["per_node"][key]["CAP-04"]["findings"]["error"]
+    assert "as_of violation" in out["per_node"][key]["CAP-04"]["findings"]["error"]
+
+
+def test_pipeline_envelope_labeled_with_case_pit():
+    """早案例数据可答晚请求——信封以案例自身 PIT 标注。"""
+    out = run_research_chain(
+        "humanoid", ["docs/cap02/cases/humanoid_vision_node.json"],
+        DOSSIER_DIR, AS_OF, RUN_ID)  # case.as_of = 2026-10-21
+    assert not out["errors"]
+    env = out["per_node"]["humanoid_vision_sensing"]["CAP-04"]
+    assert env["as_of"] == "2026-10-21"
 
 
 def test_pipeline_invalid_case_isolated():
@@ -196,6 +206,36 @@ def test_cap03_invalid_case_recorded_not_skipped():
     assert len(env.findings["invalid_cases"]) == 1
     # product_lines 必须是 JSON 数组类型
     assert isinstance(env.findings["nodes"][0]["product_lines"], list)
+
+
+def test_cap08_three_way_evidence_split():
+    """R1: hype 支持论点入风险桶；market_structure 入反证桶；不计为价值支持。"""
+    out = run_research_chain(
+        "humanoid", ["docs/cap02/cases/humanoid_vision_node.json"],
+        DOSSIER_DIR, AS_OF, RUN_ID)
+    f = out["per_node"]["humanoid_vision_sensing"]["CAP-08"]["findings"]
+    assert any("nc_vision_hype" in x for x in f["hype_risks"])
+    assert not any("nc_vision_hype" in x for x in f["supports"])
+    # 液冷 multi-supplier 格局论点 → refutes（反证稀缺叙事），不是价值支持
+    out2 = run_research_chain(
+        "liquid_cooling", SUBNODE_CASES[2:3], DOSSIER_DIR, AS_OF, RUN_ID)
+    f2 = out2["per_node"]["liquid_cooling_pump_components"]["CAP-08"]["findings"]
+    assert any("nc_multi_supplier" in x for x in f2["refutes"])
+    assert not any("nc_multi_supplier" in x for x in f2["supports"])
+
+
+def test_cap03_theme_db_orchestration():
+    """R1: 从主题包自动编排 — ai_power 液冷节点自动发现 4 个 case。"""
+    from stock_research.capabilities.adapters import cap03_orchestrate_theme
+    env = cap03_orchestrate_theme("ai_power_value_capture_v1", AS_OF, RUN_ID)
+    assert env.status == "ok"
+    f = env.findings
+    assert f["node_count"] == 13
+    lc = [n for n in f["nodes"] if n["node_id"] == "liquid_cooling"][0]
+    assert len(lc["runnable_cases"]) == 4  # 父 + 3 子节点
+    assert lc["mapped_companies"] == ["002837.SZ"]
+    # 无 case 的节点如实入 gap
+    assert any(g.item == "node_case:hvdc_power" for g in env.data_gaps)
 
 
 def test_gap_backlog_deduped_with_owners():

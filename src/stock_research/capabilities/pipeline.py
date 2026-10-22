@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from stock_research.capabilities.adapters import (
-    cap03_orchestrate, cap04_tech_supply, cap05_value_economics,
-    cap06_competition, cap07_changes, cap08_synthesis,
+    cap03_orchestrate, cap03_orchestrate_theme, cap04_tech_supply,
+    cap05_value_economics, cap06_competition, cap07_changes,
+    cap08_synthesis,
 )
 from stock_research.capabilities.contract import ResearchEnvelope, make_envelope
 
@@ -47,13 +48,17 @@ def run_research_chain(
             case_meta = load_node_case(case_path)
             node_id = case_meta["node_id"]
             case_as_of = case_meta["as_of"]
-            if case_as_of != as_of:
+            if case_as_of > as_of:
                 raise ValueError(
-                    f"as_of mismatch: request={as_of} case={case_as_of} "
-                    "(no reconstructable snapshot)"
+                    f"as_of violation: case data {case_as_of} postdates "
+                    f"request {as_of} (no reconstructable snapshot)"
                 )
+            # Envelopes are labeled with the case's own PIT — an earlier
+            # evidence cutoff answering a later request is honest; the
+            # reverse is prohibited.
+            env_as_of = case_as_of
             env4, dossier, dossier_by_code = cap04_tech_supply(
-                case_path, dossier_dir, as_of, run_id,
+                case_path, dossier_dir, env_as_of, run_id,
             )
         except Exception as exc:
             err = make_envelope(
@@ -67,13 +72,13 @@ def run_research_chain(
             errors.append({"case_path": case_path, "error": str(exc)})
             continue
         fp = dossier["dossier_fingerprint"]
-        env5 = cap05_value_economics(node_id, dossier, as_of, run_id,
+        env5 = cap05_value_economics(node_id, dossier, env_as_of, run_id,
                                      upstream_fingerprints=[env4.fingerprint])
-        env6 = cap06_competition(node_id, dossier, dossier_by_code, as_of, run_id,
+        env6 = cap06_competition(node_id, dossier, dossier_by_code, env_as_of, run_id,
                                  upstream_fingerprints=[env4.fingerprint, env5.fingerprint])
-        env7 = cap07_changes(node_id, fp, baselines.get(node_id), as_of, run_id)
+        env7 = cap07_changes(node_id, fp, baselines.get(node_id), env_as_of, run_id)
         env8 = cap08_synthesis(
-            node_id, [env4, env5, env6, env7], as_of, run_id,
+            node_id, [env4, env5, env6, env7], env_as_of, run_id,
         )
         per_node[node_id] = {
             "CAP-04": env4, "CAP-05": env5, "CAP-06": env6,
@@ -120,3 +125,37 @@ def run_research_chain(
         "used_for_signal": False,
         "used_for_admission": False,
     }
+
+
+def run_theme_chain(
+    theme_id: str,
+    dossier_dir: str,
+    as_of: str,
+    run_id: str,
+    case_dir: str = "docs/cap02/cases",
+    baseline_fingerprints: dict[str, Sequence[str]] | None = None,
+) -> dict[str, Any]:
+    """R1: theme-DB-driven chain.  CAP-03 reads the theme package + company
+    mappings, auto-discovers runnable node cases, then runs CAP-04..08 per
+    matched case.  Nodes without cases stay in the CAP-03 gap list — no
+    silent skipping."""
+    env3 = cap03_orchestrate_theme(theme_id, as_of, run_id, case_dir=case_dir)
+    case_paths: list[str] = []
+    for n in env3.findings.get("nodes", []):
+        for p in n.get("runnable_cases", []):
+            if p not in case_paths:
+                case_paths.append(p)
+    out = run_research_chain(
+        theme_id, case_paths, dossier_dir, as_of, run_id,
+        baseline_fingerprints=baseline_fingerprints,
+    )
+    # Replace the case-list CAP-03 envelope with the theme-driven one; merge
+    # its gap backlog entries.
+    out["envelopes"]["CAP-03"] = env3.to_dict()
+    for g in env3.data_gaps:
+        out["gap_backlog"].append({
+            "node_id": "", "kind": g.kind, "item": g.item,
+            "owner": g.owner, "note": g.note,
+            "source_capabilities": ["CAP-03"],
+        })
+    return out

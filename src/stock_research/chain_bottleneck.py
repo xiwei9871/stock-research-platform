@@ -421,4 +421,6 @@ def load_node_case(path: str | Path) -> dict[str, Any]:
         "sources": tuple(CompanySource(**row) for row in spec.get("sources") or []),
         "input_snapshot": spec.get("input_snapshot") or {},
         "t3_records_path": spec.get("t3_records_path") or "",
+        "derived_from": spec.get("derived_from") or "",
+        "theme_node_id": spec.get("theme_node_id") or "",
     }

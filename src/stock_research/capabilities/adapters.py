@@ -158,6 +158,130 @@ def cap03_orchestrate(
     )
 
 
+def _index_cases(case_dir: str | Path) -> dict[str, dict[str, Any]]:
+    """Scan a case dir → {node_id: {path, derived_from}}; skips unreadable."""
+    out: dict[str, dict[str, Any]] = {}
+    for p in sorted(Path(case_dir).glob("*.json")):
+        try:
+            case = load_node_case(str(p))
+        except Exception:
+            continue
+        out[case["node_id"]] = {
+            "path": str(p),
+            "derived_from": case.get("derived_from") or "",
+            "theme_node_id": case.get("theme_node_id") or "",
+        }
+    return out
+
+
+def _match_cases(theme_node_id: str, case_index: dict[str, dict[str, Any]]) -> list[str]:
+    """Theme node → case paths.  Deterministic linkage:
+    node_id equality, ``derived_from`` lineage, or sub-node prefix."""
+    out = []
+    for nid, meta in case_index.items():
+        if (
+            meta.get("theme_node_id") == theme_node_id
+            or nid == theme_node_id
+            or nid.endswith(f"_{theme_node_id}")
+            or nid.startswith(f"{theme_node_id}_")
+            or theme_node_id in (meta["derived_from"] or "")
+            or nid.replace("ai_power_", "") == theme_node_id
+        ):
+            out.append(meta["path"])
+    return out
+
+
+def cap03_orchestrate_theme(
+    theme_id: str,
+    as_of: str,
+    run_id: str,
+    case_dir: str = "docs/cap02/cases",
+    artifact_dir: str | None = None,
+    mapping_dir: str | None = None,
+) -> ResearchEnvelope:
+    """R1: orchestrate from the theme DB — theme → nodes (scored) → company
+    mappings → case-backed runnable tasks.  Unmatched nodes surface as
+    node_case gaps; never silently skipped."""
+    from stock_research.theme_decomposition import load_theme_package
+    from stock_research.theme_company_mapping import (
+        load_theme_company_mapping_package,
+    )
+
+    gaps: list[DataGap] = []
+    try:
+        pkg = load_theme_package(artifact_dir)
+        theme_nodes = [n for n in pkg["nodes"] if n["theme_id"] == theme_id]
+    except Exception as exc:
+        return make_envelope(
+            "CAP-03", "theme", theme_id, as_of, run_id, status="unknown",
+            findings={"error": f"theme_package:{exc}"},
+            data_gaps=[DataGap(kind=GAP_MISSING_SOURCE,
+                               item=f"theme_package:{theme_id}",
+                               note=str(exc))],
+        )
+    if not theme_nodes:
+        return make_envelope(
+            "CAP-03", "theme", theme_id, as_of, run_id, status="unknown",
+            findings={"error": f"theme {theme_id} not found in package"},
+            data_gaps=[DataGap(kind=GAP_MISSING_SOURCE, item=f"theme:{theme_id}")],
+        )
+
+    mappings: dict[str, list[dict[str, Any]]] = {}
+    try:
+        mpkg = load_theme_company_mapping_package(mapping_dir)
+        for m in mpkg["company_mappings"]:
+            if m["theme_id"] == theme_id:
+                mappings.setdefault(m["mapped_node_id"], []).append(m)
+    except Exception:
+        mappings = {}
+
+    case_index = _index_cases(case_dir)
+    nodes: list[dict[str, Any]] = []
+    tasks: list[dict[str, str]] = []
+    for n in sorted(
+        theme_nodes,
+        key=lambda x: (-(x.get("bottleneck_score") or 0),
+                       -(x.get("value_capture_score") or 0), x["node_id"]),
+    ):
+        nid = n["node_id"]
+        case_paths = _match_cases(nid, case_index)
+        comps = mappings.get(nid, [])
+        nodes.append({
+            "node_id": nid, "name": n.get("node_name"),
+            "bottleneck_score": n.get("bottleneck_score"),
+            "value_capture_score": n.get("value_capture_score"),
+            "evidence_strength": n.get("evidence_strength"),
+            "node_review_status": n.get("node_review_status"),
+            "runnable_cases": case_paths,
+            "mapped_companies": [c["company_code"] for c in comps],
+        })
+        if case_paths:
+            tasks.append({"subject_type": "node", "subject_id": nid,
+                          "capability": "CAP-02",
+                          "cases": ",".join(case_paths)})
+        else:
+            gaps.append(DataGap(kind=GAP_MISSING_SOURCE,
+                                item=f"node_case:{nid}",
+                                note="theme node has no CAP-02 case file"))
+        for c in comps:
+            tasks.append({"subject_type": "company",
+                          "subject_id": c["company_code"],
+                          "capability": "CAP-01", "node_id": nid})
+    status = "ok" if any(n["runnable_cases"] for n in nodes) else "partial"
+    return make_envelope(
+        "CAP-03", "theme", theme_id, as_of, run_id, status=status,
+        findings={
+            "theme_id": theme_id,
+            "node_count": len(theme_nodes),
+            "nodes_with_cases": sum(1 for n in nodes if n["runnable_cases"]),
+            "nodes": nodes,
+            "research_tasks": tasks,
+            "task_count": len(tasks),
+        },
+        data_gaps=gaps,
+    )
+
+
 def cap04_tech_supply(
     case_path: str, dossier_dir: str,
     as_of: str, run_id: str,
@@ -315,29 +439,48 @@ def cap08_synthesis(
     as_of: str, run_id: str,
 ) -> ResearchEnvelope:
     """Comprehensive verdict: supports / refutes / gaps / priorities (R0)."""
-    # P1: dedupe by claim_id — a claim visible in two CAP-04 views must not
-    # be counted as independent confirmation twice.
+    # R1: three-way evidence split by claim_role.
+    #   value_supports  — scarcity / non_substitutability / entry_barrier
+    #   refutes         — confirmed market_structure = multi-supplier roster
+    #                     evidence AGAINST a scarcity narrative
+    #   hype_risks      — supported hype claims are RISK evidence, never
+    #                     positive value support
+    # P1: every bucket dedupes by claim_id.
     supports: dict[str, str] = {}
+    refutes: dict[str, str] = {}
+    hype_risks: dict[str, str] = {}
     uncertainties: list[str] = []
     gaps: list[DataGap] = []
+    _POS = {"confirmed", "partially_supported"}
     for env in upstream:
         for view in (env.findings.get("views") or {}).values():
             for c in view:
-                if c.get("verdict") in {"confirmed", "partially_supported"}:
-                    cid = c.get("claim_id") or "?"
-                    supports.setdefault(cid, f"{env.capability_id}:{cid}={c['verdict']}")
+                if c.get("verdict") not in _POS:
+                    continue
+                cid = c.get("claim_id") or "?"
+                role = c.get("claim_role") or "market_structure"
+                entry = f"{env.capability_id}:{cid}={c['verdict']}"
+                if role == "hype":
+                    hype_risks.setdefault(cid, entry)
+                elif role == "market_structure":
+                    refutes.setdefault(cid, entry)
+                else:
+                    supports.setdefault(cid, entry)
         for code, e in (env.findings.get("economics") or {}).items():
             if e.get("value_capture_verdict") == "verified":
                 supports.setdefault(
                     f"vc:{code}", f"{env.capability_id}:{code}:value_capture")
         uncertainties.extend(f"{env.capability_id}:{u}" for u in env.uncertainties)
         gaps.extend(env.data_gaps)
-    status = "ok" if supports else ("partial" if upstream else "unknown")
+    status = "ok" if (supports or refutes or hype_risks) else (
+        "partial" if upstream else "unknown")
     return make_envelope(
         "CAP-08", "node", subject_id, as_of, run_id, status=status,
         findings={
             "supports": list(supports.values()),
             "support_claim_count": len(supports),
+            "refutes": list(refutes.values()),
+            "hype_risks": list(hype_risks.values()),
             "uncertainties": uncertainties,
             "next_verification": sorted({g.item for g in gaps})[:10],
             "research_priority": [
