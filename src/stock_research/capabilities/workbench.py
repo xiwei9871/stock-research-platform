@@ -30,7 +30,8 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
             })
             continue
         env4 = envs["CAP-04"]["findings"]
-        env8 = envs["CAP-08"]["findings"]
+        env8_env = envs["CAP-08"]
+        env8 = env8_env["findings"]
         env6 = envs["CAP-06"]["findings"]
         nodes.append({
             "node_id": node_id,
@@ -45,14 +46,15 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
                 for code, row in (env6.get("comparison") or {}).items()
             ],
             "synthesis": {
-                "favorable_support": env8.get("supports", []),
+                "favorable_support": env8.get("favorable_support", []),
                 "market_structure": env8.get("market_structure", []),
                 "counter_evidence": env8.get("counter_evidence", []),
                 "hype_risks": env8.get("hype_risks", []),
                 "unresolved": env8.get("unresolved", []),
             },
-            "evidence_refs": env8.get("evidence_refs", []),
-            "upstream_fingerprints": env8.get("upstream_fingerprints", []),
+            # traceability: envelope TOP-LEVEL fields, never findings
+            "evidence_refs": env8_env.get("evidence_refs", []),
+            "upstream_fingerprints": env8_env.get("upstream_fingerprints", []),
         })
     gap_summary: dict[str, int] = {}
     for g in chain_out.get("gap_backlog", []):

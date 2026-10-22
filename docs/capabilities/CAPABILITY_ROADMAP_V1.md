@@ -117,7 +117,16 @@ cap-chain-smoke --theme liquid_cooling --cases <3 子节点> --as-of 2026-10-22
 
 **验收烟测**：`cap-chain-smoke --theme <id> --theme-db --baseline-dir ... --workbench-dir ...`；ai_power 25 / humanoid 3 / semi 6 去重缺口。
 
-## 十一、边界
+## 十一、R1 第三批 — CAP-09 工作台入口 + CAP-07 增删改 + CAP-03 DB 读层（2026-10-22）
+
+- **CAP-09 索引修正**：五桶从 `env8["findings"]` 取，`evidence_refs`/`upstream_fingerprints` 从 ResearchEnvelope 顶层取；`run_theme_chain` 顺序改为「先完成 CAP-03 主题信封替换+全部 gap 汇总，再写最终 index」；新增索引↔结果一致性契约测试（五桶/证据引用/指纹/节点覆盖/缺口数）
+- **CAP-07 增删改 diff**：`baseline.py` 支持 added/removed/changed 三类比较，覆盖 claim、公司经济事实（revenue/delivery/order）、evidence_refs、node_verdict、cap_statuses；同内容重跑不追加版本（`deduped=True`），append-only 历史保留；写入走 `atomic_write_json` 原子替换
+- **CAP-03 DB 读层实测**：`THEME_RESEARCH_READ_SOURCE=db` 真实只读 PostgreSQL smoke——ai_power 读 13 节点；`compare` 模式 DB↔artifact diff count=0；公司映射 `reviewed` 状态可见（002837/002364/300870/002335 均 reviewed，confidence 0.94）；DB 共 25 个权威主题（含 semiconductor_manufacturing_equipment_value_chain_v1）；主题历史 PIT 不可确认时保留 `pit_note` 不确定性标记
+- **CAP-09 Dashboard 入口**：`/research/capabilities` 只读页面（`CapabilitiesWorkbenchPage` + `/api/research/capabilities/workbench[/{theme}]`）——主题→节点展开→五桶综合研判→公司经济格→证据引用/上游指纹→DATA/CAP 去重缺口；三主题浏览验证截图存 `docs/capabilities/screenshots/cap09_workbench_*.png`
+
+**验收实测**（见 `r1_smoke_*` + 截图）：ai_power 4 节点/21 缺口；humanoid 1 节点/3 缺口（`nc_vision_hype` 正确归炒作风险）；semi_equipment 1 节点/6 缺口；同内容重跑 state_changed=False、版本不追加；变更场景 added=5/removed=2/changed=5。
+
+## 十二、边界
 
 - research_only：`used_for_signal=False` / `used_for_admission=False` 全链路透传；
 - 不重建已稳定基础设施（CAP-01/02 引擎、dashboard、StrategyLab 全部复用）；

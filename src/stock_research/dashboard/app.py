@@ -1225,6 +1225,19 @@ def create_app() -> FastAPI:
     def company_intelligence_dossiers():
         return list_company_intelligence_dossiers()
 
+    @app.get("/api/research/capabilities/workbench")
+    def capabilities_workbench_themes():
+        from stock_research.dashboard.capabilities import list_workbench_themes
+        return list_workbench_themes()
+
+    @app.get("/api/research/capabilities/workbench/{theme_id}")
+    def capabilities_workbench_index(theme_id: str):
+        from stock_research.dashboard.capabilities import load_workbench_index
+        doc = load_workbench_index(theme_id)
+        if doc is None:
+            raise HTTPException(status_code=404, detail="workbench_index_not_found")
+        return doc
+
     @app.get("/api/research/company-intelligence/stocks/{stock_code}/dossier")
     def company_intelligence_dossier(stock_code: str):
         try:

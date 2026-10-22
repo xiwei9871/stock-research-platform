@@ -172,12 +172,13 @@ def run_theme_chain(
             p = m["path"] if isinstance(m, dict) else m
             if p not in case_paths:
                 case_paths.append(p)
+    # Inner run must NOT write the index yet — the CAP-03 envelope and gap
+    # backlog are finalized here first, THEN the workbench index reflects
+    # the final research state.
     out = run_research_chain(
         theme_id, case_paths, dossier_dir, as_of, run_id,
-        baseline_dir=baseline_dir, workbench_dir=workbench_dir,
+        baseline_dir=baseline_dir, workbench_dir=None,
     )
-    # Replace the case-list CAP-03 envelope with the theme-driven one; merge
-    # its gap backlog entries.
     out["envelopes"]["CAP-03"] = env3.to_dict()
     for g in env3.data_gaps:
         out["gap_backlog"].append({
@@ -185,4 +186,6 @@ def run_theme_chain(
             "owner": g.owner, "note": g.note,
             "source_capabilities": ["CAP-03"],
         })
+    if workbench_dir:
+        out["workbench_index"] = write_workbench_index(out, workbench_dir)
     return out

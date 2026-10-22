@@ -95,22 +95,36 @@ def test_cap07_baseline_semantics(tmp_path):
     no_base = cap07_changes("n1", snap_v1, None, AS_OF, RUN_ID)
     assert no_base.status == "unknown"
     assert no_base.data_gaps[0].owner == "CAP-07"
-    # 版本化保存
+    # 版本化保存；同内容重跑不追加（deduped）
     r1 = save_baseline(store, "n1", snap_v1)
     assert r1["version"] == 1
-    save_baseline(store, "n1", snap_v1)
-    assert len(load_baselines(store, "n1")) == 2
+    r_dup = save_baseline(store, "n1", snap_v1)
+    assert r_dup.get("deduped") is True
+    assert len(load_baselines(store, "n1")) == 1
     # 同内容 diff → state_changed False
     same = cap07_changes("n1", snap_v1, load_baselines(store, "n1"), AS_OF, RUN_ID)
     assert same.findings["state_changed"] is False
-    # verdict 变化 → 可解释 change 条目
-    snap_v2 = {**snap_v1, "claims": {"c1": {"verdict": "confirmed"}},
+    # 增删改三类：claim 变更 + evidence 新增/删除
+    snap_v2 = {**snap_v1,
+               "claims": {"c1": {"verdict": "confirmed"},
+                          "c_new": {"verdict": "partially_supported"}},
+               "evidence_refs": ["e1", "e2"],
                "dossier_fingerprint": "fp_b"}
     diff = cap07_changes("n1", snap_v2, load_baselines(store, "n1"), AS_OF, RUN_ID)
     assert diff.findings["state_changed"] is True
     ch = diff.findings["changes"]
-    assert any(c["field"] == "claim:c1" and c["to"] == "confirmed" for c in ch)
-    assert diff.findings["baseline_version"] == 2
+    assert any(c["kind"] == "changed" and c["field"] == "claim:c1"
+               and c["to"] == "confirmed" for c in ch)
+    assert any(c["kind"] == "added" and c["field"] == "claim:c_new" for c in ch)
+    assert any(c["kind"] == "added" and c["field"].startswith("evidence_ref:") for c in ch)
+    assert diff.findings["baseline_version"] == 1
+    # 变更后追加为 v2
+    r2 = save_baseline(store, "n1", snap_v2)
+    assert r2["version"] == 2
+    # 删除类：evidence_refs 清空 → removed
+    snap_v3 = {**snap_v2, "evidence_refs": []}
+    diff3 = cap07_changes("n1", snap_v3, load_baselines(store, "n1"), AS_OF, RUN_ID)
+    assert any(c["kind"] == "removed" for c in diff3.findings["changes"])
 
 
 def test_cap10_isolation():
@@ -274,6 +288,37 @@ def test_cap03_theme_db_orchestration():
     cov_tasks = [t for t in f["research_tasks"]
                  if t.get("task_type") == "coverage_gap"]
     assert any(t["subject_id"] == "hvdc_power" for t in cov_tasks)
+
+
+def test_workbench_index_consistency(tmp_path):
+    """索引=最终研究结果：五桶/证据引用/指纹/覆盖状态/缺口数一致。"""
+    from stock_research.capabilities.pipeline import run_theme_chain
+    wb = str(tmp_path / "wb")
+    out = run_theme_chain(
+        "ai_power_value_capture_v1", DOSSIER_DIR, AS_OF, RUN_ID,
+        baseline_dir=str(tmp_path / "b"), workbench_dir=wb)
+    import json
+    idx = json.loads(
+        open(f"{wb}/ai_power_value_capture_v1/index.json").read())
+    assert idx["theme_id"] == "ai_power_value_capture_v1"
+    # 每节点五桶齐全 + 顶层证据引用/指纹（非 findings 误取）
+    for n in idx["nodes"]:
+        for b in ("favorable_support", "market_structure",
+                  "counter_evidence", "hype_risks", "unresolved"):
+            assert b in n["synthesis"], (n["node_id"], b)
+        assert isinstance(n["evidence_refs"], list)
+        assert len(n["upstream_fingerprints"]) == 4
+        env8 = out["per_node"][n["node_id"]]["CAP-08"]
+        assert n["evidence_refs"] == env8["evidence_refs"]
+        assert n["upstream_fingerprints"] == env8["upstream_fingerprints"]
+        assert n["node_verdict"] == \
+            out["per_node"][n["node_id"]]["CAP-04"]["findings"]["node_verdict"]
+    # 索引缺口数 == 最终 backlog（含 cap03 主题读层缺口合并后）
+    assert sum(idx["gap_summary"].values()) == len(idx["gap_backlog"]) \
+        == len(out["gap_backlog"])
+    # CAP-03 信封必须是主题库版本（带 read_source），不是 case 列表版
+    assert out["envelopes"]["CAP-03"]["findings"].get("read_source") in {
+        "artifact", "db", "compare"}
 
 
 def test_gap_backlog_deduped_with_owners():
