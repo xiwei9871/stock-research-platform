@@ -101,11 +101,9 @@
     },
     {
       "claim_id": "nc_cert_barrier",
-      "claim_text": "客户认证周期是否构成进入壁垒",
+      "claim_text": "客户认证周期是否构成进入壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
       "claim_role": "entry_barrier",
-      "evidence_ids": [
-        "e_002837_intel_cdu"
-      ],
+      "evidence_ids": [],
       "dimension": "certification_barrier"
     },
     {
@@ -113,7 +111,7 @@
       "claim_text": "是否存在概念关联成分",
       "claim_role": "hype",
       "evidence_ids": [],
-      "dimension": "hype_component"
+      "dimension": "hype_only"
     }
   ],
   "input_snapshot": {

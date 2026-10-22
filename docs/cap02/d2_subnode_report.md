@@ -10,9 +10,9 @@
 
 | 子节点 | verdict | 格局论点 | 认证壁垒 | 供给约束 |
 |---|---|---|---|---|
-| CDU整机及系统集成 | bottleneck_unverified | partially_supported(2) | partially_supported(1) | unknown |
-| 冷板/Manifold/快接头 | bottleneck_unverified | partially_supported(2) | partially_supported(1) | unknown |
-| 屏蔽泵及循环组件 | bottleneck_unverified | partially_supported(1) | partially_supported(1) | unknown |
+| CDU整机及系统集成 | bottleneck_unverified | partially_supported(2) | **needs_evidence/unknown**(产品认证不计壁垒) | unknown |
+| 冷板/Manifold/快接头 | bottleneck_unverified | partially_supported(2) | **needs_evidence/unknown**(同上) | unknown |
+| 屏蔽泵及循环组件 | bottleneck_unverified | partially_supported(1) | **needs_evidence/unknown**(同上) | unknown |
 
 父节点公司画像未自动升级：各子节点独立绑定 node-scope 证据；三花未出现在任何子节点成员（无产品级证据）；申菱板块客户关系（dc_liquid_cooling 归因）未进入 cdu_system 子节点。
 
@@ -54,7 +54,8 @@
 
 ## 五、可信覆盖率与缺口
 
-- 覆盖率（accepted 事实/六维格子）：大元 4/6（缺收入、毛利）；英维克 3/6（技术、认证、部分交付表述；缺收入、毛利、可量化交付）；申菱 1/6（仅技术序列）
+- 覆盖率（六维有≥1条 accepted/verified 事实，口径统一；同一份年报支持多事实仍计一份来源）：**大元 3/6**（技术/认证[产品级]/交付；缺收入、毛利、竞争优势）；英维克 3/6（技术/认证/交付表述级；缺收入、毛利、竞争优势）；申菱 1/6（仅技术序列）
+- 子节点 accepted 节点级证据：CDU 3 / 冷板 3 / 泵 2（+1 pending 外资叙述）——一份来源的多条事实不重复计数
 - 三子节点 accepted 节点级证据：CDU 3 / 冷板 3 / 泵 2（+1 pending 外资叙述）
 - **未解决关键问题**：①液冷各子环节收入/毛利全线未披露；②大元液冷金额与单价；③泵环节除大元外国内第二家验证供应商缺位（外资不在 A 股口径）；④申菱产品级客户认证；⑤英维克 CDU/冷板交付量级
 

@@ -84,11 +84,9 @@
     },
     {
       "claim_id": "nc_cert_barrier",
-      "claim_text": "UL等认证及大批量交付壁垒",
+      "claim_text": "UL等认证及大批量交付壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
       "claim_role": "entry_barrier",
-      "evidence_ids": [
-        "e_603757_ul"
-      ],
+      "evidence_ids": [],
       "dimension": "certification_barrier"
     },
     {
@@ -96,7 +94,7 @@
       "claim_text": "概念关联",
       "claim_role": "hype",
       "evidence_ids": [],
-      "dimension": "hype_component"
+      "dimension": "hype_only"
     }
   ],
   "input_snapshot": {

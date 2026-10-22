@@ -579,3 +579,60 @@ def test_sanhua_rival_source_is_internal_summary():
     t3 = load_t3_records("docs/cap02/t3/t3_records.json")
     rec = [r for r in t3["rival_supply"] if r.record_id == "rival_002050_sanhua"][0]
     assert rec.source_type == "internal_summary" and rec.review_status == "lead_only"
+
+
+# ---------- DATA-D2 子节点收口 ----------
+
+SUBNODE_CASES = [
+    "docs/cap02/cases/liquid_cooling_cdu_system_node.json",
+    "docs/cap02/cases/liquid_cooling_coldplate_manifold_node.json",
+    "docs/cap02/cases/liquid_cooling_pump_components_node.json",
+]
+
+
+def test_subnode_cases_loadable_with_valid_dimensions():
+    import json
+    from stock_research.chain_bottleneck import NODE_ASPECTS, load_node_case
+    for f in SUBNODE_CASES:
+        case = load_node_case(f)
+        assert case["node_claims"], f
+        for c in case["node_claims"]:
+            assert c.dimension in (*NODE_ASPECTS.keys(), "hype_only")
+
+
+def test_subnode_hype_dimension_named_hype_only():
+    import json
+    for f in SUBNODE_CASES:
+        spec = json.loads(open(f).read())
+        hype = [c for c in spec["node_claims"] if c["claim_id"] == "nc_hype"]
+        assert hype and hype[0]["dimension"] == "hype_only"
+
+
+def test_product_cert_does_not_prove_cert_barrier():
+    """产品通过认证不构成'认证周期/成本/失效率'壁垒证据。"""
+    import json
+    for f in SUBNODE_CASES:
+        spec = json.loads(open(f).read())
+        cb = [c for c in spec["node_claims"] if c["dimension"] == "certification_barrier"][0]
+        assert cb["evidence_ids"] == []  # 无壁垒级证据绑定 → needs_evidence/unknown
+
+
+def test_subnode_product_lines_isolated():
+    """三条子线 T3 归因互不透：大元泵记录只在 pump_components。"""
+    from stock_research.chain_t3_evidence import load_t3_records, segment_records_for
+    t3 = load_t3_records("docs/cap02/t3/t3_records.json")
+    dy_cv = [r for r in t3["customer_validation"] if r.stock_code == "603757"]
+    assert dy_cv and all(r.product_line == "pump_components" for r in dy_cv)
+    # cdu 子节点过滤不到泵组件记录
+    assert not [r for r in dy_cv if r.product_line in {"cdu_system"}]
+
+
+def test_same_source_facets_not_independent_confirmation():
+    """Intel 同源冷板/CDU 切面不可计为两家独立确认。"""
+    from stock_research.chain_t3_evidence import load_t3_records
+    t3 = load_t3_records("docs/cap02/t3/t3_records.json")
+    cold = [r for r in t3["customer_validation"]
+            if r.product_line == "coldplate_manifold" and r.review_status == "accepted"
+            and r.stock_code == "002837"]
+    srcs = {(r.source_id, r.published_at) for r in cold}
+    assert len(srcs) == 1  # 同一来源切面，非多源
