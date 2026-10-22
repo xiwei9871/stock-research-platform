@@ -18,7 +18,7 @@ from stock_research.chain_t3_evidence import (
 )
 from stock_research.capabilities.contract import (
     DataGap, ResearchEnvelope, make_envelope,
-    GAP_MISSING_SOURCE, GAP_UNPARSED,
+    GAP_ATTRIBUTION_UNKNOWN, GAP_MISSING_SOURCE, GAP_UNPARSED,
 )
 
 
@@ -102,6 +102,9 @@ def _claims_by_role(claims: list[dict[str, Any]], roles: set[str],
                 "claim_id": c["claim_id"], "dimension": c.get("dimension"),
                 "claim_role": role, "verdict": c.get("verdict"),
                 "claim_text": c.get("claim_text"),
+                "evidence_ids": list(c.get("evidence_ids") or ()),
+                "support_count": c.get("support_count", 0),
+                "refute_count": c.get("refute_count", 0),
             })
     return out
 
@@ -174,11 +177,13 @@ def _index_cases(case_dir: str | Path) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _match_cases(theme_node_id: str, case_index: dict[str, dict[str, Any]]) -> list[str]:
-    """Theme node → case paths.  Deterministic linkage:
-    node_id equality, ``derived_from`` lineage, or sub-node prefix."""
-    out = []
-    for nid, meta in case_index.items():
+def _match_case_meta(theme_node_id: str,
+                     case_index: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Theme node → case metadata.  Deterministic linkage:
+    explicit theme_node_id > node_id equality > derived_from lineage >
+    sub-node prefix."""
+    return [
+        meta for nid, meta in case_index.items()
         if (
             meta.get("theme_node_id") == theme_node_id
             or nid == theme_node_id
@@ -186,9 +191,8 @@ def _match_cases(theme_node_id: str, case_index: dict[str, dict[str, Any]]) -> l
             or nid.startswith(f"{theme_node_id}_")
             or theme_node_id in (meta["derived_from"] or "")
             or nid.replace("ai_power_", "") == theme_node_id
-        ):
-            out.append(meta["path"])
-    return out
+        )
+    ]
 
 
 def cap03_orchestrate_theme(
@@ -199,86 +203,129 @@ def cap03_orchestrate_theme(
     artifact_dir: str | None = None,
     mapping_dir: str | None = None,
 ) -> ResearchEnvelope:
-    """R1: orchestrate from the theme DB — theme → nodes (scored) → company
-    mappings → case-backed runnable tasks.  Unmatched nodes surface as
-    node_case gaps; never silently skipped."""
-    from stock_research.theme_decomposition import load_theme_package
-    from stock_research.theme_company_mapping import (
-        load_theme_company_mapping_package,
+    """R1: orchestrate from the theme read layer — reuses
+    ``dashboard.theme_research`` (PostgreSQL ``db`` / ``artifact`` /
+    ``compare`` per THEME_RESEARCH_READ_SOURCE, artifact as controlled
+    fallback).  Unreviewed company mappings generate pending tasks, never
+    confirmed relations.  Nodes without cases become CAP-02 coverage tasks
+    (capability gap, not an external DATA gap)."""
+    from stock_research.dashboard.theme_research import (
+        configured_theme_research_read_source,
+        list_theme_research_companies,
+        list_theme_research_nodes,
     )
 
-    gaps: list[DataGap] = []
+    requested_source = configured_theme_research_read_source()
+    effective_source = requested_source
+    source_note = ""
     try:
-        pkg = load_theme_package(artifact_dir)
-        theme_nodes = [n for n in pkg["nodes"] if n["theme_id"] == theme_id]
+        node_rows = list_theme_research_nodes(
+            theme_id, read_source=requested_source)["items"]
+        company_rows = list_theme_research_companies(
+            theme_id, read_source=requested_source)["items"]
     except Exception as exc:
+        # Controlled fallback: artifact read when the configured source
+        # (e.g. db) is unreachable — never silent.
+        effective_source = "artifact"
+        source_note = f"{requested_source}_unavailable:{exc}"
+        try:
+            node_rows = list_theme_research_nodes(
+                theme_id, read_source="artifact")["items"]
+            company_rows = list_theme_research_companies(
+                theme_id, read_source="artifact")["items"]
+        except Exception as exc2:
+            return make_envelope(
+                "CAP-03", "theme", theme_id, as_of, run_id, status="unknown",
+                findings={"error": f"theme_read:{exc2}",
+                          "requested_source": requested_source},
+                data_gaps=[DataGap(kind=GAP_MISSING_SOURCE,
+                                   item=f"theme_package:{theme_id}",
+                                   note=str(exc2))],
+            )
+    if not node_rows:
         return make_envelope(
             "CAP-03", "theme", theme_id, as_of, run_id, status="unknown",
-            findings={"error": f"theme_package:{exc}"},
-            data_gaps=[DataGap(kind=GAP_MISSING_SOURCE,
-                               item=f"theme_package:{theme_id}",
-                               note=str(exc))],
-        )
-    if not theme_nodes:
-        return make_envelope(
-            "CAP-03", "theme", theme_id, as_of, run_id, status="unknown",
-            findings={"error": f"theme {theme_id} not found in package"},
+            findings={"error": f"theme {theme_id} not found",
+                      "read_source": effective_source},
             data_gaps=[DataGap(kind=GAP_MISSING_SOURCE, item=f"theme:{theme_id}")],
         )
 
+    # as_of/PIT: theme artifacts carry no intrinsic as_of — the envelope
+    # records the package provenance and treats rows as a latest snapshot;
+    # historical PIT replay requires a versioned package (gap noted).
+    pit_note = "theme package is a snapshot without intrinsic as_of; rows read as latest"
     mappings: dict[str, list[dict[str, Any]]] = {}
-    try:
-        mpkg = load_theme_company_mapping_package(mapping_dir)
-        for m in mpkg["company_mappings"]:
-            if m["theme_id"] == theme_id:
-                mappings.setdefault(m["mapped_node_id"], []).append(m)
-    except Exception:
-        mappings = {}
+    for c in company_rows:
+        mappings.setdefault(c["mapped_node_id"], []).append(c)
 
     case_index = _index_cases(case_dir)
     nodes: list[dict[str, Any]] = []
     tasks: list[dict[str, str]] = []
-    for n in sorted(
-        theme_nodes,
-        key=lambda x: (-(x.get("bottleneck_score") or 0),
-                       -(x.get("value_capture_score") or 0), x["node_id"]),
-    ):
+    coverage_gaps: list[str] = []
+    for n in node_rows:
         nid = n["node_id"]
-        case_paths = _match_cases(nid, case_index)
+        case_metas = _match_case_meta(nid, case_index)
+        case_paths = [m["path"] for m in case_metas]
         comps = mappings.get(nid, [])
+        reviewed = [c for c in comps
+                    if c.get("review_status") in {"approved", "reviewed"}]
+        pending = [c for c in comps
+                   if c.get("review_status") not in {"approved", "reviewed"}]
         nodes.append({
             "node_id": nid, "name": n.get("node_name"),
+            "priority_score": n.get("priority_score"),
             "bottleneck_score": n.get("bottleneck_score"),
             "value_capture_score": n.get("value_capture_score"),
-            "evidence_strength": n.get("evidence_strength"),
             "node_review_status": n.get("node_review_status"),
-            "runnable_cases": case_paths,
-            "mapped_companies": [c["company_code"] for c in comps],
+            # lineage: a sub-node case derived_from a parent is the same
+            # evidence, not independent confirmation
+            "runnable_cases": [
+                {"path": m["path"], "lineage": m.get("derived_from") or None}
+                for m in _match_case_meta(nid, case_index)
+            ],
+            "mapped_companies": [
+                {"company_code": c["company_code"],
+                 "review_status": c.get("review_status") or "unknown",
+                 "mapping_type": c.get("mapping_type")}
+                for c in comps
+            ],
         })
         if case_paths:
             tasks.append({"subject_type": "node", "subject_id": nid,
                           "capability": "CAP-02",
                           "cases": ",".join(case_paths)})
         else:
-            gaps.append(DataGap(kind=GAP_MISSING_SOURCE,
-                                item=f"node_case:{nid}",
-                                note="theme node has no CAP-02 case file"))
-        for c in comps:
+            # capability coverage task — owned by CAP-02, not a DATA gap
+            coverage_gaps.append(nid)
+            tasks.append({"subject_type": "node", "subject_id": nid,
+                          "capability": "CAP-02",
+                          "task_type": "coverage_gap"})
+        for c in reviewed:
             tasks.append({"subject_type": "company",
                           "subject_id": c["company_code"],
                           "capability": "CAP-01", "node_id": nid})
+        for c in pending:
+            tasks.append({"subject_type": "company",
+                          "subject_id": c["company_code"],
+                          "capability": "CAP-01", "node_id": nid,
+                          "task_type": "pending_mapping_review"})
     status = "ok" if any(n["runnable_cases"] for n in nodes) else "partial"
     return make_envelope(
         "CAP-03", "theme", theme_id, as_of, run_id, status=status,
         findings={
             "theme_id": theme_id,
-            "node_count": len(theme_nodes),
+            "read_source": effective_source,
+            "requested_source": requested_source,
+            "source_note": source_note,
+            "pit_note": pit_note,
+            "node_count": len(node_rows),
             "nodes_with_cases": sum(1 for n in nodes if n["runnable_cases"]),
+            "coverage_gap_nodes": coverage_gaps,
             "nodes": nodes,
             "research_tasks": tasks,
             "task_count": len(tasks),
         },
-        data_gaps=gaps,
+        uncertainties=(source_note,) if source_note else (),
     )
 
 
@@ -309,6 +356,16 @@ def cap04_tech_supply(
             "node_verdict": dossier["conclusion"]["node_verdict"],
             "views": views,
             "claim_count": len(claims),
+            # claim → evidence → source traceability for CAP-08/09
+            "evidence_index": {
+                r["evidence_id"]: {
+                    "source_id": r.get("source_id"),
+                    "direction": r.get("direction"),
+                    "aspect": r.get("aspect"),
+                    "review_status": r.get("review_status"),
+                }
+                for r in dossier.get("evidence_matrix", [])
+            },
         },
         evidence_refs=tuple(
             eid for c in claims for eid in c.get("evidence_ids", ())
@@ -334,9 +391,29 @@ def cap05_value_economics(
         rev_state = _cell_state(row.get("revenue_profit"))
         ord_state = _cell_state(row.get("verified_orders"))
         del_state = _cell_state(row.get("validation_delivery"))
+        # C: consume precise product-line revenue & margin from the matrix
+        # cell facts — only exact product_line scope counts; broader segment
+        # numbers never flow into the sub-node line.
+        rev_cell = row.get("revenue_profit")
+        facts = (rev_cell or {}).get("facts") or []
+        exact = [f for f in facts if f.get("scope") == "product_line"]
+        broader = [f for f in facts
+                   if f.get("scope") in {"segment", "industry_board", "company_total"}]
+        if exact:
+            margin_state = "disclosed" if any(
+                f.get("gross_margin") is not None for f in exact) else "unknown"
+        elif broader:
+            margin_state = "segment_level"  # 板块口径，不下钻产品线
+        else:
+            margin_state = "unknown"
         economics[code] = {
             "revenue_state": rev_state,
-            "margin_state": "unknown",  # 分产品毛利无独立矩阵列 — 如实标注
+            "revenue_value": exact[0]["revenue"] if exact else None,
+            "margin_state": margin_state,
+            "margin_value": (
+                next((f["gross_margin"] for f in exact
+                      if f.get("gross_margin") is not None), None)
+            ),
             "delivery_state": del_state,
             "order_state": ord_state,
             # P0-2: R0 stays conservative.  disclosed_broader_scope only proves
@@ -356,7 +433,13 @@ def cap05_value_economics(
         elif rev_state in {"missing", "undisclosed"}:
             gaps.append(DataGap(kind=GAP_MISSING_SOURCE, item=f"product_revenue:{code}",
                                 note=f"rev_state={rev_state}"))
-        gaps.append(DataGap(kind=GAP_MISSING_SOURCE, item=f"product_gross_margin:{code}"))
+        if margin_state == "unknown":
+            gaps.append(DataGap(kind=GAP_MISSING_SOURCE,
+                                item=f"product_gross_margin:{code}"))
+        elif margin_state == "segment_level":
+            gaps.append(DataGap(kind=GAP_ATTRIBUTION_UNKNOWN,
+                                item=f"product_gross_margin:{code}",
+                                note="segment margin exists, product line unattributed"))
         if ord_state in {"missing", "none_seen"}:
             gaps.append(DataGap(kind=GAP_MISSING_SOURCE, item=f"verifiable_order:{code}"))
     status = "ok" if economics else "not_evaluated"
@@ -405,32 +488,37 @@ def cap06_competition(
 
 
 def cap07_changes(
-    subject_id: str, current_fingerprint: str,
-    baseline_fingerprints: Iterable[str] | None,
+    subject_id: str, current_snapshot: dict[str, Any],
+    baseline_snapshots: Iterable[dict[str, Any]] | None,
     as_of: str, run_id: str,
 ) -> ResearchEnvelope:
-    """Dynamic tracking: fingerprint diff vs baseline (R0)."""
-    base = list(baseline_fingerprints or [])
+    """Dynamic tracking: explainable content diff vs versioned baselines
+    (verdicts / claims / economics / cap-statuses), not just fingerprints."""
+    from stock_research.capabilities.baseline import diff_baselines
+
+    base = list(baseline_snapshots or [])
     if not base:
         return make_envelope(
             "CAP-07", "node", subject_id, as_of, run_id,
             status="unknown",
-            findings={"note": "no baseline fingerprint — cannot diff"},
+            findings={"note": "no baseline snapshot — first run seeds baseline"},
             data_gaps=[DataGap(kind=GAP_MISSING_SOURCE,
                                item=f"baseline_fingerprint:{subject_id}",
                                owner="CAP-07",
                                note="capability run-state, not external data")],
         )
-    changed = current_fingerprint not in base
+    diff = diff_baselines(current_snapshot, base)
     return make_envelope(
         "CAP-07", "node", subject_id, as_of, run_id,
         status="ok",
         findings={
-            "state_changed": changed,
-            "current_fingerprint": current_fingerprint,
+            **diff,
+            "current_fingerprint": current_snapshot.get("dossier_fingerprint"),
             "baseline_count": len(base),
         },
-        evidence_refs=[current_fingerprint],
+        evidence_refs=tuple(
+            c["field"] for c in diff.get("changes", [])[:20]
+        ),
     )
 
 
@@ -439,54 +527,84 @@ def cap08_synthesis(
     as_of: str, run_id: str,
 ) -> ResearchEnvelope:
     """Comprehensive verdict: supports / refutes / gaps / priorities (R0)."""
-    # R1: three-way evidence split by claim_role.
-    #   value_supports  — scarcity / non_substitutability / entry_barrier
-    #   refutes         — confirmed market_structure = multi-supplier roster
-    #                     evidence AGAINST a scarcity narrative
-    #   hype_risks      — supported hype claims are RISK evidence, never
-    #                     positive value support
-    # P1: every bucket dedupes by claim_id.
-    supports: dict[str, str] = {}
-    refutes: dict[str, str] = {}
-    hype_risks: dict[str, str] = {}
+    # R1: five-bucket evidence split.
+    #   favorable_support — supply_scarcity / non_substitutability /
+    #                       entry_barrier claims with positive verdicts
+    #   market_structure  — descriptive roster facts (never auto-refutes)
+    #   counter_evidence  — claims actually REFUTED (bound hypothesis +
+    #                       qualified opposing evidence); "several suppliers
+    #                       exist" alone never becomes counter evidence
+    #   hype_risks        — supported hype claims = risk evidence
+    #   unresolved        — needs_evidence / unknown claims
+    # Every entry carries claim + evidence_ids + source_ids traceability;
+    # upstream fingerprints are provenance, not a substitute for evidence.
+    favorable: dict[str, dict[str, Any]] = {}
+    structure: dict[str, dict[str, Any]] = {}
+    counter: dict[str, dict[str, Any]] = {}
+    hype_risks: dict[str, dict[str, Any]] = {}
+    unresolved: dict[str, dict[str, Any]] = {}
     uncertainties: list[str] = []
     gaps: list[DataGap] = []
+    evidence_refs: set[str] = set()
     _POS = {"confirmed", "partially_supported"}
     for env in upstream:
+        evidence_index = env.findings.get("evidence_index") or {}
         for view in (env.findings.get("views") or {}).values():
             for c in view:
-                if c.get("verdict") not in _POS:
-                    continue
                 cid = c.get("claim_id") or "?"
                 role = c.get("claim_role") or "market_structure"
-                entry = f"{env.capability_id}:{cid}={c['verdict']}"
-                if role == "hype":
-                    hype_risks.setdefault(cid, entry)
-                elif role == "market_structure":
-                    refutes.setdefault(cid, entry)
+                verdict = c.get("verdict")
+                eids = list(c.get("evidence_ids") or ())
+                sids = sorted({
+                    (evidence_index.get(e) or {}).get("source_id")
+                    for e in eids if evidence_index.get(e)
+                } - {None})
+                entry = {
+                    "claim_id": cid, "role": role, "verdict": verdict,
+                    "hypothesis": c.get("claim_text"),
+                    "evidence_ids": eids, "source_ids": sids,
+                    "capability": env.capability_id,
+                }
+                if verdict in _POS:
+                    if role == "hype":
+                        hype_risks.setdefault(cid, entry)
+                    elif role == "market_structure":
+                        structure.setdefault(cid, entry)
+                    else:
+                        favorable.setdefault(cid, entry)
+                elif verdict == "refuted":
+                    counter.setdefault(cid, entry)
                 else:
-                    supports.setdefault(cid, entry)
+                    unresolved.setdefault(cid, entry)
+                evidence_refs.update(eids)
         for code, e in (env.findings.get("economics") or {}).items():
             if e.get("value_capture_verdict") == "verified":
-                supports.setdefault(
-                    f"vc:{code}", f"{env.capability_id}:{code}:value_capture")
+                favorable.setdefault(f"vc:{code}", {
+                    "claim_id": f"value_capture:{code}", "role": "economics",
+                    "verdict": "verified", "hypothesis": "value capture",
+                    "evidence_ids": [], "source_ids": [],
+                    "capability": env.capability_id,
+                })
         uncertainties.extend(f"{env.capability_id}:{u}" for u in env.uncertainties)
         gaps.extend(env.data_gaps)
-    status = "ok" if (supports or refutes or hype_risks) else (
+    status = "ok" if (favorable or structure or counter or hype_risks) else (
         "partial" if upstream else "unknown")
     return make_envelope(
         "CAP-08", "node", subject_id, as_of, run_id, status=status,
         findings={
-            "supports": list(supports.values()),
-            "support_claim_count": len(supports),
-            "refutes": list(refutes.values()),
+            "favorable_support": list(favorable.values()),
+            "market_structure": list(structure.values()),
+            "counter_evidence": list(counter.values()),
             "hype_risks": list(hype_risks.values()),
+            "unresolved": list(unresolved.values()),
+            "support_claim_count": len(favorable),
             "uncertainties": uncertainties,
             "next_verification": sorted({g.item for g in gaps})[:10],
             "research_priority": [
                 g.item for g in gaps if g.kind == GAP_MISSING_SOURCE
             ][:10],
         },
+        evidence_refs=sorted(evidence_refs),
         data_gaps=gaps,
         upstream_fingerprints=[e.fingerprint for e in upstream],
     )

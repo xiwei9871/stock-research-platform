@@ -107,7 +107,17 @@ cap-chain-smoke --theme liquid_cooling --cases <3 子节点> --as-of 2026-10-22
 
 **三主题 smoke**（`r1_smoke_*.json`）：ai_power cap03 `ok`（4 case 自动发现，12 node_case 缺口）/ humanoid `ok`（head_vision 链接生效）/ semi_equipment（无主题包 → case 模式跑通）。
 
-## 十、边界
+## 十、R1 第二批（2026-10-22）
+
+- **CAP-08 五桶语义**：`favorable_support`（scarcity/non_sub/entry_barrier 正向）/ `market_structure`（描述性格局，**不自动反证稀缺**）/ `counter_evidence`（仅 claim verdict=`refuted` 的绑定假设反证）/ `hype_risks` / `unresolved`；每条带 claim_text+evidence_ids+source_ids 三级追溯；`upstream_fingerprints` 保留为溯源链而非证据替代
+- **CAP-03 读层**：复用 `dashboard.theme_research` 读层——`THEME_RESEARCH_READ_SOURCE`=db/artifact/compare，DB 不可达时受控回退 artifact 并记录 `requested_source/effective_source/source_note`；映射带 `review_status`（未审核→`pending_mapping_review` 任务）；`node_case` 缺失改记 `coverage_gap_nodes`（CAP-02 能力任务，非 DATA 缺口）；父子 case 带 lineage 标记（非独立证据）
+- **CAP-05 毛利消费**：`margin_state` = disclosed（product_line 精确）/ segment_level（仅板块口径，记 `attribution_unknown` gap）/ unknown；宽口径不窜入子线
+- **CAP-07 基线**：`capabilities/baseline.py` 版本化追加存储（`outputs/research/cap_baselines/`）+ 内容级 diff（node_verdict/claim verdict/econ 状态/cap 状态逐字段变化清单），非仅指纹
+- **CAP-09 工作台**：`capabilities/workbench.py` 生成 `outputs/research/cap_workbench/<theme>/index.json`——主题→节点→公司（dashboard 深链）→证据→缺口统一只读索引，复用现有 dashboard 链接约定
+
+**验收烟测**：`cap-chain-smoke --theme <id> --theme-db --baseline-dir ... --workbench-dir ...`；ai_power 25 / humanoid 3 / semi 6 去重缺口。
+
+## 十一、边界
 
 - research_only：`used_for_signal=False` / `used_for_admission=False` 全链路透传；
 - 不重建已稳定基础设施（CAP-01/02 引擎、dashboard、StrategyLab 全部复用）；

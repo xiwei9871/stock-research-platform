@@ -1,0 +1,790 @@
+{
+ "theme_id": "humanoid_robotics_head_to_toe_v1",
+ "as_of": "2026-10-22",
+ "run_id": "cap00-2026-10-22",
+ "envelopes": {
+  "CAP-03": {
+   "capability_id": "CAP-03",
+   "subject_type": "theme",
+   "subject_id": "humanoid_robotics_head_to_toe_v1",
+   "as_of": "2026-10-22",
+   "run_id": "cap00-2026-10-22",
+   "status": "ok",
+   "findings": {
+    "theme_id": "humanoid_robotics_head_to_toe_v1",
+    "read_source": "artifact",
+    "requested_source": "artifact",
+    "source_note": "",
+    "pit_note": "theme package is a snapshot without intrinsic as_of; rows read as latest",
+    "node_count": 21,
+    "nodes_with_cases": 1,
+    "coverage_gap_nodes": [
+     "planetary_roller_screw",
+     "harmonic_reducer",
+     "six_axis_force_sensor",
+     "arm_actuator",
+     "frameless_motor",
+     "brain_ai_compute",
+     "controller",
+     "hand_dexterous",
+     "torque_sensor",
+     "ankle_joint",
+     "hip_joint",
+     "knee_joint",
+     "bearing",
+     "encoder",
+     "tactile_sensor",
+     "battery_bms",
+     "wiring_harness",
+     "imu",
+     "lightweight_materials",
+     "torso_structure"
+    ],
+    "nodes": [
+     {
+      "node_id": "planetary_roller_screw",
+      "name": "Planetary Roller Screw",
+      "priority_score": 84.0,
+      "bottleneck_score": 5,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "harmonic_reducer",
+      "name": "Harmonic Reducer",
+      "priority_score": 82.0,
+      "bottleneck_score": 5,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "six_axis_force_sensor",
+      "name": "Six-Axis Force Sensor",
+      "priority_score": 80.0,
+      "bottleneck_score": 5,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "arm_actuator",
+      "name": "Arm Actuator",
+      "priority_score": 77.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "frameless_motor",
+      "name": "Frameless Motor",
+      "priority_score": 77.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "brain_ai_compute",
+      "name": "Brain AI Compute",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "controller",
+      "name": "Controller",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "hand_dexterous",
+      "name": "Dexterous Hand",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "torque_sensor",
+      "name": "Torque Sensor",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "ankle_joint",
+      "name": "Ankle Joint",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "hip_joint",
+      "name": "Hip Joint",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "knee_joint",
+      "name": "Knee Joint",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "bearing",
+      "name": "Bearing",
+      "priority_score": 67.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "encoder",
+      "name": "Encoder",
+      "priority_score": 67.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "tactile_sensor",
+      "name": "Tactile Sensor",
+      "priority_score": 67.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "head_vision",
+      "name": "Head Vision",
+      "priority_score": 58.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [
+       {
+        "path": "docs/cap02/cases/humanoid_vision_node.json",
+        "lineage": null
+       }
+      ],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "battery_bms",
+      "name": "Battery and BMS",
+      "priority_score": 56.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "wiring_harness",
+      "name": "Wiring Harness",
+      "priority_score": 52.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "imu",
+      "name": "IMU",
+      "priority_score": 47.0,
+      "bottleneck_score": 2,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "lightweight_materials",
+      "name": "Lightweight Materials",
+      "priority_score": 47.0,
+      "bottleneck_score": 2,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "torso_structure",
+      "name": "Torso Structure",
+      "priority_score": 47.0,
+      "bottleneck_score": 2,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     }
+    ],
+    "research_tasks": [
+     {
+      "subject_type": "node",
+      "subject_id": "planetary_roller_screw",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "harmonic_reducer",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "six_axis_force_sensor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "arm_actuator",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "frameless_motor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "brain_ai_compute",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "controller",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "hand_dexterous",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "torque_sensor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "ankle_joint",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "hip_joint",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "knee_joint",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "bearing",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "encoder",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "tactile_sensor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "head_vision",
+      "capability": "CAP-02",
+      "cases": "docs/cap02/cases/humanoid_vision_node.json"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "battery_bms",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "wiring_harness",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "imu",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "lightweight_materials",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "torso_structure",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     }
+    ],
+    "task_count": 21
+   },
+   "evidence_refs": [],
+   "uncertainties": [],
+   "data_gaps": [],
+   "fingerprint": "ffb6401ff59957658f1347ea107fafb913d80117b821e54fc1fbb59d5ddaa432",
+   "rule_version": "cap00-r0",
+   "research_only": true,
+   "used_for_signal": false,
+   "used_for_admission": false,
+   "upstream_fingerprints": []
+  }
+ },
+ "per_node": {
+  "humanoid_vision_sensing": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "needs_evidence",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_vision_capacity",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [
+       {
+        "claim_id": "nc_vision_process",
+        "dimension": "process_irreplaceability",
+        "claim_role": "non_substitutability",
+        "verdict": "unknown",
+        "claim_text": "机器人视觉感知工艺难以被替代",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "market_structure": [],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_vision_cert",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "主机厂视觉部件认证周期长构成壁垒",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       },
+       {
+        "claim_id": "nc_vision_perf",
+        "dimension": "performance_gap",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "节点内视觉方案间存在可量化性能差异",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_vision_hype",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "partially_supported",
+        "claim_text": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+        "evidence_ids": [
+         "n_ev_theme_score"
+        ],
+        "support_count": 1,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 5,
+     "evidence_index": {
+      "n_ev_yuejiang_lead": {
+       "source_id": "public_web_929553c10b516ee2",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "review_status": "lead_only"
+      },
+      "n_ev_aoopte_layout": {
+       "source_id": "ru_688686_5906",
+       "direction": "unclear",
+       "aspect": "capacity_constraint",
+       "review_status": "accepted"
+      },
+      "n_ev_theme_score": {
+       "source_id": "N_m1_theme_mapping",
+       "direction": "support",
+       "aspect": "hype_only",
+       "review_status": "accepted"
+      }
+     }
+    },
+    "evidence_refs": [
+     "n_ev_theme_score"
+    ],
+    "uncertainties": [
+     "nc_vision_capacity=unknown",
+     "nc_vision_process=unknown",
+     "nc_vision_cert=unknown",
+     "nc_vision_perf=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "13171a4bd8afd7aa34fd60a25d3bde0d1c8bda34f14a6bae29b5c7c10daf92dd",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "688686": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "pending_review",
+       "order_state": "pending_review",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
+      }
+     },
+     "member_count": 1
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688686",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688686",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "6778911561d178dc0bab9ee43721c448980a7158ce9af82839925eb3242ff1bb",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "13171a4bd8afd7aa34fd60a25d3bde0d1c8bda34f14a6bae29b5c7c10daf92dd"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "688686": {
+       "company_name": "奥普特",
+       "overall_verdict": "needs_evidence",
+       "tech_participation": "partially_supported",
+       "delivery": "pending_review",
+       "revenue": "missing",
+       "order": "pending_review",
+       "concept_only_risk": "high",
+       "moat_dimensions": {
+        "tech_moat": "partially_supported",
+        "competitive_advantage": null
+       }
+      }
+     },
+     "note": "component delivery ≠ full-system substitution; product cert ≠ customer cert"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "2d5908c33fe2446d2489bb044416ecfe91d7e32ae38fb7723e84c0c75f899695",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "13171a4bd8afd7aa34fd60a25d3bde0d1c8bda34f14a6bae29b5c7c10daf92dd",
+     "6778911561d178dc0bab9ee43721c448980a7158ce9af82839925eb3242ff1bb"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-22",
+    "status": "unknown",
+    "findings": {
+     "note": "no baseline snapshot — first run seeds baseline"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "baseline_fingerprint:humanoid_vision_sensing",
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
+     }
+    ],
+    "fingerprint": "00989e7a517827b2f43de4fbccfce5713f983a82d4465f4eba770b2df3f77d9b",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [],
+     "market_structure": [],
+     "counter_evidence": [],
+     "hype_risks": [
+      {
+       "claim_id": "nc_vision_hype",
+       "role": "hype",
+       "verdict": "partially_supported",
+       "hypothesis": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+       "evidence_ids": [
+        "n_ev_theme_score"
+       ],
+       "source_ids": [
+        "N_m1_theme_mapping"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "unresolved": [
+      {
+       "claim_id": "nc_vision_capacity",
+       "role": "supply_scarcity",
+       "verdict": "unknown",
+       "hypothesis": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_vision_process",
+       "role": "non_substitutability",
+       "verdict": "unknown",
+       "hypothesis": "机器人视觉感知工艺难以被替代",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_vision_cert",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "主机厂视觉部件认证周期长构成壁垒",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_vision_perf",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "节点内视觉方案间存在可量化性能差异",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "support_claim_count": 0,
+     "uncertainties": [
+      "CAP-04:nc_vision_capacity=unknown",
+      "CAP-04:nc_vision_process=unknown",
+      "CAP-04:nc_vision_cert=unknown",
+      "CAP-04:nc_vision_perf=unknown"
+     ],
+     "next_verification": [
+      "baseline_fingerprint:humanoid_vision_sensing",
+      "product_gross_margin:688686",
+      "product_revenue:688686"
+     ],
+     "research_priority": [
+      "product_revenue:688686",
+      "product_gross_margin:688686",
+      "baseline_fingerprint:humanoid_vision_sensing"
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_theme_score"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688686",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688686",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "baseline_fingerprint:humanoid_vision_sensing",
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
+     }
+    ],
+    "fingerprint": "5edfe84428468d54c5633bb68906191ae0dd0af3001c64909dc7f4360b8ef3f2",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "13171a4bd8afd7aa34fd60a25d3bde0d1c8bda34f14a6bae29b5c7c10daf92dd",
+     "6778911561d178dc0bab9ee43721c448980a7158ce9af82839925eb3242ff1bb",
+     "2d5908c33fe2446d2489bb044416ecfe91d7e32ae38fb7723e84c0c75f899695",
+     "00989e7a517827b2f43de4fbccfce5713f983a82d4465f4eba770b2df3f77d9b"
+    ]
+   }
+  }
+ },
+ "errors": [],
+ "gap_backlog": [
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "product_revenue:688686",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "product_gross_margin:688686",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "baseline_fingerprint:humanoid_vision_sensing",
+   "owner": "CAP-07",
+   "note": "capability run-state, not external data",
+   "source_capabilities": [
+    "CAP-07",
+    "CAP-08"
+   ]
+  }
+ ],
+ "research_only": true,
+ "used_for_signal": false,
+ "used_for_admission": false,
+ "workbench_index": "outputs/research/cap_workbench/humanoid_robotics_head_to_toe_v1/index.json"
+}

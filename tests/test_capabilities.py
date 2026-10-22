@@ -81,14 +81,36 @@ def test_cap03_empty_cases_degrades_unknown_with_gap():
     assert env.data_gaps and env.data_gaps[0].kind == "missing_source"
 
 
-def test_cap07_baseline_semantics():
-    no_base = cap07_changes("n1", "fp_x", None, AS_OF, RUN_ID)
+def test_cap07_baseline_semantics(tmp_path):
+    """CAP-07 R1: 版本化基线 + 内容级 diff（非仅指纹）。"""
+    from stock_research.capabilities.baseline import (
+        load_baselines, save_baseline,
+    )
+    store = str(tmp_path / "baselines")
+    snap_v1 = {"node_verdict": "unverified", "dossier_fingerprint": "fp_a",
+               "claims": {"c1": {"verdict": "needs_evidence"}},
+               "economics": {"002837": {"revenue": "missing"}},
+               "cap_statuses": {"CAP-04": "ok"}}
+    # 无基线 → unknown + CAP-07 归属 gap
+    no_base = cap07_changes("n1", snap_v1, None, AS_OF, RUN_ID)
     assert no_base.status == "unknown"
-    assert no_base.data_gaps[0].item.startswith("baseline_fingerprint")
-    same = cap07_changes("n1", "fp_x", ["fp_x"], AS_OF, RUN_ID)
+    assert no_base.data_gaps[0].owner == "CAP-07"
+    # 版本化保存
+    r1 = save_baseline(store, "n1", snap_v1)
+    assert r1["version"] == 1
+    save_baseline(store, "n1", snap_v1)
+    assert len(load_baselines(store, "n1")) == 2
+    # 同内容 diff → state_changed False
+    same = cap07_changes("n1", snap_v1, load_baselines(store, "n1"), AS_OF, RUN_ID)
     assert same.findings["state_changed"] is False
-    diff = cap07_changes("n1", "fp_y", ["fp_x"], AS_OF, RUN_ID)
+    # verdict 变化 → 可解释 change 条目
+    snap_v2 = {**snap_v1, "claims": {"c1": {"verdict": "confirmed"}},
+               "dossier_fingerprint": "fp_b"}
+    diff = cap07_changes("n1", snap_v2, load_baselines(store, "n1"), AS_OF, RUN_ID)
     assert diff.findings["state_changed"] is True
+    ch = diff.findings["changes"]
+    assert any(c["field"] == "claim:c1" and c["to"] == "confirmed" for c in ch)
+    assert diff.findings["baseline_version"] == 2
 
 
 def test_cap10_isolation():
@@ -160,14 +182,15 @@ def test_cap04_views_classified_by_claim_role_not_dimension():
 
 
 def test_cap08_dedupes_support_by_claim_id():
-    """同一 claim_id 只计一次支持。"""
+    """同一 claim_id 只计一次支持（五桶均去重）。"""
     out = run_research_chain(
         "liquid_cooling", SUBNODE_CASES, DOSSIER_DIR, AS_OF, RUN_ID)
     for envs in out["per_node"].values():
         s = envs["CAP-08"]["findings"]
-        cids = [x.split(":")[1].split("=")[0] for x in s["supports"]]
-        assert len(cids) == len(set(cids))
-        assert s["support_claim_count"] == len(s["supports"])
+        for bucket in ("favorable_support", "market_structure",
+                       "counter_evidence", "hype_risks", "unresolved"):
+            cids = [e["claim_id"] for e in s[bucket]]
+            assert len(cids) == len(set(cids)), bucket
 
 
 def test_pipeline_as_of_violation_degrades_not_silent():
@@ -208,34 +231,49 @@ def test_cap03_invalid_case_recorded_not_skipped():
     assert isinstance(env.findings["nodes"][0]["product_lines"], list)
 
 
-def test_cap08_three_way_evidence_split():
-    """R1: hype 支持论点入风险桶；market_structure 入反证桶；不计为价值支持。"""
+def test_cap08_five_bucket_evidence_split():
+    """R1: hype→风险桶；market_structure→描述性格局（不自动反证）；可追溯。"""
     out = run_research_chain(
         "humanoid", ["docs/cap02/cases/humanoid_vision_node.json"],
         DOSSIER_DIR, AS_OF, RUN_ID)
     f = out["per_node"]["humanoid_vision_sensing"]["CAP-08"]["findings"]
-    assert any("nc_vision_hype" in x for x in f["hype_risks"])
-    assert not any("nc_vision_hype" in x for x in f["supports"])
-    # 液冷 multi-supplier 格局论点 → refutes（反证稀缺叙事），不是价值支持
+    hype_ids = [e["claim_id"] for e in f["hype_risks"]]
+    assert "nc_vision_hype" in hype_ids
+    assert not any(e["claim_id"] == "nc_vision_hype" for e in f["favorable_support"])
+    # 液冷 multi-supplier 格局论点 → market_structure 描述桶，**不是反证**
     out2 = run_research_chain(
         "liquid_cooling", SUBNODE_CASES[2:3], DOSSIER_DIR, AS_OF, RUN_ID)
-    f2 = out2["per_node"]["liquid_cooling_pump_components"]["CAP-08"]["findings"]
-    assert any("nc_multi_supplier" in x for x in f2["refutes"])
-    assert not any("nc_multi_supplier" in x for x in f2["supports"])
+    e8 = out2["per_node"]["liquid_cooling_pump_components"]["CAP-08"]
+    f2 = e8["findings"]
+    assert any(e["claim_id"] == "nc_multi_supplier" for e in f2["market_structure"])
+    assert not any(e["claim_id"] == "nc_multi_supplier" for e in f2["counter_evidence"])
+    # 追溯：每条桶内条目带 claim_text + evidence_ids + source_ids
+    for bucket in ("favorable_support", "market_structure", "hype_risks"):
+        for e in f2[bucket]:
+            assert "hypothesis" in e and "evidence_ids" in e and "source_ids" in e
+    # 信封级 evidence_refs 非空（上游指纹不替代原始引用）
+    assert e8["evidence_refs"]
 
 
 def test_cap03_theme_db_orchestration():
-    """R1: 从主题包自动编排 — ai_power 液冷节点自动发现 4 个 case。"""
+    """R1: 主题读层自动编排 — 液冷节点发现 4 case；映射带 review_status。"""
     from stock_research.capabilities.adapters import cap03_orchestrate_theme
     env = cap03_orchestrate_theme("ai_power_value_capture_v1", AS_OF, RUN_ID)
     assert env.status == "ok"
     f = env.findings
+    assert f["read_source"] in {"artifact", "db", "compare"}
     assert f["node_count"] == 13
     lc = [n for n in f["nodes"] if n["node_id"] == "liquid_cooling"][0]
     assert len(lc["runnable_cases"]) == 4  # 父 + 3 子节点
-    assert lc["mapped_companies"] == ["002837.SZ"]
-    # 无 case 的节点如实入 gap
-    assert any(g.item == "node_case:hvdc_power" for g in env.data_gaps)
+    # 映射带审核状态；未审核映射只生成待研究任务
+    assert lc["mapped_companies"][0]["review_status"] == "reviewed"
+    assert lc["mapped_companies"][0]["company_code"] == "002837.SZ"
+    # node_case 缺失 → 能力覆盖任务（非外部数据缺口）
+    assert "hvdc_power" in f["coverage_gap_nodes"]
+    assert not any(g.item == "node_case:hvdc_power" for g in env.data_gaps)
+    cov_tasks = [t for t in f["research_tasks"]
+                 if t.get("task_type") == "coverage_gap"]
+    assert any(t["subject_id"] == "hvdc_power" for t in cov_tasks)
 
 
 def test_gap_backlog_deduped_with_owners():

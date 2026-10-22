@@ -2378,6 +2378,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cap_chain.add_argument("--as-of", required=True)
     cap_chain.add_argument("--output", default="", help="optional JSON report path")
+    cap_chain.add_argument(
+        "--baseline-dir", default="outputs/research/cap_baselines",
+        help="CAP-07 versioned baseline store ('' disables)",
+    )
+    cap_chain.add_argument(
+        "--workbench-dir", default="outputs/research/cap_workbench",
+        help="CAP-09 unified browse index dir ('' disables)",
+    )
 
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
@@ -9619,6 +9627,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 args.as_of,
                 run_id=f"cap00-{args.as_of}",
                 case_dir=args.case_dir,
+                baseline_dir=args.baseline_dir or None,
+                workbench_dir=args.workbench_dir or None,
             )
             e3 = out["envelopes"]["CAP-03"]["findings"]
             print(
@@ -9635,6 +9645,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 args.dossier_dir,
                 args.as_of,
                 run_id=f"cap00-{args.as_of}",
+                baseline_dir=args.baseline_dir or None,
+                workbench_dir=args.workbench_dir or None,
             )
         if args.output:
             from pathlib import Path as _P
