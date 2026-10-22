@@ -516,3 +516,30 @@ def test_t3_audit_stats_counts():
     st = t3_audit_stats(t3)
     assert st["totals"]["accepted"] == 3 and st["totals"]["pending"] == 1
     assert st["totals"]["n"] == 4
+
+
+def test_percent_fields_use_decimal_ratio():
+    """全量 T3 比例字段小数约定：margin/share∈[-1,1]，yoy∈[-1,5)，杜绝 30.9 式百分数。"""
+    from stock_research.chain_t3_evidence import load_t3_records
+    t3 = load_t3_records("docs/cap02/t3/t3_records.json")
+    for r in t3["segment_records"]:
+        for f in ("gross_margin", "revenue_share"):
+            v = getattr(r, f)
+            assert v is None or -1 <= v <= 1, f"{r.record_id}.{f}={v}"
+        v = r.revenue_yoy
+        assert v is None or -1 <= v < 5, f"{r.record_id}.revenue_yoy={v}"
+
+
+def test_candidate_facts_carry_source_provenance():
+    """券商 S3 候选与公司披露 S1 可直接区分。"""
+    broker = _seg(rid="b", review="pending")
+    broker = SegmentRevenueRecord(**{**broker.__dict__, "source_type": "broker_report",
+                                   "reliability_level": "S3", "source_id": "brk1",
+                                   "page_or_section": "p1"})
+    cell = segment_cell([broker])
+    cf = cell["candidate_facts"][0]
+    assert cf["source_type"] == "broker_report" and cf["reliability_level"] == "S3"
+    assert cf["source_id"] == "brk1" and cf["page"]
+    filing = _seg(rid="f", review="accepted")
+    cell2 = segment_cell([filing])
+    assert cell2["facts"][0]["source_type"] == "company_filing"

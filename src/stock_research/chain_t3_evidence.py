@@ -161,9 +161,13 @@ def segment_cell(
             "revenue": r.revenue,
             "gross_margin": r.gross_margin,
             "revenue_share": r.revenue_share,
+            "revenue_yoy": r.revenue_yoy,
             "scope": r.disclosure_scope,
             "review_status": r.review_status,
             "page": r.page_or_section,
+            "source_id": r.source_id,
+            "source_type": r.source_type,
+            "reliability_level": r.reliability_level,
         }
 
     def _why(r: SegmentRevenueRecord) -> str:
