@@ -567,7 +567,7 @@ def test_dayuan_fact_tiers_separated():
     assert cv["cust_603757_ul"].stage == "product_certified"  # 产品认证位
     assert cv["cust_603757_sampling"].stage == "contact"     # 对接覆盖≠送样完成
     cell = validation_cell(list(t3["customer_validation"]), "603757",
-                           {"dc_liquid_cooling"}, "2026-10-22")
+                           {"pump_components"}, "2026-10-22")
     assert cell["state"] == "mass_delivery"                  # 批量交付仍最高级
     stages = {f["stage"] for f in cell["product_facts"]}
     assert "product_certified" in stages                     # UL 事实可见但不冒认证级
