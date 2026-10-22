@@ -12,6 +12,7 @@ import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
 import { ThemeResearchWorkspace } from './ThemeResearchWorkspace';
+import { CapabilitiesWorkbenchPage } from './CapabilitiesWorkbenchPage';
 import { ThemeResearchReportReviewWorkspace } from './ThemeResearchReportReviewWorkspace';
 import { UserManagementView } from './UserManagementView';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
@@ -39,6 +40,7 @@ type WorkspaceMode =
   | 'stock'
   | 'watchlist'
   | 'themeResearch'
+  | 'capabilities'
   | 'techBottleneckReviewUniverse'
   | 'dataToBriefDocling90'
   | 'factors'
@@ -89,6 +91,7 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
   { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
   { mode: 'themeResearch', label: '主题研究', ariaLabel: 'Open Theme Research workspace' },
+  { mode: 'capabilities', label: '能力研究', ariaLabel: 'Open Capabilities workbench' },
   {
     mode: 'dataToBriefDocling90',
     label: 'Docling报告审计',
@@ -115,6 +118,7 @@ const TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH = '/research/tech-bottleneck/review-u
 const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
 const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
 const THEME_RESEARCH_PATH = '/theme-research';
+const CAPABILITIES_PATH = '/research/capabilities';
 const THEME_REPORT_REVIEW_PATH = '/admin/theme-research/report-review';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
 
@@ -124,6 +128,7 @@ function firstDate(...dates: Array<string | null | undefined>) {
 
 function workspaceModeFromPath(pathname: string, isAdmin = false): WorkspaceMode {
   if (pathname === THEME_REPORT_REVIEW_PATH) return isAdmin ? 'themeReportReview' : 'home';
+  if (pathname === CAPABILITIES_PATH || pathname.startsWith(`${CAPABILITIES_PATH}/`)) return 'capabilities';
   if (pathname === THEME_RESEARCH_PATH || pathname.startsWith(`${THEME_RESEARCH_PATH}/`)) return 'themeResearch';
   if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReviewUniverse';
   if (pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) return 'techBottleneckReviewUniverse';
@@ -408,6 +413,8 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
       window.history.pushState({}, '', THEME_REPORT_REVIEW_PATH);
     } else if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
       window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
+    } else if (mode === 'capabilities' && window.location.pathname !== CAPABILITIES_PATH) {
+      window.history.pushState({}, '', CAPABILITIES_PATH);
     } else if (mode === 'themeResearch' && window.location.pathname !== THEME_RESEARCH_PATH) {
       window.history.pushState({}, '', THEME_RESEARCH_PATH);
       setThemeResearchPathname(THEME_RESEARCH_PATH);
@@ -655,6 +662,7 @@ export function AppShell({ currentUser: _currentUser, onLogout }: AppShellProps 
               onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
             />
           ) : null}
+          {workspaceMode === 'capabilities' ? <CapabilitiesWorkbenchPage /> : null}
           {workspaceMode === 'themeResearch' ? (
             <ThemeResearchWorkspace
               pathname={themeResearchPathname}

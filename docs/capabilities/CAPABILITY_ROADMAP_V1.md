@@ -1,0 +1,140 @@
+# CAP-00 平台能力架构与路线图 V1
+
+日期：2026-10-22 ｜ 状态：R0 骨架已落地 ｜ research_only，未部署，不进入信号/准入
+
+## 一、现有能力盘点（只读审计）
+
+| 已有模块 | 对应 CAP | 状态 |
+|---|---|---|
+| `company_intelligence` / `_feed` / `_report` + dashboard 面板 | CAP-01 公司研究 | **冻结**（六维 dossier，已验收） |
+| `chain_bottleneck` + `chain_value_matrix` + `chain_t3_evidence` | CAP-02 节点研究 | **冻结**（节点判定/矩阵/T3 证据） |
+| `theme_decomposition` + `theme_company_mapping` + node case 目录 | CAP-03 主题编排 | **部分已有** — 拆解/映射在，编排信封新增 |
+| dossier claim_role 五维聚合 | CAP-04 技术与供需 | **R0 适配层**（无新判定） |
+| `chain_value_matrix` rev/ord/valdel 三格 | CAP-05 产业经济 | **R0 适配层**（margin 无矩阵列→如实 unknown） |
+| 矩阵行 + CAP-01 dossier 维度 verdict | CAP-06 竞争比较 | **R0 适配层** |
+| dossier/envelope 指纹链 | CAP-07 动态跟踪 | **R0**：无基线 → unknown + gap，不做模拟 diff |
+| 聚合上游信封 | CAP-08 综合研判 | **R0**：支持/不确定性/缺口/优先级 |
+| dashboard api / review workflow / research_queue_* | CAP-09 工作台 | **指针信封**（不重建 UI） |
+| backtest / factor_eval / strategy_* / performance_* | CAP-10 策略验证 | **隔离指针**（`not_evaluated`，不接信号） |
+
+## 二、统一研究契约（`capabilities/contract.py`）
+
+所有 CAP 输出 `ResearchEnvelope`：
+
+```
+capability_id, subject_type, subject_id, as_of, run_id, status,
+findings, evidence_refs, uncertainties, data_gaps,
+fingerprint, rule_version, upstream_fingerprints,
+research_only=True, used_for_signal=False, used_for_admission=False
+```
+
+- `status`：`ok | partial | unknown | not_evaluated`
+- `data_gaps.kind`（统一 DATA 线词汇）：
+  `missing_source`（缺整个源）/ `unparsed`（源有未解析）/ `pending_review`（已解析待核验）/ `attribution_unknown`（已核验归属不明）/ `truly_undisclosed`（企业确实未披露）/ `pit_incompatible`（历史 PIT 不可用）
+- `fingerprint`：sha256(canonical fields + upstream_fingerprints) — 上游变更必然传导指纹
+- 退化原则：无数据 → `unknown`/`not_evaluated` + gap 条目，**绝不产出模拟正面结论**
+
+## 三、能力依赖图
+
+```
+CAP-03 ─→ CAP-02 + CAP-01（编排消费冻结引擎）
+CAP-04 ─→ CAP-02（dossier claim_role 视图）
+CAP-05 ─→ CAP-04, CAP-02, CAP-01（矩阵格状态）
+CAP-06 ─→ CAP-05, CAP-02（同业比较）
+CAP-07 ─→ CAP-04/05/06（指纹 diff）
+CAP-08 ─→ CAP-03..07（综合研判）
+CAP-09 ─→ CAP-08（浏览/复核入口）
+CAP-10 ─→ ∅（与研究线隔离，仅复用策略基础设施）
+```
+
+## 四、R0 骨架落点
+
+| 文件 | 内容 |
+|---|---|
+| `src/stock_research/capabilities/contract.py` | ResearchEnvelope + DataGap + 指纹 |
+| `src/stock_research/capabilities/registry.py` | CAP-00..10 描述符 + 依赖图 |
+| `src/stock_research/capabilities/adapters.py` | CAP-03..10 瘦适配器（复用冻结引擎） |
+| `src/stock_research/capabilities/pipeline.py` | `run_research_chain` 端到端 + gap backlog |
+| `cli.py cap-chain-smoke` | 可复现命令入口 |
+| `tests/test_capabilities.py` | 11 契约测试 |
+| `docs/capabilities/r0_smoke_liquid_cooling.json` | 液冷三子节点 smoke 快照 |
+
+## 五、端到端 smoke 结果（液冷三子节点）
+
+```
+cap-chain-smoke --theme liquid_cooling --cases <3 子节点> --as-of 2026-10-22
+```
+
+- CAP-03 `ok`：3 节点 / 5 个公司研究任务
+- 每节点 CAP-04..08 全部产出信封；节点 verdict 与 dossier 一致 `bottleneck_unverified`
+- CAP-05 语义：`revenue_state=missing`（子节点 product_line 口径下无收入记录，**隔离正确**——母公司板块收入不窜入子线）；603757 `delivery=mass_delivery / order=verified_delivered`，`value_capture=not_evaluated`（无收入披露→不冒充 verified）
+- CAP-07 全 `unknown`（无基线指纹 — R0 如实退化，不模拟）
+- `gap_backlog` 34 条，全部 `missing_source`：product_revenue / product_gross_margin / verifiable_order per company + baseline_fingerprint×3
+
+## 六、DATA 线并行清单（由 backlog 自动生成）
+
+| 类别 | 条目 | 归属 |
+|---|---|---|
+| missing_source | `product_revenue:*`（各公司分产品收入） | DATA |
+| missing_source | `product_gross_margin:*`（矩阵无毛利列） | DATA + CAP-05 R1 |
+| missing_source | `verifiable_order:*`（无已验证订单格） | DATA |
+| missing_source | `baseline_fingerprint:*`×3（CAP-07 基线） | CAP-07 R1（保存首 run 指纹即关闭） |
+
+**未阻塞项**：所有 CAP 在 gap 下仍产出信封——DATA 补录后重跑 `cap-chain-smoke` 即可自动收敛，无需改代码。
+
+## 七、R1 联调验收条件（下一阶段）
+
+1. 三主题（AI 供电 / 半导体设备 / 人形机器人）各跑通同一链路；
+2. CAP-07 保存首轮指纹基线 → diff 有实际意义；
+3. CAP-05 `margin_state` 接入真实分产品毛利列；
+4. CAP-09 统一入口可在 dashboard 打开任一信封；
+5. 接口断裂 / 重复归因 / 语义不一致问题清零（比数据完整优先）。
+
+## 八、R0.1 语义收口（2026-10-22）
+
+- **P0-1**：CAP-04 视图改按 `claim_role`（supply_scarcity / non_substitutability / market_structure / entry_barrier / hype）分类——dimension 与 role 不混用；market_structure role 引用 process_irreplaceability 证据仍归格局视图
+- **P0-2**：CAP-05 `value_capture_verdict` R0 一律 `not_evaluated`（`disclosed_broader_scope`≠子节点收入兑现；`verified_delivered`≠可识别合同/收入确认）；rev/delivery/order 三格保持独立
+- **P0-3**：`case.as_of` 必须与请求 `as_of` 一致（无可重建快照 → 不一致即 not_evaluated+错误）；单节点失败生成错误信封、其余节点继续；CAP-03 `product_lines` 输出 JSON 数组，坏 case 入 `invalid_cases`
+- **P1**：backlog 按 (node_id,kind,item,owner) 去重 + `source_capabilities` 列贡献 CAP；CAP-07 基线缺口归属 `CAP-07`（运行状态，非外部数据缺口）；CAP-08 支持按 claim_id 去重（`support_claim_count`）
+
+**三主题 R0.1 smoke（去重后）**：液冷 17 / 半导体 6 / 人形 3 条缺口，全链 `cap-chain-smoke` 可复现（`r0_smoke_*.json`）。
+
+## 九、R1 首批增量（2026-10-22）
+
+- **CAP-03 R1**：`cap03_orchestrate_theme` / `run_theme_chain` / `cap-chain-smoke --theme-db`——从主题包读节点（13/21 nodes，按 bottleneck/value score 排序）+ 公司映射 + 自动匹配 case 文件（`theme_node_id` 显式链接 > node_id 相等 > derived_from 谱系 > 子节点前缀）；无 case 节点入 `node_case:*` 缺口，不静默跳过
+- **CAP-08 R1**：按 claim_role 三分——`supports`（scarcity/non_substitutability/entry_barrier）/ `refutes`（confirmed market_structure=多供应商格局反证稀缺叙事）/ `hype_risks`（炒作论点支持≠价值利好，人形 `nc_vision_hype` 已正确归风险桶）
+- **as_of 语义精化**：信封以案例自身 PIT 标注；晚案例数据答早请求 → not_evaluated；早案例答晚请求允许（如实标注 10-21）
+
+**三主题 smoke**（`r1_smoke_*.json`）：ai_power cap03 `ok`（4 case 自动发现，12 node_case 缺口）/ humanoid `ok`（head_vision 链接生效）/ semi_equipment（无主题包 → case 模式跑通）。
+
+## 十、R1 第二批（2026-10-22）
+
+- **CAP-08 五桶语义**：`favorable_support`（scarcity/non_sub/entry_barrier 正向）/ `market_structure`（描述性格局，**不自动反证稀缺**）/ `counter_evidence`（仅 claim verdict=`refuted` 的绑定假设反证）/ `hype_risks` / `unresolved`；每条带 claim_text+evidence_ids+source_ids 三级追溯；`upstream_fingerprints` 保留为溯源链而非证据替代
+- **CAP-03 读层**：复用 `dashboard.theme_research` 读层——`THEME_RESEARCH_READ_SOURCE`=db/artifact/compare，DB 不可达时受控回退 artifact 并记录 `requested_source/effective_source/source_note`；映射带 `review_status`（未审核→`pending_mapping_review` 任务）；`node_case` 缺失改记 `coverage_gap_nodes`（CAP-02 能力任务，非 DATA 缺口）；父子 case 带 lineage 标记（非独立证据）
+- **CAP-05 毛利消费**：`margin_state` = disclosed（product_line 精确）/ segment_level（仅板块口径，记 `attribution_unknown` gap）/ unknown；宽口径不窜入子线
+- **CAP-07 基线**：`capabilities/baseline.py` 版本化追加存储（`outputs/research/cap_baselines/`）+ 内容级 diff（node_verdict/claim verdict/econ 状态/cap 状态逐字段变化清单），非仅指纹
+- **CAP-09 工作台**：`capabilities/workbench.py` 生成 `outputs/research/cap_workbench/<theme>/index.json`——主题→节点→公司（dashboard 深链）→证据→缺口统一只读索引，复用现有 dashboard 链接约定
+
+**验收烟测**：`cap-chain-smoke --theme <id> --theme-db --baseline-dir ... --workbench-dir ...`；ai_power 25 / humanoid 3 / semi 6 去重缺口。
+
+## 十一、R1 第三批 — CAP-09 工作台入口 + CAP-07 增删改 + CAP-03 DB 读层（2026-10-22）
+
+- **CAP-09 索引修正**：五桶从 `env8["findings"]` 取，`evidence_refs`/`upstream_fingerprints` 从 ResearchEnvelope 顶层取；`run_theme_chain` 顺序改为「先完成 CAP-03 主题信封替换+全部 gap 汇总，再写最终 index」；新增索引↔结果一致性契约测试（五桶/证据引用/指纹/节点覆盖/缺口数）
+- **CAP-07 增删改 diff**：`baseline.py` 支持 added/removed/changed 三类比较，覆盖 claim、公司经济事实（revenue/delivery/order）、evidence_refs、node_verdict、cap_statuses；同内容重跑不追加版本（`deduped=True`），append-only 历史保留；写入走 `atomic_write_json` 原子替换
+- **CAP-03 DB 读层实测**：`THEME_RESEARCH_READ_SOURCE=db` 真实只读 PostgreSQL smoke——ai_power 读 13 节点；`compare` 模式 DB↔artifact diff count=0；公司映射 `reviewed` 状态可见（002837/002364/300870/002335 均 reviewed，confidence 0.94）；DB 共 25 个权威主题（含 semiconductor_manufacturing_equipment_value_chain_v1）；主题历史 PIT 不可确认时保留 `pit_note` 不确定性标记
+- **CAP-09 Dashboard 入口**：`/research/capabilities` 只读页面（`CapabilitiesWorkbenchPage` + `/api/research/capabilities/workbench[/{theme}]`）——主题→节点展开→五桶综合研判→公司经济格→证据引用/上游指纹→DATA/CAP 去重缺口；三主题浏览验证截图存 `docs/capabilities/screenshots/cap09_workbench_*.png`
+
+**验收实测**（见 `r1_smoke_*` + 截图）：ai_power 4 节点/21 缺口；humanoid 1 节点/3 缺口（`nc_vision_hype` 正确归炒作风险）；semi_equipment 1 节点/6 缺口；同内容重跑 state_changed=False、版本不追加；变更场景 added=5/removed=2/changed=5。
+
+## 十二、R1 最终联调 — 基线幂等 + 全主题浏览 + UAT（2026-10-22）
+
+- **CAP-07 幂等**：研究事实身份排除运行元数据——`envelope_fingerprints`（CAP-07 fp 内嵌自身 diff 输出）、CAP-07 自身状态、CAP-08 派生综合态均不计入 dedupe/diff；连跑 3 次全链路基线保持 v1 不增长（契约测试锁定）；diff 增加 `econ:*.revenue_facts`（有来源的产品线收入/毛利数值变化）；`diff_baselines`/`save_baseline` 只使用 `as_of <=` 当前时点的 PIT-eligible 基线（`skipped_future_versions` 可审计），历史回放永不对比未来基线、append-only 不覆盖较新历史
+- **CAP-09 全主题覆盖**：index 含案例节点 + **无案例主题节点**（`status=no_case`、`coverage_owner=CAP-02`、审核状态、映射公司、主题深链）；子案例显示 `归属主题节点`（案例 node_id≠主题 node_id 通过 `runnable_cases[].case_node_id` 映射）；`covered_node_count/theme_node_count` 头部摘要；`changes` 块（vs 基线 vN 无变化/增删改字段级）
+- **深链**：公司 → `/tech-bottleneck/stock/{code}?source=capabilities`（实测跳转英维克个股工作台）；主题 → `/theme-research/{theme_id}`；无有效目标处不伪造链接（evidence_refs/source_ids 纯文本展示）
+- **UAT**（本地 Dashboard，未部署）：ai_power 16 节点（4 案例 + 12 覆盖缺口）/ humanoid 21（1+20）/ semi case 模式 1 节点；主题→节点→公司→五桶→来源→缺口→历史变化全程页面完成，无需 JSON/CLI；截图 `screenshots/uat_*.png`
+
+## 十三、边界
+
+- research_only：`used_for_signal=False` / `used_for_admission=False` 全链路透传；
+- 不重建已稳定基础设施（CAP-01/02 引擎、dashboard、StrategyLab 全部复用）；
+- 未部署生产；未改动任何调度/同步/EOD 路径。

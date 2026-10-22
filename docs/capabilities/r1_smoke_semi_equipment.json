@@ -1,0 +1,567 @@
+{
+ "theme_id": "semi_equipment",
+ "as_of": "2026-10-22",
+ "run_id": "cap00-2026-10-22",
+ "envelopes": {
+  "CAP-03": {
+   "capability_id": "CAP-03",
+   "subject_type": "theme",
+   "subject_id": "semi_equipment",
+   "as_of": "2026-10-22",
+   "run_id": "cap00-2026-10-22",
+   "status": "ok",
+   "findings": {
+    "theme_id": "semi_equipment",
+    "nodes": [
+     {
+      "node_id": "semi_front_end_equipment",
+      "name": "半导体前道设备环节",
+      "product_lines": [
+       "semi_front_end"
+      ],
+      "members": [
+       "002371",
+       "688037"
+      ]
+     }
+    ],
+    "research_tasks": [
+     {
+      "subject_type": "company",
+      "subject_id": "002371",
+      "capability": "CAP-01",
+      "node_id": "semi_front_end_equipment"
+     },
+     {
+      "subject_type": "company",
+      "subject_id": "688037",
+      "capability": "CAP-01",
+      "node_id": "semi_front_end_equipment"
+     }
+    ],
+    "task_count": 2,
+    "invalid_cases": []
+   },
+   "evidence_refs": [],
+   "uncertainties": [],
+   "data_gaps": [],
+   "fingerprint": "0e813bbfc3d33b87fbdf5116a20328c8d71301d3b14225f0c8aa27d529dfd47f",
+   "rule_version": "cap00-r0",
+   "research_only": true,
+   "used_for_signal": false,
+   "used_for_admission": false,
+   "upstream_fingerprints": []
+  }
+ },
+ "per_node": {
+  "semi_front_end_equipment": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "bottleneck_unverified",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_import_substitution_demand",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "partially_supported",
+        "claim_text": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+        "evidence_ids": [
+         "n_ev_naura_industry"
+        ],
+        "support_count": 1,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [
+       {
+        "claim_id": "nc_process_monopoly",
+        "dimension": "process_irreplaceability",
+        "claim_role": "non_substitutability",
+        "verdict": "needs_evidence",
+        "claim_text": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+        "evidence_ids": [
+         "n_ev_puda_alternative"
+        ],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "market_structure": [],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_cert_barrier",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "needs_evidence",
+        "claim_text": "晶圆厂产线验证周期长构成后进入者壁垒",
+        "evidence_ids": [
+         "n_ev_m1_cert"
+        ],
+        "support_count": 0,
+        "refute_count": 0
+       },
+       {
+        "claim_id": "nc_perf_gap",
+        "dimension": "performance_gap",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_hype_component",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "unknown",
+        "claim_text": "国产替代主题存在概念关联超过实际供给约束的成分",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 5,
+     "evidence_index": {
+      "n_ev_naura_industry": {
+       "source_id": "ru_002371_428",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "review_status": "accepted"
+      },
+      "n_ev_puda_alternative": {
+       "source_id": "B_puda_huaxin_20260410",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "review_status": "lead_only"
+      },
+      "n_ev_m1_cert": {
+       "source_id": "N_m1_node_evidence",
+       "direction": "unclear",
+       "aspect": "certification_barrier",
+       "review_status": "accepted"
+      },
+      "n_ev_naura_milestone": {
+       "source_id": "ru_002371_428",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "review_status": "accepted"
+      }
+     }
+    },
+    "evidence_refs": [
+     "n_ev_naura_industry",
+     "n_ev_puda_alternative",
+     "n_ev_m1_cert"
+    ],
+    "uncertainties": [
+     "nc_process_monopoly=needs_evidence",
+     "nc_cert_barrier=needs_evidence",
+     "nc_perf_gap=unknown",
+     "nc_hype_component=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "6d1fffeb2731db1b449f9b3c7af4a79d11041c591a82ec40ae7edd2e2c4d6b45",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "002371": {
+       "revenue_state": "disclosed_broader_scope",
+       "revenue_value": null,
+       "margin_state": "segment_level",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
+      },
+      "688037": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ]
+      }
+     },
+     "member_count": 2
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:002371",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002371",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688037",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688037",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:688037",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "f9a982aeefa2edc324403291504a46bb581a9bbda94adcd8d694cc377d079518",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "6d1fffeb2731db1b449f9b3c7af4a79d11041c591a82ec40ae7edd2e2c4d6b45"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "002371": {
+       "company_name": "北方华创",
+       "overall_verdict": "needs_evidence",
+       "tech_participation": "partially_supported",
+       "delivery": "none_seen",
+       "revenue": "disclosed_broader_scope",
+       "order": "none_seen",
+       "concept_only_risk": "low",
+       "moat_dimensions": {
+        "tech_moat": "partially_supported",
+        "competitive_advantage": null
+       }
+      },
+      "688037": {
+       "company_name": "芯源微(北方华创子公司)",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "delivery": "none_seen",
+       "revenue": "missing",
+       "order": "none_seen",
+       "concept_only_risk": "unevaluated",
+       "moat_dimensions": {
+        "tech_moat": null,
+        "competitive_advantage": null
+       }
+      }
+     },
+     "note": "component delivery ≠ full-system substitution; product cert ≠ customer cert"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "5f1c02c08e5f3e91377d5ff6c621055e28ae19a2d2adb19988b1c8a835772233",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "6d1fffeb2731db1b449f9b3c7af4a79d11041c591a82ec40ae7edd2e2c4d6b45",
+     "f9a982aeefa2edc324403291504a46bb581a9bbda94adcd8d694cc377d079518"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-22",
+    "status": "unknown",
+    "findings": {
+     "note": "no baseline snapshot — first run seeds baseline"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "baseline_fingerprint:semi_front_end_equipment",
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
+     }
+    ],
+    "fingerprint": "c3f27c9536b4bbc1ca62b7f3dd092c510ce9b64e0bcbf9f6eb52574cbd707684",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-22",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [
+      {
+       "claim_id": "nc_import_substitution_demand",
+       "role": "supply_scarcity",
+       "verdict": "partially_supported",
+       "hypothesis": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+       "evidence_ids": [
+        "n_ev_naura_industry"
+       ],
+       "source_ids": [
+        "ru_002371_428"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "market_structure": [],
+     "counter_evidence": [],
+     "hype_risks": [],
+     "unresolved": [
+      {
+       "claim_id": "nc_process_monopoly",
+       "role": "non_substitutability",
+       "verdict": "needs_evidence",
+       "hypothesis": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+       "evidence_ids": [
+        "n_ev_puda_alternative"
+       ],
+       "source_ids": [
+        "B_puda_huaxin_20260410"
+       ],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "role": "entry_barrier",
+       "verdict": "needs_evidence",
+       "hypothesis": "晶圆厂产线验证周期长构成后进入者壁垒",
+       "evidence_ids": [
+        "n_ev_m1_cert"
+       ],
+       "source_ids": [
+        "N_m1_node_evidence"
+       ],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_perf_gap",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_hype_component",
+       "role": "hype",
+       "verdict": "unknown",
+       "hypothesis": "国产替代主题存在概念关联超过实际供给约束的成分",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "support_claim_count": 1,
+     "uncertainties": [
+      "CAP-04:nc_process_monopoly=needs_evidence",
+      "CAP-04:nc_cert_barrier=needs_evidence",
+      "CAP-04:nc_perf_gap=unknown",
+      "CAP-04:nc_hype_component=unknown"
+     ],
+     "next_verification": [
+      "baseline_fingerprint:semi_front_end_equipment",
+      "product_gross_margin:002371",
+      "product_gross_margin:688037",
+      "product_revenue:688037",
+      "verifiable_order:002371",
+      "verifiable_order:688037"
+     ],
+     "research_priority": [
+      "verifiable_order:002371",
+      "product_revenue:688037",
+      "product_gross_margin:688037",
+      "verifiable_order:688037",
+      "baseline_fingerprint:semi_front_end_equipment"
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_m1_cert",
+     "n_ev_naura_industry",
+     "n_ev_puda_alternative"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:002371",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002371",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688037",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688037",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:688037",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "baseline_fingerprint:semi_front_end_equipment",
+      "owner": "CAP-07",
+      "note": "capability run-state, not external data"
+     }
+    ],
+    "fingerprint": "946fbeb08eefd513ba2e2f6f0d876f0c403b87634d2b57d4470aa099a5b40558",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "6d1fffeb2731db1b449f9b3c7af4a79d11041c591a82ec40ae7edd2e2c4d6b45",
+     "f9a982aeefa2edc324403291504a46bb581a9bbda94adcd8d694cc377d079518",
+     "5f1c02c08e5f3e91377d5ff6c621055e28ae19a2d2adb19988b1c8a835772233",
+     "c3f27c9536b4bbc1ca62b7f3dd092c510ce9b64e0bcbf9f6eb52574cbd707684"
+    ]
+   }
+  }
+ },
+ "errors": [],
+ "gap_backlog": [
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "attribution_unknown",
+   "item": "product_gross_margin:002371",
+   "owner": "DATA",
+   "note": "segment margin exists, product line unattributed",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "verifiable_order:002371",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "product_revenue:688037",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "product_gross_margin:688037",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "verifiable_order:688037",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "baseline_fingerprint:semi_front_end_equipment",
+   "owner": "CAP-07",
+   "note": "capability run-state, not external data",
+   "source_capabilities": [
+    "CAP-07",
+    "CAP-08"
+   ]
+  }
+ ],
+ "research_only": true,
+ "used_for_signal": false,
+ "used_for_admission": false,
+ "workbench_index": "outputs/research/cap_workbench/semi_equipment/index.json"
+}

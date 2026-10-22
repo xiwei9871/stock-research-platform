@@ -16,6 +16,7 @@ import {
   techBottleneckWorkbenchRejectedCandidates
 } from '../features/techBottleneckWatchlistReview/techBottleneckCandidateUniverseData';
 import { TechBottleneckEvidencePanel } from '../components/techBottleneck/TechBottleneckEvidencePanel';
+import { CompanyIntelligencePanel } from '../components/techBottleneck/CompanyIntelligencePanel';
 import {
   EMPTY_TECH_BOTTLENECK_REVIEW_FILTERS,
   TechBottleneckFilterBar,
@@ -179,6 +180,7 @@ export function TechBottleneckReviewPage({ onOpenStock }: Props) {
   const [decisionHistory, setDecisionHistory] = useState<TechBottleneckReviewDecisionRecord[]>([]);
   const [decisionMessage, setDecisionMessage] = useState('');
   const [error, setError] = useState('');
+  const [companyIntelCode, setCompanyIntelCode] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +211,7 @@ export function TechBottleneckReviewPage({ onOpenStock }: Props) {
   function openEvidence(stockCode: string) {
     const row = enrichedRows.find((candidate) => candidate.stock_code === stockCode) ?? null;
     setSelectedStock(row);
+    setCompanyIntelCode(stockCode);
     Promise.all([
       fetchTechBottleneckReviewUniverseEvidence(stockCode),
       fetchTechBottleneckReviewUniverseSources(stockCode),
@@ -315,6 +318,18 @@ export function TechBottleneckReviewPage({ onOpenStock }: Props) {
         decisionMessage={decisionMessage}
         decisionHistory={decisionHistory}
       />
+      <div className="ci-stock-entry">
+        <label>
+          企业研究画像代码
+          <input
+            value={companyIntelCode}
+            onChange={(event) => setCompanyIntelCode(event.target.value.trim())}
+            placeholder="如 002837"
+            aria-label="企业研究画像股票代码"
+          />
+        </label>
+      </div>
+      <CompanyIntelligencePanel stockCode={companyIntelCode} />
     </section>
   );
 }

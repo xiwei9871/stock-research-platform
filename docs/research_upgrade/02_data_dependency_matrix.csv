@@ -1,0 +1,33 @@
+序号,数据链/输入,类别,来源与采集任务,最新有效日期,预期日期(2026-10-19),覆盖率/断档,调度存在且运行,消费方(函数/模块),消费方式,缺失行为,建议状态条件
+1,public.market_daily_bar,正式每日输入,"tushare+baostock, daily_pipeline --stage daily",2026-10-19,2026-10-19,全市场约5200只/日,是(cron daily),全部策略+EOD+因子,必需,查询无数据→策略缺输入,READY:当日覆盖≥预期股票数;BLOCKED:缺当日或覆盖率<阈值
+2,market.stock_minute_bar,正式每日输入,"baostock, daily_pipeline --stage minute5 + retry_failed",2026-10-19,2026-10-19,raw+qfq各约199万行/日(10月分区),是(cron),lhb回测/特征计算/分钟回填,必需,无当日分区数据→下游缺输入,READY:当日双adjust_type齐全
+3,market.trading_calendar,正式每日输入,维护表(至2027-02),2027-02-17,覆盖未来,17846行,静态维护,交易日判断/Freshness Gate预期日,必需,表缺失→无法判断交易日,READY:覆盖当日+未来
+4,core.asset_status_daily,正式每日输入,daily_pipeline deps,2026-10-19,2026-10-19,全市场,是,ST/停牌过滤(lhb loader等),必需,缺失→ST过滤失效,READY:当日
+5,core.asset_master,正式每日输入,基础维表,-,-,全量,静态维护,asset_id↔ts_code映射,必需,缺失→映射失败,READY:非空
+6,factor.stock_score_daily,正式每日输入,"run-daily-factor-pipeline (platform_ready)",2026-10-19,2026-10-19,manual_v1 全市场,是(launchd),EOD top_scores/mid_trend/lhb review兜底,必需,缺失→top5为空,READY:当日manual_v1
+7,factor.stock_technical_features_daily,正式每日输入,"build-technical-features-daily qfq (platform_ready)",2026-10-19,2026-10-19,全市场qfq,是,lhb loader/技术因子,必需,缺失→技术特征全空,READY:当日
+8,factor.lhb_event_features_daily,正式每日输入,"run_lhb_event_features_build (publish step)",2026-10-19,2026-10-19,龙虎榜事件覆盖,是,lhb event_replay/watchlist,必需,缺失→无事件回放,READY:当日
+9,market.lhb_top_list_daily,正式每日输入,daily_pipeline deps,2026-10-19,2026-10-19,35968行,是,lhb特征源头,必需,缺失→无龙虎榜数据,READY:当日
+10,market.lhb_top_inst_daily,正式每日输入,daily_pipeline deps,2026-10-19,2026-10-19,17347行,是,lhb特征源头,必需,缺失→无营业部数据,READY:当日
+11,market.stock_auction_bar(open_call),可选增强,"tdx回填(一次性)+tushare同步(已停)",2026-09-07,2026-10-19,~5190只/日,否,lhb frames loader→回测auction_enhanced_score(entry侧),增强,静默fallback日线代理(6周+),DEGRADED可见;BLOCKED if契约要求竞价增强
+12,market.stock_auction_bar(close_call),可选增强,"tushare同步(唯一来源,已停)",2026-06-09,2026-10-19,全市场,否,lhb frames loader→回测auction_enhanced_score(signal侧gap),增强,静默fallback日线代理(4个月+),DEGRADED可见
+13,staging.tdx_stock_auction_bar,中间暂存,TDX一次性回填,2026-09-07,-,-,否,→11上游,中间表,非消费对象,信息项
+14,staging.tushare_stock_auction_bar,中间暂存,sync-tushare-auction-bars CLI(存在未调度),空,-,0行,否,→12上游,中间表,从未使用,P2:确认是否仍需
+15,market.stock_auction_minute_bar,正式每日输入(观察池),"collect-open-auction-minute-v1 cron 9:40/15:10",2026-10-20,2026-10-19,open_call观察池~50-80只,是,竞价观察/研究,必需(自身),覆盖不全(31/81未覆盖为已知),READY:当日;注意仅观察池非全市场
+16,market.stock_open_auction_snapshot,正式每日输入(观察池),"快照cron 9:15-9:25每2分钟",2026-10-20,2026-10-19,open_call观察池,是,竞价观察/研究,必需(自身),-,READY:当日
+17,factor.stock_intraday_features_daily,可选增强/研究输入,"build-intraday-features-daily CLI(存在,无调度)",2026-08-03,2026-10-19,5193只×10特征/日(停更前),否,lhb回测frames/mid_trend_intraday_risk_overlay/intraday_factor_eval,增强+研究,特征静默为旧值/缺失(10周+),DEGRADED;恢复调度+回填
+18,factor.industry_intraday_features_daily,可选增强/研究输入,同上,2026-08-03,2026-10-19,-,否,intraday_factor_eval/行业盘中特征,研究,同上,DEGRADED;同上
+19,market.adjustment_factor,条件依赖,"corporate_actions.py写入(无调度)",2026-08-27,视需求,5196只/日(停更前),否,minute_backfill.derive_qfq_minute_bars_from_raw_job,条件依赖(仅历史回填),derive任务标记失败(非静默),按需恢复;日线/分钟5自推导不受影响
+20,market.corporate_action,低依赖,"corporate_actions.py写入(无调度)",2026-07-27,视需求,-,否,仅data_audit注册/无人消费,近闲置,P2:确认是否退役
+21,market.stock_auction_detail,低依赖,xtick逐笔(无调度),2026-06-09,-,58行,否,无消费者,P2:确认是否退役
+22,regime CSV(market_regime_confirmation_daily.csv),正式每日输入(tech_bottleneck),静态种子复制,M0.5前2026-06-05,2026-10-19,188个回放日,否(待恢复),tech_bottleneck_v1市场敞口,必需,旧代码默认1.0;已改fail-closed(待部署),BLOCKED→修复包已验证待发布
+23,tech_bottleneck种子(serenity_bottleneck_baseline_20250101_20260605),正式每日输入(冻结研究输入),冻结基线148只,静态,-,148只,静态文件,publish→_prepare_tech_bottleneck_base_candidate_source,必需,缺失→tech_bottleneck失败,READY:文件存在(版本化)
+24,daily_lhb_shortline_watchlist_YYYYMMDD.csv,正式每日输入,"run-lhb-shortline-daily-v1 (platform_ready)",2026-10-19,2026-10-19,每日Top观察,是,EOD lhb review,增强(缺失→top_scores兜底),缺失→静默兜底score表,DEGRADED可见
+25,mid_trend_watch_funnel_detail.csv(顶层兜底),正式每日输入(兜底),研究产物,2026-05-19,2026-10-19,顶层文件静态,否,EOD mid_trend(首选当日版),兜底,当日版缺失→用5个月旧数据,版本化替换或消除兜底
+26,current_mid_trend_strategy_v2_top10_candidate_20250101_20260612/,正式每日输入,静态研究目录(远端冻结6-12),缺失(远端2026-06-12),2026-10-19,-,本地缺失,EOD midtrend_v2_top10_candidate切片,增强,切片自6-13起为空(warn-only),恢复本地副本或版本化声明
+27,midtrend_pit_attribution_canonical_and_daily_review_lite_v1_20260628/,正式每日输入,静态研究目录(远端冻结6-28),缺失(远端2026-06-28),2026-10-19,-,本地缺失,EOD midtrend trade_changes等切片,增强,切片为空(warn-only),同上
+28,dragon_case/lhb_risk_feature/alignment 三文件,静态研究输入,策展案例库v2_1,2026-05-14~15,-,策展数据集,有意冻结,lhb event_replay/规则审计,必需(输入),缺失→lhb_daily失败,版本化声明(非新鲜度问题)
+29,public_news_events/news_feature_daily/topn_news_enrichment,正式每日输入,"public_news_refresh+free_enrichment (platform_ready)",2026-10-19,2026-10-19,按日生成,是,新闻增强/manifest,增强,-,READY:当日文件存在
+30,research.stock_report_source,研究输入,研报库(一次性导入),2026-10-13,-,107份(47篇日期NULL待补),批量导入,报告检索/证据,研究,47篇日期NULL→查询不命中,日期补录批次(已备审批包)
+31,ops.daily_pipeline_status,运行状态,finalize阶段写入,2026-10-19,2026-10-19,每日,是,EOD依赖门(执行状态),必需,仅反映执行成功≠数据健康,扩展为含输入新鲜度
+32,strategy_daily_eod/<date>/ 产物目录,正式每日输入,EOD+publish生成,2026-10-19,2026-10-19,每日,是,dashboard review/manifest,必需,-,READY:当日目录+manifest

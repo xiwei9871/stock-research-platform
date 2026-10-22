@@ -83,6 +83,13 @@ from stock_research.dashboard.ops_snapshot import (
 )
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.readiness import build_platform_readiness
+from stock_research.dashboard.company_intelligence import (
+    list_company_intelligence_dossiers,
+    list_company_intelligence_reviews,
+    load_company_intelligence_dossier,
+    load_company_intelligence_markdown,
+    record_company_intelligence_review,
+)
 from stock_research.dashboard.read_models import platform_summary_read_model
 from stock_research.dashboard.response_cache import DashboardResponseCache, dashboard_eod_cache_ttl_seconds
 from stock_research.dashboard.reports import load_report_links
@@ -1213,6 +1220,62 @@ def create_app() -> FastAPI:
     @app.get("/api/research/tech-bottleneck/review-universe/decision-summary")
     def tech_bottleneck_review_universe_decision_summary():
         return build_tech_bottleneck_review_decision_summary()
+
+    @app.get("/api/research/company-intelligence/dossiers")
+    def company_intelligence_dossiers():
+        return list_company_intelligence_dossiers()
+
+    @app.get("/api/research/capabilities/workbench")
+    def capabilities_workbench_themes():
+        from stock_research.dashboard.capabilities import list_workbench_themes
+        return list_workbench_themes()
+
+    @app.get("/api/research/capabilities/workbench/{theme_id}")
+    def capabilities_workbench_index(theme_id: str):
+        from stock_research.dashboard.capabilities import load_workbench_index
+        doc = load_workbench_index(theme_id)
+        if doc is None:
+            raise HTTPException(status_code=404, detail="workbench_index_not_found")
+        return doc
+
+    @app.get("/api/research/company-intelligence/stocks/{stock_code}/dossier")
+    def company_intelligence_dossier(stock_code: str):
+        try:
+            dossier = load_company_intelligence_dossier(stock_code)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="dossier_not_found")
+        if dossier is None:
+            raise HTTPException(status_code=404, detail="dossier_not_found")
+        return dossier
+
+    @app.get("/api/research/company-intelligence/stocks/{stock_code}/dossier.md")
+    def company_intelligence_dossier_markdown(stock_code: str):
+        from fastapi.responses import PlainTextResponse
+
+        try:
+            markdown = load_company_intelligence_markdown(stock_code)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="dossier_not_found")
+        if markdown is None:
+            raise HTTPException(status_code=404, detail="dossier_not_found")
+        return PlainTextResponse(markdown, media_type="text/markdown; charset=utf-8")
+
+    @app.get("/api/research/company-intelligence/stocks/{stock_code}/reviews")
+    def company_intelligence_reviews(stock_code: str):
+        try:
+            return list_company_intelligence_reviews(stock_code)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="dossier_not_found")
+
+    @app.post("/api/research/company-intelligence/stocks/{stock_code}/reviews")
+    def company_intelligence_review_create(stock_code: str, request: Request, payload: dict):
+        _require_guard(request, "company_intelligence_review_write")
+        try:
+            return record_company_intelligence_review(stock_code, payload)
+        except ValueError as exc:
+            detail = str(exc)
+            status = 404 if detail in {"dossier_not_found", "invalid_stock_code"} else 400
+            raise HTTPException(status_code=status, detail=detail) from exc
 
     @app.get("/api/ops/snapshot")
     def ops_snapshot(date: str | None = None):

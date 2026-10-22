@@ -1,0 +1,469 @@
+{
+  "company_code": "002837",
+  "company_name": "英维克",
+  "as_of": "2026-10-21",
+  "theme_context": {
+    "theme_id": "ai_power_value_capture_v1",
+    "theme_name": "AI供电产业链：谁在拿走价值量",
+    "node_id": "ai_power_liquid_cooling_002837_v1",
+    "node_name": "liquid_cooling",
+    "mapping_type": "direct_product",
+    "priority_score": 78.8
+  },
+  "review_universe_stock_code": "002837",
+  "review_universe_row_indexes": [
+    750,
+    751,
+    752,
+    753,
+    754,
+    755,
+    758,
+    759,
+    766,
+    767,
+    768,
+    769,
+    773,
+    774,
+    775,
+    776,
+    777,
+    778,
+    779,
+    781
+  ],
+  "source_overrides": {
+    "ru_002837_750": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_751": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_752": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_753": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_754": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_755": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_758": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_759": {
+      "published_at": "2025-08-19"
+    },
+    "ru_002837_766": {
+      "published_at": "2026"
+    },
+    "ru_002837_767": {
+      "published_at": "2026"
+    },
+    "ru_002837_768": {
+      "published_at": "2026"
+    },
+    "ru_002837_769": {
+      "published_at": "2026"
+    },
+    "ru_002837_773": {
+      "published_at": "2026"
+    },
+    "ru_002837_774": {
+      "published_at": "2026"
+    },
+    "ru_002837_775": {
+      "published_at": "2026"
+    },
+    "ru_002837_776": {
+      "published_at": "2026"
+    },
+    "ru_002837_777": {
+      "published_at": "2026"
+    },
+    "ru_002837_778": {
+      "published_at": "2026"
+    },
+    "ru_002837_779": {
+      "published_at": "2026"
+    },
+    "ru_002837_781": {
+      "published_at": "2026"
+    }
+  },
+  "evidence_overrides": {
+    "ru_002837_768": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "dc_liquid_cooling"
+    },
+    "ru_002837_754": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "自研技术/知识产权"
+    },
+    "ru_002837_755": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "自研技术/知识产权",
+      "product_line": "dc_liquid_cooling"
+    },
+    "ru_002837_773": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "关键工艺"
+    },
+    "ru_002837_777": {
+      "dimension": "tech_moat",
+      "direction": "support",
+      "checklist_item": "量产阶段",
+      "product_line": "dc_liquid_cooling"
+    },
+    "ru_002837_769": {
+      "dimension": "chain_position",
+      "direction": "support",
+      "checklist_item": "产业链关键节点"
+    },
+    "ru_002837_753": {
+      "dimension": "commercialization",
+      "direction": "support",
+      "checklist_item": "客户验证",
+      "product_line": "dc_liquid_cooling"
+    },
+    "ru_002837_758": {
+      "dimension": "commercialization",
+      "direction": "support",
+      "checklist_item": "客户验证",
+      "product_line": "dc_liquid_cooling"
+    },
+    "ru_002837_776": {
+      "dimension": "commercialization",
+      "direction": "support",
+      "checklist_item": "量产阶段",
+      "product_line": "ess_thermal"
+    },
+    "ru_002837_752": {
+      "dimension": "commercialization",
+      "direction": "support",
+      "checklist_item": "实际交付",
+      "product_line": "ess_thermal"
+    },
+    "ru_002837_778": {
+      "dimension": "commercialization",
+      "direction": "support",
+      "checklist_item": "量产阶段",
+      "product_line": "ess_thermal"
+    },
+    "ru_002837_779": {
+      "dimension": "financial_realization",
+      "direction": "support",
+      "checklist_item": "量产阶段",
+      "product_line": "dc_liquid_cooling"
+    },
+    "ru_002837_759": {
+      "dimension": "risk_counter",
+      "direction": "support",
+      "checklist_item": "商业化不及预期"
+    },
+    "ru_002837_781": {
+      "dimension": "commercialization",
+      "direction": "unclear"
+    }
+  },
+  "extra_sources": [
+    {
+      "source_id": "B_shenling_huaxin_20261012",
+      "source_type": "broker_report",
+      "title": "申菱环境：液冷全方案出海先锋（华鑫证券）",
+      "publisher": "华鑫证券",
+      "published_at": "2026-10-12",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "B_sanhua_galaxy_20260324",
+      "source_type": "broker_report",
+      "title": "三花智控2025年年度报告点评（银河证券）",
+      "publisher": "银河证券",
+      "published_at": "2026-03-24",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "B_guojin_liquid_20261010",
+      "source_type": "broker_report",
+      "title": "数据中心液冷行业报告（国金证券）",
+      "publisher": "国金证券",
+      "published_at": "2026-10-10",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "B_dayuan_huayuan_20260819",
+      "source_type": "broker_report",
+      "title": "大元泵业报告（华源证券）",
+      "publisher": "华源证券",
+      "published_at": "2026-08-19",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "B_maglev_huayuan_20260728",
+      "source_type": "broker_report",
+      "title": "磁悬浮离心压缩机行业报告（华源证券）",
+      "publisher": "华源证券",
+      "published_at": "2026-07-28",
+      "available_at": "2026-10-19",
+      "ingested_at": "2026-10-19",
+      "reliability_level": "S3"
+    },
+    {
+      "source_id": "N_m1_moat_deepening",
+      "source_type": "industry_data",
+      "title": "M1 主题护城河证据深化核查记录",
+      "publisher": "内部研究",
+      "published_at": "2026-10-20",
+      "available_at": "2026-10-20",
+      "ingested_at": "2026-10-20",
+      "reliability_level": "S2"
+    },
+    {
+      "source_id": "public_web_74a15229fd4c8635",
+      "source_type": "broker_report",
+      "title": "英维克(002837)：谷歌CDU合作获突破 国内外市场有望双增",
+      "publisher": "公开网络检索（研报线索）",
+      "published_at": "2025-10-28",
+      "available_at": "",
+      "ingested_at": "",
+      "reliability_level": "S3"
+    }
+  ],
+  "extra_evidence": [
+    {
+      "evidence_id": "ev_shenling_full_stack",
+      "source_id": "B_shenling_huaxin_20261012",
+      "dimension": "competitive_edge",
+      "direction": "refute",
+      "excerpt": "申菱环境被研报称为'液冷全方案出海先锋'，并声称北美市场新增订单约2.5亿元（H1'25）——国内竞争对手同样具备全链条液冷供给能力。",
+      "page_or_section": "第 2 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "国内外主要对手"
+    },
+    {
+      "evidence_id": "ev_sanhua_lc_revenue",
+      "source_id": "B_sanhua_galaxy_20260324",
+      "dimension": "competitive_edge",
+      "direction": "refute",
+      "excerpt": "三花智控年报点评称'数据中心液冷收入翻倍'；制冷零部件业务收入185.85亿元、毛利率28.77%——具备液冷业务与规模的同行存在。",
+      "page_or_section": "第 1-2 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "国内外主要对手"
+    },
+    {
+      "evidence_id": "ev_guojin_full_chain",
+      "source_id": "B_guojin_liquid_20261010",
+      "dimension": "competitive_edge",
+      "direction": "refute",
+      "excerpt": "国金证券液冷行业报告（pp.1-3）描述'风液同源'数据中心全链条冷却能力图谱，覆盖液冷环路在内的完整环节——全链条非独家叙事。",
+      "page_or_section": "第 1-3 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "国内外主要对手"
+    },
+    {
+      "evidence_id": "ev_dayuan_bypass",
+      "source_id": "B_dayuan_huayuan_20260819",
+      "dimension": "competitive_edge",
+      "direction": "refute",
+      "excerpt": "大元泵业屏蔽泵零泄漏、体积缩短≥60%、原生适配800V-HVDC CDU，研报声称适配 NVIDIA Kyber CDU 并经 Google 2MW CDU 确认（单一券商来源，未核实）。",
+      "page_or_section": "第 11-12 页",
+      "confidence": "low",
+      "review_status": "lead_only",
+      "checklist_item": "国内外主要对手"
+    },
+    {
+      "evidence_id": "ev_dayuan_route_risk",
+      "source_id": "B_dayuan_huayuan_20260819",
+      "dimension": "risk_counter",
+      "direction": "support",
+      "excerpt": "屏蔽泵路线若被大客户验证为更优，可能绕开英维克现有冷板/快换接头方案的关键环节——技术路线绕开风险的具体候选。",
+      "page_or_section": "第 11-12 页",
+      "confidence": "low",
+      "review_status": "lead_only",
+      "checklist_item": "技术替代/绕开风险"
+    },
+    {
+      "evidence_id": "ev_maglev_alt_route",
+      "source_id": "B_maglev_huayuan_20260728",
+      "dimension": "risk_counter",
+      "direction": "support",
+      "excerpt": "磁悬浮离心压缩机行业报告称 IPLV 提升42%、电机功率较螺杆机降低30%——替代制冷技术路线在能效指标上存在竞争力。",
+      "page_or_section": "第 1,12 页",
+      "confidence": "medium",
+      "review_status": "lead_only",
+      "checklist_item": "技术替代/绕开风险"
+    },
+    {
+      "evidence_id": "ev_lc_revenue_undisclosed",
+      "source_id": "N_m1_moat_deepening",
+      "dimension": "financial_realization",
+      "direction": "unclear",
+      "excerpt": "M1核查：英维克液冷相关收入未在定期报告中单独拆分披露——现有语料无法量化液冷业务收入、毛利与现金流贡献（证据缺失，非反证）。",
+      "page_or_section": "docs/research_upgrade/02_theme_moat_evidence_deepening.md §1",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "相关业务收入占比"
+    },
+    {
+      "evidence_id": "ev_google_cdu_lead",
+      "source_id": "public_web_74a15229fd4c8635",
+      "dimension": "commercialization",
+      "direction": "support",
+      "excerpt": "券商点评称英维克'谷歌CDU合作获突破'——指向海外大客户CDU合作的具体线索，未经一手公告核实。",
+      "page_or_section": "报告标题/摘要",
+      "confidence": "low",
+      "review_status": "lead_only",
+      "checklist_item": "客户验证",
+      "product_line": "dc_liquid_cooling"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "c_tech_full_chain",
+      "dimension": "tech_moat",
+      "claim_text": "公司掌握'热源到冷源'全链条液冷技术平台（Coolinside、两相冷板、射流冷板、快换接头/Manifold），并参编行业冷板技术规范标准",
+      "evidence_ids": [
+        "ru_002837_768",
+        "ru_002837_773",
+        "ru_002837_777"
+      ]
+    },
+    {
+      "claim_id": "c_chain_node",
+      "dimension": "chain_position",
+      "claim_text": "公司是数据中心/算力温控链条的关键节点供应商（覆盖头部互联网与运营商客户）",
+      "evidence_ids": [
+        "ru_002837_769",
+        "ru_002837_758_x_chain",
+        "ru_002837_773_x_chain"
+      ]
+    },
+    {
+      "claim_id": "c_comm_customers",
+      "dimension": "commercialization",
+      "claim_text": "液冷产品已获主流算力芯片厂商与头部算力设备制造商认可并被规模采购",
+      "evidence_ids": [
+        "ru_002837_753",
+        "ru_002837_758",
+        "ru_002837_776",
+        "ev_google_cdu_lead"
+      ]
+    },
+    {
+      "claim_id": "c_comm_delivery",
+      "dimension": "commercialization",
+      "claim_text": "液冷/储能温控产品已进入批量交付与量产阶段",
+      "evidence_ids": [
+        "ru_002837_752",
+        "ru_002837_778"
+      ]
+    },
+    {
+      "claim_id": "c_edge_capability",
+      "dimension": "competitive_edge",
+      "claim_text": "'全链条'液冷供给能力构成相对同行的差异化优势",
+      "evidence_ids": [
+        "ru_002837_755_x_edge",
+        "ru_002837_768_x_edge"
+      ]
+    },
+    {
+      "claim_id": "c_edge_uniqueness",
+      "dimension": "competitive_edge",
+      "claim_text": "液冷全链条供给能力在国内为独占/唯一（市场不存在同类供给）",
+      "evidence_ids": [
+        "ev_shenling_full_stack",
+        "ev_sanhua_lc_revenue",
+        "ev_guojin_full_chain",
+        "ev_dayuan_bypass"
+      ]
+    },
+    {
+      "claim_id": "c_edge_perf",
+      "dimension": "competitive_edge",
+      "claim_text": "公司产品相对竞品在性能/成本/交付上具有可量化的比较优势",
+      "evidence_ids": []
+    },
+    {
+      "claim_id": "c_fin_quantifiable",
+      "dimension": "financial_realization",
+      "claim_text": "液冷相关业务的收入规模、毛利与现金流贡献可以量化追溯",
+      "evidence_ids": [
+        "ev_lc_revenue_undisclosed"
+      ]
+    },
+    {
+      "claim_id": "c_fin_rd_intensity",
+      "dimension": "financial_realization",
+      "claim_text": "公司维持高强度研发投入（H1'25 研发费用4.46亿元、占营收7.35%）",
+      "evidence_ids": [
+        "ru_002837_779"
+      ]
+    },
+    {
+      "claim_id": "c_risk_competition",
+      "dimension": "risk_counter",
+      "claim_text": "存在行业竞争加剧与技术路线绕开（屏蔽泵/磁悬浮等替代方案）风险",
+      "evidence_ids": [
+        "ru_002837_759",
+        "ev_dayuan_route_risk",
+        "ev_maglev_alt_route"
+      ]
+    }
+  ],
+  "input_snapshot": {
+    "evidence_pool": "research.tech_bottleneck_review_universe_evidence@dataset_v1 + M1深化核查线索",
+    "date_basis": "interim=文件名日期2025-08-19；annual=标题'2025年年度报告'(年)；broker=M1文档页码引用",
+    "note": "all filing excerpts pending human verification; broker leads are single-source unverified claims",
+    "r1_revision": "claim级判定修正：独占性/差异化/性能优势拆分；未披露类证据改判unclear；lead_only不进判定"
+  },
+  "evidence_facets": [
+    {
+      "from": "ru_002837_758",
+      "as_evidence_id": "ru_002837_758_x_chain",
+      "dimension": "chain_position",
+      "direction": "support",
+      "checklist_item": "产业链关键节点"
+    },
+    {
+      "from": "ru_002837_773",
+      "as_evidence_id": "ru_002837_773_x_chain",
+      "dimension": "chain_position",
+      "direction": "support",
+      "checklist_item": "供应约束"
+    },
+    {
+      "from": "ru_002837_755",
+      "as_evidence_id": "ru_002837_755_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    },
+    {
+      "from": "ru_002837_768",
+      "as_evidence_id": "ru_002837_768_x_edge",
+      "dimension": "competitive_edge",
+      "direction": "support"
+    }
+  ]
+}

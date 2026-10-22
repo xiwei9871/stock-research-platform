@@ -145,6 +145,11 @@ from stock_research.factor_eval_store import (
 )
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
 from stock_research.factor_gate_watchdog import run_factor_gate_batch_watchdog
+from stock_research.tdx_auction_watchdog import (
+    DEFAULT_MONTH_LEDGER,
+    DEFAULT_REPORT_TARGET,
+    run_tdx_auction_backfill_watchdog,
+)
 from stock_research.daily_pipeline import run_daily_factor_pipeline
 from stock_research.daily_close_pipeline import (
     PipelineConfig as DailyClosePipelineConfig,
@@ -1117,6 +1122,32 @@ def add_factor_gate_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--top-n", type=int, default=30)
 
 
+def add_tdx_auction_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start-date", default="2018-02-14")
+    parser.add_argument("--end-date", default="2024-12-31")
+    parser.add_argument("--max-jobs", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--stale-after-minutes", type=int, default=60)
+    parser.add_argument("--run-timeout-seconds", type=int, default=3600)
+    parser.add_argument("--tdx-hosts", type=lambda value: parse_str_list(value, "--tdx-hosts"))
+    parser.add_argument("--tdx-timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--tdx-server-count", type=int, default=4)
+    parser.add_argument("--tdx-connections-per-server", type=int, default=1)
+    parser.add_argument("--retry-attempts", type=int, default=2)
+    parser.add_argument("--retry-sleep-seconds", type=float, default=0.25)
+    parser.add_argument("--max-pages", type=int, default=100)
+    parser.add_argument("--service", default=SETTINGS.research_service)
+    parser.add_argument("--report-target", default=DEFAULT_REPORT_TARGET)
+    parser.add_argument("--report-account", default="jarvis")
+    parser.add_argument("--openclaw-bin", default="openclaw")
+    parser.add_argument("--report-dry-run", action="store_true")
+    parser.add_argument("--ledger-path", default=str(DEFAULT_MONTH_LEDGER))
+    parser.add_argument("--min-coverage-ratio", type=float, default=0.98)
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--daily", action="store_true")
+    parser.add_argument("--daily-lookback-open-days", type=int, default=30)
+
+
 def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
     result = run_technical_feature_backfill_watchdog(
         start_date=args.start_date,
@@ -1184,6 +1215,191 @@ def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
     print(f"factor_gate_watchdog|delta_success|{delta_success}")
     print(f"factor_gate_watchdog|delta_rows|{max(0, delta_rows)}")
     print(f"factor_gate_watchdog|work_remaining|{result['status'].work_remaining}")
+
+
+def run_company_intelligence_dossier_command(args: argparse.Namespace) -> None:
+    from stock_research.company_intelligence import build_company_dossier
+    from stock_research.company_intelligence_feed import load_case_input
+    from stock_research.company_intelligence_report import write_dossier_outputs
+
+    case_input = load_case_input(args.case)
+    dossier = build_company_dossier(
+        company_code=case_input.company_code,
+        company_name=case_input.company_name,
+        as_of=case_input.as_of,
+        claims=case_input.claims,
+        evidence=case_input.evidence,
+        sources=case_input.sources,
+        theme_context=case_input.theme_context,
+        input_snapshot=case_input.input_snapshot,
+    )
+    paths = write_dossier_outputs(
+        dossier, args.output_dir, code_sha=args.code_sha
+    )
+    print(f"company_intelligence|json|{paths['json']}")
+    print(f"company_intelligence|markdown|{paths['markdown']}")
+    print(
+        "company_intelligence|overall_verdict|"
+        f"{dossier['conclusion']['overall_verdict']}"
+    )
+    print(
+        "company_intelligence|gaps|"
+        f"{len(dossier['research_gaps'])}"
+    )
+
+
+def run_chain_bottleneck_dossier_command(args: argparse.Namespace) -> None:
+    from stock_research.chain_bottleneck import build_node_dossier, load_node_case
+    from stock_research.chain_bottleneck_report import write_node_outputs
+    from stock_research.chain_value_matrix import build_value_matrix, load_dossiers
+
+    case = load_node_case(args.case)
+    member_codes = [str(m.get("stock_code") or "") for m in case["member_companies"]]
+    dossier_by_code = load_dossiers(args.dossier_dir, member_codes)
+
+    from stock_research.chain_t3_evidence import (
+        load_t3_records, rival_supply_as_evidence, t3_audit_stats,
+    )
+
+    t3 = {"segment_records": (), "rival_supply": ()}
+    if case.get("t3_records_path"):
+        t3 = load_t3_records(case["t3_records_path"])
+    # Rival-supply records convert into node-scope evidence + sources.
+    extra_evidence = list(case["evidence"])
+    extra_sources = {s.source_id: s for s in case["sources"]}
+    node_claims = list(case["node_claims"])
+    rival_map = {}
+    audit = t3_audit_stats(t3)
+    print(f"t3_audit|{json.dumps(audit['totals'], ensure_ascii=False, sort_keys=True)}")
+    for rec in t3["rival_supply"]:
+        if rec.node_id != case["node_id"]:
+            continue
+        # 双行：{rid} refute→稀缺性claim；{rid}_roster support→market_structure claim
+        ev, src = rival_supply_as_evidence(rec, direction="refute")
+        extra_evidence.append(ev)
+        from stock_research.company_intelligence import CompanyEvidence as _CE
+        roster = _CE(
+            evidence_id=rec.record_id + "_roster",
+            source_id=ev.source_id, dimension=ev.dimension,
+            direction="support", excerpt=ev.excerpt,
+            page_or_section=ev.page_or_section, confidence=ev.confidence,
+            review_status=rec.review_status, checklist_item="供应格局",
+            evidence_scope="node", product_line="",
+        )
+        extra_evidence.append(roster)
+        extra_sources[src.source_id] = src
+        rival_map[rec.record_id] = rec
+    matrix = build_value_matrix(
+        node_id=case["node_id"],
+        node_name=case["node_name"],
+        as_of=case["as_of"],
+        member_companies=case["member_companies"],
+        dossier_by_code=dossier_by_code,
+        node_product_lines=case.get("product_lines"),
+        segment_records=t3["segment_records"],
+        validation_records=t3.get("customer_validation") or (),
+        order_records=t3.get("orders") or (),
+    )
+    dossier = build_node_dossier(
+        node_id=case["node_id"],
+        node_name=case["node_name"],
+        as_of=case["as_of"],
+        node_claims=node_claims,
+        evidence=extra_evidence,
+        sources=list(extra_sources.values()),
+        member_companies=case["member_companies"],
+        product_lines=case.get("product_lines"),
+        value_matrix=matrix,
+        t3={
+            "segment_records": t3["segment_records"],
+            "rival_supply": t3["rival_supply"],
+            "customer_validation": t3.get("customer_validation") or (),
+            "orders": t3.get("orders") or (),
+        },
+        input_snapshot=case["input_snapshot"],
+    )
+    paths = write_node_outputs(dossier, args.output_dir, code_sha=args.code_sha)
+    print(f"chain_bottleneck|json|{paths['json']}")
+    print(f"chain_bottleneck|markdown|{paths['markdown']}")
+    print(f"chain_bottleneck|node_verdict|{dossier['conclusion']['node_verdict']}")
+    print(f"chain_bottleneck|gaps|{len(dossier['research_gaps'])}")
+
+
+def run_tdx_auction_watchdog_command(args: argparse.Namespace) -> None:
+    from stock_research.tdx_auction_backfill import TDX_AUCTION_SOURCE_VERSION
+    from stock_research.tdx_auction_watchdog import load_daily_backfill_scope
+
+    start_date = args.start_date
+    end_date = args.end_date
+    run_id = args.run_id
+    if args.daily:
+        if not run_id:
+            run_id = f"tdx-auction-open:{TDX_AUCTION_SOURCE_VERSION}:daily"
+        scope = load_daily_backfill_scope(
+            service=args.service,
+            run_id=run_id,
+            lookback_open_days=args.daily_lookback_open_days,
+            min_coverage_ratio=args.min_coverage_ratio,
+        )
+        if scope.window_start is None:
+            print(
+                "tdx_auction_watchdog|daily_scope|"
+                f"complete:{scope.latest_collectible or 'none'}"
+            )
+            print("tdx_auction_watchdog|action|skipped_no_incomplete_dates")
+            return
+        start_date = scope.window_start
+        end_date = scope.window_end
+        print(
+            f"tdx_auction_watchdog|daily_scope|{start_date}..{end_date}"
+            f"|incomplete={len(scope.incomplete_dates)}"
+        )
+    print(f"tdx_auction_watchdog|window|{start_date}..{end_date}")
+    print(f"tdx_auction_watchdog|run_id|{run_id or 'auto'}")
+    result = run_tdx_auction_backfill_watchdog(
+        start_date=start_date,
+        end_date=end_date,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        hosts=args.tdx_hosts,
+        timeout_seconds=args.tdx_timeout_seconds,
+        server_count=args.tdx_server_count,
+        connections_per_server=args.tdx_connections_per_server,
+        retry_attempts=args.retry_attempts,
+        retry_sleep_seconds=args.retry_sleep_seconds,
+        max_pages=args.max_pages,
+        service=args.service,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+        ledger_path=args.ledger_path,
+        min_coverage_ratio=args.min_coverage_ratio,
+        run_id=run_id,
+    )
+    run_result = result.get("run_result", {})
+    post_summary = result["post_summary"]
+    print(f"tdx_auction_watchdog|action|{result['status'].watchdog_action}")
+    print(f"tdx_auction_watchdog|completed_tasks|{post_summary.success_tasks}")
+    print(f"tdx_auction_watchdog|pending_tasks|{post_summary.pending_tasks}")
+    print(f"tdx_auction_watchdog|failed_tasks|{post_summary.failed_tasks}")
+    print(f"tdx_auction_watchdog|rows_written|{post_summary.total_rows_written}")
+    print(f"tdx_auction_watchdog|run_attempted|{run_result.get('attempted', 0)}")
+    print(f"tdx_auction_watchdog|run_rows|{run_result.get('rows', 0)}")
+    print(f"tdx_auction_watchdog|run_partial|{run_result.get('partial', 0)}")
+    print(f"tdx_auction_watchdog|run_requested_symbols|{run_result.get('requested_codes', 0)}")
+    print(f"tdx_auction_watchdog|run_missing_symbols|{run_result.get('missing_codes', 0)}")
+    print(f"tdx_auction_watchdog|run_failed_symbols|{run_result.get('failed_symbols', 0)}")
+    print(f"tdx_auction_watchdog|run_unsupported_symbols|{run_result.get('unsupported_symbols', 0)}")
+    print(f"tdx_auction_watchdog|run_excluded_symbols|{run_result.get('excluded_symbols', 0)}")
+    print(f"tdx_auction_watchdog|work_remaining|{result['status'].work_remaining}")
+    for report in result.get("monthly_reports", []):
+        print(
+            "tdx_auction_watchdog|month_report|"
+            f"{report.get('month', '')}|sent|{report.get('sent', False)}"
+        )
 
 
 def print_factor_backfill_progress(event: dict) -> None:
@@ -2122,6 +2338,54 @@ def build_parser() -> argparse.ArgumentParser:
 
     baostock_minute_backfill_watchdog = subparsers.add_parser("baostock-minute-backfill-watchdog")
     add_baostock_minute_backfill_watchdog_arguments(baostock_minute_backfill_watchdog)
+
+    tdx_auction_backfill_watchdog = subparsers.add_parser("tdx-auction-backfill-watchdog")
+    add_tdx_auction_watchdog_arguments(tdx_auction_backfill_watchdog)
+
+    company_intel = subparsers.add_parser("company-intelligence-dossier")
+    company_intel.add_argument("--case", required=True, help="case JSON path")
+    company_intel.add_argument(
+        "--output-dir", default="outputs/research/company_intelligence"
+    )
+    company_intel.add_argument("--code-sha", default="")
+
+    node_intel = subparsers.add_parser("chain-bottleneck-dossier")
+    node_intel.add_argument("--case", required=True, help="node case JSON path")
+    node_intel.add_argument(
+        "--dossier-dir",
+        default="outputs/research/company_intelligence",
+        help="directory holding member-company CAP-01 dossiers for the value matrix",
+    )
+    node_intel.add_argument(
+        "--output-dir", default="outputs/research/chain_bottleneck"
+    )
+    node_intel.add_argument("--code-sha", default="")
+
+    cap_chain = subparsers.add_parser("cap-chain-smoke")
+    cap_chain.add_argument("--theme", required=True, help="theme_id label")
+    cap_chain.add_argument(
+        "--cases", default="",
+        help="comma-separated node case JSON paths",
+    )
+    cap_chain.add_argument(
+        "--theme-db", action="store_true",
+        help="auto-orchestrate cases from the theme package (CAP-03 R1)",
+    )
+    cap_chain.add_argument("--case-dir", default="docs/cap02/cases")
+    cap_chain.add_argument(
+        "--dossier-dir",
+        default="outputs/research/company_intelligence",
+    )
+    cap_chain.add_argument("--as-of", required=True)
+    cap_chain.add_argument("--output", default="", help="optional JSON report path")
+    cap_chain.add_argument(
+        "--baseline-dir", default="outputs/research/cap_baselines",
+        help="CAP-07 versioned baseline store ('' disables)",
+    )
+    cap_chain.add_argument(
+        "--workbench-dir", default="outputs/research/cap_workbench",
+        help="CAP-09 unified browse index dir ('' disables)",
+    )
 
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
@@ -9347,6 +9611,55 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         run_minute_backfill_watchdog_command(args)
     elif args.command == "baostock-minute-backfill-watchdog":
         run_baostock_minute_backfill_watchdog_command(args)
+    elif args.command == "tdx-auction-backfill-watchdog":
+        run_tdx_auction_watchdog_command(args)
+    elif args.command == "company-intelligence-dossier":
+        run_company_intelligence_dossier_command(args)
+    elif args.command == "chain-bottleneck-dossier":
+        run_chain_bottleneck_dossier_command(args)
+    elif args.command == "cap-chain-smoke":
+        if getattr(args, "theme_db", False):
+            from stock_research.capabilities.pipeline import run_theme_chain
+
+            out = run_theme_chain(
+                args.theme,
+                args.dossier_dir,
+                args.as_of,
+                run_id=f"cap00-{args.as_of}",
+                case_dir=args.case_dir,
+                baseline_dir=args.baseline_dir or None,
+                workbench_dir=args.workbench_dir or None,
+            )
+            e3 = out["envelopes"]["CAP-03"]["findings"]
+            print(
+                f"cap_smoke|cap03|nodes={e3.get('node_count')}"
+                f"|with_cases={e3.get('nodes_with_cases')}"
+                f"|tasks={e3.get('task_count')}"
+            )
+        else:
+            from stock_research.capabilities.pipeline import run_research_chain
+
+            out = run_research_chain(
+                args.theme,
+                [p.strip() for p in args.cases.split(",") if p.strip()],
+                args.dossier_dir,
+                args.as_of,
+                run_id=f"cap00-{args.as_of}",
+                baseline_dir=args.baseline_dir or None,
+                workbench_dir=args.workbench_dir or None,
+            )
+        if args.output:
+            from pathlib import Path as _P
+
+            _P(args.output).parent.mkdir(parents=True, exist_ok=True)
+            _P(args.output).write_text(
+                json.dumps(out, ensure_ascii=False, indent=1, default=str),
+                encoding="utf-8",
+            )
+        for nid, envs in out["per_node"].items():
+            for cap, env in envs.items():
+                print(f"cap_smoke|{nid}|{cap}|{env['status']}|gaps={len(env['data_gaps'])}")
+        print(f"cap_smoke|total_gaps|{len(out['gap_backlog'])}")
     elif args.command == "backfill-watchdog":
         if args.adapter == "minute":
             run_minute_backfill_watchdog_command(args)
