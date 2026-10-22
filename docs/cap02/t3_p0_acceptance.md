@@ -142,3 +142,36 @@ done
 `{"accepted": 25, "lead_only": 3, "n": 28}`（unextracted 记录已由原表覆盖移除）
 
 校准：`revenue_yoy` 小数比例统一（30.9→0.309）；candidate_facts 透传 source_type/reliability/source_id/page；undisclosed 限定为"已核查 2025 年报口径"，液冷单线数字缺口保留。
+
+
+## DATA-D1 归因收口（2026-10-22 二轮）
+
+### 三花修正（P0）
+
+- `seg_002050_refrig_2025FY` product_line: `dc_liquid_cooling` → **`refrigeration_ac_parts`**——185.85 亿元制冷零部件分部不再绑定液冷节点；矩阵 rev: `disclosed_broader_scope` → **`undisclosed`**（仅余液冷单线未拆分的已核实记录；数据中心项目线索保留为板块叙述）
+- `rival_002050_sanhua` 来源修正：摘录源自 M1 内部摘要 → `source_type=internal_summary/S2`，URI 去除 cninfo 伪装，保持 lead_only（年报核查事实独立存于 seg_002050_liquid_line_undisclosed）
+
+### 大元事实分级
+
+| 事实 | 分级 | 落位 |
+|---|---|---|
+| In-Rack 泵 ~3万+~2万台 | 组件级交付（非整套CDU） | `mass_delivery` + `verified_delivered` |
+| In-Row 22/37kW UL 认证 | **产品认证**（非客户认证） | `product_certified` 事实位（不升 validated） |
+| 17 家温控厂商覆盖 | **对接覆盖**（不默认逐家送样/签约） | `contact` |
+| 曙光8000 泵组 | 项目级交付 | `ord_603757_sugon` delivered |
+
+`substitution_verified=False` 保持——组件交付≠整套 CDU 系统替代能力。
+
+### PDF 固化
+
+`docs/cap02/t3/t3_source_manifest.json`：4 份 PDF 公告 ID、下载 URL、SHA256、页数、采集时间、稳定路径全记录（沿用 cninfo_primary_source_pdfs 冷备目录）。
+
+### 矩阵差异（修正后）
+
+- 002050 rev: `disclosed_broader_scope` → **`undisclosed`**（三花分部归因修正的核心效果）
+- 603757 valdel/ord 保持 `mass_delivery`/`verified_delivered`（组件级语义注明）
+- 其余行不变；节点判定不变
+
+### 统计
+
+`{"accepted": 25, "lead_only": 3, "n": 28}` 不变（记录归因修正，非增删）

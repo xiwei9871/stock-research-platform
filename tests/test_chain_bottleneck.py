@@ -543,3 +543,39 @@ def test_candidate_facts_carry_source_provenance():
     filing = _seg(rid="f", review="accepted")
     cell2 = segment_cell([filing])
     assert cell2["facts"][0]["source_type"] == "company_filing"
+
+
+def test_sanhua_segment_not_bound_to_liquid_node():
+    """制冷零部件分部不得绑定 dc_liquid_cooling：节点财务格不得消费该收入。"""
+    from stock_research.chain_t3_evidence import load_t3_records
+    t3 = load_t3_records("docs/cap02/t3/t3_records.json")
+    refrig = [r for r in t3["segment_records"] if r.record_id == "seg_002050_refrig_2025FY"][0]
+    assert refrig.product_line != "dc_liquid_cooling"
+    # 节点过滤：该分部记录不进 dc_liquid_cooling 节点
+    rows = segment_records_for(t3["segment_records"], "002050", {"dc_liquid_cooling"})
+    assert refrig.record_id not in [r.record_id for r in rows]
+    # 液冷节点财务格：undisclosed 已核实记录仍在 → undisclosed（非 disclosed_broader_scope）
+    cell = segment_cell(rows, "2026-10-22")
+    assert cell["state"] == "undisclosed"
+
+
+def test_dayuan_fact_tiers_separated():
+    """产品认证≠客户认证；对接覆盖≠送样/签约。"""
+    from stock_research.chain_t3_evidence import load_t3_records
+    t3 = load_t3_records("docs/cap02/t3/t3_records.json")
+    cv = {r.record_id: r for r in t3["customer_validation"]}
+    assert cv["cust_603757_ul"].stage == "product_certified"  # 产品认证位
+    assert cv["cust_603757_sampling"].stage == "contact"     # 对接覆盖≠送样完成
+    cell = validation_cell(list(t3["customer_validation"]), "603757",
+                           {"dc_liquid_cooling"}, "2026-10-22")
+    assert cell["state"] == "mass_delivery"                  # 批量交付仍最高级
+    stages = {f["stage"] for f in cell["product_facts"]}
+    assert "product_certified" in stages                     # UL 事实可见但不冒认证级
+
+
+def test_sanhua_rival_source_is_internal_summary():
+    """M1 摘要不得挂 company_filing。"""
+    from stock_research.chain_t3_evidence import load_t3_records
+    t3 = load_t3_records("docs/cap02/t3/t3_records.json")
+    rec = [r for r in t3["rival_supply"] if r.record_id == "rival_002050_sanhua"][0]
+    assert rec.source_type == "internal_summary" and rec.review_status == "lead_only"

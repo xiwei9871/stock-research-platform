@@ -82,6 +82,7 @@ class RivalSupplyRecord:
     # 明确适配/性能/产能/认证证据支持"有效替代"时才为 True；
     # 仅披露产品序列不自动构成可替代供给反证。
     substitution_verified: bool = False
+    note: str = ""
 
 
 def load_t3_records(path: str | Path) -> dict[str, Any]:
@@ -376,6 +377,12 @@ def validation_cell(
     return {
         "state": state,
         "validated_by": [r.customer for r in pl if r.customer],
+        "product_facts": [
+            {"record_id": r.record_id, "stage": r.stage, "customer": r.customer,
+             "note": getattr(r, "note", "")}
+            for r in accepted
+            if r.stage not in VALIDATION_STAGES and r.stage != "customer_relationship"
+        ],
         "candidates": [
             {"record_id": r.record_id, "stage": r.stage, "customer": r.customer,
              "review_status": r.review_status,

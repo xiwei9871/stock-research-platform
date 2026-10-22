@@ -218,7 +218,7 @@
     {
       "record_id": "seg_002050_refrig_2025FY",
       "stock_code": "002050",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "refrigeration_ac_parts",
       "product_line_label": "制冷空调电器零部件",
       "report_period": "2025FY",
       "disclosure_scope": "segment",
@@ -236,7 +236,7 @@
       "ingested_at": "2026-10-22",
       "review_status": "accepted",
       "excerpt": "年报p15：制冷空调电器零部件18,584,743,718.09元(59.93%)/毛利率28.77%/+12.22%；p14板块下提及'推进数据中心领域项目'——口径远大于数据中心液冷",
-      "note": "通用热管理板块，液冷相关披露未拆分"
+      "note": "该分部为通用热管理业务，年报仅提及\"推进数据中心领域项目\"，未建立分部与液冷产品包含关系——不绑定 dc_liquid_cooling，液冷节点财务格不得使用"
     },
     {
       "record_id": "seg_002050_liquid_line_undisclosed",
@@ -305,18 +305,19 @@
       "rival_name": "三花智控",
       "node_id": "ai_power_liquid_cooling",
       "stage": "未知",
-      "supply_facts": "2025年报已核：制冷空调电器零部件板块提及'推进数据中心领域项目'；无液冷产品线/CDU/冷板（数据中心用）披露；p137冷板为新能源车电池水冷板",
+      "supply_facts": "M1摘要称三花布局液冷；2025年报全文已核：无液冷/CDU产品线披露，仅制冷零部件板块\"推进数据中心领域项目\"表述",
       "substitution_note": "无液冷产品一手披露——不支撑供应商格局论点；保持lead_only",
-      "source_id": "cninfo_002050_ar2025",
-      "uri": "outputs/research/tech_bottleneck_expansion_queue_primary_source_backfill_v1/cninfo_primary_source_pdfs/002050_三花智控_2026-03-24_年报_2025年年度报告_1225026522.pdf",
-      "page_or_section": "年报全文",
+      "source_id": "m1_internal_summary",
+      "uri": "",
+      "page_or_section": "M1内部研究摘要（一手披露未核实）",
       "published_at": "2026-03-24",
       "ingested_at": "2026-10-22",
       "review_status": "lead_only",
       "excerpt": "M1核查摘要：三花智控具备液冷相关布局（内部摘要，未核原文）",
-      "source_type": "company_filing",
-      "reliability_level": "S1",
-      "available_at": "2026-03-24"
+      "source_type": "internal_summary",
+      "reliability_level": "S2",
+      "available_at": "2026-03-24",
+      "note": "摘录源自M1内部摘要（非三花原文）——修正来源指向；年报核查事实见 seg_002050_liquid_line_undisclosed"
     }
   ],
   "customer_validation": [
@@ -404,13 +405,14 @@
       "available_at": "2026-08-27",
       "ingested_at": "2026-10-22",
       "review_status": "accepted",
-      "excerpt": "p17：1-15kw区间In-Rack型配套产品2025年累计交付约3万台，2026年上半年累计交付约2万台"
+      "excerpt": "p17：1-15kw区间In-Rack型配套产品2025年累计交付约3万台，2026年上半年累计交付约2万台",
+      "note": "组件级交付（In-Rack配套泵，非整套CDU系统）"
     },
     {
       "record_id": "cust_603757_sugon8000",
       "stock_code": "603757",
       "product_line": "dc_liquid_cooling",
-      "stage": "validated",
+      "stage": "mass_delivery",
       "customer": "曙光数创",
       "scope": "product_line",
       "report_period": "2026H1",
@@ -421,14 +423,15 @@
       "available_at": "2026-08-27",
       "ingested_at": "2026-10-22",
       "review_status": "accepted",
-      "excerpt": "p17：完成曙光8000（登峰）全国产十万卡AI超算集群浸没式相变架构下全套氟化液浸没循环屏蔽泵组的配套及供应"
+      "excerpt": "p17：完成曙光8000（登峰）全国产十万卡AI超算集群浸没式相变架构下全套氟化液浸没循环屏蔽泵组的配套及供应",
+      "note": "项目级交付证据（配套及供应完成），与订单记录 ord_603757_sugon 同事实不同维度"
     },
     {
       "record_id": "cust_603757_ul",
       "stock_code": "603757",
       "product_line": "dc_liquid_cooling",
-      "stage": "validated",
-      "customer": "In-Row CDU配套(22kw/37kw)",
+      "stage": "product_certified",
+      "customer": "In-Row CDU 22/37kw 配套泵",
       "scope": "product_line",
       "report_period": "2026H1",
       "source_id": "cninfo_603757_2026h1",
@@ -438,13 +441,14 @@
       "available_at": "2026-08-27",
       "ingested_at": "2026-10-22",
       "review_status": "accepted",
-      "excerpt": "p17：In-Row场景CDU配套22kw、37kw永磁同步/异步屏蔽泵按要求严格完成各项单机测试及认证（含UL认证）"
+      "excerpt": "p17：In-Row场景CDU配套22kw、37kw永磁同步/异步屏蔽泵按要求严格完成各项单机测试及认证（含UL认证）",
+      "note": "产品级认证（UL等单机测试认证），非客户认证"
     },
     {
       "record_id": "cust_603757_sampling",
       "stock_code": "603757",
       "product_line": "dc_liquid_cooling",
-      "stage": "sampling",
+      "stage": "contact",
       "customer": "英维克/申菱/Vertiv/台达/双鸿/AVC/Cooler Master/nVent/Boyd/Carrier/CoolIt/科华/同飞/尼得科/杰瑞/中兴/海悟等",
       "scope": "product_line",
       "report_period": "2026H1",
@@ -455,7 +459,8 @@
       "available_at": "2026-08-27",
       "ingested_at": "2026-10-22",
       "review_status": "accepted",
-      "excerpt": "p17：完成与海内外重点温控厂商的对接覆盖，按客户差异化节奏完成产品送样、订单的对接获取"
+      "excerpt": "p17：完成与海内外重点温控厂商的对接覆盖，按客户差异化节奏完成产品送样、订单的对接获取",
+      "note": "对接覆盖+按客户节奏送样/订单对接——不默认每家均已送样/认证/签约"
     }
   ],
   "orders": [
@@ -529,7 +534,8 @@
       "available_at": "2026-08-27",
       "ingested_at": "2026-10-22",
       "review_status": "accepted",
-      "excerpt": "In-Rack CDU泵2025交付约3万台+2026H1约2万台（台数量级，未披露金额）"
+      "excerpt": "In-Rack CDU泵2025交付约3万台+2026H1约2万台（台数量级，未披露金额）",
+      "note": "组件级交付（In-Rack配套泵台数，非整套CDU）"
     },
     {
       "record_id": "ord_603757_sugon",
