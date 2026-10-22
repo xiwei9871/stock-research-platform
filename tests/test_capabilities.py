@@ -301,8 +301,14 @@ def test_workbench_index_consistency(tmp_path):
     idx = json.loads(
         open(f"{wb}/ai_power_value_capture_v1/index.json").read())
     assert idx["theme_id"] == "ai_power_value_capture_v1"
+    case_nodes = [n for n in idx["nodes"] if n.get("status") != "no_case"]
+    uncovered = [n for n in idx["nodes"] if n.get("status") == "no_case"]
+    assert len(case_nodes) == len(out["per_node"])
+    # 主题 13 节点、4 个有案例 → 无案例节点入索引而非静默消失
+    assert uncovered and all(n["coverage_owner"] == "CAP-02" for n in uncovered)
+    assert idx["covered_node_count"] < idx["theme_node_count"]
     # 每节点五桶齐全 + 顶层证据引用/指纹（非 findings 误取）
-    for n in idx["nodes"]:
+    for n in case_nodes:
         for b in ("favorable_support", "market_structure",
                   "counter_evidence", "hype_risks", "unresolved"):
             assert b in n["synthesis"], (n["node_id"], b)
@@ -313,6 +319,8 @@ def test_workbench_index_consistency(tmp_path):
         assert n["upstream_fingerprints"] == env8["upstream_fingerprints"]
         assert n["node_verdict"] == \
             out["per_node"][n["node_id"]]["CAP-04"]["findings"]["node_verdict"]
+        # 子案例归属主题节点（不是独立主题节点）
+        assert n["theme_node_id"] == "liquid_cooling"
     # 索引缺口数 == 最终 backlog（含 cap03 主题读层缺口合并后）
     assert sum(idx["gap_summary"].values()) == len(idx["gap_backlog"]) \
         == len(out["gap_backlog"])
@@ -333,3 +341,72 @@ def test_gap_backlog_deduped_with_owners():
     assert baseline and all(g["owner"] == "CAP-07" for g in baseline)
     for g in out["gap_backlog"]:
         assert g["source_capabilities"]
+
+
+def test_cap07_three_run_idempotent_no_metadata_growth(tmp_path):
+    """UAT-A: 全链路连跑 3 次 —— 首跑建基线，后两跑无新研究事实不得追加。
+
+    CAP-07 自身状态 / envelope 指纹 / baseline_count 均为运行元数据，
+    不构成研究事实变化，不得造成循环版本增长。"""
+    from stock_research.capabilities.baseline import load_baselines
+    store = str(tmp_path / "baselines")
+    env7_runs = []
+    for i in range(3):
+        out = run_research_chain(
+            "liquid_cooling", SUBNODE_CASES, DOSSIER_DIR, AS_OF,
+            f"{RUN_ID}-r{i}", baseline_dir=store)
+        env7_runs.append(out["per_node"]["liquid_cooling_cdu_system"]["CAP-07"])
+    versions = load_baselines(store, "liquid_cooling_cdu_system")
+    assert len(versions) == 1, f"baselines grew: {len(versions)}"
+    assert env7_runs[0]["status"] == "unknown"          # 首跑无基线
+    assert env7_runs[1]["findings"]["state_changed"] is False
+    assert env7_runs[2]["findings"]["state_changed"] is False
+    assert env7_runs[2]["findings"]["baseline_version"] == 1
+
+
+def test_cap07_pit_replay_ignores_future_baselines(tmp_path):
+    """历史回放不得与未来日期基线比较，也不得覆盖较新历史。"""
+    from stock_research.capabilities.baseline import (
+        diff_baselines, load_baselines, save_baseline,
+    )
+    store = str(tmp_path / "baselines")
+    future = {"as_of": "2026-10-31", "node_verdict": "unverified",
+              "claims": {}, "economics": {}, "evidence_refs": []}
+    save_baseline(store, "n1", future)
+    # 回放更早时点：未来基线被跳过，不视为已有基线
+    replay = {"as_of": "2026-10-25", "node_verdict": "unverified",
+              "claims": {}, "economics": {}, "evidence_refs": []}
+    d = diff_baselines(replay, load_baselines(store, "n1"))
+    assert d["baseline_found"] is False
+    assert d["skipped_future_versions"] == 1
+    # 回放快照追加为新版本——较新历史（as_of 10-31）保留不被覆盖
+    rec = save_baseline(store, "n1", replay)
+    assert rec["version"] == 2
+    versions = load_baselines(store, "n1")
+    assert versions[0]["as_of"] == "2026-10-31"  # 原版本仍在
+    # 再回到新时点：对比的是最新 PIT-eligible 基线
+    newer = {"as_of": "2026-10-31", "node_verdict": "contested",
+             "claims": {}, "economics": {}, "evidence_refs": []}
+    d2 = diff_baselines(newer, versions)
+    assert d2["baseline_found"] is True
+    assert d2["baseline_version"] == 2  # eligible: v1(10-31)…排序按追加
+    assert any(c["field"] == "node:node_verdict" for c in d2["changes"])
+
+
+def test_cap07_diff_includes_sourced_revenue_facts(tmp_path):
+    """内容 diff 覆盖有来源的产品线收入/毛利数值，不只是状态。"""
+    from stock_research.capabilities.baseline import diff_baselines
+    f1 = [{"product_line": "liquid_cooling_pump", "period": "2025H1",
+           "revenue": 1.0, "gross_margin": 0.3, "source_id": "cninfo_x"}]
+    f2 = [{**f1[0], "gross_margin": 0.35}]
+    base = {"as_of": "2026-10-22",
+            "economics": {"002837": {"revenue": "disclosed",
+                                     "revenue_facts": f1}},
+            "claims": {}, "evidence_refs": []}
+    cur = {"as_of": "2026-10-22",
+           "economics": {"002837": {"revenue": "disclosed",
+                                    "revenue_facts": f2}},
+           "claims": {}, "evidence_refs": []}
+    d = diff_baselines(cur, [dict(base, version=1)])
+    hits = [c for c in d["changes"] if "revenue_facts" in c["field"]]
+    assert hits and hits[0]["kind"] == "changed"

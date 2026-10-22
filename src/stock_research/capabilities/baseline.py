@@ -27,10 +27,36 @@ def load_baselines(store_root: str | Path, node_id: str) -> list[dict[str, Any]]
     return json.loads(p.read_text(encoding="utf-8")).get("versions", [])
 
 
+# Self-referential / derived run states — never part of research-fact
+# identity.  CAP-07 reports its own diff state; CAP-08's status is a
+# deterministic function of the upstream envelopes (real changes already
+# surface via claims/economics/evidence diffs).
+_DERIVED_CAPS = {"CAP-07", "CAP-08"}
+
+
 def _snapshot_content(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Content used for dedupe — everything except bookkeeping fields."""
-    return {k: v for k, v in snapshot.items()
-            if k not in {"version", "saved_at"}}
+    """Research-fact identity used for dedupe.  Derived run metadata —
+    envelope fingerprints (CAP-07's own fp embeds its diff output, so
+    keeping it would force a new version every run) and CAP-07/CAP-08
+    statuses — are excluded; only substantive facts version history."""
+    content = {k: v for k, v in snapshot.items()
+               if k not in {"version", "saved_at", "envelope_fingerprints"}}
+    caps = dict(content.get("cap_statuses") or {})
+    for c in _DERIVED_CAPS:
+        caps.pop(c, None)
+    content["cap_statuses"] = caps
+    return content
+
+
+def _eligible_baselines(
+    versions: Sequence[dict[str, Any]], as_of: str | None,
+) -> list[dict[str, Any]]:
+    """Only baselines at or before ``as_of`` may serve as comparison —
+    a historical replay must never diff against future-dated state."""
+    if not as_of:
+        return list(versions)
+    return [v for v in versions
+            if str(v.get("as_of") or "") <= str(as_of)]
 
 
 def save_baseline(
@@ -38,14 +64,17 @@ def save_baseline(
     node_id: str,
     snapshot: dict[str, Any],
 ) -> dict[str, Any]:
-    """Append a versioned baseline (atomic replace).  Identical content
-    re-runs are NOT appended — returns the existing last version with
-    ``deduped=True`` instead of growing history with no change."""
+    """Append a versioned baseline (atomic replace).  Content-identical
+    re-runs are NOT appended — dedupe is checked against the newest
+    PIT-eligible baseline (as_of <= snapshot.as_of), so replaying an
+    older date never collapses newer history and newer baselines are
+    never overwritten."""
     p = _store_path(store_root, node_id)
     p.parent.mkdir(parents=True, exist_ok=True)
     versions = load_baselines(store_root, node_id)
-    if versions and _snapshot_content(versions[-1]) == _snapshot_content(snapshot):
-        return {**versions[-1], "deduped": True}
+    eligible = _eligible_baselines(versions, snapshot.get("as_of"))
+    if eligible and _snapshot_content(eligible[-1]) == _snapshot_content(snapshot):
+        return {**eligible[-1], "deduped": True}
     record = {
         "version": len(versions) + 1,
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -76,6 +105,9 @@ def snapshot_from_node_chain(
             "revenue": _cell(row.get("revenue_profit")),
             "delivery": _cell(row.get("validation_delivery")),
             "order": _cell(row.get("verified_orders")),
+            # sourced product-line revenue/margin VALUES (not just state)
+            # — a real change in disclosed numbers is a research change.
+            "revenue_facts": _revenue_facts(row.get("revenue_profit")),
         }
     def _attr(e: Any, key: str) -> Any:
         return e.get(key) if isinstance(e, dict) else getattr(e, key, None)
@@ -118,12 +150,16 @@ def diff_baselines(
     current: dict[str, Any],
     baselines: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Explainable diff vs the most recent baseline — added / removed /
-    changed across claims, companies (economics), evidence refs, node
-    verdict and capability statuses."""
-    if not baselines:
-        return {"baseline_found": False, "changes": []}
-    prev = baselines[-1]
+    """Explainable diff vs the newest PIT-eligible baseline — added /
+    removed / changed across claims, companies (economics incl. sourced
+    revenue/margin facts), evidence refs, node verdict and capability
+    statuses.  CAP-07/CAP-08 self/derived statuses are excluded;
+    future-dated baselines never participate."""
+    eligible = _eligible_baselines(baselines, current.get("as_of"))
+    if not eligible:
+        return {"baseline_found": False, "changes": [],
+                "skipped_future_versions": len(baselines)}
+    prev = eligible[-1]
     changes: list[dict[str, Any]] = []
     changes += _diff_maps(
         {"node_verdict": prev.get("node_verdict")},
@@ -142,13 +178,16 @@ def diff_baselines(
         {e: True for e in (prev.get("evidence_refs") or [])},
         {e: True for e in current.get("evidence_refs", [])},
         "evidence_ref")
-    changes += _diff_maps(
-        prev.get("cap_statuses") or {}, current.get("cap_statuses") or {},
-        "cap_status")
+    prev_caps = {k: v for k, v in (prev.get("cap_statuses") or {}).items()
+                 if k not in _DERIVED_CAPS}
+    cur_caps = {k: v for k, v in (current.get("cap_statuses") or {}).items()
+                if k not in _DERIVED_CAPS}
+    changes += _diff_maps(prev_caps, cur_caps, "cap_status")
     return {
         "baseline_found": True,
         "baseline_version": prev.get("version"),
         "baseline_as_of": prev.get("as_of"),
+        "skipped_future_versions": len(baselines) - len(eligible),
         "state_changed": bool(changes),
         "changes": changes,
         "added": sum(1 for c in changes if c["kind"] == "added"),
@@ -161,3 +200,21 @@ def _cell(v: Any) -> str:
     if isinstance(v, dict):
         return str(v.get("state") or "missing")
     return str(v or "missing")
+
+
+def _revenue_facts(cell: Any) -> list[dict[str, Any]]:
+    """Compact sourced revenue/margin facts from a matrix cell — diffable
+    values, not just disclosure state."""
+    if not isinstance(cell, dict):
+        return []
+    facts = []
+    for f in cell.get("facts") or []:
+        facts.append({
+            "product_line": f.get("product_line") or f.get("label"),
+            "period": f.get("period"),
+            "revenue": f.get("revenue"),
+            "gross_margin": f.get("gross_margin"),
+            "scope": f.get("scope"),
+            "source_id": f.get("source_id"),
+        })
+    return sorted(facts, key=lambda x: (str(x["product_line"]), str(x["period"])))

@@ -126,7 +126,14 @@ cap-chain-smoke --theme liquid_cooling --cases <3 子节点> --as-of 2026-10-22
 
 **验收实测**（见 `r1_smoke_*` + 截图）：ai_power 4 节点/21 缺口；humanoid 1 节点/3 缺口（`nc_vision_hype` 正确归炒作风险）；semi_equipment 1 节点/6 缺口；同内容重跑 state_changed=False、版本不追加；变更场景 added=5/removed=2/changed=5。
 
-## 十二、边界
+## 十二、R1 最终联调 — 基线幂等 + 全主题浏览 + UAT（2026-10-22）
+
+- **CAP-07 幂等**：研究事实身份排除运行元数据——`envelope_fingerprints`（CAP-07 fp 内嵌自身 diff 输出）、CAP-07 自身状态、CAP-08 派生综合态均不计入 dedupe/diff；连跑 3 次全链路基线保持 v1 不增长（契约测试锁定）；diff 增加 `econ:*.revenue_facts`（有来源的产品线收入/毛利数值变化）；`diff_baselines`/`save_baseline` 只使用 `as_of <=` 当前时点的 PIT-eligible 基线（`skipped_future_versions` 可审计），历史回放永不对比未来基线、append-only 不覆盖较新历史
+- **CAP-09 全主题覆盖**：index 含案例节点 + **无案例主题节点**（`status=no_case`、`coverage_owner=CAP-02`、审核状态、映射公司、主题深链）；子案例显示 `归属主题节点`（案例 node_id≠主题 node_id 通过 `runnable_cases[].case_node_id` 映射）；`covered_node_count/theme_node_count` 头部摘要；`changes` 块（vs 基线 vN 无变化/增删改字段级）
+- **深链**：公司 → `/tech-bottleneck/stock/{code}?source=capabilities`（实测跳转英维克个股工作台）；主题 → `/theme-research/{theme_id}`；无有效目标处不伪造链接（evidence_refs/source_ids 纯文本展示）
+- **UAT**（本地 Dashboard，未部署）：ai_power 16 节点（4 案例 + 12 覆盖缺口）/ humanoid 21（1+20）/ semi case 模式 1 节点；主题→节点→公司→五桶→来源→缺口→历史变化全程页面完成，无需 JSON/CLI；截图 `screenshots/uat_*.png`
+
+## 十三、边界
 
 - research_only：`used_for_signal=False` / `used_for_admission=False` 全链路透传；
 - 不重建已稳定基础设施（CAP-01/02 引擎、dashboard、StrategyLab 全部复用）；

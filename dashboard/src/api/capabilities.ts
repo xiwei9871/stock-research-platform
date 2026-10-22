@@ -31,12 +31,19 @@ export interface CapWorkbenchCompany {
 
 export interface CapWorkbenchNode {
   node_id: string;
+  theme_node_id?: string;
   theme_node?: string;
   status?: string;
+  coverage?: string;
+  coverage_owner?: string;
   error?: string;
   node_verdict?: string;
+  node_review_status?: string;
+  bottleneck_score?: number;
+  value_capture_score?: number;
   cap_statuses?: Record<string, string>;
   companies?: CapWorkbenchCompany[];
+  mapped_companies?: Array<{ stock_code: string; review_status?: string; dashboard_link?: string }>;
   synthesis?: {
     favorable_support: CapBucketEntry[];
     market_structure: CapBucketEntry[];
@@ -46,6 +53,16 @@ export interface CapWorkbenchNode {
   };
   evidence_refs?: string[];
   upstream_fingerprints?: string[];
+  theme_link?: string;
+  changes?: {
+    baseline_found?: boolean;
+    baseline_version?: number;
+    state_changed?: boolean;
+    added?: number;
+    removed?: number;
+    changed?: number;
+    items?: Array<{ kind: string; field: string; from: unknown; to: unknown }>;
+  } | null;
 }
 
 export interface CapWorkbenchGap {
@@ -62,6 +79,11 @@ export interface CapWorkbenchIndex {
   theme_id: string;
   as_of: string;
   run_id: string;
+  theme_link?: string;
+  read_source?: string;
+  pit_note?: string;
+  theme_node_count?: number;
+  covered_node_count?: number;
   nodes: CapWorkbenchNode[];
   gap_summary?: Record<string, number>;
   gap_backlog: CapWorkbenchGap[];

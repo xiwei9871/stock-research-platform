@@ -171,6 +171,7 @@ def _index_cases(case_dir: str | Path) -> dict[str, dict[str, Any]]:
             continue
         out[case["node_id"]] = {
             "path": str(p),
+            "case_node_id": case["node_id"],
             "derived_from": case.get("derived_from") or "",
             "theme_node_id": case.get("theme_node_id") or "",
         }
@@ -280,7 +281,8 @@ def cap03_orchestrate_theme(
             # lineage: a sub-node case derived_from a parent is the same
             # evidence, not independent confirmation
             "runnable_cases": [
-                {"path": m["path"], "lineage": m.get("derived_from") or None}
+                {"path": m["path"], "case_node_id": m.get("case_node_id"),
+                 "lineage": m.get("derived_from") or None}
                 for m in _match_case_meta(nid, case_index)
             ],
             "mapped_companies": [
