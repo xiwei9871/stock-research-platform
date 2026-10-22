@@ -2361,6 +2361,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     node_intel.add_argument("--code-sha", default="")
 
+    cap_chain = subparsers.add_parser("cap-chain-smoke")
+    cap_chain.add_argument("--theme", required=True, help="theme_id label")
+    cap_chain.add_argument(
+        "--cases", required=True,
+        help="comma-separated node case JSON paths",
+    )
+    cap_chain.add_argument(
+        "--dossier-dir",
+        default="outputs/research/company_intelligence",
+    )
+    cap_chain.add_argument("--as-of", required=True)
+    cap_chain.add_argument("--output", default="", help="optional JSON report path")
+
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
         "--adapter",
@@ -9591,6 +9604,28 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         run_company_intelligence_dossier_command(args)
     elif args.command == "chain-bottleneck-dossier":
         run_chain_bottleneck_dossier_command(args)
+    elif args.command == "cap-chain-smoke":
+        from stock_research.capabilities.pipeline import run_research_chain
+
+        out = run_research_chain(
+            args.theme,
+            [p.strip() for p in args.cases.split(",") if p.strip()],
+            args.dossier_dir,
+            args.as_of,
+            run_id=f"cap00-{args.as_of}",
+        )
+        if args.output:
+            from pathlib import Path as _P
+
+            _P(args.output).parent.mkdir(parents=True, exist_ok=True)
+            _P(args.output).write_text(
+                json.dumps(out, ensure_ascii=False, indent=1, default=str),
+                encoding="utf-8",
+            )
+        for nid, envs in out["per_node"].items():
+            for cap, env in envs.items():
+                print(f"cap_smoke|{nid}|{cap}|{env['status']}|gaps={len(env['data_gaps'])}")
+        print(f"cap_smoke|total_gaps|{len(out['gap_backlog'])}")
     elif args.command == "backfill-watchdog":
         if args.adapter == "minute":
             run_minute_backfill_watchdog_command(args)
