@@ -324,7 +324,7 @@
     {
       "record_id": "cust_002837_intel",
       "stock_code": "002837",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "coldplate_manifold",
       "stage": "validated",
       "customer": "Intel(至强6平台冷板集成商)",
       "scope": "product_line",
@@ -336,7 +336,8 @@
       "available_at": "2026-04-21",
       "ingested_at": "2026-10-21",
       "review_status": "accepted",
-      "excerpt": "年报p9-10：BHS-AP平台冷板/UQD04/分水器/机架式CDU通过英特尔测试验证，成为至强6平台首位冷板液冷方案集成商；冷板列入Intel Eagle Stream Design Guide；快换接头/Manifold/冷板等获主流算力芯片厂商、头部算力和交换设备制造商认可并开始被规模采购应用"
+      "excerpt": "年报p9-10：BHS-AP平台冷板/UQD04/分水器/机架式CDU通过英特尔测试验证，成为至强6平台首位冷板液冷方案集成商；冷板列入Intel Eagle Stream Design Guide；快换接头/Manifold/冷板等获主流算力芯片厂商、头部算力和交换设备制造商认可并开始被规模采购应用",
+      "note": "冷板+分水器通过Intel测试验证（冷板/Manifold子线切面）"
     },
     {
       "record_id": "cust_002837_nvidia_mgx",
@@ -393,7 +394,7 @@
     {
       "record_id": "cust_603757_inrack_mass",
       "stock_code": "603757",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "pump_components",
       "stage": "mass_delivery",
       "customer": "海内外温控厂商（批量交付未点名单一）",
       "scope": "product_line",
@@ -411,7 +412,7 @@
     {
       "record_id": "cust_603757_sugon8000",
       "stock_code": "603757",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "pump_components",
       "stage": "mass_delivery",
       "customer": "曙光数创",
       "scope": "product_line",
@@ -429,7 +430,7 @@
     {
       "record_id": "cust_603757_ul",
       "stock_code": "603757",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "pump_components",
       "stage": "product_certified",
       "customer": "In-Row CDU 22/37kw 配套泵",
       "scope": "product_line",
@@ -447,7 +448,7 @@
     {
       "record_id": "cust_603757_sampling",
       "stock_code": "603757",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "pump_components",
       "stage": "contact",
       "customer": "英维克/申菱/Vertiv/台达/双鸿/AVC/Cooler Master/nVent/Boyd/Carrier/CoolIt/科华/同飞/尼得科/杰瑞/中兴/海悟等",
       "scope": "product_line",
@@ -461,6 +462,42 @@
       "review_status": "accepted",
       "excerpt": "p17：完成与海内外重点温控厂商的对接覆盖，按客户差异化节奏完成产品送样、订单的对接获取",
       "note": "对接覆盖+按客户节奏送样/订单对接——不默认每家均已送样/认证/签约"
+    },
+    {
+      "record_id": "cust_002837_intel_cdu",
+      "stock_code": "002837",
+      "product_line": "cdu_system",
+      "stage": "validated",
+      "customer": "Intel(机架式CDU/UQD04)",
+      "scope": "product_line",
+      "report_period": "2025FY",
+      "source_id": "ru_002837_ar2025_seg",
+      "uri": "outputs/research/tech_bottleneck_expansion_queue_primary_source_backfill_v1/cninfo_primary_source_pdfs/002837_英维克_2026-04-21_年报_2025年年度报告_1225131813.pdf",
+      "page_or_section": "年报p9-10",
+      "published_at": "2026-04-21",
+      "available_at": "2026-04-21",
+      "ingested_at": "2026-10-21",
+      "review_status": "accepted",
+      "excerpt": "年报p9-10：机架式CDU、UQD04通过英特尔测试验证（CDU子线切面，同源摘录）",
+      "note": "CDU整机子线切面"
+    },
+    {
+      "record_id": "cust_002837_nvidia_qd",
+      "stock_code": "002837",
+      "product_line": "coldplate_manifold",
+      "stage": "ecosystem",
+      "customer": "NVIDIA MGX生态(UQD/MQD快接头)",
+      "scope": "product_line",
+      "report_period": "2025FY",
+      "source_id": "ru_002837_ar2025_seg",
+      "uri": "outputs/research/tech_bottleneck_expansion_queue_primary_source_backfill_v1/cninfo_primary_source_pdfs/002837_英维克_2026-04-21_年报_2025年年度报告_1225131813.pdf",
+      "page_or_section": "年报p9-10",
+      "published_at": "2026-04-21",
+      "available_at": "2026-04-21",
+      "ingested_at": "2026-10-21",
+      "review_status": "accepted",
+      "excerpt": "年报p9-10：UQD/MQD快接头列入英伟达MGX生态（快接头子线切面）",
+      "note": "快接头子线切面"
     }
   ],
   "orders": [
@@ -521,7 +558,7 @@
     {
       "record_id": "ord_603757_inrack",
       "stock_code": "603757",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "pump_components",
       "stage": "delivered",
       "amount": null,
       "counterparty": "海内外温控厂商",
@@ -540,7 +577,7 @@
     {
       "record_id": "ord_603757_sugon",
       "stock_code": "603757",
-      "product_line": "dc_liquid_cooling",
+      "product_line": "pump_components",
       "stage": "delivered",
       "amount": null,
       "counterparty": "曙光数创",

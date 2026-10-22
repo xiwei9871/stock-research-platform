@@ -13,7 +13,10 @@
       "pages": 233,
       "sha256": "af09ac4951073e650f8d4f428a7eaea6977e18a162cfb042000408a3fc49d50f",
       "file": "002371_北方华创_2026-04-18_年报_2025年年度报告_1225122918.pdf",
-      "verified_pages": "p31-33 分产品收入表; p104 审计报告"
+      "verified_pages": "p31-33 分产品收入表; p104 审计报告",
+      "backup_path": "/Users/xiwei/stock_research/data/manual/t3_primary_sources_20261022/002371_北方华创_2026-04-18_年报_2025年年度报告_1225122918.pdf",
+      "backup_sha256_match": true,
+      "backup_status": "VERIFIED"
     },
     {
       "source_id": "cninfo_002050_ar2025",
@@ -25,7 +28,10 @@
       "pages": 185,
       "sha256": "f2ff01b21bc3e5354feb77c23c05515a5016db7bc3e01011b7de0db0fa17b626",
       "file": "002050_三花智控_2026-03-24_年报_2025年年度报告_1225026522.pdf",
-      "verified_pages": "p14-15 收入构成; 全文液冷/CDU零命中核查"
+      "verified_pages": "p14-15 收入构成; 全文液冷/CDU零命中核查",
+      "backup_path": "/Users/xiwei/stock_research/data/manual/t3_primary_sources_20261022/002050_三花智控_2026-03-24_年报_2025年年度报告_1225026522.pdf",
+      "backup_sha256_match": true,
+      "backup_status": "VERIFIED"
     },
     {
       "source_id": "cninfo_603757_ar2025_digest",
@@ -37,7 +43,10 @@
       "pages": 15,
       "sha256": "f2ac521c0a48bfa5549a52d05828fbceebaafe0df378cefd499fdd5f1baa152b",
       "file": "603757_大元泵业_2026-04-24_年报_2025年年度报告摘要_1225160102.pdf",
-      "verified_pages": "p3-4 液冷温控领域业务定位"
+      "verified_pages": "p3-4 液冷温控领域业务定位",
+      "backup_path": "/Users/xiwei/stock_research/data/manual/t3_primary_sources_20261022/603757_大元泵业_2026-04-24_年报_2025年年度报告摘要_1225160102.pdf",
+      "backup_sha256_match": true,
+      "backup_status": "VERIFIED"
     },
     {
       "source_id": "cninfo_603757_2026h1",
@@ -49,7 +58,13 @@
       "pages": 163,
       "sha256": "169da24fa78b46d5c36fd2913be7bd8b07f6d67ee1919ac49bcef1307ff804b2",
       "file": "603757_大元泵业_2026-08-27_半年报_2026年半年度报告_1225509042.pdf",
-      "verified_pages": "p17-18 CDU泵交付/认证/客户覆盖"
+      "verified_pages": "p17-18 CDU泵交付/认证/客户覆盖",
+      "backup_path": "/Users/xiwei/stock_research/data/manual/t3_primary_sources_20261022/603757_大元泵业_2026-08-27_半年报_2026年半年度报告_1225509042.pdf",
+      "backup_sha256_match": true,
+      "backup_status": "VERIFIED"
     }
-  ]
+  ],
+  "backup_base_path": "/Users/xiwei/stock_research/data/manual/t3_primary_sources_20261022/",
+  "backup_verified_at": "2026-10-22",
+  "note": "主路径为回填目录（曾被清理）；data/manual 为独立持久副本"
 }

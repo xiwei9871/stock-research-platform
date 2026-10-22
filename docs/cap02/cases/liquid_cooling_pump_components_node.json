@@ -1,0 +1,110 @@
+{
+  "node_id": "liquid_cooling_pump_components",
+  "node_name": "屏蔽泵及液体循环组件",
+  "as_of": "2026-10-22",
+  "member_companies": [
+    {
+      "stock_code": "603757",
+      "company_name": "大元泵业",
+      "mapping_type": "direct_component",
+      "priority_score": 55.0
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "cninfo_603757_2026h1",
+      "source_type": "company_filing",
+      "title": "cninfo_603757_2026h1",
+      "publisher": "公司披露",
+      "published_at": "2026-08-27",
+      "available_at": "2026-08-27",
+      "ingested_at": "2026-10-22",
+      "uri": "outputs/research/tech_bottleneck_expansion_queue_primary_source_backfill_v1/cninfo_primary_source_pdfs/603757_大元泵业_2026-08-27_半年报_2026年半年度报告_1225509042.pdf",
+      "reliability_level": "S1"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "e_603757_supply",
+      "source_id": "cninfo_603757_2026h1",
+      "dimension": "process_irreplaceability",
+      "direction": "support",
+      "excerpt": "大元In-Rack泵2025交付~3万台/2026H1~2万台；In-Row 22/37kw完成测试认证含UL；曙光8000浸没泵组供应完成",
+      "page_or_section": "",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "供应格局",
+      "evidence_scope": "node",
+      "product_line": ""
+    },
+    {
+      "evidence_id": "e_foreign_incumbents",
+      "source_id": "cninfo_603757_2026h1",
+      "dimension": "process_irreplaceability",
+      "direction": "support",
+      "excerpt": "大元年报p18：外资头部泵企格兰富CME/CM等CDU专用泵2026H1美国市场销售额+20%；CR系列经40年迭代——外资在位者存在",
+      "page_or_section": "",
+      "confidence": "medium",
+      "review_status": "pending",
+      "checklist_item": "供应格局",
+      "evidence_scope": "node",
+      "product_line": ""
+    },
+    {
+      "evidence_id": "e_603757_ul",
+      "source_id": "cninfo_603757_2026h1",
+      "dimension": "certification_barrier",
+      "direction": "support",
+      "excerpt": "In-Row CDU 22/37kw完成单机测试及认证（含UL）；千瓦级永磁屏蔽泵大批量稳定交付——认证+量产构成进入壁垒",
+      "page_or_section": "",
+      "confidence": "medium",
+      "review_status": "accepted",
+      "checklist_item": "供应格局",
+      "evidence_scope": "node",
+      "product_line": ""
+    }
+  ],
+  "node_claims": [
+    {
+      "claim_id": "nc_supply_scarce",
+      "claim_text": "CDU泵组件是否存在有效供给约束",
+      "claim_role": "supply_scarcity",
+      "evidence_ids": [],
+      "dimension": "capacity_constraint"
+    },
+    {
+      "claim_id": "nc_multi_supplier",
+      "claim_text": "CDU泵存在多家供应商（含外资在位者）",
+      "claim_role": "market_structure",
+      "evidence_ids": [
+        "e_603757_supply",
+        "e_foreign_incumbents"
+      ],
+      "dimension": "process_irreplaceability"
+    },
+    {
+      "claim_id": "nc_cert_barrier",
+      "claim_text": "UL等认证及大批量交付壁垒",
+      "claim_role": "entry_barrier",
+      "evidence_ids": [
+        "e_603757_ul"
+      ],
+      "dimension": "certification_barrier"
+    },
+    {
+      "claim_id": "nc_hype",
+      "claim_text": "概念关联",
+      "claim_role": "hype",
+      "evidence_ids": [],
+      "dimension": "hype_component"
+    }
+  ],
+  "input_snapshot": {
+    "pipeline": "cap02-d2-subnodes",
+    "derived_from": "ai_power_liquid_cooling parent"
+  },
+  "product_lines": [
+    "pump_components"
+  ],
+  "t3_records_path": "docs/cap02/t3/t3_records.json"
+}

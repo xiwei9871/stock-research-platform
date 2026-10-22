@@ -231,7 +231,10 @@
     "note": "R2修正：供应商名单事实独立成已核实论点；M1反驳仅针对'工艺难以被绕开'，不否定产能缺口；冷板/CDU/泵子环节拆分列为缺口"
   },
   "product_lines": [
-    "dc_liquid_cooling"
+    "dc_liquid_cooling",
+    "cdu_system",
+    "coldplate_manifold",
+    "pump_components"
   ],
   "t3_records_path": "docs/cap02/t3/t3_records.json"
 }
