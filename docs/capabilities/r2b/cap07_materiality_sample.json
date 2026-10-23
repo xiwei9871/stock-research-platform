@@ -1,0 +1,48 @@
+{
+ "note": "synthetic demonstration on stored baseline — never written to baseline store",
+ "baseline_version": 3,
+ "materiality": {
+  "counts": {
+   "material": 2,
+   "notable": 0,
+   "minor": 0,
+   "non_substantive": 0
+  },
+  "requires_re_review": true,
+  "note": "重要性=对研究判断的影响程度，非价格预测"
+ },
+ "changes": [
+  {
+   "kind": "changed",
+   "field": "claim:nc_supply_scarce",
+   "from": "unknown",
+   "to": "confirmed",
+   "change_category": "hypothesis_state_changed",
+   "materiality": "material",
+   "affected_hypothesis_ids": [
+    "nc_supply_scarce"
+   ],
+   "before": "unknown",
+   "after": "supported",
+   "evidence_delta": [],
+   "explanation": "未决假设获得合格支持/反证",
+   "action_required": "re_review_hypothesis"
+  },
+  {
+   "kind": "changed",
+   "field": "hypothesis:nc_supply_scarce",
+   "from": "unresolved",
+   "to": "supported",
+   "change_category": "hypothesis_state_changed",
+   "materiality": "material",
+   "affected_hypothesis_ids": [
+    "nc_supply_scarce"
+   ],
+   "before": "unresolved",
+   "after": "supported",
+   "evidence_delta": [],
+   "explanation": "未决假设获得合格支持/反证",
+   "action_required": "re_review_hypothesis"
+  }
+ ]
+}

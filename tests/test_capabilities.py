@@ -548,7 +548,7 @@ def test_r2a_broader_revenue_not_line_revenue():
          "validation_delivery": "validated",
          "verified_orders": {"state": "none_seen"}},
     ]}}
-    env = cap05_value_economics("n1", dossier, AS_OF, RUN_ID)
+    env = cap05_value_economics("n1", dossier, as_of=AS_OF, run_id=RUN_ID)
     e = env.findings["economics"]["002371"]
     assert e["commercialization_stage"] != "revenue_visible"
     assert e["commercialization_stage"] == "delivery_seen"
@@ -604,3 +604,280 @@ def test_r2a_real_cases_no_positive_fabrication():
         t2 = assess_technical(d2)
         assert t2["entry_barrier"]["sub_checks"]["customer_validation"][
             "state"] in {"no_evidence", "unverified"}, p
+
+
+# ---------------- CAP-R2B contract tests -----------------
+
+def _mk_dossier_t3(rows, *, pls=("line_a",), t3=None, claims=None):
+    return {
+        "node_id": "n1", "as_of": "2026-10-22",
+        "product_lines": sorted(pls),
+        "node_claims": claims or [],
+        "evidence_matrix": [],
+        "value_matrix": {"rows": rows},
+        "t3_facts": t3 or {},
+    }
+
+
+def _val_rec(rid, code, stage, scope="product_line", review="accepted"):
+    return {"record_id": rid, "stock_code": code, "product_line": "line_a",
+            "stage": stage, "scope": scope, "customer": "custX",
+            "source_id": f"src_{rid}", "published_at": "2026-01-01",
+            "ingested_at": "2026-01-02", "review_status": review}
+
+
+def _ord_rec(rid, code, stage, scope="product_line", review="accepted"):
+    return {"record_id": rid, "stock_code": code, "product_line": "line_a",
+            "stage": stage, "scope": scope,
+            "source_id": f"src_{rid}", "published_at": "2026-01-01",
+            "ingested_at": "2026-01-02", "review_status": review}
+
+
+def _seg_rec(rid, code, scope="product_line", rev=100.0, gm=None,
+             review="accepted"):
+    return {"record_id": rid, "stock_code": code, "product_line": "line_a",
+            "disclosure_scope": scope, "revenue": rev, "gross_margin": gm,
+            "report_period": "2025FY", "source_id": f"src_{rid}",
+            "published_at": "2026-01-01", "ingested_at": "2026-01-02",
+            "review_status": review}
+
+
+def test_r2b_cert_delivery_fields_separated():
+    """A1: 验证阶段记录不冒充交付；交付不冒充认证。"""
+    from stock_research.capabilities.reasoning import compare_competition
+    d = _mk_dossier_t3(
+        [{"stock_code": "A", "mapping_type": "direct_product",
+          "tech_participation": "confirmed", "validation_delivery": "validated",
+          "revenue_profit": {"state": "missing"},
+          "verified_orders": {"state": "none_seen"}},
+         {"stock_code": "B", "mapping_type": "direct_product",
+          "tech_participation": "confirmed", "validation_delivery": "mass_delivery",
+          "revenue_profit": {"state": "missing"},
+          "verified_orders": {"state": "verified_delivered"}}],
+        t3={"customer_validation": [
+            _val_rec("v1", "A", "validated"),
+            _val_rec("v2", "B", "mass_delivery"),
+        ], "orders": [_ord_rec("o1", "B", "delivered")]})
+    comp = compare_competition(d, {})["comparison"]
+    # A: 仅客户验证 → cert=validated, delivery 不得沿用 validated
+    assert comp["A"]["certification_customer_validation"] == "validated"
+    assert comp["A"]["delivery_capability"] in {"none_seen", "unknown"}
+    # B: mass_delivery + delivered 订单 → 两条车道各自成立
+    assert comp["B"]["delivery_capability"] == "verified_delivered"
+    assert comp["B"]["certification_customer_validation"] == "mass_delivery"
+
+
+def test_r2b_directional_source_counts():
+    """A2: 支持与反证来源分别计数，合计去重。"""
+    from stock_research.capabilities.reasoning import assess_hypotheses
+    c = _mk_claim("h1", verdict="confirmed",
+                  evids=("e1", "e2", "e3", "e4"))
+    idx = {
+        "e1": _mk_ev("e1", sid="s_a"),
+        "e2": _mk_ev("e2", sid="s_a"),          # 同一底层来源
+        "e3": _mk_ev("e3", sid="s_b"),
+        "e4": _mk_ev("e4", sid="s_c", direction="refute"),
+    }
+    h = assess_hypotheses([c], idx, "n1", "2026-10-22")[0]
+    assert h["supporting_source_count"] == 2
+    assert h["counter_source_count"] == 1
+    assert h["independent_source_count"] == 3
+    assert h["assessment_state"] == "contested"  # 正反并存 → contested
+
+
+def test_r2b_stage_evidence_gated_no_skip():
+    """B: 各阶段独立证据门控——高阶段不回填，缺证据阶段如实 missing。"""
+    from stock_research.capabilities.reasoning import assess_commercialization
+    d = _mk_dossier_t3(
+        [{"stock_code": "A", "mapping_type": "direct_product",
+          "tech_participation": "confirmed", "validation_delivery": "validated",
+          "revenue_profit": {"state": "missing"},
+          "verified_orders": {"state": "none_seen"}}],
+        t3={"customer_validation": [_val_rec("v1", "A", "validated")],
+            "orders": [], "segment_records": []})
+    a = assess_commercialization(d, {}, "2026-10-22")["A"]
+    assert "technology_demonstrated" in a["confirmed_stages"]
+    assert "customer_validated" in a["confirmed_stages"]
+    # 无交付记录 → commercial_delivery 不得由 validated 反推
+    assert "commercial_delivery" in a["missing_stages"]
+    assert "revenue_attributed" in a["missing_stages"]
+    assert "cash_realization_visible" in a["missing_stages"]
+    assert a["attribution_scope"] == "unattributed"
+
+
+def test_r2b_delivery_without_revenue_no_upgrade():
+    """B: 组件级交付/大口径交付不升级为产品线收入确认。"""
+    from stock_research.capabilities.reasoning import assess_commercialization
+    d = _mk_dossier_t3(
+        [{"stock_code": "B", "mapping_type": "direct_component",
+          "tech_participation": "confirmed", "validation_delivery": "mass_delivery",
+          "revenue_profit": {"state": "disclosed_broader_scope",
+                            "facts": [{"scope": "segment", "revenue": 9e8}]},
+          "verified_orders": {"state": "none_seen"}}],
+        t3={"customer_validation": [_val_rec("v1", "B", "mass_delivery")],
+            "orders": [_ord_rec("o1", "B", "delivered")],
+            "segment_records": [_seg_rec("s1", "B", scope="segment",
+                                         rev=9e8)]})
+    a = assess_commercialization(d, {}, "2026-10-22")["B"]
+    assert "commercial_delivery" in a["confirmed_stages"]
+    # segment 口径收入不归属产品线 → revenue_attributed 仍 missing
+    assert "revenue_attributed" in a["missing_stages"]
+    assert "profitability_visible" in a["missing_stages"]
+    assert a["attribution_scope"] == "segment"
+
+
+def test_r2b_pl_revenue_and_margin_unlock_stages():
+    """B: 产品线收入+毛利 → revenue/profitability 两阶段确认；现金仍缺。"""
+    from stock_research.capabilities.reasoning import assess_commercialization
+    d = _mk_dossier_t3(
+        [{"stock_code": "A", "mapping_type": "direct_product",
+          "tech_participation": "confirmed", "validation_delivery": "mass_delivery",
+          "revenue_profit": {"state": "disclosed", "facts": []},
+          "verified_orders": {"state": "verified_delivered"}}],
+        t3={"customer_validation": [_val_rec("v1", "A", "mass_delivery")],
+            "orders": [_ord_rec("o1", "A", "revenue_recognized")],
+            "segment_records": [_seg_rec("s1", "A", rev=5e8, gm=0.28)]})
+    a = assess_commercialization(d, {}, "2026-10-22")["A"]
+    for s in ("technology_demonstrated", "customer_validated",
+              "commercial_delivery", "revenue_attributed",
+              "profitability_visible"):
+        assert s in a["confirmed_stages"], s
+    assert "cash_realization_visible" in a["missing_stages"]
+    assert a["highest_confirmed_stage"] == "profitability_visible"
+
+
+def test_r2b_materiality_rules_auditable():
+    """C: 分级规则——假设翻转 material；同源重采 non_substantive；元数据不变。"""
+    from stock_research.capabilities.baseline import diff_baselines
+    base = {"as_of": "2026-10-22", "node_verdict": "unverified",
+            "claims": {"c1": {"verdict": "unknown", "role": "supply_scarcity"}},
+            "hypotheses": {"c1": "unresolved"},
+            "economics": {"002837": {"delivery": "none_seen",
+                                     "order": "none_seen"}},
+            "evidence_refs": ["e1"],
+            "evidence_sources": {"e1": "src_a"},
+            "cap_statuses": {"CAP-05": "ok"}}
+    cur = {"as_of": "2026-10-23", "node_verdict": "unverified",
+           "claims": {"c1": {"verdict": "confirmed", "role": "supply_scarcity"}},
+           "hypotheses": {"c1": "supported"},
+           "economics": {"002837": {"delivery": "verified_delivered",
+                                    "order": "none_seen"}},
+           "evidence_refs": ["e1", "e2"],
+           "evidence_sources": {"e1": "src_a", "e2": "src_a"},
+           "cap_statuses": {"CAP-05": "partial"}}
+    d = diff_baselines(cur, [dict(base, version=1)])
+    by_field = {c["field"]: c for c in d["changes"]}
+    assert by_field["hypothesis:c1"]["materiality"] == "material"
+    assert by_field["hypothesis:c1"]["change_category"] \
+        == "hypothesis_state_changed"
+    assert by_field["hypothesis:c1"]["action_required"] \
+        == "re_review_hypothesis"
+    # 新证据 e2 但底层来源 src_a 已存在 → 重复采集 non_substantive
+    assert by_field["evidence_ref:e2"]["materiality"] == "non_substantive"
+    assert by_field["evidence_ref:e2"]["change_category"] == "source_revision"
+    # 交付 → 商业兑现变化 material
+    assert by_field["econ:002837.delivery"]["materiality"] == "material"
+    assert by_field["econ:002837.delivery"]["change_category"] \
+        == "commercialization_stage_changed"
+    # cap_status 变化 → metadata_only / non_substantive
+    assert by_field["cap_status:CAP-05"]["materiality"] == "non_substantive"
+    assert d["materiality"]["requires_re_review"] is True
+
+
+def test_r2b_stage_flip_tracked_in_snapshot(tmp_path):
+    """C: CAP-05 confirmed_stages 变化进入快照 diff。"""
+    from stock_research.capabilities.baseline import diff_baselines
+    base = {"as_of": "2026-10-22",
+            "economics": {"002837": {
+                "stages": ["technology_demonstrated", "customer_validated"]}},
+            "claims": {}, "evidence_refs": []}
+    cur = {"as_of": "2026-10-23",
+           "economics": {"002837": {
+               "stages": ["technology_demonstrated", "customer_validated",
+                          "commercial_delivery"]}},
+           "claims": {}, "evidence_refs": []}
+    d = diff_baselines(cur, [dict(base, version=1)])
+    hits = [c for c in d["changes"] if "stages" in c["field"]]
+    assert hits and hits[0]["change_category"] \
+        == "commercialization_stage_changed"
+    assert hits[0]["materiality"] == "material"
+
+
+def test_r2b_verification_tasks_proposed_only():
+    """D: 验证任务——proposed、去重、优先级依据，不触发任何采集。"""
+    from stock_research.capabilities.reasoning import verification_tasks
+    per_node = {"n1": {
+        "CAP-08": {"findings": {"hypothesis_assessment": [{
+            "hypothesis_id": "h1", "hypothesis": "供给是否紧缺",
+            "assessment_state": "unresolved",
+            "decisive_gaps": ["capacity_or_leadtime", "supplier_count"],
+        }, {
+            "hypothesis_id": "h2", "hypothesis": "是否不可替代",
+            "assessment_state": "contested",
+            "decisive_gaps": ["performance_parity"],
+        }]}},
+        "CAP-05": {"findings": {"economics": {"002837": {
+            "commercialization_assessment": {
+                "confirmed_stages": ["technology_demonstrated",
+                                     "customer_validated",
+                                     "commercial_delivery"]}}}},
+            "data_gaps": [{"kind": "missing_source",
+                           "item": "product_revenue:002837"}]},
+        "CAP-07": {"findings": {"changes": [{
+            "field": "hypothesis:h1", "materiality": "material",
+            "from": "unresolved", "to": "supported",
+            "affected_hypothesis_ids": ["h1"]}]}},
+    }}
+    tasks = verification_tasks(per_node, {"coverage_gap_nodes": ["n2"]}, "t1")
+    assert tasks and all(t["status"] == "proposed" for t in tasks)
+    qs = [t["question"] for t in tasks]
+    assert any("供给是否紧缺" in q for q in qs)
+    assert any("区分竞争解释" in q for q in qs)
+    assert any("002837" in (t["company_code"] or "") for t in tasks)
+    assert any(t["node_id"] == "n2" and t["owner"] == "CAP-02"
+               for t in tasks)
+    assert any(t["owner"] == "CAP-09" for t in tasks)  # material re-review
+    highs = [t for t in tasks if t["priority"] == "high"]
+    assert highs and highs[0]["task_id"] == "vt-0001"  # 高优先级排序在前
+    assert all("评级" not in t["priority_reason"]
+               and "涨幅" not in t["priority_reason"] for t in tasks)
+
+
+def test_r2b_cap10_isolation_contract():
+    """E: CAP-10 只读隔离——capabilities 不被策略/信号/准入模块引用。"""
+    import pathlib
+    root = pathlib.Path("src/stock_research")
+    allowed = {"capabilities", "dashboard", "cli.py"}
+    offenders = []
+    for f in root.rglob("*.py"):
+        rel = f.relative_to(root)
+        top = rel.parts[0]
+        if top in {"capabilities", "dashboard"} or str(rel) == "cli.py":
+            continue
+        txt = f.read_text(encoding="utf-8")
+        if "stock_research.capabilities" in txt \
+                or "from stock_research import capabilities" in txt:
+            offenders.append(str(rel))
+    assert not offenders, f"production module imports capabilities: {offenders}"
+    # 信封级标志：任何 CAP 结果不得进信号/准入
+    from stock_research.capabilities.adapters import cap10_strategy_bridge
+    env = cap10_strategy_bridge("2026-10-23", "r2b-test")
+    assert env.status == "not_evaluated"
+    assert "never enter signals" in env.findings["isolation"]
+
+
+def test_r2b_chain_flags_research_only(tmp_path):
+    """E: 链路输出 isolation 标志不变量。"""
+    from stock_research.capabilities.pipeline import run_research_chain
+    out = run_research_chain(
+        "t_r2b", ["docs/cap02/cases/humanoid_vision_node.json"],
+        DOSSIER_DIR, "2026-10-23", "r2b-flags",
+        baseline_dir=str(tmp_path))
+    assert out["research_only"] is True
+    assert out["used_for_signal"] is False
+    assert out["used_for_admission"] is False
+    for envs in out["per_node"].values():
+        for env in envs.values():
+            assert env["research_only"] is True
+            assert env["used_for_signal"] is False
+            assert env["used_for_admission"] is False

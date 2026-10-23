@@ -28,8 +28,10 @@ export interface CapWorkbenchCompany {
   revenue?: string;
   order?: string;
   scope_class?: string;
+  cert?: string;
   evidence_coverage?: number;
   comparable_with?: string[];
+  confirmed_stages?: string[];
 }
 
 export interface CapHypothesis {
@@ -45,6 +47,8 @@ export interface CapHypothesis {
   revision_triggers: string[];
   evidence_refs: string[];
   independent_source_count?: number;
+  supporting_source_count?: number;
+  counter_source_count?: number;
 }
 
 export interface CapTechnicalArea {
@@ -113,8 +117,26 @@ export interface CapWorkbenchNode {
     added?: number;
     removed?: number;
     changed?: number;
-    items?: Array<{ kind: string; field: string; from: unknown; to: unknown }>;
+    materiality?: { counts?: Record<string, number>; requires_re_review?: boolean };
+    items?: Array<{ kind: string; field: string; from: unknown; to: unknown;
+      change_category?: string; materiality?: string; action_required?: string;
+      explanation?: string }>;
   } | null;
+}
+
+export interface CapVerificationTask {
+  task_id: string;
+  theme_id: string;
+  node_id: string;
+  company_code?: string | null;
+  question: string;
+  hypothesis_id?: string | null;
+  required_evidence: string[];
+  owner: string;
+  priority: string;
+  priority_reason: string;
+  source_capabilities: string[];
+  status: string;
 }
 
 export interface CapWorkbenchGap {
@@ -137,6 +159,7 @@ export interface CapWorkbenchIndex {
   theme_node_count?: number;
   covered_node_count?: number;
   theme_synthesis?: CapThemeSynthesis;
+  verification_tasks?: CapVerificationTask[];
   nodes: CapWorkbenchNode[];
   gap_summary?: Record<string, number>;
   gap_backlog: CapWorkbenchGap[];

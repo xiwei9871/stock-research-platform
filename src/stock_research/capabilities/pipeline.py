@@ -35,11 +35,14 @@ def run_research_chain(
     run_id: str,
     baseline_dir: str | None = None,
     workbench_dir: str | None = None,
+    case_theme_nodes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run one theme through the CAP-03..08 chain.  Returns envelopes +
     unified DATA gap backlog.  Never raises on missing data — every gap
     surfaces as an envelope status + backlog entry.  ``baseline_dir`` /
-    ``workbench_dir`` opt into persisted baselines / workbench index."""
+    ``workbench_dir`` opt into persisted baselines / workbench index;
+    ``case_theme_nodes`` maps internal case node_id → theme node id for
+    CAP-05 attribution labeling."""
     envelopes: dict[str, ResearchEnvelope] = {}
 
     env3 = cap03_orchestrate(theme_id, case_paths, as_of, run_id)
@@ -82,8 +85,11 @@ def run_research_chain(
             errors.append({"case_path": case_path, "error": str(exc)})
             continue
         fp = dossier["dossier_fingerprint"]
-        env5 = cap05_value_economics(node_id, dossier, env_as_of, run_id,
-                                     upstream_fingerprints=[env4.fingerprint])
+        env5 = cap05_value_economics(
+            node_id, dossier, dossier_by_code=dossier_by_code,
+            theme_node_id=(case_theme_nodes or {}).get(node_id, ""),
+            as_of=env_as_of, run_id=run_id,
+            upstream_fingerprints=[env4.fingerprint])
         env6 = cap06_competition(node_id, dossier, dossier_by_code, env_as_of, run_id,
                                  upstream_fingerprints=[env4.fingerprint, env5.fingerprint])
         node_envs = {
@@ -175,17 +181,22 @@ def run_theme_chain(
     silent skipping."""
     env3 = cap03_orchestrate_theme(theme_id, as_of, run_id, case_dir=case_dir)
     case_paths: list[str] = []
+    case_theme_nodes: dict[str, str] = {}
     for n in env3.findings.get("nodes", []):
         for m in n.get("runnable_cases", []):
             p = m["path"] if isinstance(m, dict) else m
             if p not in case_paths:
                 case_paths.append(p)
+            if isinstance(m, dict):
+                case_theme_nodes.setdefault(
+                    m.get("case_node_id") or Path(p).stem, n["node_id"])
     # Inner run must NOT write the index yet — the CAP-03 envelope and gap
     # backlog are finalized here first, THEN the workbench index reflects
     # the final research state.
     out = run_research_chain(
         theme_id, case_paths, dossier_dir, as_of, run_id,
         baseline_dir=baseline_dir, workbench_dir=None,
+        case_theme_nodes=case_theme_nodes,
     )
     out["envelopes"]["CAP-03"] = env3.to_dict()
     for g in env3.data_gaps:

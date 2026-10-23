@@ -40,7 +40,10 @@ def _snapshot_content(snapshot: dict[str, Any]) -> dict[str, Any]:
     keeping it would force a new version every run) and CAP-07/CAP-08
     statuses — are excluded; only substantive facts version history."""
     content = {k: v for k, v in snapshot.items()
-               if k not in {"version", "saved_at", "envelope_fingerprints"}}
+               if k not in {"version", "saved_at", "envelope_fingerprints",
+                            # derived lookup map for diff explainability —
+                            # metadata, never part of research-fact identity
+                            "evidence_sources"}}
     caps = dict(content.get("cap_statuses") or {})
     for c in _DERIVED_CAPS:
         caps.pop(c, None)
@@ -92,6 +95,9 @@ def snapshot_from_node_chain(
     envelopes: dict[str, Any],
 ) -> dict[str, Any]:
     """Extract the diffable summary from one node's chain output."""
+    def _attr(e: Any, key: str) -> Any:
+        return e.get(key) if isinstance(e, dict) else getattr(e, key, None)
+
     claims = {}
     for c in dossier.get("node_claims", []):
         claims[c["claim_id"]] = {
@@ -109,9 +115,18 @@ def snapshot_from_node_chain(
             # — a real change in disclosed numbers is a research change.
             "revenue_facts": _revenue_facts(row.get("revenue_profit")),
         }
-    def _attr(e: Any, key: str) -> Any:
-        return e.get(key) if isinstance(e, dict) else getattr(e, key, None)
-
+    # R2B: commercial-realization stage lists from CAP-05 — stage flips
+    # are research-fact changes (commercialization_stage_changed).
+    env5 = envelopes.get("CAP-05")
+    comm = {}
+    if env5 is not None:
+        eco = ((_attr(env5, "findings") or {}).get("economics") or {})
+        for code, e in eco.items():
+            stages = ((e.get("commercialization_assessment") or {})
+                      .get("confirmed_stages"))
+            if stages is not None:
+                econ.setdefault(code, {})["stages"] = stages
+                comm[code] = stages
     from stock_research.capabilities.reasoning import hypothesis_state_map
     ev_index = {e["evidence_id"]: e
                 for e in dossier.get("evidence_matrix", [])}
@@ -128,6 +143,12 @@ def snapshot_from_node_chain(
         "evidence_refs": sorted(
             r["evidence_id"] for r in dossier.get("evidence_matrix", [])
         ),
+        # derived metadata for diff explainability — excluded from content
+        # identity (same facts ⇒ same identity regardless of this map)
+        "evidence_sources": {
+            r["evidence_id"]: r.get("source_id")
+            for r in dossier.get("evidence_matrix", [])
+        },
         "cap_statuses": {cap: _attr(e, "status") for cap, e in envelopes.items()},
         "envelope_fingerprints": {
             cap: _attr(e, "fingerprint") for cap, e in envelopes.items()},
@@ -193,13 +214,20 @@ def diff_baselines(
     cur_caps = {k: v for k, v in (current.get("cap_statuses") or {}).items()
                 if k not in _DERIVED_CAPS}
     changes += _diff_maps(prev_caps, cur_caps, "cap_status")
+    # R2B: every change is classified (category + materiality + action)
+    # under auditable rules — display/metadata touches never fabricate a
+    # research event.
+    from stock_research.capabilities.reasoning import (
+        classify_changes, materiality_summary)
+    classified = classify_changes(changes, current, prev)
     return {
         "baseline_found": True,
         "baseline_version": prev.get("version"),
         "baseline_as_of": prev.get("as_of"),
         "skipped_future_versions": len(baselines) - len(eligible),
         "state_changed": bool(changes),
-        "changes": changes,
+        "changes": classified,
+        "materiality": materiality_summary(classified),
         "added": sum(1 for c in changes if c["kind"] == "added"),
         "removed": sum(1 for c in changes if c["kind"] == "removed"),
         "changed": sum(1 for c in changes if c["kind"] == "changed"),

@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from stock_research.capabilities.reasoning import verification_tasks
+
 
 def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
     """Chain output → unified browse index.  Covers BOTH case-executed
@@ -49,6 +51,7 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
         env8 = env8_env["findings"]
         env6 = envs["CAP-06"]["findings"]
         env7 = envs.get("CAP-07", {}).get("findings") or {}
+        env5 = envs.get("CAP-05", {}).get("findings") or {}
         tn = case_to_theme.get(node_id) or nodes_meta.get(node_id) or {}
         if tn.get("node_id"):
             covered_theme_nodes.add(tn["node_id"])
@@ -67,8 +70,14 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
                  .get("revenue"),
                  "order": row.get("order_visibility"),
                  "scope_class": row.get("scope_class"),
+                 "cert": row.get("certification_customer_validation"),
                  "evidence_coverage": row.get("evidence_coverage"),
-                 "comparable_with": row.get("comparable_with")}
+                 "comparable_with": row.get("comparable_with"),
+                 # R2B: commercial-realization stage summary
+                 "confirmed_stages": (
+                     ((env5.get("economics") or {}).get(code) or {})
+                     .get("commercialization_assessment") or {}
+                 ).get("confirmed_stages")}
                 for code, row in (env6.get("comparison") or {}).items()
             ],
             "pairwise_scope": env6.get("pairwise_scope") or [],
@@ -105,6 +114,7 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
                 "added": env7.get("added"),
                 "removed": env7.get("removed"),
                 "changed": env7.get("changed"),
+                "materiality": env7.get("materiality"),
                 "items": env7.get("changes") or [],
             } if env7 else None,
         })
@@ -148,6 +158,10 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
         "theme_node_count": len(theme_nodes),
         "covered_node_count": len(covered_theme_nodes),
         "theme_synthesis": chain_out.get("theme_synthesis"),
+        # R2B: proposed verification tasks — read-only, never auto-trigger
+        "verification_tasks": verification_tasks(
+            chain_out.get("per_node", {}), cap03_findings,
+            chain_out.get("theme_id") or ""),
         "nodes": nodes,
         "gap_summary": gap_summary,
         "gap_backlog": chain_out.get("gap_backlog", []),

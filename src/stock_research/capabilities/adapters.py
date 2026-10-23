@@ -398,10 +398,21 @@ def cap04_tech_supply(
 
 
 def cap05_value_economics(
-    node_id: str, dossier: dict[str, Any], as_of: str, run_id: str,
+    node_id: str, dossier: dict[str, Any],
+    dossier_by_code: dict[str, dict[str, Any]] | None = None,
+    theme_node_id: str = "",
+    as_of: str = "", run_id: str = "",
     upstream_fingerprints: Sequence[str] = (),
 ) -> ResearchEnvelope:
-    """Industrial economics: revenue/margin/order/delivery states (R0)."""
+    """Industrial economics: revenue/margin/order/delivery states (R0).
+
+    R2B: adds evidence-gated commercial-realization stage assessment per
+    company — stages describe proven facts only, never skip levels, and
+    ``value_capture_verdict`` stays ``not_evaluated`` until a rule exists.
+    """
+    from stock_research.capabilities.reasoning import assess_commercialization
+    stage_map = assess_commercialization(
+        dossier, dossier_by_code or {}, as_of, theme_node_id)
     rows = (dossier.get("value_matrix") or {}).get("rows") or []
     economics: dict[str, dict[str, Any]] = {}
     gaps: list[DataGap] = []
@@ -456,6 +467,7 @@ def cap05_value_economics(
             ],
             "cash_state": "unknown",
             "commercialization_stage": stage,
+            "commercialization_assessment": stage_map.get(code),
             "independent_facts": {
                 "revenue": rev_state, "margin": margin_state,
                 "order": ord_state, "delivery": del_state,

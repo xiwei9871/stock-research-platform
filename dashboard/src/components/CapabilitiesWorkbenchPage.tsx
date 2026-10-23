@@ -108,7 +108,11 @@ function JudgmentBlock({ node }: { node: CapWorkbenchNode }) {
             <span style={{ fontWeight: 600, color: STATE_TONES[h.assessment_state] ?? '#374151', marginLeft: 6 }}>
               {STATE_LABELS[h.assessment_state] ?? h.assessment_state}
             </span>
-            <span style={{ color: '#6b7280' }}> · {h.claim_role} · 独立来源 {h.independent_source_count ?? 0}</span>
+            <span style={{ color: '#6b7280' }}> · {h.claim_role} · 独立来源 {h.independent_source_count ?? 0}
+              {typeof h.supporting_source_count === 'number'
+                ? `（正${h.supporting_source_count}/反${h.counter_source_count ?? 0}）`
+                : ''}
+            </span>
           </div>
           {h.alternative_explanations?.length ? (
             <div style={{ color: '#0369a1' }}>替代解释：{h.alternative_explanations.join('；')}</div>
@@ -167,6 +171,43 @@ function ThemeSummary({ ts }: { ts: NonNullable<CapWorkbenchIndex['theme_synthes
   );
 }
 
+const PRIORITY_TONES: Record<string, string> = {
+  high: '#b91c1c', medium: '#92400e', low: '#6b7280',
+};
+
+function VerificationTasks({ tasks }: { tasks: NonNullable<CapWorkbenchIndex['verification_tasks']> }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ border: '1px solid #fde68a', borderRadius: 8, padding: 10, marginBottom: 12, background: '#fffbeb' }}>
+      <button onClick={() => setOpen(!open)} style={{ all: 'unset', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+        下一步验证任务（{tasks.length} · 只读建议，不自动执行） {open ? '收起' : '展开'}
+      </button>
+      {open ? (
+        <div style={{ marginTop: 8, fontSize: 12 }}>
+          {tasks.slice(0, 30).map((t) => (
+            <div key={t.task_id} style={{ margin: '3px 0 3px 8px', borderLeft: `3px solid ${PRIORITY_TONES[t.priority] ?? '#9ca3af'}`, paddingLeft: 8 }}>
+              <div>
+                <code>{t.task_id}</code>
+                <span style={{ fontWeight: 600, color: PRIORITY_TONES[t.priority] ?? '#374151', marginLeft: 6 }}>
+                  [{t.priority}]
+                </span>
+                <span style={{ marginLeft: 6 }}>{t.question}</span>
+              </div>
+              <div style={{ color: '#6b7280' }}>
+                {t.node_id}{t.company_code ? ` / ${t.company_code}` : ''} · owner {t.owner}
+                {t.hypothesis_id ? ` · 假设 ${t.hypothesis_id}` : ''}
+                {t.required_evidence?.length ? ` · 需证据 ${t.required_evidence.join(', ')}` : ''}
+              </div>
+              <div style={{ color: '#92400e' }}>优先级依据：{t.priority_reason} · 来源 {t.source_capabilities?.join('+')}</div>
+            </div>
+          ))}
+          {tasks.length > 30 ? <div style={{ color: '#6b7280' }}>…共 {tasks.length} 条，其余略</div> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ChangesBlock({ changes }: { changes: NonNullable<CapWorkbenchNode['changes']> }) {
   if (!changes.baseline_found) {
     return <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>历史变化：无基线（首次研究建立基线）</div>;
@@ -179,11 +220,23 @@ function ChangesBlock({ changes }: { changes: NonNullable<CapWorkbenchNode['chan
         {changes.state_changed
           ? ` 新增 ${changes.added ?? 0} · 删除 ${changes.removed ?? 0} · 变更 ${changes.changed ?? 0}`
           : ' 无变化'}
+        {changes.materiality ? (
+          <span style={{ color: '#92400e' }}>
+            {' '}· material {changes.materiality.counts?.material ?? 0}
+            {' '}· notable {changes.materiality.counts?.notable ?? 0}
+            {changes.materiality.requires_re_review ? ' · 需人工复核' : ''}
+          </span>
+        ) : null}
       </div>
       {items.slice(0, 15).map((c, i) => (
         <div key={i} style={{ margin: '1px 0 1px 12px', color: '#374151' }}>
           <em>[{c.kind}]</em> <code>{c.field}</code>{' '}
           {String(c.from ?? '—')} → {String(c.to ?? '—')}
+          {c.materiality ? (
+            <span style={{ color: c.materiality === 'material' ? '#b91c1c' : '#6b7280' }}>
+              {' '}· {c.materiality}{c.explanation ? `（${c.explanation}）` : ''}
+            </span>
+          ) : null}
         </div>
       ))}
     </div>
@@ -257,7 +310,10 @@ function NodeCard({ node }: { node: CapWorkbenchNode }) {
                 <div key={c.stock_code} style={{ margin: '2px 0 2px 12px' }}>
                   <CompanyLink code={c.stock_code} link={c.dashboard_link} /> {c.overall_verdict ?? 'no_dossier'}
                   {c.scope_class ? <span style={{ color: '#0369a1' }}> [{c.scope_class}]</span> : null}
-                  <span style={{ color: '#6b7280' }}> · 交付 {c.delivery ?? '—'} · 收入 {c.revenue ?? '—'} · 订单 {c.order ?? '—'}</span>
+                  <span style={{ color: '#6b7280' }}> · 认证 {c.cert ?? '—'} · 交付 {c.delivery ?? '—'} · 收入 {c.revenue ?? '—'} · 订单 {c.order ?? '—'}</span>
+                  {c.confirmed_stages?.length ? (
+                    <span style={{ color: '#15803d' }}> · 兑现 {c.confirmed_stages.length}/6 阶段</span>
+                  ) : null}
                   {typeof c.evidence_coverage === 'number' ? (
                     <span style={{ color: '#9ca3af' }}> · 证据覆盖 {c.evidence_coverage}</span>
                   ) : null}
@@ -337,6 +393,7 @@ export function CapabilitiesWorkbenchPage() {
       {index ? (
         <>
           {index.theme_synthesis ? <ThemeSummary ts={index.theme_synthesis} /> : null}
+          {index.verification_tasks?.length ? <VerificationTasks tasks={index.verification_tasks} /> : null}
           {(index.nodes ?? []).map((n) => <NodeCard key={n.node_id} node={n} />)}
           <div style={{ marginTop: 12, borderTop: '1px solid #e5e7eb', paddingTop: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>

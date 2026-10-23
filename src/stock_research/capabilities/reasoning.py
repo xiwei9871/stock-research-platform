@@ -60,9 +60,14 @@ def _ev_index(dossier: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _split_claim_evidence(
     claim: dict[str, Any], ev_index: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """support / counter / excluded split for one claim's evidence_ids."""
+    """support / counter / excluded split for one claim's evidence_ids.
+
+    R2B: sources are counted per direction AND as a deduped union —
+    supporting and counter evidence never silently merge, and the same
+    underlying filing counts once across all citations."""
     sup, ref, exc = [], [], []
-    sids: set[str] = set()
+    sup_sids: set[str] = set()
+    ref_sids: set[str] = set()
     for eid in claim.get("evidence_ids") or []:
         ev = ev_index.get(eid)
         if ev is None:
@@ -73,13 +78,21 @@ def _split_claim_evidence(
             continue
         if ev.get("direction") == "refute":
             ref.append(eid)
+            if ev.get("source_id"):
+                ref_sids.add(ev["source_id"])
         else:
             sup.append(eid)
             if ev.get("source_id"):
-                sids.add(ev["source_id"])
+                sup_sids.add(ev["source_id"])
+    all_sids = sup_sids | ref_sids
     return {
         "support": sup, "counter": ref, "excluded": exc,
-        "source_ids": sorted(sids), "independent_source_count": len(sids),
+        "source_ids": sorted(all_sids),
+        "support_source_ids": sorted(sup_sids),
+        "counter_source_ids": sorted(ref_sids),
+        "supporting_source_count": len(sup_sids),
+        "counter_source_count": len(ref_sids),
+        "independent_source_count": len(all_sids),
     }
 
 
@@ -102,6 +115,10 @@ def evidence_boundary(
         "counter_evidence_ids": split["counter"],
         "excluded_evidence": split["excluded"],
         "source_ids": split["source_ids"],
+        "support_source_ids": split["support_source_ids"],
+        "counter_source_ids": split["counter_source_ids"],
+        "supporting_source_count": split["supporting_source_count"],
+        "counter_source_count": split["counter_source_count"],
         "independent_source_count": split["independent_source_count"],
         "required_evidence": [
             {"item": r, "met": r in satisfied} for r in required
@@ -362,6 +379,115 @@ def assess_technical(dossier: dict[str, Any]) -> dict[str, Any]:
 
 _SCOPE_COMPARABLE: dict[tuple[str, str], tuple[str, str]] = {}
 
+# Validation-ladder stages that attest customer validation / certification —
+# ``mass_delivery`` is a *delivery* fact, never a certification one.
+_CERT_STAGES = {"contact", "sampling", "in_validation", "ecosystem",
+                "validated"}
+_DELIVERY_ORDER_STAGES = {"delivered", "revenue_recognized"}
+_CERT_KEYWORDS = ("认证", "验证", "送样", "测试", "定点")
+_DELIVERY_CHECKLIST = {"实际交付", "交付里程碑", "批量交付"}
+_PRODUCTION_CHECKLIST = {"量产阶段", "量产/订单"}
+
+
+def _t3_rows(dossier: dict[str, Any], kind: str,
+             code: str) -> list[dict[str, Any]]:
+    facts = (dossier.get("t3_facts") or {}).get(kind) or []
+    return [r for r in facts
+            if str(r.get("stock_code") or "") == str(code)
+            and isinstance(r, dict)]
+
+
+def _accepted(r: dict[str, Any]) -> bool:
+    return r.get("review_status") in {"accepted", "verified"}
+
+
+def _cert_delivery_split(
+    dossier: dict[str, Any], dossier_by_code: dict[str, dict[str, Any]],
+    code: str,
+) -> dict[str, Any]:
+    """Certification/validation and delivery as SEPARATE evidence lanes.
+
+    R2B-A1: delivery state never doubles as certification state and vice
+    versa.  Sources:
+    - certification: accepted CustomerValidation records at
+      contact/sampling/in_validation/ecosystem/validated (product_line
+      scope preferred; broader scopes reported with their scope suffix);
+      falls back to dossier certification-keyword claims as claims_only.
+    - delivery: validation records at mass_delivery, order records at
+      delivered/revenue_recognized, or dossier delivery-checklist claims
+      (verified_delivery / production_claimed tiers).
+    """
+    vrows = _t3_rows(dossier, "customer_validation", code)
+    orows = _t3_rows(dossier, "orders", code)
+    acc_v = [r for r in vrows if _accepted(r)]
+    rank = {s: i for i, s in enumerate(
+        ("contact", "sampling", "in_validation", "ecosystem",
+         "validated", "mass_delivery"))}
+
+    # --- certification / customer validation ------------------------------
+    # All validation-ladder stages report here (the stage name is
+    # self-documenting — ``mass_delivery`` still reads as a delivery-stage
+    # record, never a certification one); the DELIVERY lane below still
+    # requires its own evidence.
+    cert_pl = [r for r in acc_v
+               if r.get("scope") == "product_line"
+               and r.get("stage") in _CERT_STAGES | {"mass_delivery"}]
+    cert_broad = [r for r in acc_v
+                  if r.get("scope") != "product_line"
+                  and r.get("stage") in _CERT_STAGES | {"mass_delivery"}]
+    if cert_pl:
+        cert_state = max(
+            cert_pl, key=lambda r: rank.get(r.get("stage"), -1))["stage"]
+    elif cert_broad:
+        best = max(cert_broad, key=lambda r: rank.get(r.get("stage"), -1))
+        cert_state = f"{best['stage']}_at_{best.get('scope')}"
+    elif vrows:
+        cert_state = "pending_review"
+    else:
+        cert_state = "unknown"
+
+    # --- delivery -----------------------------------------------------------
+    mass = [r for r in acc_v if r.get("stage") == "mass_delivery"]
+    mass_pl = [r for r in mass if r.get("scope") == "product_line"]
+    del_orders = [r for r in orows
+                  if _accepted(r) and r.get("stage") in _DELIVERY_ORDER_STAGES]
+    del_pl = [r for r in del_orders if r.get("scope") == "product_line"]
+    # dossier delivery-tier claims (node product-line attributable)
+    dsr = dossier_by_code.get(code) or {}
+    delivery_claim_seen = False
+    if dsr:
+        m = {e["evidence_id"]: e for e in dsr.get("evidence_matrix") or []}
+        pls = set(dossier.get("product_lines") or [])
+        for c in dsr.get("claims") or []:
+            if c.get("dimension") != "commercialization":
+                continue
+            for eid in c.get("evidence_ids") or []:
+                row = m.get(eid)
+                if not row or row.get("verdict_weight") != "counted":
+                    continue
+                if pls and (row.get("product_line") or "") not in pls:
+                    continue
+                item = row.get("checklist_item") or ""
+                if item in _DELIVERY_CHECKLIST | _PRODUCTION_CHECKLIST:
+                    delivery_claim_seen = True
+    if mass_pl or del_pl:
+        delivery_state = "verified_delivered"
+    elif mass or del_orders:
+        delivery_state = "delivered_at_broader_scope"
+    elif delivery_claim_seen:
+        delivery_state = "production_claimed"
+    elif vrows or orows:
+        delivery_state = "none_seen"
+    else:
+        delivery_state = "unknown"
+    return {
+        "certification_customer_validation": cert_state,
+        "delivery_capability": delivery_state,
+        "evidence_record_ids": sorted(
+            r.get("record_id") for r in acc_v + del_orders
+            if r.get("record_id")),
+    }
+
 
 def _pair_scope(a: str, b: str) -> tuple[str, str]:
     """Comparability of two mapping types.  Component suppliers are never
@@ -403,15 +529,25 @@ def compare_competition(
                   if _cell_state(row.get(k)) not in
                   {"missing", "none_seen", "excluded"})
         coverage[code] = cov + (1 if row.get("dossier") == "present" else 0)
+        split = _cert_delivery_split(dossier, dossier_by_code, code)
         table[code] = {
             "company_name": row.get("company_name"),
             "scope_class": row.get("mapping_type") or "unknown",
             "overall_verdict": row.get("overall_verdict") or "no_dossier",
             "tech_participation": row.get("tech_participation"),
-            "product_maturity": _cell_state(row.get("validation_delivery")),
-            "certification_customer_validation": _cell_state(
-                row.get("validation_delivery")),
-            "delivery_capability": _cell_state(row.get("validation_delivery")),
+            # R2B-A1: maturity follows DELIVERY evidence; certification and
+            # delivery read their own lanes — the combined
+            # validation_delivery cell never doubles as either one.
+            "product_maturity": (
+                "mass_delivery" if split["delivery_capability"]
+                == "verified_delivered" else
+                "production_claimed" if split["delivery_capability"]
+                in {"production_claimed", "delivered_at_broader_scope"}
+                else split["delivery_capability"]),
+            "certification_customer_validation":
+                split["certification_customer_validation"],
+            "delivery_capability": split["delivery_capability"],
+            "cert_delivery_record_ids": split["evidence_record_ids"],
             "revenue_identifiability": {
                 "revenue": _cell_state(row.get("revenue_profit")),
                 "margin_known": bool(
@@ -558,6 +694,10 @@ def assess_hypotheses(
             "revision_triggers": _revision_triggers(role),
             "evidence_refs": split["support"] + split["counter"],
             "excluded_evidence": split["excluded"],
+            "support_source_ids": split["support_source_ids"],
+            "counter_source_ids": split["counter_source_ids"],
+            "supporting_source_count": split["supporting_source_count"],
+            "counter_source_count": split["counter_source_count"],
             "independent_source_count": split["independent_source_count"],
             "as_of": as_of,
         })
@@ -625,3 +765,482 @@ def _cell_state(v: Any) -> str:
     if isinstance(v, dict):
         return str(v.get("state") or "missing")
     return str(v or "missing")
+
+
+# ---------------------------------------------------------------------------
+# CAP-05 R2B: commercial-realization stage assessment
+# ---------------------------------------------------------------------------
+
+# Evidence-gated stages.  Each stage is confirmed ONLY by its own qualified
+# evidence — a later stage never back-proves an earlier one, and a generic
+# narrative never counts as stage evidence.  Stages describe proven facts;
+# companies are NOT assumed to progress in order.
+_COMMERCIALIZATION_STAGES = (
+    "technology_demonstrated",
+    "customer_validated",
+    "commercial_delivery",
+    "revenue_attributed",
+    "profitability_visible",
+    "cash_realization_visible",
+)
+
+
+def _seg_rows(dossier: dict[str, Any], code: str) -> list[dict[str, Any]]:
+    return _t3_rows(dossier, "segment_records", code)
+
+
+def _stage(
+    confirmed: bool, evidence: list[str], sources: set[str], note: str,
+) -> dict[str, Any]:
+    return {
+        "confirmed": confirmed,
+        "evidence_ids": sorted(evidence),
+        "source_ids": sorted(sources),
+        "note": note,
+    }
+
+
+def assess_commercialization(
+    dossier: dict[str, Any],
+    dossier_by_code: dict[str, dict[str, Any]],
+    as_of: str,
+    theme_node_id: str = "",
+) -> dict[str, dict[str, Any]]:
+    """CAP-05 R2B: per-company commercial-realization stage table.
+
+    Six stages with independent evidence gates:
+      technology_demonstrated — credible product/tech capability evidence
+      customer_validated      — a named-customer validation ladder stage
+                                (validated/ecosystem; mass_delivery also
+                                attests validation — it IS a validation-
+                                ladder record, not a narrative)
+      commercial_delivery     — mass_delivery record, order delivered/
+                                revenue_recognized, or delivery-checklist
+                                dossier evidence
+      revenue_attributed      — product_line-scope segment revenue
+      profitability_visible   — product_line revenue + gross margin
+      cash_realization_visible— cash-collection attribution record
+                                (no such T3 kind today → always missing)
+
+    Hard rules: product capability ≠ customer cert ≠ order ≠ delivery ≠
+    revenue ≠ profit ≠ cash; broader-scope numbers never fill a
+    product-line stage; value_capture_verdict stays ``not_evaluated``.
+    """
+    rows = (dossier.get("value_matrix") or {}).get("rows") or []
+    pls = set(dossier.get("product_lines") or [])
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        code = str(row.get("stock_code") or "")
+        dsr = dossier_by_code.get(code) or {}
+        vrows = _t3_rows(dossier, "customer_validation", code)
+        orows = _t3_rows(dossier, "orders", code)
+        srows = _seg_rows(dossier, code)
+        crows = _t3_rows(dossier, "cash_collections", code)
+        acc_v = [r for r in vrows if _accepted(r)]
+        acc_o = [r for r in orows if _accepted(r)]
+        acc_s = [r for r in srows if _accepted(r)]
+
+        def _ids(rr: list[dict[str, Any]]) -> list[str]:
+            return [r["record_id"] for r in rr if r.get("record_id")]
+
+        def _srcs(rr: list[dict[str, Any]]) -> set[str]:
+            return {r["source_id"] for r in rr if r.get("source_id")}
+
+        # --- technology_demonstrated ------------------------------------
+        tech_state = _cell_state(row.get("tech_participation"))
+        tech_ok = tech_state in {"confirmed", "partially_supported"}
+        if not tech_ok and dsr:
+            dv = ((dsr.get("dimensions") or {}).get("tech_moat") or {}) \
+                .get("verdict")
+            tech_ok = dv in {"confirmed", "partially_supported"}
+        s_tech = _stage(tech_ok, [], _srcs(acc_v) if tech_ok else set(),
+                        "产品/技术能力可信证据（矩阵 tech_participation 或 dossier tech_moat）")
+
+        # --- customer_validated ------------------------------------------
+        cust_ok_rows = [r for r in acc_v
+                        if r.get("scope") == "product_line"
+                        and r.get("stage")
+                        in {"validated", "ecosystem", "mass_delivery"}]
+        cust_broad = [r for r in acc_v
+                      if r.get("scope") != "product_line"
+                      and r.get("stage") in _CERT_STAGES | {"mass_delivery"}]
+        cust_note = "特定客户验证/认证证据（产品线口径）"
+        if not cust_ok_rows and cust_broad:
+            cust_note = (f"仅{cust_broad[0].get('scope')}口径客户验证披露——"
+                         "不冒产品线认证")
+        s_cust = _stage(bool(cust_ok_rows), _ids(cust_ok_rows),
+                        _srcs(cust_ok_rows), cust_note)
+
+        # --- commercial_delivery ------------------------------------------
+        del_mass = [r for r in acc_v if r.get("stage") == "mass_delivery"]
+        del_ord = [r for r in acc_o
+                   if r.get("stage") in _DELIVERY_ORDER_STAGES]
+        del_pl = [r for r in del_mass + del_ord
+                  if r.get("scope") == "product_line"]
+        claim_delivery = _cert_delivery_split(
+            dossier, dossier_by_code, code)["delivery_capability"]
+        del_ok = bool(del_pl) or claim_delivery == "verified_delivered"
+        del_ev = _ids(del_pl)
+        if not del_ok and (del_mass or del_ord):
+            s_del = _stage(False, _ids(del_mass + del_ord),
+                           _srcs(del_mass + del_ord),
+                           "交付证据仅为非产品线口径——不冒产品线交付")
+        elif del_ok:
+            s_del = _stage(True, del_ev, _srcs(del_pl),
+                           "商业交付合格证据（mass_delivery/订单交付）")
+        elif claim_delivery == "production_claimed":
+            s_del = _stage(False, [], set(),
+                           "量产声明≠商业交付——缺交付里程碑证据")
+        else:
+            s_del = _stage(False, [], set(), "无商业交付证据")
+
+        # --- revenue_attributed -------------------------------------------
+        rev_pl = [r for r in acc_s
+                  if r.get("disclosure_scope") == "product_line"
+                  and r.get("revenue") is not None]
+        rev_broad = [r for r in acc_s
+                     if r.get("disclosure_scope")
+                     in {"segment", "industry_board", "company_total"}
+                     and r.get("revenue") is not None]
+        s_rev = _stage(
+            bool(rev_pl), _ids(rev_pl), _srcs(rev_pl),
+            "可归属产品线收入" if rev_pl else
+            ("仅板块/更大口径收入——不冒产品线收入"
+             if rev_broad else "无收入归属证据"))
+
+        # --- profitability_visible ----------------------------------------
+        prof_pl = [r for r in rev_pl if r.get("gross_margin") is not None]
+        s_prof = _stage(bool(prof_pl), _ids(prof_pl), _srcs(prof_pl),
+                        "产品线收入+毛利可识别" if prof_pl else
+                        "产品线毛利证据缺失")
+
+        # --- cash_realization_visible -------------------------------------
+        cash_ok = [r for r in crows if _accepted(r)]
+        s_cash = _stage(bool(cash_ok), _ids(cash_ok), _srcs(cash_ok),
+                        "可归属回款证据" if cash_ok else
+                        "T3 无回款归属记录类型——不可用财务三表现金流推定")
+
+        stage_evidence = {
+            "technology_demonstrated": s_tech,
+            "customer_validated": s_cust,
+            "commercial_delivery": s_del,
+            "revenue_attributed": s_rev,
+            "profitability_visible": s_prof,
+            "cash_realization_visible": s_cash,
+        }
+        confirmed = [s for s in _COMMERCIALIZATION_STAGES
+                     if stage_evidence[s]["confirmed"]]
+        missing = [s for s in _COMMERCIALIZATION_STAGES
+                   if not stage_evidence[s]["confirmed"]]
+        scopes = {r.get("disclosure_scope") for r in acc_s
+                  if r.get("disclosure_scope")}
+        attribution = (
+            "product_line" if "product_line" in scopes else
+            "segment" if scopes & {"segment", "industry_board",
+                                   "company_total"} else
+            "unattributed")
+        out[code] = {
+            "company_code": code,
+            "theme_node_id": theme_node_id or dossier.get("node_id"),
+            "product_lines": sorted(pls),
+            "stage_evidence": stage_evidence,
+            "confirmed_stages": confirmed,
+            "missing_stages": missing,
+            "highest_confirmed_stage": confirmed[-1] if confirmed else None,
+            "attribution_scope": attribution,
+            "source_ids": sorted({
+                s for st in stage_evidence.values()
+                for s in st["source_ids"]}),
+            "as_of": as_of,
+            "note": "阶段描述已证实事实——不假设顺序推进、不跳级、非评级",
+        }
+    return out
+
+
+# ---------------------------------------------------------------------------
+# CAP-07 R2B: change classification + materiality
+# ---------------------------------------------------------------------------
+
+_CATEGORY_BY_PREFIX = {
+    "node": "hypothesis_state_changed",
+    "claim": "hypothesis_state_changed",
+    "hypothesis": "hypothesis_state_changed",
+    "econ": "economic_fact_changed",
+    "evidence_ref": "new_evidence",
+    "cap_status": "metadata_only",
+}
+
+_HYPO_MATERIAL_TO = {"supported", "refuted", "contested"}
+_HYPO_NOTABLE_TO = {"risk_flagged", "unresolved"}
+
+
+_UNRESOLVED_FAMILY = {None, "", "unresolved", "unknown", "needs_evidence"}
+
+
+def _hypo_materiality(before: Any, after: Any) -> tuple[str, str]:
+    if before in _UNRESOLVED_FAMILY and after in _HYPO_MATERIAL_TO:
+        return "material", "未决假设获得合格支持/反证"
+    if before in _HYPO_MATERIAL_TO and after in _HYPO_MATERIAL_TO \
+            and before != after:
+        return "material", "假设在支持/反证/contested 间翻转"
+    if before in _HYPO_MATERIAL_TO and after in _HYPO_NOTABLE_TO:
+        return "material", "已成立假设失去支持/被反证推翻"
+    if after in _HYPO_NOTABLE_TO:
+        return "notable", "假设状态变化但未触及核心结论"
+    return "minor", "假设状态微调"
+
+
+def _econ_materiality(field: str, before: Any, after: Any) -> tuple[str, str]:
+    cell = field.split(".")[-1]
+    if cell == "stages" or cell in {"delivery", "order"}:
+        cat = "commercialization_stage_changed"
+    else:
+        cat = "economic_fact_changed"
+    a, b = str(before or ""), str(after or "")
+    # product-line revenue/margin materializing (or disappearing)
+    if cell in {"revenue", "revenue_facts"}:
+        if ("missing" in a or "unknown" in a or a in {"None", ""}) \
+                and ("disclosed" in b or b not in {"missing", "unknown"}):
+            if "broader" not in b and "segment" not in b:
+                return "material", cat
+            return "notable", cat
+        return "notable", cat
+    if cell == "stages":
+        # ``stages`` is an R2B-introduced tracked field: its first
+        # appearance (before=None) is schema-tracking onset, not a
+        # world change — notable, never material.  A real set difference
+        # between two tracked snapshots IS material.
+        if before in (None, [], "") and after not in (None, [], ""):
+            return "notable", cat
+        return ("material" if a != b else "minor"), cat
+    if cell in {"delivery", "order"}:
+        promoted = any(k in b for k in ("delivered", "mass_delivery",
+                                        "verified", "revenue_recognized"))
+        if promoted and not any(k in a for k in
+                                ("delivered", "verified",
+                                 "revenue_recognized")):
+            return "material", cat
+        return "notable", cat
+    return "minor", cat
+
+
+def _evidence_materiality(
+    change: dict[str, Any],
+    prev_sources: set[str], cur_sources: dict[str, str],
+) -> tuple[str, str]:
+    if change["kind"] == "removed":
+        return "notable", "source_revision"
+    ev_id = change["field"].split(":", 1)[1]
+    src = cur_sources.get(ev_id)
+    if src and src in prev_sources:
+        return "non_substantive", "source_revision"
+    return "notable", "new_evidence"
+
+
+def classify_changes(
+    changes: list[dict[str, Any]],
+    current: dict[str, Any],
+    prev: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Annotate each raw diff entry with change_category / materiality /
+    affected_hypothesis_ids / before-after / evidence_delta /
+    explanation / action_required.  Auditable rules only — a re-fetched
+    old source or a display-field touch never manufactures a research
+    event."""
+    hypo_ids = sorted((current.get("hypotheses") or {}).keys())
+    prev_sources = {
+        s for s in ((prev or {}).get("evidence_sources") or {}).values()}
+    cur_sources = (current.get("evidence_sources") or {})
+    out: list[dict[str, Any]] = []
+    for ch in changes:
+        prefix = ch["field"].split(":", 1)[0]
+        before, after = ch.get("from"), ch.get("to")
+        category = _CATEGORY_BY_PREFIX.get(prefix, "metadata_only")
+        materiality = "non_substantive"
+        explanation = ""
+        affected: list[str] = []
+        evidence_delta: list[str] = []
+
+        if prefix in {"hypothesis", "claim", "node"}:
+            # claim fields carry raw verdicts — normalize to assessment
+            # states so identical semantics grade identically.
+            if prefix in {"claim", "node"}:
+                before = _ASSESSMENT_BY_VERDICT.get(before, before)
+                after = _ASSESSMENT_BY_VERDICT.get(after, after)
+            materiality, explanation = _hypo_materiality(before, after)
+            target = ch["field"].split(":", 1)[1]
+            affected = [] if target == "node_verdict" else [target]
+            category = "hypothesis_state_changed"
+        elif prefix == "econ":
+            materiality, category = _econ_materiality(
+                ch["field"], before, after)
+            affected = list(hypo_ids)
+            explanation = (
+                "商业兑现/经营事实变化，可能影响假设"
+                if materiality == "material" else "经营事实更新")
+        elif prefix == "evidence_ref":
+            materiality, category = _evidence_materiality(
+                ch, prev_sources, cur_sources)
+            evidence_delta = [ch["field"].split(":", 1)[1]]
+            affected = list(hypo_ids)
+            explanation = {
+                "non_substantive": "同一底层来源重复采集——不触发实质变化",
+                "new_evidence": "新增合格证据引用",
+                "source_revision": "证据引用被移除/修订",
+            }[materiality if materiality == "non_substantive" else category]
+        elif prefix == "cap_status":
+            explanation = "运行/状态元数据——非研究事件"
+        action = ("re_review_hypothesis" if materiality == "material"
+                  else "note_for_next_review" if materiality == "notable"
+                  else "none")
+        out.append({
+            **ch,
+            "change_category": category,
+            "materiality": materiality,
+            "affected_hypothesis_ids": affected,
+            "before": before,
+            "after": after,
+            "evidence_delta": evidence_delta,
+            "explanation": explanation,
+            "action_required": action,
+        })
+    return out
+
+
+def materiality_summary(classified: list[dict[str, Any]]) -> dict[str, Any]:
+    counts = {"material": 0, "notable": 0, "minor": 0, "non_substantive": 0}
+    for c in classified:
+        counts[c["materiality"]] = counts.get(c["materiality"], 0) + 1
+    return {
+        "counts": counts,
+        "requires_re_review": counts["material"] > 0,
+        "note": "重要性=对研究判断的影响程度，非价格预测",
+    }
+
+
+# ---------------------------------------------------------------------------
+# CAP-09 R2B: verification task derivation (read-only, proposed only)
+# ---------------------------------------------------------------------------
+
+_GAP_OWNER = {
+    "missing_source": "DATA",
+    "unparsed": "DATA",
+    "attribution_unknown": "DATA",
+}
+
+
+def verification_tasks(
+    per_node: dict[str, dict[str, Any]],
+    cap03_findings: dict[str, Any],
+    theme_id: str,
+) -> list[dict[str, Any]]:
+    """Derive proposed verification tasks from CAP-04/05/07/08 outputs.
+
+    Read-only list — status is always ``proposed``; nothing triggers
+    collection, crawlers, production workflows, or review-state changes.
+    Priority reflects *research* value (blocking a core hypothesis,
+    discriminating competing explanations, gating commercialization),
+    never expected price moves or concept heat.
+    """
+    tasks: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+
+    def _add(node_id: str, company: str, question: str, hypothesis: str,
+             required: list[str], owner: str, priority: str,
+             reason: str, caps: list[str]) -> None:
+        key = (node_id, company, hypothesis or question,
+               tuple(sorted(required)))
+        if key in seen:
+            return
+        seen.add(key)
+        tasks.append({
+            "task_id": f"vt-{len(tasks) + 1:04d}",
+            "theme_id": theme_id,
+            "node_id": node_id,
+            "company_code": company or None,
+            "question": question,
+            "hypothesis_id": hypothesis or None,
+            "required_evidence": required,
+            "owner": owner,
+            "priority": priority,
+            "priority_reason": reason,
+            "source_capabilities": caps,
+            "status": "proposed",
+        })
+
+    for node_id, envs in per_node.items():
+        if node_id.endswith("__error"):
+            continue
+        f8 = (envs.get("CAP-08") or {}).get("findings") or {}
+        f5 = (envs.get("CAP-05") or {}).get("findings") or {}
+        f7 = (envs.get("CAP-07") or {}).get("findings") or {}
+        hypo_texts = {}
+        for h in f8.get("hypothesis_assessment") or []:
+            hypo_texts[h["hypothesis_id"]] = h
+            state = h.get("assessment_state")
+            gaps = [g for g in h.get("decisive_gaps") or []]
+            text = h.get("hypothesis") or ""
+            if state == "unresolved" and gaps:
+                _add(node_id, "", f"核实假设：{text or h['hypothesis_id']}",
+                     h["hypothesis_id"], gaps, "DATA", "high",
+                     "阻断核心研究假设（未决且有决定性缺口）",
+                     ["CAP-04", "CAP-08"])
+            elif state == "contested":
+                _add(node_id, "", f"区分竞争解释：{text or h['hypothesis_id']}",
+                     h["hypothesis_id"], gaps or ["adjudicating_evidence"],
+                     "DATA", "high",
+                     "存在合格反证——需能区分相互竞争解释的证据",
+                     ["CAP-08"])
+            elif state == "risk_flagged":
+                _add(node_id, "", f"核实炒作风险边界：{text or h['hypothesis_id']}",
+                     h["hypothesis_id"],
+                     ["theme_mapping_independent_evidence"],
+                     "DATA", "medium",
+                     "主题映射之外的独立证据方可解除风险标记",
+                     ["CAP-08"])
+        # CAP-05: delivery confirmed but revenue missing → value gate
+        for code, eco in (f5.get("economics") or {}).items():
+            ca = eco.get("commercialization_assessment") or {}
+            confirmed = set(ca.get("confirmed_stages") or [])
+            if "commercial_delivery" in confirmed \
+                    and "revenue_attributed" not in confirmed:
+                _add(node_id, code,
+                     f"{code} 已有交付证据但产品线收入未归属——核实收入确认",
+                     "", ["product_line_attributed_revenue"], "DATA",
+                     "medium", "影响商业兑现判断：交付≠收入",
+                     ["CAP-05"])
+            if "revenue_attributed" in confirmed \
+                    and "profitability_visible" not in confirmed:
+                _add(node_id, code,
+                     f"{code} 产品线收入已归属但毛利不可见——核实毛利披露",
+                     "", ["product_line_gross_margin"], "DATA",
+                     "medium", "影响商业兑现判断：收入≠盈利",
+                     ["CAP-05"])
+        # CAP-07 material changes → re-review task
+        for ch in f7.get("changes") or []:
+            if ch.get("materiality") == "material":
+                _add(node_id, "",
+                     f"复核实质变化：{ch['field']} {ch.get('from')}→{ch.get('to')}",
+                     (ch.get("affected_hypothesis_ids") or [""])[0] or "",
+                     ["re_review"], "CAP-09", "high",
+                     "新证据实质改变研究判断——需人工复核",
+                     ["CAP-07"])
+        # external data gaps → DATA tasks (deduped by backlog owner)
+        for g in (envs.get("CAP-05") or {}).get("data_gaps") or []:
+            item = g.get("item") or ""
+            _add(node_id, item.split(":")[-1] if ":" in item else "",
+                 f"补齐数据缺口：{item}", "", [item],
+                 _GAP_OWNER.get(g.get("kind"), "DATA"), "low",
+                 f"外部数据缺口（{g.get('kind')}）", ["CAP-05"])
+
+    # coverage gaps → CAP-02 capability tasks
+    for nid in cap03_findings.get("coverage_gap_nodes") or []:
+        _add(nid, "", f"节点 {nid} 无研究案例——需补能力覆盖", "",
+             ["node_case"], "CAP-02", "low",
+             "能力覆盖缺口（非外部数据缺失）", ["CAP-03"])
+
+    rank = {"high": 0, "medium": 1, "low": 2}
+    tasks.sort(key=lambda t: (rank.get(t["priority"], 3), t["task_id"]))
+    for i, t in enumerate(tasks):
+        t["task_id"] = f"vt-{i + 1:04d}"
+    return tasks
