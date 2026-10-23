@@ -148,6 +148,17 @@ fi
 
 print_summary "策略日终完成" 0
 
+# Post-EOD refresh jobs — keep dashboard surfaces current. Non-fatal by design:
+# a failure here must not flip the EOD run to failed.
+set +e
+PYTHONPATH=src "$PYTHON_BIN" -m stock_research.cli run-daily-review-v1 \
+  --trade-date "$TRADE_DATE" --record-run >>"$DETAIL_LOG" 2>&1
+echo "daily_review_v1|rc|$?" >>"$DETAIL_LOG"
+PYTHONPATH=src "$PYTHON_BIN" -m stock_research.cli research-queue-refresh \
+  --trade-date "$TRADE_DATE" >>"$DETAIL_LOG" 2>&1
+echo "research_queue_refresh|rc|$?" >>"$DETAIL_LOG"
+set -e
+
 ARTIFACT_SYNC_SCRIPT="$ROOT/deploy/sync_dashboard_artifacts.sh"
 if [[ -x "$ARTIFACT_SYNC_SCRIPT" || -f "$ARTIFACT_SYNC_SCRIPT" ]]; then
   nohup /bin/bash "$ARTIFACT_SYNC_SCRIPT" >>"$LOG_DIR/dashboard_artifact_sync.trigger.log" 2>&1 &

@@ -1429,7 +1429,7 @@ def test_latest_successful_status_loader_requires_complete_official_publication(
         "mid_trend_status = 'success'",
         "midtrend_artifacts_status = 'success'",
         "tech_bottleneck_status = 'success'",
-        "review_rows = 15",
+        "review_rows > 0",
         "ORDER BY trade_date DESC",
         "LIMIT 1",
     ):

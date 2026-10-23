@@ -49,8 +49,13 @@ def completed_assets() -> set[str]:
             rep = json.load(open(p))
         except Exception:
             continue
+        if isinstance(rep, list):
+            done.update(k for k in rep if isinstance(k, str)
+                        and k.startswith("CN:"))
+            continue
         for k, v in rep.items():
-            if k.startswith("CN:") and v.get("status") == "COMPLETE":
+            if k.startswith("CN:") and isinstance(v, dict) \
+                    and v.get("status") == "COMPLETE":
                 done.add(k)
     return done
 
@@ -152,20 +157,36 @@ def _load_ledger(path: str) -> dict:
 
 
 def pending_minute_keys(assets: list[str], conn) -> dict[str, dict]:
+    """Set-based pending computation: two grouped scans instead of ~3
+    per-asset partition scans (2,249 assets × monthly partitions was
+    taking hours). Same semantics as before."""
     ledger = _load_ledger(PROGRESS)
-    groups, sigs, raw_sigs = {}, {}, {}
-    for asset_id in assets:
-        gs = fetch_all(
-            conn, "SELECT DISTINCT freq, source FROM market.stock_minute_bar"
-                  " WHERE asset_id=%s AND adjust_type='raw'",
-            [asset_id])
-        if gs:
-            groups[asset_id] = gs
-            sigs[asset_id] = factor_sig(conn, asset_id)
-            for g in gs:
-                key = f"{asset_id}|{g['freq']}|{g['source']}"
-                raw_sigs[key] = raw_minute_sig(
-                    conn, asset_id, g["freq"], g["source"])
+    # one scan: raw minute groups + their signatures together
+    groups, raw_sigs = {}, {}
+    for r in fetch_all(
+            conn, "SELECT asset_id, freq, source, count(*) c,"
+                  " max(updated_at) mx FROM market.stock_minute_bar"
+                  " WHERE adjust_type='raw' AND asset_id = ANY(%s)"
+                  " GROUP BY asset_id, freq, source",
+            [assets]):
+        a = r["asset_id"]
+        groups.setdefault(a, []).append(
+            {"freq": r["freq"], "source": r["source"]})
+        raw_sigs[f"{a}|{r['freq']}|{r['source']}"] = f"{r['c']}:{r['mx']}"
+    # one scan: factor signatures
+    sigs = {}
+    for r in fetch_all(
+            conn, "SELECT asset_id, count(*) c, max(updated_at) mx"
+                  " FROM market.adjustment_factor WHERE asset_id = ANY(%s)"
+                  " AND source_version='derived_market_daily_bar_v1'"
+                  " GROUP BY asset_id",
+            [assets]):
+        sigs[r["asset_id"]] = f"{r['c']}:{r['mx']}"
+    # assets with raw groups but zero factor rows keep the same
+    # "0:None" signature factor_sig() would have returned — they stay
+    # pending and surface as FACTOR_GAP during derive, as before
+    for a in groups:
+        sigs.setdefault(a, "0:None")
     return decide_minute_pending(groups, sigs, raw_sigs, ledger)
 
 

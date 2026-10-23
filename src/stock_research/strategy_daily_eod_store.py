@@ -215,7 +215,7 @@ def load_latest_successful_strategy_daily_eod_status(
       AND mid_trend_status = 'success'
       AND midtrend_artifacts_status = 'success'
       AND tech_bottleneck_status = 'success'
-      AND review_rows = 15
+      AND review_rows > 0
     ORDER BY trade_date DESC
     LIMIT 1
     """

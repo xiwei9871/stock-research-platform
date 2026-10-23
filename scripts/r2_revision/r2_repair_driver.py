@@ -126,7 +126,10 @@ def main() -> None:
                           f"stderr={proc.stderr[-300:] if proc.stderr else ''}", flush=True)
                     elapsed = time.time() - t0
                     out = (proc.stderr or "") + (proc.stdout or "")
-                    if elapsed < FAST_FAIL_S and "login failed" in out:
+                    if elapsed < FAST_FAIL_S and (
+                        "login failed" in out
+                        or "session already in use" in out
+                    ):
                         if is_blacklist_error(out):
                             # fail-closed: server-side blacklist — pause
                             # everything and exit; a human must unblock
