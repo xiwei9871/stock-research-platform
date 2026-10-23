@@ -194,7 +194,8 @@ function VerificationTasks({ tasks }: { tasks: NonNullable<CapWorkbenchIndex['ve
                 <span style={{ marginLeft: 6 }}>{t.question}</span>
               </div>
               <div style={{ color: '#6b7280' }}>
-                {t.node_id}{t.company_code ? ` / ${t.company_code}` : ''} · owner {t.owner}
+                {(t.related_node_ids?.length ? t.related_node_ids.join('+') : t.node_id)}
+                {t.company_code ? ` / ${t.company_code}` : ''} · owner {t.owner}
                 {t.hypothesis_id ? ` · 假设 ${t.hypothesis_id}` : ''}
                 {t.required_evidence?.length ? ` · 需证据 ${t.required_evidence.join(', ')}` : ''}
               </div>
@@ -310,9 +311,22 @@ function NodeCard({ node }: { node: CapWorkbenchNode }) {
                 <div key={c.stock_code} style={{ margin: '2px 0 2px 12px' }}>
                   <CompanyLink code={c.stock_code} link={c.dashboard_link} /> {c.overall_verdict ?? 'no_dossier'}
                   {c.scope_class ? <span style={{ color: '#0369a1' }}> [{c.scope_class}]</span> : null}
-                  <span style={{ color: '#6b7280' }}> · 认证 {c.cert ?? '—'} · 交付 {c.delivery ?? '—'} · 收入 {c.revenue ?? '—'} · 订单 {c.order ?? '—'}</span>
+                  <span style={{ color: '#6b7280' }}>
+                    {c.cert_facts
+                      ? <> · 产品认证 {c.cert_facts.product_certification ?? '—'} · 生态 {c.cert_facts.ecosystem_participation ?? '—'}
+                          · 客户验证 {c.cert_facts.customer_validation ?? '—'} · 交付 {c.cert_facts.commercial_delivery ?? '—'}</>
+                      : <> · 认证 {c.cert ?? '—'} · 交付 {c.delivery ?? '—'}</>}
+                    {' '}· 收入 {c.revenue ?? '—'} · 订单 {c.order ?? '—'}
+                  </span>
                   {c.confirmed_stages?.length ? (
                     <span style={{ color: '#15803d' }}> · 兑现 {c.confirmed_stages.length}/6 阶段</span>
+                  ) : null}
+                  {c.theme_application_attribution ? (
+                    <span style={{ color: c.theme_application_attribution === 'confirmed' ? '#15803d' : '#b45309' }}>
+                      {' '}· 主题归属 {c.theme_application_attribution}
+                      {c.theme_specific_revenue && c.theme_specific_revenue !== 'not_evaluated'
+                        ? ` / 主题收入 ${c.theme_specific_revenue}` : ''}
+                    </span>
                   ) : null}
                   {typeof c.evidence_coverage === 'number' ? (
                     <span style={{ color: '#9ca3af' }}> · 证据覆盖 {c.evidence_coverage}</span>

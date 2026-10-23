@@ -40,10 +40,7 @@ def _snapshot_content(snapshot: dict[str, Any]) -> dict[str, Any]:
     keeping it would force a new version every run) and CAP-07/CAP-08
     statuses — are excluded; only substantive facts version history."""
     content = {k: v for k, v in snapshot.items()
-               if k not in {"version", "saved_at", "envelope_fingerprints",
-                            # derived lookup map for diff explainability —
-                            # metadata, never part of research-fact identity
-                            "evidence_sources"}}
+               if k not in {"version", "saved_at", "envelope_fingerprints"}}
     caps = dict(content.get("cap_statuses") or {})
     for c in _DERIVED_CAPS:
         caps.pop(c, None)
@@ -143,16 +140,45 @@ def snapshot_from_node_chain(
         "evidence_refs": sorted(
             r["evidence_id"] for r in dossier.get("evidence_matrix", [])
         ),
-        # derived metadata for diff explainability — excluded from content
-        # identity (same facts ⇒ same identity regardless of this map)
+        # R2B.1: per-evidence fact signature (source + direction +
+        # dimension + scope + review status + content hash).  Part of
+        # research-fact identity — a same-source NEW fact or a fact
+        # revision must version the baseline once so the change is
+        # absorbed rather than re-reported forever.
         "evidence_sources": {
-            r["evidence_id"]: r.get("source_id")
+            r["evidence_id"]: _ev_signature(r)
             for r in dossier.get("evidence_matrix", [])
         },
         "cap_statuses": {cap: _attr(e, "status") for cap, e in envelopes.items()},
         "envelope_fingerprints": {
             cap: _attr(e, "fingerprint") for cap, e in envelopes.items()},
     }
+
+
+def _ev_signature(row: dict[str, Any]) -> dict[str, Any]:
+    """Content-level fact signature for one evidence row — source_id
+    alone cannot tell a re-fetch from a genuinely new fact."""
+    import hashlib
+    sig_raw = "|".join(str(row.get(k) or "")
+                       for k in ("excerpt", "checklist_item",
+                                 "product_line", "aspect"))
+    return {
+        "src": row.get("source_id"),
+        "dir": row.get("direction"),
+        "dim": row.get("aspect") or row.get("dimension"),
+        "scope": row.get("product_line") or row.get("evidence_scope"),
+        "rev": row.get("review_status"),
+        "sig": hashlib.sha1(sig_raw.encode("utf-8")).hexdigest()[:10],
+    }
+
+
+def _evidence_maps(snap: dict[str, Any]) -> dict[str, Any]:
+    """evidence_id → fact signature map (legacy flat ``src`` values are
+    normalized downstream in the classifier)."""
+    m = snap.get("evidence_sources")
+    if m:
+        return m
+    return {e: {"src": None} for e in snap.get("evidence_refs") or []}
 
 
 def _diff_maps(
@@ -206,9 +232,7 @@ def diff_baselines(
          for cell, v in cells.items()},
         "econ")
     changes += _diff_maps(
-        {e: True for e in (prev.get("evidence_refs") or [])},
-        {e: True for e in current.get("evidence_refs", [])},
-        "evidence_ref")
+        _evidence_maps(prev), _evidence_maps(current), "evidence_ref")
     prev_caps = {k: v for k, v in (prev.get("cap_statuses") or {}).items()
                  if k not in _DERIVED_CAPS}
     cur_caps = {k: v for k, v in (current.get("cap_statuses") or {}).items()

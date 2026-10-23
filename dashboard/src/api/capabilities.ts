@@ -29,9 +29,18 @@ export interface CapWorkbenchCompany {
   order?: string;
   scope_class?: string;
   cert?: string;
+  cert_facts?: {
+    product_certification?: string;
+    ecosystem_participation?: string;
+    customer_validation?: string;
+    commercial_delivery?: string;
+  };
   evidence_coverage?: number;
   comparable_with?: string[];
   confirmed_stages?: string[];
+  product_line_attribution?: string;
+  theme_application_attribution?: string;
+  theme_specific_revenue?: string;
 }
 
 export interface CapHypothesis {
@@ -128,6 +137,7 @@ export interface CapVerificationTask {
   task_id: string;
   theme_id: string;
   node_id: string;
+  related_node_ids?: string[];
   company_code?: string | null;
   question: string;
   hypothesis_id?: string | null;

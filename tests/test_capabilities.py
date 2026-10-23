@@ -608,6 +608,11 @@ def test_r2a_real_cases_no_positive_fabrication():
 
 # ---------------- CAP-R2B contract tests -----------------
 
+def _ev_sig(src, sig, direction="support", rev="accepted", scope="node"):
+    return {"src": src, "dir": direction, "dim": "capacity_constraint",
+            "scope": scope, "rev": rev, "sig": sig}
+
+
 def _mk_dossier_t3(rows, *, pls=("line_a",), t3=None, claims=None):
     return {
         "node_id": "n1", "as_of": "2026-10-22",
@@ -634,16 +639,31 @@ def _ord_rec(rid, code, stage, scope="product_line", review="accepted"):
 
 
 def _seg_rec(rid, code, scope="product_line", rev=100.0, gm=None,
-             review="accepted"):
-    return {"record_id": rid, "stock_code": code, "product_line": "line_a",
+             review="accepted", pl="line_a"):
+    return {"record_id": rid, "stock_code": code, "product_line": pl,
             "disclosure_scope": scope, "revenue": rev, "gross_margin": gm,
             "report_period": "2025FY", "source_id": f"src_{rid}",
             "published_at": "2026-01-01", "ingested_at": "2026-01-02",
             "review_status": review}
 
 
+def _tech_dossier(code, pl="line_a"):
+    """Minimal company dossier carrying traceable tech-capability
+    evidence — P0-C requires confirmed stages to cite real evidence."""
+    return {
+        "dimensions": {"tech_moat": {"verdict": "confirmed"}},
+        "claims": [{"claim_id": f"c_tech_{code}", "dimension": "tech_moat",
+                    "verdict": "confirmed", "evidence_ids": [f"te_{code}"]}],
+        "evidence_matrix": [{
+            "evidence_id": f"te_{code}", "source_id": f"src_tech_{code}",
+            "review_status": "accepted", "verdict_weight": "counted",
+            "product_line": pl, "evidence_scope": "product_line",
+            "published_at": "2026-01-01"}],
+    }
+
+
 def test_r2b_cert_delivery_fields_separated():
-    """A1: 验证阶段记录不冒充交付；交付不冒充认证。"""
+    """A1/R2B.1: mass_delivery 只进交付车道，不再冒充认证状态。"""
     from stock_research.capabilities.reasoning import compare_competition
     d = _mk_dossier_t3(
         [{"stock_code": "A", "mapping_type": "direct_product",
@@ -662,9 +682,16 @@ def test_r2b_cert_delivery_fields_separated():
     # A: 仅客户验证 → cert=validated, delivery 不得沿用 validated
     assert comp["A"]["certification_customer_validation"] == "validated"
     assert comp["A"]["delivery_capability"] in {"none_seen", "unknown"}
-    # B: mass_delivery + delivered 订单 → 两条车道各自成立
+    # B: mass_delivery + delivered 订单 → 交付成立，认证车道不再出现
+    #    mass_delivery（R2B.1 修复：交付事实不冒认证状态）
     assert comp["B"]["delivery_capability"] == "verified_delivered"
-    assert comp["B"]["certification_customer_validation"] == "mass_delivery"
+    assert comp["B"]["certification_customer_validation"] == "none_seen"
+    # 四事实独立表达
+    cf = comp["B"]["cert_facts"]
+    assert cf["commercial_delivery"] == "verified_delivered"
+    assert cf["customer_validation"] == "none_seen"
+    assert cf["product_certification"] == "unknown"
+    assert cf["ecosystem_participation"] == "none_seen"
 
 
 def test_r2b_directional_source_counts():
@@ -695,7 +722,8 @@ def test_r2b_stage_evidence_gated_no_skip():
           "verified_orders": {"state": "none_seen"}}],
         t3={"customer_validation": [_val_rec("v1", "A", "validated")],
             "orders": [], "segment_records": []})
-    a = assess_commercialization(d, {}, "2026-10-22")["A"]
+    a = assess_commercialization(
+        d, {"A": _tech_dossier("A")}, "2026-10-22")["A"]
     assert "technology_demonstrated" in a["confirmed_stages"]
     assert "customer_validated" in a["confirmed_stages"]
     # 无交付记录 → commercial_delivery 不得由 validated 反推
@@ -718,7 +746,8 @@ def test_r2b_delivery_without_revenue_no_upgrade():
             "orders": [_ord_rec("o1", "B", "delivered")],
             "segment_records": [_seg_rec("s1", "B", scope="segment",
                                          rev=9e8)]})
-    a = assess_commercialization(d, {}, "2026-10-22")["B"]
+    a = assess_commercialization(
+        d, {"B": _tech_dossier("B")}, "2026-10-22")["B"]
     assert "commercial_delivery" in a["confirmed_stages"]
     # segment 口径收入不归属产品线 → revenue_attributed 仍 missing
     assert "revenue_attributed" in a["missing_stages"]
@@ -734,16 +763,22 @@ def test_r2b_pl_revenue_and_margin_unlock_stages():
           "tech_participation": "confirmed", "validation_delivery": "mass_delivery",
           "revenue_profit": {"state": "disclosed", "facts": []},
           "verified_orders": {"state": "verified_delivered"}}],
-        t3={"customer_validation": [_val_rec("v1", "A", "mass_delivery")],
+        t3={"customer_validation": [_val_rec("v1", "A", "mass_delivery"),
+                                    _val_rec("v2", "A", "validated")],
             "orders": [_ord_rec("o1", "A", "revenue_recognized")],
             "segment_records": [_seg_rec("s1", "A", rev=5e8, gm=0.28)]})
-    a = assess_commercialization(d, {}, "2026-10-22")["A"]
+    a = assess_commercialization(
+        d, {"A": _tech_dossier("A")}, "2026-10-22")["A"]
     for s in ("technology_demonstrated", "customer_validated",
               "commercial_delivery", "revenue_attributed",
               "profitability_visible"):
         assert s in a["confirmed_stages"], s
     assert "cash_realization_visible" in a["missing_stages"]
     assert a["highest_confirmed_stage"] == "profitability_visible"
+    # R2B.1: 阶段证据可追溯
+    for s in a["confirmed_stages"]:
+        se = a["stage_evidence"][s]
+        assert se["evidence_ids"] or se.get("trace"), s
 
 
 def test_r2b_materiality_rules_auditable():
@@ -755,7 +790,7 @@ def test_r2b_materiality_rules_auditable():
             "economics": {"002837": {"delivery": "none_seen",
                                      "order": "none_seen"}},
             "evidence_refs": ["e1"],
-            "evidence_sources": {"e1": "src_a"},
+            "evidence_sources": {"e1": _ev_sig("src_a", "sig1")},
             "cap_statuses": {"CAP-05": "ok"}}
     cur = {"as_of": "2026-10-23", "node_verdict": "unverified",
            "claims": {"c1": {"verdict": "confirmed", "role": "supply_scarcity"}},
@@ -763,7 +798,8 @@ def test_r2b_materiality_rules_auditable():
            "economics": {"002837": {"delivery": "verified_delivered",
                                     "order": "none_seen"}},
            "evidence_refs": ["e1", "e2"],
-           "evidence_sources": {"e1": "src_a", "e2": "src_a"},
+           "evidence_sources": {"e1": _ev_sig("src_a", "sig1"),
+                                "e2": _ev_sig("src_a", "sig1")},
            "cap_statuses": {"CAP-05": "partial"}}
     d = diff_baselines(cur, [dict(base, version=1)])
     by_field = {c["field"]: c for c in d["changes"]}
@@ -772,9 +808,10 @@ def test_r2b_materiality_rules_auditable():
         == "hypothesis_state_changed"
     assert by_field["hypothesis:c1"]["action_required"] \
         == "re_review_hypothesis"
-    # 新证据 e2 但底层来源 src_a 已存在 → 重复采集 non_substantive
+    # 新证据 e2 但底层来源 src_a 已存在且事实签名相同 → 重复采集
     assert by_field["evidence_ref:e2"]["materiality"] == "non_substantive"
-    assert by_field["evidence_ref:e2"]["change_category"] == "source_revision"
+    assert by_field["evidence_ref:e2"]["change_category"] \
+        == "duplicate_ingestion"
     # 交付 → 商业兑现变化 material
     assert by_field["econ:002837.delivery"]["materiality"] == "material"
     assert by_field["econ:002837.delivery"]["change_category"] \
@@ -838,7 +875,10 @@ def test_r2b_verification_tasks_proposed_only():
                for t in tasks)
     assert any(t["owner"] == "CAP-09" for t in tasks)  # material re-review
     highs = [t for t in tasks if t["priority"] == "high"]
-    assert highs and highs[0]["task_id"] == "vt-0001"  # 高优先级排序在前
+    assert highs  # 高优先级排序在前
+    import re
+    assert all(re.fullmatch(r"vt-[0-9a-f]{10}", t["task_id"])
+               for t in tasks)  # R2B.1 稳定 hash 身份
     assert all("评级" not in t["priority_reason"]
                and "涨幅" not in t["priority_reason"] for t in tasks)
 
@@ -881,3 +921,171 @@ def test_r2b_chain_flags_research_only(tmp_path):
             assert env["research_only"] is True
             assert env["used_for_signal"] is False
             assert env["used_for_admission"] is False
+
+
+# ---------------- CAP-R2B.1 semantic-closure contract tests -----------------
+
+def test_r2b1_theme_application_attribution():
+    """688686 场景：公司机器视觉产品线收入确认，但人形应用归属 unknown。"""
+    from stock_research.capabilities.reasoning import assess_commercialization
+    d = _mk_dossier_t3(
+        [{"stock_code": "688686", "mapping_type": "direct_product",
+          "tech_participation": "confirmed",
+          "revenue_profit": {"state": "disclosed", "facts": []},
+          "verified_orders": {"state": "none_seen"},
+          "validation_delivery": "none_seen"}],
+        pls=("humanoid_vision",),
+        t3={"customer_validation": [], "orders": [],
+            "segment_records": [
+                _seg_rec("seg_688686_mv", "688686", rev=9.6e8, gm=0.655,
+                         pl="machine_vision")]}  # 非节点产品线
+    )
+    a = assess_commercialization(
+        d, {"688686": _tech_dossier("688686", pl="humanoid_vision")},
+        "2026-10-22")["688686"]
+    # 公司产品线事实成立，主题应用归属未知——双重归属分离
+    assert a["product_line_attribution"] == "confirmed"
+    assert a["theme_application_attribution"] == "unknown"
+    assert a["theme_specific_revenue"] == "not_evaluated"
+    # 非节点产品线收入不提升主题阶段——收入/毛利如实降级
+    assert "revenue_attributed" in a["missing_stages"]
+    assert "profitability_visible" in a["missing_stages"]
+    # 事实保留而非丢弃
+    assert a["related_company_facts"] and \
+        a["related_company_facts"][0]["record_id"] == "seg_688686_mv"
+
+
+def test_r2b1_component_delivery_not_system_node():
+    """大元泵业场景：pump_components 交付在 cdu_system 节点不成立。"""
+    from stock_research.capabilities.reasoning import (
+        assess_commercialization, compare_competition)
+    rec = dict(_val_rec("v1", "603757", "mass_delivery"),
+               product_line="pump_components")
+    orec = dict(_ord_rec("o1", "603757", "delivered"),
+                product_line="pump_components")
+    d = _mk_dossier_t3(
+        [{"stock_code": "603757", "mapping_type": "direct_component",
+          "tech_participation": "confirmed",
+          "revenue_profit": {"state": "missing"},
+          "verified_orders": {"state": "verified_delivered"},
+          "validation_delivery": "mass_delivery"}],
+        pls=("cdu_system",),  # CDU 系统节点
+        t3={"customer_validation": [rec], "orders": [orec],
+            "segment_records": []})
+    a = assess_commercialization(d, {}, "2026-10-22")["603757"]
+    assert "commercial_delivery" in a["missing_stages"]
+    comp = compare_competition(d, {})["comparison"]["603757"]
+    # 合格交付记录存在但在其他产品线 → 如实标注口径外，不提升本节点
+    assert comp["cert_facts"]["commercial_delivery"] == "out_of_node_scope"
+    assert comp["delivery_capability"] == "out_of_node_scope"
+
+
+def test_r2b1_product_cert_ecosystem_not_customer_validation():
+    """产品测试/生态认证不升级为具名客户验证；mass_delivery 不进认证车道。"""
+    from stock_research.capabilities.reasoning import compare_competition
+    d = _mk_dossier_t3(
+        [{"stock_code": "A", "mapping_type": "direct_product",
+          "tech_participation": "confirmed",
+          "revenue_profit": {"state": "missing"},
+          "verified_orders": {"state": "none_seen"},
+          "validation_delivery": "ecosystem"}],
+        t3={"customer_validation": [
+                dict(_val_rec("v1", "A", "product_certified")),
+                dict(_val_rec("v2", "A", "ecosystem")),
+                dict(_val_rec("v3", "A", "contact")),  # 接触级
+            ], "orders": [], "segment_records": []})
+    cf = compare_competition(d, {})["comparison"]["A"]["cert_facts"]
+    assert cf["product_certification"] == "product_certified"
+    assert cf["ecosystem_participation"] == "participating"
+    assert cf["customer_validation"] == "contact"  # 生态≠具名客户验证
+    # 具名客户验证阶段门控同样适用 CAP-05
+    from stock_research.capabilities.reasoning import assess_commercialization
+    a = assess_commercialization(
+        d, {"A": _tech_dossier("A")}, "2026-10-22")["A"]
+    assert "customer_validated" in a["missing_stages"]
+
+
+def test_r2b1_confirmed_stage_needs_trace():
+    """P0-C：confirmed 阶段无可追溯证据引用必须降级。"""
+    from stock_research.capabilities.reasoning import assess_commercialization
+    d = _mk_dossier_t3(
+        [{"stock_code": "X", "mapping_type": "direct_product",
+          "tech_participation": "confirmed",  # 矩阵判成立但 dossier 无证据
+          "revenue_profit": {"state": "missing"},
+          "verified_orders": {"state": "none_seen"},
+          "validation_delivery": "none_seen"}],
+        t3={"customer_validation": [], "orders": [], "segment_records": []})
+    a = assess_commercialization(d, {}, "2026-10-22")["X"]
+    assert "technology_demonstrated" in a["missing_stages"]
+    assert "technology_demonstrated" in a["demoted_stages"]
+    assert "可追溯" in a["stage_evidence"]["technology_demonstrated"]["note"] \
+        or "降级" in a["stage_evidence"]["technology_demonstrated"]["note"]
+
+
+def test_r2b1_same_source_new_counterevidence_material():
+    """同一来源新增合格反证 → material（同来源≠重复采集）。"""
+    from stock_research.capabilities.baseline import diff_baselines
+    base = {"as_of": "2026-10-22",
+            "hypotheses": {"h1": "supported"},
+            "claims": {}, "economics": {},
+            "evidence_refs": ["e1"],
+            "evidence_sources": {"e1": _ev_sig("src_a", "sig1")}}
+    cur = {"as_of": "2026-10-23",
+           "hypotheses": {"h1": "supported"},
+           "claims": {}, "economics": {},
+           "evidence_refs": ["e1", "e2"],
+           "evidence_sources": {"e1": _ev_sig("src_a", "sig1"),
+                                "e2": _ev_sig("src_a", "sig9",
+                                              direction="refute")}}
+    d = diff_baselines(cur, [dict(base, version=1)])
+    by_field = {c["field"]: c for c in d["changes"]}
+    assert by_field["evidence_ref:e2"]["change_category"] \
+        == "same_source_new_fact"
+    assert by_field["evidence_ref:e2"]["materiality"] == "material"
+    assert by_field["evidence_ref:e2"]["action_required"] \
+        == "re_review_hypothesis"
+    # 对照：同来源新支持性事实 → notable 而非 non_substantive
+    cur2 = dict(cur, evidence_sources={
+        "e1": _ev_sig("src_a", "sig1"),
+        "e2": _ev_sig("src_a", "sig9")})
+    d2 = diff_baselines(cur2, [dict(base, version=1)])
+    by2 = {c["field"]: c for c in d2["changes"]}
+    assert by2["evidence_ref:e2"]["change_category"] == "same_source_new_fact"
+    assert by2["evidence_ref:e2"]["materiality"] == "notable"
+
+
+def test_r2b1_task_ids_stable_and_merged():
+    """稳定任务身份：重跑/重排 id 不变；父子节点同一需求合并。"""
+    from stock_research.capabilities.reasoning import verification_tasks
+    hypo = {"hypothesis_id": "h_gap", "hypothesis": "供给是否紧缺",
+            "assessment_state": "unresolved",
+            "decisive_gaps": ["capacity_or_leadtime"]}
+    per_node = {
+        "child_node": {"CAP-08": {"findings": {
+            "hypothesis_assessment": [hypo]}}},
+        "parent_node": {"CAP-08": {"findings": {
+            "hypothesis_assessment": [hypo]}}},
+    }
+    t1 = verification_tasks(per_node, {}, "t1")
+    t2 = verification_tasks(
+        dict(reversed(list(per_node.items()))), {}, "t1")
+    assert [t["task_id"] for t in t1] == [t["task_id"] for t in t2]
+    # 同一验证需求跨节点 → 单任务 + related_node_ids
+    assert len(t1) == 1
+    assert sorted(t1[0]["related_node_ids"]) == ["child_node",
+                                                 "parent_node"]
+    t3 = verification_tasks(per_node, {}, "t1")  # 重跑
+    assert t3[0]["task_id"] == t1[0]["task_id"]
+
+
+def test_r2b1_real_cases_attribution_honest():
+    """真实三主题边界复核：688686 人形应用归属 unknown；大元交付如实。"""
+    from stock_research.capabilities.reasoning import assess_commercialization
+    from stock_research.capabilities.adapters import _build_node_dossier
+    d, dbc = _build_node_dossier(
+        "docs/cap02/cases/humanoid_vision_node.json", DOSSIER_DIR)
+    a = assess_commercialization(d, dbc, d.get("as_of"))["688686"]
+    assert a["product_line_attribution"] == "confirmed"
+    assert a["theme_application_attribution"] == "unknown"
+    assert a["theme_specific_revenue"] == "not_evaluated"
+    assert "revenue_attributed" in a["missing_stages"]

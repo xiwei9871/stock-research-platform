@@ -71,13 +71,29 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
                  "order": row.get("order_visibility"),
                  "scope_class": row.get("scope_class"),
                  "cert": row.get("certification_customer_validation"),
+                 # R2B.1: four independent facts — no stage label shared
+                 "cert_facts": row.get("cert_facts"),
                  "evidence_coverage": row.get("evidence_coverage"),
                  "comparable_with": row.get("comparable_with"),
                  # R2B: commercial-realization stage summary
                  "confirmed_stages": (
                      ((env5.get("economics") or {}).get(code) or {})
                      .get("commercialization_assessment") or {}
-                 ).get("confirmed_stages")}
+                 ).get("confirmed_stages"),
+                 # R2B.1: dual attribution — a company product-line fact
+                 # is not a theme-application fact
+                 "product_line_attribution": (
+                     ((env5.get("economics") or {}).get(code) or {})
+                     .get("commercialization_assessment") or {}
+                 ).get("product_line_attribution"),
+                 "theme_application_attribution": (
+                     ((env5.get("economics") or {}).get(code) or {})
+                     .get("commercialization_assessment") or {}
+                 ).get("theme_application_attribution"),
+                 "theme_specific_revenue": (
+                     ((env5.get("economics") or {}).get(code) or {})
+                     .get("commercialization_assessment") or {}
+                 ).get("theme_specific_revenue")}
                 for code, row in (env6.get("comparison") or {}).items()
             ],
             "pairwise_scope": env6.get("pairwise_scope") or [],
