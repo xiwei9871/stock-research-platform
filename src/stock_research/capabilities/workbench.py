@@ -61,10 +61,32 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
             "companies": [
                 {"stock_code": code,
                  "dashboard_link": f"/tech-bottleneck/stock/{code}?source=capabilities",
-                 **{k: v for k, v in row.items()
-                    if k in {"overall_verdict", "delivery", "revenue", "order"}}}
+                 "overall_verdict": row.get("overall_verdict"),
+                 "delivery": row.get("delivery_capability"),
+                 "revenue": (row.get("revenue_identifiability") or {})
+                 .get("revenue"),
+                 "order": row.get("order_visibility"),
+                 "scope_class": row.get("scope_class"),
+                 "evidence_coverage": row.get("evidence_coverage"),
+                 "comparable_with": row.get("comparable_with")}
                 for code, row in (env6.get("comparison") or {}).items()
             ],
+            "pairwise_scope": env6.get("pairwise_scope") or [],
+            "scope_classes": env6.get("scope_classes") or {},
+            "technical_assessment": {
+                area: {
+                    "assessment": (env4.get("technical_assessment") or {})
+                    .get(area, {}).get("assessment"),
+                    "sub_checks": {
+                        k: v.get("state") for k, v in
+                        ((env4.get("technical_assessment") or {})
+                         .get(area, {}).get("sub_checks") or {}).items()
+                    },
+                }
+                for area in ("supply_constraint", "non_substitutability",
+                             "entry_barrier")
+            },
+            "hypothesis_assessment": env8.get("hypothesis_assessment") or [],
             "synthesis": {
                 "favorable_support": env8.get("favorable_support", []),
                 "market_structure": env8.get("market_structure", []),
@@ -125,6 +147,7 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
         "pit_note": cap03_findings.get("pit_note"),
         "theme_node_count": len(theme_nodes),
         "covered_node_count": len(covered_theme_nodes),
+        "theme_synthesis": chain_out.get("theme_synthesis"),
         "nodes": nodes,
         "gap_summary": gap_summary,
         "gap_backlog": chain_out.get("gap_backlog", []),

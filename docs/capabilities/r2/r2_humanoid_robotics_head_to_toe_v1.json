@@ -1,0 +1,1377 @@
+{
+ "theme_id": "humanoid_robotics_head_to_toe_v1",
+ "as_of": "2026-10-22",
+ "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+ "envelopes": {
+  "CAP-03": {
+   "capability_id": "CAP-03",
+   "subject_type": "theme",
+   "subject_id": "humanoid_robotics_head_to_toe_v1",
+   "as_of": "2026-10-22",
+   "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+   "status": "ok",
+   "findings": {
+    "theme_id": "humanoid_robotics_head_to_toe_v1",
+    "read_source": "artifact",
+    "requested_source": "artifact",
+    "source_note": "",
+    "pit_note": "theme package is a snapshot without intrinsic as_of; rows read as latest",
+    "node_count": 21,
+    "nodes_with_cases": 1,
+    "coverage_gap_nodes": [
+     "planetary_roller_screw",
+     "harmonic_reducer",
+     "six_axis_force_sensor",
+     "arm_actuator",
+     "frameless_motor",
+     "brain_ai_compute",
+     "controller",
+     "hand_dexterous",
+     "torque_sensor",
+     "ankle_joint",
+     "hip_joint",
+     "knee_joint",
+     "bearing",
+     "encoder",
+     "tactile_sensor",
+     "battery_bms",
+     "wiring_harness",
+     "imu",
+     "lightweight_materials",
+     "torso_structure"
+    ],
+    "nodes": [
+     {
+      "node_id": "planetary_roller_screw",
+      "name": "Planetary Roller Screw",
+      "priority_score": 84.0,
+      "bottleneck_score": 5,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "harmonic_reducer",
+      "name": "Harmonic Reducer",
+      "priority_score": 82.0,
+      "bottleneck_score": 5,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "six_axis_force_sensor",
+      "name": "Six-Axis Force Sensor",
+      "priority_score": 80.0,
+      "bottleneck_score": 5,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "arm_actuator",
+      "name": "Arm Actuator",
+      "priority_score": 77.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "frameless_motor",
+      "name": "Frameless Motor",
+      "priority_score": 77.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "brain_ai_compute",
+      "name": "Brain AI Compute",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "controller",
+      "name": "Controller",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "hand_dexterous",
+      "name": "Dexterous Hand",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "torque_sensor",
+      "name": "Torque Sensor",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "ankle_joint",
+      "name": "Ankle Joint",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "hip_joint",
+      "name": "Hip Joint",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "knee_joint",
+      "name": "Knee Joint",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "bearing",
+      "name": "Bearing",
+      "priority_score": 67.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "encoder",
+      "name": "Encoder",
+      "priority_score": 67.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "tactile_sensor",
+      "name": "Tactile Sensor",
+      "priority_score": 67.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "head_vision",
+      "name": "Head Vision",
+      "priority_score": 58.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [
+       {
+        "path": "docs/cap02/cases/humanoid_vision_node.json",
+        "case_node_id": "humanoid_vision_sensing",
+        "lineage": null
+       }
+      ],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "battery_bms",
+      "name": "Battery and BMS",
+      "priority_score": 56.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "wiring_harness",
+      "name": "Wiring Harness",
+      "priority_score": 52.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "imu",
+      "name": "IMU",
+      "priority_score": 47.0,
+      "bottleneck_score": 2,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "lightweight_materials",
+      "name": "Lightweight Materials",
+      "priority_score": 47.0,
+      "bottleneck_score": 2,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "torso_structure",
+      "name": "Torso Structure",
+      "priority_score": 47.0,
+      "bottleneck_score": 2,
+      "value_capture_score": 2,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     }
+    ],
+    "research_tasks": [
+     {
+      "subject_type": "node",
+      "subject_id": "planetary_roller_screw",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "harmonic_reducer",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "six_axis_force_sensor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "arm_actuator",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "frameless_motor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "brain_ai_compute",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "controller",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "hand_dexterous",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "torque_sensor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "ankle_joint",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "hip_joint",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "knee_joint",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "bearing",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "encoder",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "tactile_sensor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "head_vision",
+      "capability": "CAP-02",
+      "cases": "docs/cap02/cases/humanoid_vision_node.json"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "battery_bms",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "wiring_harness",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "imu",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "lightweight_materials",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "torso_structure",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     }
+    ],
+    "task_count": 21
+   },
+   "evidence_refs": [],
+   "uncertainties": [],
+   "data_gaps": [],
+   "fingerprint": "78f396f3374b5bada36770c169d9319e69d7880dd6dae032334b5a62b4e8e545",
+   "rule_version": "cap00-r0",
+   "research_only": true,
+   "used_for_signal": false,
+   "used_for_admission": false,
+   "upstream_fingerprints": []
+  }
+ },
+ "per_node": {
+  "humanoid_vision_sensing": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "needs_evidence",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_vision_capacity",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [
+       {
+        "claim_id": "nc_vision_process",
+        "dimension": "process_irreplaceability",
+        "claim_role": "non_substitutability",
+        "verdict": "unknown",
+        "claim_text": "机器人视觉感知工艺难以被替代",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "market_structure": [],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_vision_cert",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "主机厂视觉部件认证周期长构成壁垒",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       },
+       {
+        "claim_id": "nc_vision_perf",
+        "dimension": "performance_gap",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "节点内视觉方案间存在可量化性能差异",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_vision_hype",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "partially_supported",
+        "claim_text": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+        "evidence_ids": [
+         "n_ev_theme_score"
+        ],
+        "support_count": 1,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 5,
+     "technical_assessment": {
+      "supply_constraint": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "demand_growth": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "需求增长为事实描述——本身不证明供给短缺"
+        },
+        "capacity_limited": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_vision_capacity"
+         ],
+         "evidence_ids": [],
+         "note": "有效产能/供给约束证据"
+        },
+        "effective_delivery_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "交付能力受限观察（矩阵交付格）",
+         "delivery_states": {
+          "688686": "pending_review"
+         },
+         "deliverable_companies": []
+        },
+        "supplier_count_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "已验证供应商数量——多供应商是格局事实，不自动否定紧缺也不证明紧缺"
+        },
+        "cert_gated_supply": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_vision_cert"
+         ],
+         "evidence_ids": [],
+         "note": "认证门槛造成的有效供给受限（需客户认证证据）"
+        }
+       },
+       "caveat": "需求增长本身不得推导短缺；多供应商格局不自动否定也不证明紧缺"
+      },
+      "non_substitutability": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "functional_alternative_exists": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_vision_process"
+         ],
+         "evidence_ids": [],
+         "note": "存在功能相近替代——存在替代供应商不等于可无成本替代",
+         "alt_evidence_ids": []
+        },
+        "performance_meets_requirement": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_vision_perf"
+         ],
+         "evidence_ids": [],
+         "note": "替代方案性能是否达标"
+        },
+        "switching_cost_cert": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_vision_cert"
+         ],
+         "evidence_ids": [],
+         "note": "替代所需认证与切换成本证据"
+        },
+        "switching_time": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代所需时间证据"
+        },
+        "alternative_commercialized": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案是否已实际商业化",
+         "alt_evidence_ids": []
+        }
+       },
+       "caveat": "存在替代供应商不等于可无成本替代"
+      },
+      "entry_barrier": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "product_certification": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_vision_cert"
+         ],
+         "evidence_ids": [],
+         "note": "产品级测试/认证事实（Intel/UL 等）——不证明客户认证"
+        },
+        "customer_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "特定客户认证通过证据（周期/成本/失效率）"
+        },
+        "mass_production_line_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "量产线验证证据"
+        },
+        "long_term_supply_qualification": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "长期供应资格证据"
+        },
+        "yield_reliability": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "工艺良率与可靠性证据"
+        }
+       },
+       "caveat": "产品认证（Intel/UL）不证明客户认证壁垒"
+      },
+      "evidence_boundaries": [
+       {
+        "claim_id": "nc_vision_capacity",
+        "hypothesis": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+        "role": "supply_scarcity",
+        "verdict": "unknown",
+        "as_of": "2026-10-21",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "capacity_or_leadtime",
+          "met": false
+         },
+         {
+          "item": "delivery_shortfall",
+          "met": false
+         },
+         {
+          "item": "supplier_count",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "capacity_or_leadtime",
+         "delivery_shortfall",
+         "supplier_count"
+        ]
+       },
+       {
+        "claim_id": "nc_vision_process",
+        "hypothesis": "机器人视觉感知工艺难以被替代",
+        "role": "non_substitutability",
+        "verdict": "unknown",
+        "as_of": "2026-10-21",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "alternative_function_check",
+          "met": false
+         },
+         {
+          "item": "performance_parity",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "alternative_function_check",
+         "performance_parity",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_vision_cert",
+        "hypothesis": "主机厂视觉部件认证周期长构成壁垒",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-21",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_vision_perf",
+        "hypothesis": "节点内视觉方案间存在可量化性能差异",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-21",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_vision_hype",
+        "hypothesis": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+        "role": "hype",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-21",
+        "support_evidence_ids": [
+         "n_ev_theme_score"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [
+         "N_m1_theme_mapping"
+        ],
+        "independent_source_count": 1,
+        "required_evidence": [],
+        "unmet_conditions": []
+       }
+      ]
+     },
+     "evidence_index": {
+      "n_ev_yuejiang_lead": {
+       "evidence_id": "n_ev_yuejiang_lead",
+       "source_id": "public_web_929553c10b516ee2",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "dimension": null,
+       "excerpt": "券商点评：奥普特'与越疆开展机器人业务合作'——公司级合作接触线索。",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "n_ev_aoopte_layout": {
+       "evidence_id": "n_ev_aoopte_layout",
+       "source_id": "ru_688686_5906",
+       "direction": "unclear",
+       "aspect": "capacity_constraint",
+       "dimension": null,
+       "excerpt": "奥普特年报：'提前布局机器人赛道，补齐感知、精密运动控制核心部件'——公司级定位性表述，无节点供需信息。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "n_ev_theme_score": {
+       "evidence_id": "n_ev_theme_score",
+       "source_id": "N_m1_theme_mapping",
+       "direction": "support",
+       "aspect": "hype_only",
+       "dimension": null,
+       "excerpt": "主题映射表显示奥普特在人形机器人主题 priority_score=98.0（dependency 高关联），但截至本日无机器人业务收入/订单一手披露——主题关联显著高于可验证供给证据。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      }
+     },
+     "claims": [
+      {
+       "claim_id": "nc_vision_capacity",
+       "claim_text": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+       "claim_role": "supply_scarcity",
+       "dimension": "capacity_constraint",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_vision_process",
+       "claim_text": "机器人视觉感知工艺难以被替代",
+       "claim_role": "non_substitutability",
+       "dimension": "process_irreplaceability",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_vision_cert",
+       "claim_text": "主机厂视觉部件认证周期长构成壁垒",
+       "claim_role": "entry_barrier",
+       "dimension": "certification_barrier",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_vision_perf",
+       "claim_text": "节点内视觉方案间存在可量化性能差异",
+       "claim_role": "entry_barrier",
+       "dimension": "performance_gap",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_vision_hype",
+       "claim_text": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+       "claim_role": "hype",
+       "dimension": "hype_only",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "n_ev_theme_score"
+       ],
+       "support_count": 1,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      }
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_theme_score"
+    ],
+    "uncertainties": [
+     "nc_vision_capacity=unknown",
+     "nc_vision_process=unknown",
+     "nc_vision_cert=unknown",
+     "nc_vision_perf=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "5647344ed69f79339e79a13376e178d130064600fa95cfe23b3556d498bb2402",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "688686": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "pending_review",
+       "order_state": "pending_review",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "order_seen",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "pending_review",
+        "delivery": "pending_review",
+        "cash": "unknown"
+       }
+      }
+     },
+     "member_count": 1
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688686",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688686",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "5605d3b66e9fde0104c72f657042bcd4ddfc4611621a63a571ea47af7e22d425",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "5647344ed69f79339e79a13376e178d130064600fa95cfe23b3556d498bb2402"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "688686": {
+       "company_name": "奥普特",
+       "scope_class": "dependency",
+       "overall_verdict": "needs_evidence",
+       "tech_participation": "partially_supported",
+       "product_maturity": "pending_review",
+       "certification_customer_validation": "pending_review",
+       "delivery_capability": "pending_review",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "pending_review",
+       "advantage_substitutability": {
+        "tech_moat": "partially_supported",
+        "competitive_edge": "needs_evidence"
+       },
+       "concept_only_risk": "high",
+       "evidence_coverage": 4,
+       "comparable_with": []
+      }
+     },
+     "pairwise_scope": [],
+     "scope_classes": {
+      "dependency": [
+       "688686"
+      ]
+     },
+     "note": "同口径比较：组件 vs 系统不直接排名；披露更多≠竞争力更强；无评分无推荐"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "0dae1a7c596af5889ad1997f18135f1940eec9b3681119e22eba258a01be2e1e",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "5647344ed69f79339e79a13376e178d130064600fa95cfe23b3556d498bb2402",
+     "5605d3b66e9fde0104c72f657042bcd4ddfc4611621a63a571ea47af7e22d425"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+    "status": "ok",
+    "findings": {
+     "baseline_found": true,
+     "baseline_version": 1,
+     "baseline_as_of": "2026-10-21",
+     "skipped_future_versions": 0,
+     "state_changed": true,
+     "changes": [
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_vision_capacity",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_vision_process",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_vision_cert",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_vision_perf",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_vision_hype",
+       "from": null,
+       "to": "risk_flagged"
+      }
+     ],
+     "added": 5,
+     "removed": 0,
+     "changed": 0,
+     "current_fingerprint": "115b3460e180067e7e1af65db0ca233c2ee054d5d1f6e3cafe565ea3a84e2ee1",
+     "baseline_count": 1
+    },
+    "evidence_refs": [
+     "hypothesis:nc_vision_capacity",
+     "hypothesis:nc_vision_process",
+     "hypothesis:nc_vision_cert",
+     "hypothesis:nc_vision_perf",
+     "hypothesis:nc_vision_hype"
+    ],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "fadb300ced2a00dc9c80a5e09b0e83e4ddc04b7066e928a42955b682c91df78c",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "humanoid_vision_sensing",
+    "as_of": "2026-10-21",
+    "run_id": "r2a-humanoid_robotics_head_to_toe_v1",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [],
+     "market_structure": [],
+     "counter_evidence": [],
+     "hype_risks": [
+      {
+       "claim_id": "nc_vision_hype",
+       "role": "hype",
+       "verdict": "partially_supported",
+       "hypothesis": "节点当前热度主要来自主题映射与概念关联而非供给证据",
+       "evidence_ids": [
+        "n_ev_theme_score"
+       ],
+       "source_ids": [
+        "N_m1_theme_mapping"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "unresolved": [
+      {
+       "claim_id": "nc_vision_capacity",
+       "role": "supply_scarcity",
+       "verdict": "unknown",
+       "hypothesis": "人形机器人视觉感知环节存在可验证的产能/供给瓶颈",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_vision_process",
+       "role": "non_substitutability",
+       "verdict": "unknown",
+       "hypothesis": "机器人视觉感知工艺难以被替代",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_vision_cert",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "主机厂视觉部件认证周期长构成壁垒",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_vision_perf",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "节点内视觉方案间存在可量化性能差异",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "hypothesis_assessment": [
+      {
+       "hypothesis_id": "nc_vision_capacity",
+       "subject_scope": "humanoid_vision_sensing/supply_scarcity",
+       "claim_role": "supply_scarcity",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "多供应商格局可吸收需求增长——供给紧缺未证实"
+       ],
+       "decisive_gaps": [
+        "capacity_or_leadtime",
+        "delivery_shortfall",
+        "supplier_count"
+       ],
+       "revision_triggers": [
+        "获得产能利用率/交期/订单排队的合格证据 → 升级",
+        "新进入者实现规模交付或第二供应商放量 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-21"
+      },
+      {
+       "hypothesis_id": "nc_vision_process",
+       "subject_scope": "humanoid_vision_sensing/non_substitutability",
+       "claim_role": "non_substitutability",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "存在已商业化或可认证替代方案——不可替代未证实"
+       ],
+       "decisive_gaps": [
+        "alternative_function_check",
+        "performance_parity",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "替代方案通过同等级客户认证并量产 → 弱化",
+        "切换成本/良率差距证据出现 → 强化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-21"
+      },
+      {
+       "hypothesis_id": "nc_vision_cert",
+       "subject_scope": "humanoid_vision_sensing/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-21"
+      },
+      {
+       "hypothesis_id": "nc_vision_perf",
+       "subject_scope": "humanoid_vision_sensing/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-21"
+      },
+      {
+       "hypothesis_id": "nc_vision_hype",
+       "subject_scope": "humanoid_vision_sensing/hype",
+       "claim_role": "hype",
+       "verdict": "partially_supported",
+       "assessment_state": "risk_flagged",
+       "supporting_claim_ids": [
+        "nc_vision_hype"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "主题映射与概念热度驱动，非供给/交付证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "主题映射之外的订单/交付/收入证据出现 → 重新评估"
+       ],
+       "evidence_refs": [
+        "n_ev_theme_score"
+       ],
+       "excluded_evidence": [],
+       "independent_source_count": 1,
+       "as_of": "2026-10-21"
+      }
+     ],
+     "support_claim_count": 0,
+     "uncertainties": [
+      "CAP-04:nc_vision_capacity=unknown",
+      "CAP-04:nc_vision_process=unknown",
+      "CAP-04:nc_vision_cert=unknown",
+      "CAP-04:nc_vision_perf=unknown"
+     ],
+     "next_verification": [
+      "product_gross_margin:688686",
+      "product_revenue:688686"
+     ],
+     "research_priority": [
+      "product_revenue:688686",
+      "product_gross_margin:688686"
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_theme_score"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688686",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688686",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "5af212ad048565b35327902f82ca250b21ca6d23512732968111a78ea2a16d80",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "5647344ed69f79339e79a13376e178d130064600fa95cfe23b3556d498bb2402",
+     "5605d3b66e9fde0104c72f657042bcd4ddfc4611621a63a571ea47af7e22d425",
+     "0dae1a7c596af5889ad1997f18135f1940eec9b3681119e22eba258a01be2e1e",
+     "fadb300ced2a00dc9c80a5e09b0e83e4ddc04b7066e928a42955b682c91df78c"
+    ]
+   }
+  }
+ },
+ "errors": [],
+ "gap_backlog": [
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "product_revenue:688686",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "humanoid_vision_sensing",
+   "kind": "missing_source",
+   "item": "product_gross_margin:688686",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  }
+ ],
+ "research_only": true,
+ "used_for_signal": false,
+ "used_for_admission": false,
+ "theme_synthesis": {
+  "key_findings": [
+   "humanoid_vision_sensing: needs_evidence（正向 0 · 风险 1 · 未决 4）"
+  ],
+  "competing_hypotheses": [
+   {
+    "node_id": "humanoid_vision_sensing",
+    "hypothesis_id": "nc_vision_hype",
+    "state": "risk_flagged",
+    "independent_source_count": 1,
+    "new_evidence_refs": [
+     "n_ev_theme_score"
+    ]
+   }
+  ],
+  "core_unresolved": [
+   {
+    "node_id": "humanoid_vision_sensing",
+    "claim_id": "nc_vision_capacity",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "humanoid_vision_sensing",
+    "claim_id": "nc_vision_process",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "humanoid_vision_sensing",
+    "claim_id": "nc_vision_cert",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "humanoid_vision_sensing",
+    "claim_id": "nc_vision_perf",
+    "verdict": "unknown"
+   }
+  ],
+  "next_verification": [
+   "product_gross_margin:688686",
+   "product_revenue:688686"
+  ],
+  "coverage": {
+   "theme_nodes": 21,
+   "nodes_with_cases": 1,
+   "coverage_gap_nodes": [
+    "planetary_roller_screw",
+    "harmonic_reducer",
+    "six_axis_force_sensor",
+    "arm_actuator",
+    "frameless_motor",
+    "brain_ai_compute",
+    "controller",
+    "hand_dexterous",
+    "torque_sensor",
+    "ankle_joint",
+    "hip_joint",
+    "knee_joint",
+    "bearing",
+    "encoder",
+    "tactile_sensor",
+    "battery_bms",
+    "wiring_harness",
+    "imu",
+    "lightweight_materials",
+    "torso_structure"
+   ],
+   "read_source": "artifact"
+  },
+  "note": "结构化研究摘要——非主题评级、非买卖建议"
+ },
+ "workbench_index": "outputs/research/cap_workbench/humanoid_robotics_head_to_toe_v1/index.json"
+}

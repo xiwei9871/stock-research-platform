@@ -351,6 +351,9 @@ def cap04_tech_supply(
         "hype": _claims_by_role(claims, {"hype"}),
         "unclassified": _claims_by_role(claims, set(), invert=True),
     }
+    # R2A: structured bottleneck assessment — sub-checks + evidence
+    # boundaries; the frozen CAP-02 node_verdict stays untouched.
+    from stock_research.capabilities.reasoning import assess_technical
     env = make_envelope(
         "CAP-04", "node", node_id, as_of, run_id,
         status="ok" if claims else "unknown",
@@ -358,16 +361,30 @@ def cap04_tech_supply(
             "node_verdict": dossier["conclusion"]["node_verdict"],
             "views": views,
             "claim_count": len(claims),
+            "technical_assessment": assess_technical(dossier),
             # claim → evidence → source traceability for CAP-08/09
             "evidence_index": {
                 r["evidence_id"]: {
+                    "evidence_id": r["evidence_id"],
                     "source_id": r.get("source_id"),
                     "direction": r.get("direction"),
                     "aspect": r.get("aspect"),
+                    "dimension": r.get("dimension"),
+                    "excerpt": r.get("excerpt"),
                     "review_status": r.get("review_status"),
+                    "pit_status": r.get("pit_status"),
+                    "verdict_weight": r.get("verdict_weight"),
                 }
                 for r in dossier.get("evidence_matrix", [])
             },
+            # flat claim list for CAP-08 hypothesis assessment
+            "claims": [
+                {k: c.get(k) for k in (
+                    "claim_id", "claim_text", "claim_role", "dimension",
+                    "verdict", "evidence_ids", "support_count",
+                    "refute_count", "unverified_evidence_ids")}
+                for c in claims
+            ],
         },
         evidence_refs=tuple(
             eid for c in claims for eid in c.get("evidence_ids", ())
@@ -408,6 +425,15 @@ def cap05_value_economics(
             margin_state = "segment_level"  # 板块口径，不下钻产品线
         else:
             margin_state = "unknown"
+        # R2A-P1: five mutually independent facts — delivery never
+        # upgrades to revenue; cash stays unknown until a source exists.
+        stage = (
+            "revenue_visible" if exact else
+            "delivery_seen" if del_state in {
+                "validated", "mass_delivery", "verified_delivered"} else
+            "order_seen" if ord_state not in {"missing", "none_seen"} else
+            "not_evaluated"
+        )
         economics[code] = {
             "revenue_state": rev_state,
             "revenue_value": exact[0]["revenue"] if exact else None,
@@ -428,6 +454,13 @@ def cap05_value_economics(
                 "product_line_attributed_revenue",
                 "operating_evidence(margin/order/cash)",
             ],
+            "cash_state": "unknown",
+            "commercialization_stage": stage,
+            "independent_facts": {
+                "revenue": rev_state, "margin": margin_state,
+                "order": ord_state, "delivery": del_state,
+                "cash": "unknown",
+            },
         }
         if rev_state == "unextracted":
             gaps.append(DataGap(kind=GAP_UNPARSED, item=f"product_revenue:{code}",
@@ -459,32 +492,18 @@ def cap06_competition(
     as_of: str, run_id: str,
     upstream_fingerprints: Sequence[str] = (),
 ) -> ResearchEnvelope:
-    """Same-node supplier comparison + moat evidence positions (R0)."""
-    rows = (dossier.get("value_matrix") or {}).get("rows") or []
-    table: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        code = row["stock_code"]
-        dims = (dossier_by_code.get(code) or {}).get("dimensions") or {}
-        table[code] = {
-            "company_name": row.get("company_name"),
-            "overall_verdict": row.get("overall_verdict") or "no_dossier",
-            "tech_participation": row.get("tech_participation"),
-            "delivery": _cell_state(row.get("validation_delivery")),
-            "revenue": _cell_state(row.get("revenue_profit")),
-            "order": _cell_state(row.get("verified_orders")),
-            "concept_only_risk": row.get("concept_only_risk"),
-            "moat_dimensions": {
-                d: dims.get(d, {}).get("verdict")
-                for d in ("tech_moat", "competitive_advantage")
-            },
-        }
+    """Same-node supplier comparison + moat evidence positions (R0).
+
+    R2A: same-scope comparison — ``comparison_scope`` labels every pair
+    directly_comparable / partially_comparable / not_comparable /
+    insufficient_evidence.  Component suppliers never rank against
+    full-system makers; more disclosure never means stronger."""
+    from stock_research.capabilities.reasoning import compare_competition
+    result = compare_competition(dossier, dossier_by_code)
     return make_envelope(
         "CAP-06", "node", node_id, as_of, run_id,
-        status="ok" if table else "not_evaluated",
-        findings={
-            "comparison": table,
-            "note": "component delivery ≠ full-system substitution; product cert ≠ customer cert",
-        },
+        status="ok" if result["comparison"] else "not_evaluated",
+        findings=result,
         upstream_fingerprints=upstream_fingerprints,
     )
 
@@ -589,6 +608,17 @@ def cap08_synthesis(
                 })
         uncertainties.extend(f"{env.capability_id}:{u}" for u in env.uncertainties)
         gaps.extend(env.data_gaps)
+    # R2A: per-claim hypothesis assessment — built from CAP-04's flat
+    # claim list + evidence index (claim/evidence/source traceability).
+    hypothesis_assessment: list[dict[str, Any]] = []
+    for env in upstream:
+        if env.capability_id != "CAP-04":
+            continue
+        from stock_research.capabilities.reasoning import assess_hypotheses
+        ev_index = env.findings.get("evidence_index") or {}
+        hypothesis_assessment.extend(assess_hypotheses(
+            env.findings.get("claims") or [], ev_index,
+            subject_id, as_of))
     status = "ok" if (favorable or structure or counter or hype_risks) else (
         "partial" if upstream else "unknown")
     return make_envelope(
@@ -599,6 +629,7 @@ def cap08_synthesis(
             "counter_evidence": list(counter.values()),
             "hype_risks": list(hype_risks.values()),
             "unresolved": list(unresolved.values()),
+            "hypothesis_assessment": hypothesis_assessment,
             "support_claim_count": len(favorable),
             "uncertainties": uncertainties,
             "next_verification": sorted({g.item for g in gaps})[:10],

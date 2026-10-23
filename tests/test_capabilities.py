@@ -410,3 +410,197 @@ def test_cap07_diff_includes_sourced_revenue_facts(tmp_path):
     d = diff_baselines(cur, [dict(base, version=1)])
     hits = [c for c in d["changes"] if "revenue_facts" in c["field"]]
     assert hits and hits[0]["kind"] == "changed"
+
+
+# ---------------- CAP-R2A adversarial contract tests -----------------
+
+def _mk_claim(cid, role="supply_scarcity", verdict="unknown",
+              dim="capacity_constraint", evids=(), text=""):
+    return {"claim_id": cid, "claim_text": text or cid, "claim_role": role,
+            "dimension": dim, "verdict": verdict, "evidence_ids": list(evids)}
+
+
+def _mk_ev(eid, sid="s1", direction="support", review="accepted",
+           pit="in_scope", weight="counted", dim="capacity_constraint",
+           excerpt=""):
+    return {"evidence_id": eid, "source_id": sid, "direction": direction,
+            "aspect": dim, "dimension": dim, "excerpt": excerpt,
+            "review_status": review, "pit_status": pit,
+            "verdict_weight": weight}
+
+
+def test_r2a_support_plus_counter_is_contested():
+    """一手支持 + 一手反证 → contested，不只保留支持。"""
+    from stock_research.capabilities.reasoning import hypothesis_state_map
+    c = _mk_claim("h1", verdict="partially_supported", evids=("e1", "e2"))
+    idx = {"e1": _mk_ev("e1"), "e2": _mk_ev("e2", direction="refute")}
+    assert hypothesis_state_map([c], idx)["h1"] == "contested"
+
+
+def test_r2a_same_underlying_source_counts_once():
+    """多条引用指向同一底层年报 → independent_source_count=1。"""
+    from stock_research.capabilities.reasoning import assess_hypotheses
+    c = _mk_claim("h1", verdict="confirmed", evids=("e1", "e2", "e3"))
+    idx = {e: _mk_ev(e, sid="cninfo_002837_ar2025") for e in ("e1", "e2", "e3")}
+    h = assess_hypotheses([c], idx, "n1", "2026-10-22")[0]
+    assert h["independent_source_count"] == 1
+
+
+def test_r2a_lead_only_evidence_never_promotes():
+    """lead_only/pending/out-of-PIT 证据进入 excluded，不提升结论。"""
+    from stock_research.capabilities.reasoning import (
+        assess_hypotheses, hypothesis_state_map)
+    c = _mk_claim("h1", verdict="needs_evidence", evids=("e1", "e2", "e3"))
+    idx = {
+        "e1": _mk_ev("e1", review="lead_only"),
+        "e2": _mk_ev("e2", review="pending_review"),
+        "e3": _mk_ev("e3", pit="out_of_scope"),
+    }
+    assert hypothesis_state_map([c], idx)["h1"] == "unresolved"
+    h = assess_hypotheses([c], idx, "n1", "2026-10-22")[0]
+    assert h["assessment_state"] == "unresolved"
+    assert len(h["excluded_evidence"]) == 3
+    assert h["independent_source_count"] == 0
+    reasons = {e["reason"].split("=")[0] for e in h["excluded_evidence"]}
+    assert reasons == {"review_status", "pit_status"}
+
+
+def test_r2a_product_cert_not_customer_cert():
+    """产品通过 Intel/UL 测试 ≠ 客户认证壁垒成立。"""
+    from stock_research.capabilities.reasoning import assess_technical
+    dossier = {
+        "node_id": "n1", "as_of": "2026-10-22",
+        "node_claims": [
+            _mk_claim("c_cert", role="entry_barrier", verdict="unknown",
+                      dim="certification_barrier", evids=("e1",),
+                      text="客户认证周期构成壁垒"),
+        ],
+        "evidence_matrix": [
+            _mk_ev("e1", dim="certification_barrier",
+                   excerpt="产品通过英特尔测试验证和UL认证"),
+        ],
+        "value_matrix": {"rows": []},
+    }
+    ta = assess_technical(dossier)["entry_barrier"]
+    assert ta["sub_checks"]["product_certification"]["evidence_ids"] == ["e1"]
+    assert ta["sub_checks"]["customer_validation"]["state"] in {
+        "no_evidence", "unverified"}
+    assert ta["assessment"] == "unverified"
+
+
+def test_r2a_demand_growth_alone_not_shortage():
+    """需求增长论点不推导供给紧缺；多供应商不自动证伪。"""
+    from stock_research.capabilities.reasoning import assess_technical
+    dossier = {
+        "node_id": "n1", "as_of": "2026-10-22",
+        "node_claims": [
+            _mk_claim("c_dem", role="market_structure",
+                      verdict="confirmed", text="AI算力需求高增长"),
+            _mk_claim("c_multi", role="market_structure",
+                      verdict="partially_supported", evids=("e1",),
+                      text="多家已验证供应商"),
+        ],
+        "evidence_matrix": [_mk_ev("e1")],
+        "value_matrix": {"rows": []},
+    }
+    ta = assess_technical(dossier)["supply_constraint"]
+    assert "需求增长" in ta["sub_checks"]["demand_growth"]["note"] or \
+        ta["sub_checks"]["demand_growth"]["state"] in {
+            "support_seen", "partial", "no_evidence"}
+    assert ta["sub_checks"]["supplier_count_limited"]["state"] == "partial"
+    # 格局事实 ≠ 紧缺 verdict：assessment 保持 unverified
+    assert ta["assessment"] == "unverified"
+
+
+def test_r2a_component_vs_system_not_comparable():
+    """组件供应商与系统厂商 not_comparable；子公司 partially。"""
+    from stock_research.capabilities.reasoning import compare_competition
+    rows = [
+        {"stock_code": "A", "mapping_type": "direct_product",
+         "tech_participation": "confirmed", "validation_delivery": "validated",
+         "revenue_profit": {"state": "missing"}, "verified_orders": {"state": "none_seen"}},
+        {"stock_code": "B", "mapping_type": "direct_component",
+         "tech_participation": "confirmed", "validation_delivery": "mass_delivery",
+         "revenue_profit": {"state": "missing"}, "verified_orders": {"state": "verified_delivered"}},
+        {"stock_code": "C", "mapping_type": "subsidiary",
+         "tech_participation": "partial", "validation_delivery": "none_seen",
+         "revenue_profit": {"state": "missing"}, "verified_orders": {"state": "none_seen"}},
+    ]
+    out = compare_competition({"value_matrix": {"rows": rows}}, {})
+    by_pair = {(p["a"], p["b"]): p["comparison_scope"]
+               for p in out["pairwise_scope"]}
+    assert by_pair[("A", "B")] == "not_comparable"
+    assert by_pair[("A", "C")] == "partially_comparable"
+    assert out["comparison"]["A"]["comparable_with"] == []
+    assert "B" in (out["comparison"]["A"]["comparable_with"]
+                   + [c for p in out["pairwise_scope"]
+                      for c in [p["a"], p["b"]] if c == "B"])  # B列在表中但不可比
+
+
+def test_r2a_broader_revenue_not_line_revenue():
+    """板块收入不升级为产品线兑现；交付不升级为收入确认。"""
+    from stock_research.capabilities.adapters import cap05_value_economics
+    dossier = {"value_matrix": {"rows": [
+        {"stock_code": "002371",
+         "revenue_profit": {"state": "disclosed_broader_scope",
+                            "facts": [{"scope": "segment", "revenue": 100,
+                                       "gross_margin": 0.4}]},
+         "validation_delivery": "validated",
+         "verified_orders": {"state": "none_seen"}},
+    ]}}
+    env = cap05_value_economics("n1", dossier, AS_OF, RUN_ID)
+    e = env.findings["economics"]["002371"]
+    assert e["commercialization_stage"] != "revenue_visible"
+    assert e["commercialization_stage"] == "delivery_seen"
+    assert e["margin_state"] == "segment_level"
+    assert e["value_capture_verdict"] == "not_evaluated"
+    assert e["independent_facts"]["cash"] == "unknown"
+
+
+def test_r2a_no_comparable_insufficient_evidence():
+    """单一成员/口径不明 → 无可比公司如实标注。"""
+    from stock_research.capabilities.reasoning import compare_competition
+    out = compare_competition({"value_matrix": {"rows": [
+        {"stock_code": "X", "mapping_type": "dependency",
+         "tech_participation": "partial", "validation_delivery": "pending_review",
+         "revenue_profit": {"state": "missing"},
+         "verified_orders": {"state": "pending_review"}},
+    ]}}, {})
+    assert out["pairwise_scope"] == []
+    assert out["comparison"]["X"]["comparable_with"] == []
+
+
+def test_r2a_hypothesis_in_baseline_diff(tmp_path):
+    """假设状态变化进入基线 diff（研究事实而非元数据）。"""
+    from stock_research.capabilities.baseline import diff_baselines
+    base = {"as_of": "2026-10-22", "hypotheses": {"h1": "unresolved"},
+            "claims": {}, "economics": {}, "evidence_refs": []}
+    cur = {"as_of": "2026-10-22", "hypotheses": {"h1": "contested",
+                                                 "h2": "risk_flagged"},
+           "claims": {}, "economics": {}, "evidence_refs": []}
+    d = diff_baselines(cur, [dict(base, version=1)])
+    kinds = {(c["kind"], c["field"]) for c in d["changes"]}
+    assert ("changed", "hypothesis:h1") in kinds
+    assert ("added", "hypothesis:h2") in kinds
+
+
+def test_r2a_real_cases_no_positive_fabrication():
+    """真实三节点：产品认证不证壁垒、组件交付不证系统、hype 归风险。"""
+    from stock_research.capabilities.reasoning import assess_technical
+    from stock_research.capabilities.adapters import _build_node_dossier
+    # 大元泵组件：交付≠系统级
+    d, dbc = _build_node_dossier(
+        "docs/cap02/cases/liquid_cooling_pump_components_node.json",
+        DOSSIER_DIR)
+    ta = assess_technical(d)
+    assert ta["entry_barrier"]["assessment"] == "unverified"
+    assert ta["entry_barrier"]["sub_checks"]["customer_validation"][
+        "state"] in {"no_evidence", "unverified"}
+    # 全案例：entry_barrier 不得因产品认证而 supported
+    for p in ("liquid_cooling_cdu_system_node.json",
+            "liquid_cooling_coldplate_manifold_node.json",
+            "semi_equipment_node.json"):
+        d2, _ = _build_node_dossier(f"docs/cap02/cases/{p}", DOSSIER_DIR)
+        t2 = assess_technical(d2)
+        assert t2["entry_barrier"]["sub_checks"]["customer_validation"][
+            "state"] in {"no_evidence", "unverified"}, p

@@ -147,6 +147,14 @@ def run_research_chain(
         "used_for_signal": False,
         "used_for_admission": False,
     }
+    # R2A: theme-level structured research summary (findings /
+    # competing hypotheses / unresolved / next verification / coverage).
+    from stock_research.capabilities.reasoning import theme_synthesis
+    out["theme_synthesis"] = theme_synthesis(
+        {n: {c: e.to_dict() for c, e in envs.items()}
+         for n, envs in per_node.items()},
+        env3.findings,
+    )
     if workbench_dir:
         out["workbench_index"] = write_workbench_index(out, workbench_dir)
     return out
@@ -186,6 +194,11 @@ def run_theme_chain(
             "owner": g.owner, "note": g.note,
             "source_capabilities": ["CAP-03"],
         })
+    # Theme summary must reflect the theme-library CAP-03 (coverage),
+    # not the inner case-list envelope.
+    from stock_research.capabilities.reasoning import theme_synthesis
+    out["theme_synthesis"] = theme_synthesis(
+        out["per_node"], env3.findings)
     if workbench_dir:
         out["workbench_index"] = write_workbench_index(out, workbench_dir)
     return out

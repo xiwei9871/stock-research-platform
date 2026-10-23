@@ -112,11 +112,18 @@ def snapshot_from_node_chain(
     def _attr(e: Any, key: str) -> Any:
         return e.get(key) if isinstance(e, dict) else getattr(e, key, None)
 
+    from stock_research.capabilities.reasoning import hypothesis_state_map
+    ev_index = {e["evidence_id"]: e
+                for e in dossier.get("evidence_matrix", [])}
     return {
         "as_of": dossier.get("as_of"),
         "dossier_fingerprint": dossier.get("dossier_fingerprint"),
         "node_verdict": (dossier.get("conclusion") or {}).get("node_verdict"),
         "claims": claims,
+        # R2A: hypothesis assessment states are research facts — a state
+        # flip (e.g. unresolved → contested) versions the baseline.
+        "hypotheses": hypothesis_state_map(
+            dossier.get("node_claims") or [], ev_index),
         "economics": econ,
         "evidence_refs": sorted(
             r["evidence_id"] for r in dossier.get("evidence_matrix", [])
@@ -168,6 +175,9 @@ def diff_baselines(
         {k: v.get("verdict") for k, v in (prev.get("claims") or {}).items()},
         {k: v.get("verdict") for k, v in current.get("claims", {}).items()},
         "claim")
+    changes += _diff_maps(
+        prev.get("hypotheses") or {}, current.get("hypotheses") or {},
+        "hypothesis")
     changes += _diff_maps(
         {f"{c}.{cell}": v for c, cells in (prev.get("economics") or {}).items()
          for cell, v in cells.items()},

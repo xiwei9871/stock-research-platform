@@ -27,6 +27,55 @@ export interface CapWorkbenchCompany {
   delivery?: string;
   revenue?: string;
   order?: string;
+  scope_class?: string;
+  evidence_coverage?: number;
+  comparable_with?: string[];
+}
+
+export interface CapHypothesis {
+  hypothesis_id: string;
+  subject_scope: string;
+  claim_role: string;
+  verdict: string;
+  assessment_state: string;
+  supporting_claim_ids: string[];
+  counter_claim_ids: string[];
+  alternative_explanations: string[];
+  decisive_gaps: string[];
+  revision_triggers: string[];
+  evidence_refs: string[];
+  independent_source_count?: number;
+}
+
+export interface CapTechnicalArea {
+  assessment?: string;
+  sub_checks?: Record<string, string>;
+}
+
+export interface CapPairwise {
+  a: string;
+  b: string;
+  comparison_scope: string;
+  reason: string;
+}
+
+export interface CapThemeSynthesis {
+  key_findings: string[];
+  competing_hypotheses: Array<{
+    node_id: string;
+    hypothesis_id: string;
+    state: string;
+    independent_source_count?: number;
+  }>;
+  core_unresolved: Array<{ node_id: string; claim_id: string; verdict?: string }>;
+  next_verification: string[];
+  coverage?: {
+    theme_nodes?: number;
+    nodes_with_cases?: number;
+    coverage_gap_nodes?: string[];
+    read_source?: string;
+  };
+  note?: string;
 }
 
 export interface CapWorkbenchNode {
@@ -44,6 +93,9 @@ export interface CapWorkbenchNode {
   cap_statuses?: Record<string, string>;
   companies?: CapWorkbenchCompany[];
   mapped_companies?: Array<{ stock_code: string; review_status?: string; dashboard_link?: string }>;
+  pairwise_scope?: CapPairwise[];
+  technical_assessment?: Record<string, CapTechnicalArea>;
+  hypothesis_assessment?: CapHypothesis[];
   synthesis?: {
     favorable_support: CapBucketEntry[];
     market_structure: CapBucketEntry[];
@@ -84,6 +136,7 @@ export interface CapWorkbenchIndex {
   pit_note?: string;
   theme_node_count?: number;
   covered_node_count?: number;
+  theme_synthesis?: CapThemeSynthesis;
   nodes: CapWorkbenchNode[];
   gap_summary?: Record<string, number>;
   gap_backlog: CapWorkbenchGap[];

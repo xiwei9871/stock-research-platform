@@ -1,0 +1,4794 @@
+{
+ "theme_id": "ai_power_value_capture_v1",
+ "as_of": "2026-10-31",
+ "run_id": "r2a-ai_power_value_capture_v1",
+ "envelopes": {
+  "CAP-03": {
+   "capability_id": "CAP-03",
+   "subject_type": "theme",
+   "subject_id": "ai_power_value_capture_v1",
+   "as_of": "2026-10-31",
+   "run_id": "r2a-ai_power_value_capture_v1",
+   "status": "ok",
+   "findings": {
+    "theme_id": "ai_power_value_capture_v1",
+    "read_source": "artifact",
+    "requested_source": "artifact",
+    "source_note": "",
+    "pit_note": "theme package is a snapshot without intrinsic as_of; rows read as latest",
+    "node_count": 13,
+    "nodes_with_cases": 1,
+    "coverage_gap_nodes": [
+     "transformer",
+     "sic_gan_power_semiconductor",
+     "hvdc_power",
+     "server_power_supply",
+     "grid_connection",
+     "ai_server_integration",
+     "copper_interconnect",
+     "ups",
+     "rack_power_distribution",
+     "switchgear",
+     "data_center_epc",
+     "power_generation"
+    ],
+    "nodes": [
+     {
+      "node_id": "liquid_cooling",
+      "name": "Liquid Cooling",
+      "priority_score": 77.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 5,
+      "node_review_status": "reviewed",
+      "runnable_cases": [
+       {
+        "path": "docs/cap02/cases/liquid_cooling_cdu_system_node.json",
+        "case_node_id": "liquid_cooling_cdu_system",
+        "lineage": null
+       },
+       {
+        "path": "docs/cap02/cases/liquid_cooling_coldplate_manifold_node.json",
+        "case_node_id": "liquid_cooling_coldplate_manifold",
+        "lineage": null
+       },
+       {
+        "path": "docs/cap02/cases/liquid_cooling_node.json",
+        "case_node_id": "ai_power_liquid_cooling",
+        "lineage": null
+       },
+       {
+        "path": "docs/cap02/cases/liquid_cooling_pump_components_node.json",
+        "case_node_id": "liquid_cooling_pump_components",
+        "lineage": null
+       }
+      ],
+      "mapped_companies": [
+       {
+        "company_code": "002837.SZ",
+        "review_status": "reviewed",
+        "mapping_type": "direct_product"
+       }
+      ]
+     },
+     {
+      "node_id": "transformer",
+      "name": "Transformer",
+      "priority_score": 73.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 5,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "sic_gan_power_semiconductor",
+      "name": "SiC/GaN Power Semiconductor",
+      "priority_score": 71.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "hvdc_power",
+      "name": "HVDC Power",
+      "priority_score": 70.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "reviewed",
+      "runnable_cases": [],
+      "mapped_companies": [
+       {
+        "company_code": "002364.SZ",
+        "review_status": "reviewed",
+        "mapping_type": "direct_product"
+       }
+      ]
+     },
+     {
+      "node_id": "server_power_supply",
+      "name": "Server Power Supply",
+      "priority_score": 69.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": [
+       {
+        "company_code": "300870.SZ",
+        "review_status": "reviewed",
+        "mapping_type": "direct_product"
+       }
+      ]
+     },
+     {
+      "node_id": "grid_connection",
+      "name": "Grid Connection",
+      "priority_score": 68.0,
+      "bottleneck_score": 4,
+      "value_capture_score": 4,
+      "node_review_status": "reviewed",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "ai_server_integration",
+      "name": "AI Server Integration",
+      "priority_score": 65.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 4,
+      "node_review_status": "reviewed",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "copper_interconnect",
+      "name": "Copper Interconnect",
+      "priority_score": 62.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "ups",
+      "name": "UPS",
+      "priority_score": 62.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 4,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": [
+       {
+        "company_code": "002335.SZ",
+        "review_status": "reviewed",
+        "mapping_type": "direct_product"
+       }
+      ]
+     },
+     {
+      "node_id": "rack_power_distribution",
+      "name": "Rack Power Distribution",
+      "priority_score": 58.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "switchgear",
+      "name": "Switchgear",
+      "priority_score": 58.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "data_center_epc",
+      "name": "Data Center EPC",
+      "priority_score": 56.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "needs_evidence",
+      "runnable_cases": [],
+      "mapped_companies": []
+     },
+     {
+      "node_id": "power_generation",
+      "name": "Power Generation",
+      "priority_score": 56.0,
+      "bottleneck_score": 3,
+      "value_capture_score": 3,
+      "node_review_status": "draft",
+      "runnable_cases": [],
+      "mapped_companies": []
+     }
+    ],
+    "research_tasks": [
+     {
+      "subject_type": "node",
+      "subject_id": "liquid_cooling",
+      "capability": "CAP-02",
+      "cases": "docs/cap02/cases/liquid_cooling_cdu_system_node.json,docs/cap02/cases/liquid_cooling_coldplate_manifold_node.json,docs/cap02/cases/liquid_cooling_node.json,docs/cap02/cases/liquid_cooling_pump_components_node.json"
+     },
+     {
+      "subject_type": "company",
+      "subject_id": "002837.SZ",
+      "capability": "CAP-01",
+      "node_id": "liquid_cooling"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "transformer",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "sic_gan_power_semiconductor",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "hvdc_power",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "company",
+      "subject_id": "002364.SZ",
+      "capability": "CAP-01",
+      "node_id": "hvdc_power"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "server_power_supply",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "company",
+      "subject_id": "300870.SZ",
+      "capability": "CAP-01",
+      "node_id": "server_power_supply"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "grid_connection",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "ai_server_integration",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "copper_interconnect",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "ups",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "company",
+      "subject_id": "002335.SZ",
+      "capability": "CAP-01",
+      "node_id": "ups"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "rack_power_distribution",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "switchgear",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "data_center_epc",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     },
+     {
+      "subject_type": "node",
+      "subject_id": "power_generation",
+      "capability": "CAP-02",
+      "task_type": "coverage_gap"
+     }
+    ],
+    "task_count": 17
+   },
+   "evidence_refs": [],
+   "uncertainties": [],
+   "data_gaps": [],
+   "fingerprint": "bd6f163222a0bc4e9d9430373aed7f62cf36dd80f6921566043ea38d29bcadff",
+   "rule_version": "cap00-r0",
+   "research_only": true,
+   "used_for_signal": false,
+   "used_for_admission": false,
+   "upstream_fingerprints": []
+  }
+ },
+ "per_node": {
+  "liquid_cooling_cdu_system": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_cdu_system",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "bottleneck_unverified",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_supply_scarce",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "CDU整机是否存在有效供给约束",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [],
+      "market_structure": [
+       {
+        "claim_id": "nc_multi_supplier",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "CDU整机存在多家已验证供应商",
+        "evidence_ids": [
+         "e_002837_cdu",
+         "e_301018_cdu"
+        ],
+        "support_count": 2,
+        "refute_count": 0
+       }
+      ],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_cert_barrier",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "客户认证周期是否构成进入壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_hype",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "unknown",
+        "claim_text": "是否存在概念关联成分",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 4,
+     "technical_assessment": {
+      "supply_constraint": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "demand_growth": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "需求增长为事实描述——本身不证明供给短缺"
+        },
+        "capacity_limited": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_supply_scarce"
+         ],
+         "evidence_ids": [],
+         "note": "有效产能/供给约束证据"
+        },
+        "effective_delivery_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "交付能力受限观察（矩阵交付格）",
+         "delivery_states": {
+          "002837": "validated",
+          "301018": "none_seen"
+         },
+         "deliverable_companies": [
+          "002837"
+         ]
+        },
+        "supplier_count_limited": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_multi_supplier"
+         ],
+         "evidence_ids": [
+          "e_002837_cdu",
+          "e_301018_cdu"
+         ],
+         "note": "已验证供应商数量——多供应商是格局事实，不自动否定紧缺也不证明紧缺"
+        },
+        "cert_gated_supply": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "认证门槛造成的有效供给受限（需客户认证证据）"
+        }
+       },
+       "caveat": "需求增长本身不得推导短缺；多供应商格局不自动否定也不证明紧缺"
+      },
+      "non_substitutability": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "functional_alternative_exists": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_multi_supplier"
+         ],
+         "evidence_ids": [
+          "e_002837_cdu",
+          "e_301018_cdu"
+         ],
+         "note": "存在功能相近替代——存在替代供应商不等于可无成本替代",
+         "alt_evidence_ids": []
+        },
+        "performance_meets_requirement": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案性能是否达标"
+        },
+        "switching_cost_cert": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "替代所需认证与切换成本证据"
+        },
+        "switching_time": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代所需时间证据"
+        },
+        "alternative_commercialized": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案是否已实际商业化",
+         "alt_evidence_ids": []
+        }
+       },
+       "caveat": "存在替代供应商不等于可无成本替代"
+      },
+      "entry_barrier": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "product_certification": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "e_002837_intel_cdu"
+         ],
+         "note": "产品级测试/认证事实（Intel/UL 等）——不证明客户认证"
+        },
+        "customer_validation": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "特定客户认证通过证据（周期/成本/失效率）"
+        },
+        "mass_production_line_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "量产线验证证据"
+        },
+        "long_term_supply_qualification": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "长期供应资格证据"
+        },
+        "yield_reliability": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "工艺良率与可靠性证据"
+        }
+       },
+       "caveat": "产品认证（Intel/UL）不证明客户认证壁垒"
+      },
+      "evidence_boundaries": [
+       {
+        "claim_id": "nc_supply_scarce",
+        "hypothesis": "CDU整机是否存在有效供给约束",
+        "role": "supply_scarcity",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "capacity_or_leadtime",
+          "met": false
+         },
+         {
+          "item": "delivery_shortfall",
+          "met": false
+         },
+         {
+          "item": "supplier_count",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "capacity_or_leadtime",
+         "delivery_shortfall",
+         "supplier_count"
+        ]
+       },
+       {
+        "claim_id": "nc_multi_supplier",
+        "hypothesis": "CDU整机存在多家已验证供应商",
+        "role": "market_structure",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "e_002837_cdu",
+         "e_301018_cdu"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [
+         "cninfo_002837_ar2025",
+         "cninfo_301018_ar2025"
+        ],
+        "independent_source_count": 2,
+        "required_evidence": [],
+        "unmet_conditions": []
+       },
+       {
+        "claim_id": "nc_cert_barrier",
+        "hypothesis": "客户认证周期是否构成进入壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_hype",
+        "hypothesis": "是否存在概念关联成分",
+        "role": "hype",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [],
+        "unmet_conditions": []
+       }
+      ]
+     },
+     "evidence_index": {
+      "e_002837_cdu": {
+       "evidence_id": "e_002837_cdu",
+       "source_id": "cninfo_002837_ar2025",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "英维克Coolinside全链条：机架式CDU列入产品序列，UQD04/分水器/机架式CDU通过英特尔测试验证",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "e_301018_cdu": {
+       "evidence_id": "e_301018_cdu",
+       "source_id": "cninfo_301018_ar2025",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "申菱年报p10-11：CDU/Manifold/一体化冷源等液冷全序列产品；2024中国液冷数据中心CDU厂商排名第一(赛迪)；智造基地投产",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "e_002837_intel_cdu": {
+       "evidence_id": "e_002837_intel_cdu",
+       "source_id": "cninfo_002837_ar2025",
+       "direction": "support",
+       "aspect": "certification_barrier",
+       "dimension": null,
+       "excerpt": "英维克机架式CDU等通过英特尔测试验证——头部平台认证构成进入壁垒",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      }
+     },
+     "claims": [
+      {
+       "claim_id": "nc_supply_scarce",
+       "claim_text": "CDU整机是否存在有效供给约束",
+       "claim_role": "supply_scarcity",
+       "dimension": "capacity_constraint",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_multi_supplier",
+       "claim_text": "CDU整机存在多家已验证供应商",
+       "claim_role": "market_structure",
+       "dimension": "process_irreplaceability",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "e_002837_cdu",
+        "e_301018_cdu"
+       ],
+       "support_count": 2,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "claim_text": "客户认证周期是否构成进入壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+       "claim_role": "entry_barrier",
+       "dimension": "certification_barrier",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_hype",
+       "claim_text": "是否存在概念关联成分",
+       "claim_role": "hype",
+       "dimension": "hype_only",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      }
+     ]
+    },
+    "evidence_refs": [
+     "e_002837_cdu",
+     "e_301018_cdu"
+    ],
+    "uncertainties": [
+     "nc_supply_scarce=unknown",
+     "nc_cert_barrier=unknown",
+     "nc_hype=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "06855f4acf4b1eadc8bb9dc0bef921822c42f4f863bb862806b9ab23813100ca",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_cdu_system",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "002837": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "validated",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "delivery_seen",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "none_seen",
+        "delivery": "validated",
+        "cash": "unknown"
+       }
+      },
+      "301018": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "not_evaluated",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "none_seen",
+        "delivery": "none_seen",
+        "cash": "unknown"
+       }
+      }
+     },
+     "member_count": 2
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:002837",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:301018",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:301018",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:301018",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "f52ed76fc8bafe650e1ef4142b2cbb882d0b70ea4f9d50faed7209e9337eb92f",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "06855f4acf4b1eadc8bb9dc0bef921822c42f4f863bb862806b9ab23813100ca"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_cdu_system",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "002837": {
+       "company_name": "英维克",
+       "scope_class": "direct_product",
+       "overall_verdict": "unverified",
+       "tech_participation": "partially_supported",
+       "product_maturity": "validated",
+       "certification_customer_validation": "validated",
+       "delivery_capability": "validated",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": "partially_supported",
+        "competitive_edge": "partially_supported"
+       },
+       "concept_only_risk": "low",
+       "evidence_coverage": 3,
+       "comparable_with": [
+        "301018"
+       ]
+      },
+      "301018": {
+       "company_name": "申菱环境",
+       "scope_class": "direct_product",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "none_seen",
+       "certification_customer_validation": "none_seen",
+       "delivery_capability": "none_seen",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 1,
+       "comparable_with": [
+        "002837"
+       ]
+      }
+     },
+     "pairwise_scope": [
+      {
+       "a": "002837",
+       "b": "301018",
+       "comparison_scope": "directly_comparable",
+       "reason": "同一节点同一产品口径"
+      }
+     ],
+     "scope_classes": {
+      "direct_product": [
+       "002837",
+       "301018"
+      ]
+     },
+     "note": "同口径比较：组件 vs 系统不直接排名；披露更多≠竞争力更强；无评分无推荐"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "21a611ee7d837ca84a92d90effa6ee3e12145bf03a492e44ee0867a815a57fc1",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "06855f4acf4b1eadc8bb9dc0bef921822c42f4f863bb862806b9ab23813100ca",
+     "f52ed76fc8bafe650e1ef4142b2cbb882d0b70ea4f9d50faed7209e9337eb92f"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_cdu_system",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "baseline_found": true,
+     "baseline_version": 1,
+     "baseline_as_of": "2026-10-22",
+     "skipped_future_versions": 0,
+     "state_changed": true,
+     "changes": [
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_supply_scarce",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_multi_supplier",
+       "from": null,
+       "to": "supported"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_cert_barrier",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_hype",
+       "from": null,
+       "to": "unresolved"
+      }
+     ],
+     "added": 4,
+     "removed": 0,
+     "changed": 0,
+     "current_fingerprint": "4327aa9f6048c05dbc1b4b021cd89a45f22a793e02835c1057513aa9b592731e",
+     "baseline_count": 1
+    },
+    "evidence_refs": [
+     "hypothesis:nc_supply_scarce",
+     "hypothesis:nc_multi_supplier",
+     "hypothesis:nc_cert_barrier",
+     "hypothesis:nc_hype"
+    ],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "1ca7686bb16c3d3816ff3eb6e96f7132e4e5c18fb5d18cfe1eb36413b879eb0e",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_cdu_system",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [],
+     "market_structure": [
+      {
+       "claim_id": "nc_multi_supplier",
+       "role": "market_structure",
+       "verdict": "partially_supported",
+       "hypothesis": "CDU整机存在多家已验证供应商",
+       "evidence_ids": [
+        "e_002837_cdu",
+        "e_301018_cdu"
+       ],
+       "source_ids": [
+        "cninfo_002837_ar2025",
+        "cninfo_301018_ar2025"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "counter_evidence": [],
+     "hype_risks": [],
+     "unresolved": [
+      {
+       "claim_id": "nc_supply_scarce",
+       "role": "supply_scarcity",
+       "verdict": "unknown",
+       "hypothesis": "CDU整机是否存在有效供给约束",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "客户认证周期是否构成进入壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_hype",
+       "role": "hype",
+       "verdict": "unknown",
+       "hypothesis": "是否存在概念关联成分",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "hypothesis_assessment": [
+      {
+       "hypothesis_id": "nc_supply_scarce",
+       "subject_scope": "liquid_cooling_cdu_system/supply_scarcity",
+       "claim_role": "supply_scarcity",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "多供应商格局可吸收需求增长——供给紧缺未证实"
+       ],
+       "decisive_gaps": [
+        "capacity_or_leadtime",
+        "delivery_shortfall",
+        "supplier_count"
+       ],
+       "revision_triggers": [
+        "获得产能利用率/交期/订单排队的合格证据 → 升级",
+        "新进入者实现规模交付或第二供应商放量 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_multi_supplier",
+       "subject_scope": "liquid_cooling_cdu_system/market_structure",
+       "claim_role": "market_structure",
+       "verdict": "partially_supported",
+       "assessment_state": "supported",
+       "supporting_claim_ids": [
+        "nc_multi_supplier"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "描述性格局事实，不构成稀缺或壁垒的正反证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "供应商数量或验证状态变化 → 更新格局事实"
+       ],
+       "evidence_refs": [
+        "e_002837_cdu",
+        "e_301018_cdu"
+       ],
+       "excluded_evidence": [],
+       "independent_source_count": 2,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_cert_barrier",
+       "subject_scope": "liquid_cooling_cdu_system/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_hype",
+       "subject_scope": "liquid_cooling_cdu_system/hype",
+       "claim_role": "hype",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "主题映射与概念热度驱动，非供给/交付证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "主题映射之外的订单/交付/收入证据出现 → 重新评估"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      }
+     ],
+     "support_claim_count": 0,
+     "uncertainties": [
+      "CAP-04:nc_supply_scarce=unknown",
+      "CAP-04:nc_cert_barrier=unknown",
+      "CAP-04:nc_hype=unknown"
+     ],
+     "next_verification": [
+      "product_gross_margin:002837",
+      "product_gross_margin:301018",
+      "product_revenue:002837",
+      "product_revenue:301018",
+      "verifiable_order:002837",
+      "verifiable_order:301018"
+     ],
+     "research_priority": [
+      "product_revenue:002837",
+      "product_gross_margin:002837",
+      "verifiable_order:002837",
+      "product_revenue:301018",
+      "product_gross_margin:301018",
+      "verifiable_order:301018"
+     ]
+    },
+    "evidence_refs": [
+     "e_002837_cdu",
+     "e_301018_cdu"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:002837",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:301018",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:301018",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:301018",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "fd4fa6a0c5b6336ebb49bcc24a46542231caf27f624c7d8617a5235aa2653298",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "06855f4acf4b1eadc8bb9dc0bef921822c42f4f863bb862806b9ab23813100ca",
+     "f52ed76fc8bafe650e1ef4142b2cbb882d0b70ea4f9d50faed7209e9337eb92f",
+     "21a611ee7d837ca84a92d90effa6ee3e12145bf03a492e44ee0867a815a57fc1",
+     "1ca7686bb16c3d3816ff3eb6e96f7132e4e5c18fb5d18cfe1eb36413b879eb0e"
+    ]
+   }
+  },
+  "liquid_cooling_coldplate_manifold": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_coldplate_manifold",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "bottleneck_unverified",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_supply_scarce",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "冷板/快接头是否存在有效供给约束",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [],
+      "market_structure": [
+       {
+        "claim_id": "nc_multi_supplier",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "冷板/Manifold/快接头存在多家已验证供应商",
+        "evidence_ids": [
+         "e_002837_cp",
+         "e_301018_cp"
+        ],
+        "support_count": 2,
+        "refute_count": 0
+       }
+      ],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_cert_barrier",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "认证壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_hype",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "unknown",
+        "claim_text": "概念关联",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 4,
+     "technical_assessment": {
+      "supply_constraint": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "demand_growth": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "需求增长为事实描述——本身不证明供给短缺"
+        },
+        "capacity_limited": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_supply_scarce"
+         ],
+         "evidence_ids": [],
+         "note": "有效产能/供给约束证据"
+        },
+        "effective_delivery_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "交付能力受限观察（矩阵交付格）",
+         "delivery_states": {
+          "002837": "validated",
+          "301018": "none_seen"
+         },
+         "deliverable_companies": [
+          "002837"
+         ]
+        },
+        "supplier_count_limited": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_multi_supplier"
+         ],
+         "evidence_ids": [
+          "e_002837_cp",
+          "e_301018_cp"
+         ],
+         "note": "已验证供应商数量——多供应商是格局事实，不自动否定紧缺也不证明紧缺"
+        },
+        "cert_gated_supply": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "认证门槛造成的有效供给受限（需客户认证证据）"
+        }
+       },
+       "caveat": "需求增长本身不得推导短缺；多供应商格局不自动否定也不证明紧缺"
+      },
+      "non_substitutability": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "functional_alternative_exists": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_multi_supplier"
+         ],
+         "evidence_ids": [
+          "e_002837_cp",
+          "e_301018_cp"
+         ],
+         "note": "存在功能相近替代——存在替代供应商不等于可无成本替代",
+         "alt_evidence_ids": []
+        },
+        "performance_meets_requirement": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案性能是否达标"
+        },
+        "switching_cost_cert": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "替代所需认证与切换成本证据"
+        },
+        "switching_time": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代所需时间证据"
+        },
+        "alternative_commercialized": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案是否已实际商业化",
+         "alt_evidence_ids": []
+        }
+       },
+       "caveat": "存在替代供应商不等于可无成本替代"
+      },
+      "entry_barrier": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "product_certification": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "e_002837_intel_cp"
+         ],
+         "note": "产品级测试/认证事实（Intel/UL 等）——不证明客户认证"
+        },
+        "customer_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "特定客户认证通过证据（周期/成本/失效率）"
+        },
+        "mass_production_line_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "量产线验证证据"
+        },
+        "long_term_supply_qualification": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "长期供应资格证据"
+        },
+        "yield_reliability": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "工艺良率与可靠性证据"
+        }
+       },
+       "caveat": "产品认证（Intel/UL）不证明客户认证壁垒"
+      },
+      "evidence_boundaries": [
+       {
+        "claim_id": "nc_supply_scarce",
+        "hypothesis": "冷板/快接头是否存在有效供给约束",
+        "role": "supply_scarcity",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "capacity_or_leadtime",
+          "met": false
+         },
+         {
+          "item": "delivery_shortfall",
+          "met": false
+         },
+         {
+          "item": "supplier_count",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "capacity_or_leadtime",
+         "delivery_shortfall",
+         "supplier_count"
+        ]
+       },
+       {
+        "claim_id": "nc_multi_supplier",
+        "hypothesis": "冷板/Manifold/快接头存在多家已验证供应商",
+        "role": "market_structure",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "e_002837_cp",
+         "e_301018_cp"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [
+         "cninfo_002837_ar2025",
+         "cninfo_301018_ar2025"
+        ],
+        "independent_source_count": 2,
+        "required_evidence": [],
+        "unmet_conditions": []
+       },
+       {
+        "claim_id": "nc_cert_barrier",
+        "hypothesis": "认证壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_hype",
+        "hypothesis": "概念关联",
+        "role": "hype",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [],
+        "unmet_conditions": []
+       }
+      ]
+     },
+     "evidence_index": {
+      "e_002837_cp": {
+       "evidence_id": "e_002837_cp",
+       "source_id": "cninfo_002837_ar2025",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "英维克冷板列入Intel Eagle Stream Design Guide；BHS-AP平台冷板/UQD04/分水器通过英特尔测试验证；UQD/MQD列入NVIDIA MGX生态",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "e_301018_cp": {
+       "evidence_id": "e_301018_cp",
+       "source_id": "cninfo_301018_ar2025",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "申菱年报：冷板、快速接头、Manifold等液冷全序列部件",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "e_002837_intel_cp": {
+       "evidence_id": "e_002837_intel_cp",
+       "source_id": "cninfo_002837_ar2025",
+       "direction": "support",
+       "aspect": "certification_barrier",
+       "dimension": null,
+       "excerpt": "Intel测试验证+NVIDIA MGX生态成员——头部算力平台认证壁垒",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      }
+     },
+     "claims": [
+      {
+       "claim_id": "nc_supply_scarce",
+       "claim_text": "冷板/快接头是否存在有效供给约束",
+       "claim_role": "supply_scarcity",
+       "dimension": "capacity_constraint",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_multi_supplier",
+       "claim_text": "冷板/Manifold/快接头存在多家已验证供应商",
+       "claim_role": "market_structure",
+       "dimension": "process_irreplaceability",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "e_002837_cp",
+        "e_301018_cp"
+       ],
+       "support_count": 2,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "claim_text": "认证壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+       "claim_role": "entry_barrier",
+       "dimension": "certification_barrier",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_hype",
+       "claim_text": "概念关联",
+       "claim_role": "hype",
+       "dimension": "hype_only",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      }
+     ]
+    },
+    "evidence_refs": [
+     "e_002837_cp",
+     "e_301018_cp"
+    ],
+    "uncertainties": [
+     "nc_supply_scarce=unknown",
+     "nc_cert_barrier=unknown",
+     "nc_hype=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "1aa9e15a8e2742bf23c3ec5358f3f34b41c19e7c7b9a2b54e9969640632be3db",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_coldplate_manifold",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "002837": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "validated",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "delivery_seen",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "none_seen",
+        "delivery": "validated",
+        "cash": "unknown"
+       }
+      },
+      "301018": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "not_evaluated",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "none_seen",
+        "delivery": "none_seen",
+        "cash": "unknown"
+       }
+      }
+     },
+     "member_count": 2
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:002837",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:301018",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:301018",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:301018",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "58db08c0509f9c9bed9eb8e8efbd7fcbb7eabd9e877d0952b0f8b9c2168dd5c3",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "1aa9e15a8e2742bf23c3ec5358f3f34b41c19e7c7b9a2b54e9969640632be3db"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_coldplate_manifold",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "002837": {
+       "company_name": "英维克",
+       "scope_class": "direct_product",
+       "overall_verdict": "unverified",
+       "tech_participation": "partially_supported",
+       "product_maturity": "validated",
+       "certification_customer_validation": "validated",
+       "delivery_capability": "validated",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": "partially_supported",
+        "competitive_edge": "partially_supported"
+       },
+       "concept_only_risk": "low",
+       "evidence_coverage": 3,
+       "comparable_with": [
+        "301018"
+       ]
+      },
+      "301018": {
+       "company_name": "申菱环境",
+       "scope_class": "direct_product",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "none_seen",
+       "certification_customer_validation": "none_seen",
+       "delivery_capability": "none_seen",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 1,
+       "comparable_with": [
+        "002837"
+       ]
+      }
+     },
+     "pairwise_scope": [
+      {
+       "a": "002837",
+       "b": "301018",
+       "comparison_scope": "directly_comparable",
+       "reason": "同一节点同一产品口径"
+      }
+     ],
+     "scope_classes": {
+      "direct_product": [
+       "002837",
+       "301018"
+      ]
+     },
+     "note": "同口径比较：组件 vs 系统不直接排名；披露更多≠竞争力更强；无评分无推荐"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "6c9fe9f8fff8e0209a3f78c3b5d6ae4e834e8876d794d1ec3f7afc2f7ec20979",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "1aa9e15a8e2742bf23c3ec5358f3f34b41c19e7c7b9a2b54e9969640632be3db",
+     "58db08c0509f9c9bed9eb8e8efbd7fcbb7eabd9e877d0952b0f8b9c2168dd5c3"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_coldplate_manifold",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "baseline_found": true,
+     "baseline_version": 1,
+     "baseline_as_of": "2026-10-22",
+     "skipped_future_versions": 0,
+     "state_changed": true,
+     "changes": [
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_supply_scarce",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_multi_supplier",
+       "from": null,
+       "to": "supported"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_cert_barrier",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_hype",
+       "from": null,
+       "to": "unresolved"
+      }
+     ],
+     "added": 4,
+     "removed": 0,
+     "changed": 0,
+     "current_fingerprint": "b4cec5ce2cfd9c5222eb0e352bbe8f783d83c040e6bf14f44fffc0fa9d04c4ea",
+     "baseline_count": 1
+    },
+    "evidence_refs": [
+     "hypothesis:nc_supply_scarce",
+     "hypothesis:nc_multi_supplier",
+     "hypothesis:nc_cert_barrier",
+     "hypothesis:nc_hype"
+    ],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "8ee4a299a7065373a33292af51f62d4a94db7f3311c9f3db302d782a209218bd",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_coldplate_manifold",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [],
+     "market_structure": [
+      {
+       "claim_id": "nc_multi_supplier",
+       "role": "market_structure",
+       "verdict": "partially_supported",
+       "hypothesis": "冷板/Manifold/快接头存在多家已验证供应商",
+       "evidence_ids": [
+        "e_002837_cp",
+        "e_301018_cp"
+       ],
+       "source_ids": [
+        "cninfo_002837_ar2025",
+        "cninfo_301018_ar2025"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "counter_evidence": [],
+     "hype_risks": [],
+     "unresolved": [
+      {
+       "claim_id": "nc_supply_scarce",
+       "role": "supply_scarcity",
+       "verdict": "unknown",
+       "hypothesis": "冷板/快接头是否存在有效供给约束",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "认证壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_hype",
+       "role": "hype",
+       "verdict": "unknown",
+       "hypothesis": "概念关联",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "hypothesis_assessment": [
+      {
+       "hypothesis_id": "nc_supply_scarce",
+       "subject_scope": "liquid_cooling_coldplate_manifold/supply_scarcity",
+       "claim_role": "supply_scarcity",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "多供应商格局可吸收需求增长——供给紧缺未证实"
+       ],
+       "decisive_gaps": [
+        "capacity_or_leadtime",
+        "delivery_shortfall",
+        "supplier_count"
+       ],
+       "revision_triggers": [
+        "获得产能利用率/交期/订单排队的合格证据 → 升级",
+        "新进入者实现规模交付或第二供应商放量 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_multi_supplier",
+       "subject_scope": "liquid_cooling_coldplate_manifold/market_structure",
+       "claim_role": "market_structure",
+       "verdict": "partially_supported",
+       "assessment_state": "supported",
+       "supporting_claim_ids": [
+        "nc_multi_supplier"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "描述性格局事实，不构成稀缺或壁垒的正反证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "供应商数量或验证状态变化 → 更新格局事实"
+       ],
+       "evidence_refs": [
+        "e_002837_cp",
+        "e_301018_cp"
+       ],
+       "excluded_evidence": [],
+       "independent_source_count": 2,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_cert_barrier",
+       "subject_scope": "liquid_cooling_coldplate_manifold/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_hype",
+       "subject_scope": "liquid_cooling_coldplate_manifold/hype",
+       "claim_role": "hype",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "主题映射与概念热度驱动，非供给/交付证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "主题映射之外的订单/交付/收入证据出现 → 重新评估"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      }
+     ],
+     "support_claim_count": 0,
+     "uncertainties": [
+      "CAP-04:nc_supply_scarce=unknown",
+      "CAP-04:nc_cert_barrier=unknown",
+      "CAP-04:nc_hype=unknown"
+     ],
+     "next_verification": [
+      "product_gross_margin:002837",
+      "product_gross_margin:301018",
+      "product_revenue:002837",
+      "product_revenue:301018",
+      "verifiable_order:002837",
+      "verifiable_order:301018"
+     ],
+     "research_priority": [
+      "product_revenue:002837",
+      "product_gross_margin:002837",
+      "verifiable_order:002837",
+      "product_revenue:301018",
+      "product_gross_margin:301018",
+      "verifiable_order:301018"
+     ]
+    },
+    "evidence_refs": [
+     "e_002837_cp",
+     "e_301018_cp"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:002837",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002837",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:301018",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:301018",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:301018",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "fb14004db799199aaa01c8f6221105f22abf1d189021ca33c6fbb45da88258d6",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "1aa9e15a8e2742bf23c3ec5358f3f34b41c19e7c7b9a2b54e9969640632be3db",
+     "58db08c0509f9c9bed9eb8e8efbd7fcbb7eabd9e877d0952b0f8b9c2168dd5c3",
+     "6c9fe9f8fff8e0209a3f78c3b5d6ae4e834e8876d794d1ec3f7afc2f7ec20979",
+     "8ee4a299a7065373a33292af51f62d4a94db7f3311c9f3db302d782a209218bd"
+    ]
+   }
+  },
+  "ai_power_liquid_cooling": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "ai_power_liquid_cooling",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "bottleneck_unverified",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_capacity_gap",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [
+       {
+        "claim_id": "nc_process_scarce",
+        "dimension": "process_irreplaceability",
+        "claim_role": "non_substitutability",
+        "verdict": "needs_evidence",
+        "claim_text": "液冷冷板/全链条工艺在当前供给格局下难以被替代方案或同类供应商绕开",
+        "evidence_ids": [
+         "n_ev_guojin_landscape",
+         "n_ev_maglev_alt",
+         "n_ev_dayuan_pump",
+         "n_ev_m1_supplier_count",
+         "rival_301018_liquid",
+         "rival_603757_pump",
+         "rival_002050_sanhua"
+        ],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "market_structure": [
+       {
+        "claim_id": "nc_nonexclusive_suppliers",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "液冷供给者不止一家（非独家供应格局）",
+        "evidence_ids": [
+         "n_ev_m1_roster",
+         "rival_301018_liquid_roster",
+         "rival_603757_pump_roster",
+         "rival_002050_sanhua_roster"
+        ],
+        "support_count": 2,
+        "refute_count": 0
+       }
+      ],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_cert_barrier",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       },
+       {
+        "claim_id": "nc_perf_gap",
+        "dimension": "performance_gap",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_hype_component",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "partially_supported",
+        "claim_text": "节点热度中存在概念关联超过供给证据的炒作成分",
+        "evidence_ids": [
+         "n_ev_m1_hype"
+        ],
+        "support_count": 1,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 6,
+     "technical_assessment": {
+      "supply_constraint": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "demand_growth": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_capacity_gap"
+         ],
+         "evidence_ids": [],
+         "note": "需求增长为事实描述——本身不证明供给短缺"
+        },
+        "capacity_limited": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_capacity_gap"
+         ],
+         "evidence_ids": [],
+         "note": "有效产能/供给约束证据"
+        },
+        "effective_delivery_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "交付能力受限观察（矩阵交付格）",
+         "delivery_states": {
+          "002837": "validated",
+          "301018": "customer_relationship_disclosed_at_industry_board",
+          "002050": "none_seen",
+          "603757": "mass_delivery"
+         },
+         "deliverable_companies": [
+          "002837",
+          "603757"
+         ]
+        },
+        "supplier_count_limited": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_nonexclusive_suppliers"
+         ],
+         "evidence_ids": [
+          "n_ev_m1_roster",
+          "rival_002050_sanhua_roster",
+          "rival_301018_liquid_roster",
+          "rival_603757_pump_roster"
+         ],
+         "note": "已验证供应商数量——多供应商是格局事实，不自动否定紧缺也不证明紧缺"
+        },
+        "cert_gated_supply": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "认证门槛造成的有效供给受限（需客户认证证据）"
+        }
+       },
+       "caveat": "需求增长本身不得推导短缺；多供应商格局不自动否定也不证明紧缺"
+      },
+      "non_substitutability": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "functional_alternative_exists": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_nonexclusive_suppliers",
+          "nc_process_scarce"
+         ],
+         "evidence_ids": [
+          "n_ev_dayuan_pump",
+          "n_ev_guojin_landscape",
+          "n_ev_m1_roster",
+          "n_ev_m1_supplier_count",
+          "n_ev_maglev_alt",
+          "rival_002050_sanhua",
+          "rival_002050_sanhua_roster",
+          "rival_301018_liquid",
+          "rival_301018_liquid_roster",
+          "rival_603757_pump",
+          "rival_603757_pump_roster"
+         ],
+         "note": "存在功能相近替代——存在替代供应商不等于可无成本替代",
+         "alt_evidence_ids": []
+        },
+        "performance_meets_requirement": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_perf_gap"
+         ],
+         "evidence_ids": [],
+         "note": "替代方案性能是否达标"
+        },
+        "switching_cost_cert": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "替代所需认证与切换成本证据"
+        },
+        "switching_time": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代所需时间证据"
+        },
+        "alternative_commercialized": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案是否已实际商业化",
+         "alt_evidence_ids": []
+        }
+       },
+       "caveat": "存在替代供应商不等于可无成本替代"
+      },
+      "entry_barrier": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "product_certification": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "产品级测试/认证事实（Intel/UL 等）——不证明客户认证"
+        },
+        "customer_validation": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "特定客户认证通过证据（周期/成本/失效率）"
+        },
+        "mass_production_line_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "量产线验证证据"
+        },
+        "long_term_supply_qualification": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "长期供应资格证据"
+        },
+        "yield_reliability": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "工艺良率与可靠性证据"
+        }
+       },
+       "caveat": "产品认证（Intel/UL）不证明客户认证壁垒"
+      },
+      "evidence_boundaries": [
+       {
+        "claim_id": "nc_capacity_gap",
+        "hypothesis": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
+        "role": "supply_scarcity",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "capacity_or_leadtime",
+          "met": false
+         },
+         {
+          "item": "delivery_shortfall",
+          "met": false
+         },
+         {
+          "item": "supplier_count",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "capacity_or_leadtime",
+         "delivery_shortfall",
+         "supplier_count"
+        ]
+       },
+       {
+        "claim_id": "nc_process_scarce",
+        "hypothesis": "液冷冷板/全链条工艺在当前供给格局下难以被替代方案或同类供应商绕开",
+        "role": "non_substitutability",
+        "verdict": "needs_evidence",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [
+         {
+          "evidence_id": "n_ev_guojin_landscape",
+          "reason": "review_status=lead_only"
+         },
+         {
+          "evidence_id": "n_ev_maglev_alt",
+          "reason": "review_status=lead_only"
+         },
+         {
+          "evidence_id": "n_ev_dayuan_pump",
+          "reason": "review_status=lead_only"
+         },
+         {
+          "evidence_id": "n_ev_m1_supplier_count",
+          "reason": "review_status=lead_only"
+         },
+         {
+          "evidence_id": "rival_301018_liquid",
+          "reason": "review_status=pending"
+         },
+         {
+          "evidence_id": "rival_603757_pump",
+          "reason": "review_status=pending"
+         },
+         {
+          "evidence_id": "rival_002050_sanhua",
+          "reason": "review_status=lead_only"
+         }
+        ],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "alternative_function_check",
+          "met": false
+         },
+         {
+          "item": "performance_parity",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "alternative_function_check",
+         "performance_parity",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_cert_barrier",
+        "hypothesis": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_perf_gap",
+        "hypothesis": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_hype_component",
+        "hypothesis": "节点热度中存在概念关联超过供给证据的炒作成分",
+        "role": "hype",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "n_ev_m1_hype"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [
+         "N_m1_moat_deepening"
+        ],
+        "independent_source_count": 1,
+        "required_evidence": [],
+        "unmet_conditions": []
+       },
+       {
+        "claim_id": "nc_nonexclusive_suppliers",
+        "hypothesis": "液冷供给者不止一家（非独家供应格局）",
+        "role": "market_structure",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "rival_301018_liquid_roster",
+         "rival_603757_pump_roster"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [
+         {
+          "evidence_id": "n_ev_m1_roster",
+          "reason": "review_status=pending"
+         },
+         {
+          "evidence_id": "rival_002050_sanhua_roster",
+          "reason": "review_status=lead_only"
+         }
+        ],
+        "source_ids": [
+         "cninfo_603757_2026h1",
+         "ru_301018_ar2025_rival"
+        ],
+        "independent_source_count": 2,
+        "required_evidence": [],
+        "unmet_conditions": []
+       }
+      ]
+     },
+     "evidence_index": {
+      "n_ev_guojin_landscape": {
+       "evidence_id": "n_ev_guojin_landscape",
+       "source_id": "B_guojin_liquid_20261010",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "国金液冷行业报告描绘'风液同源'数据中心全链条冷却图谱，液冷环路各环节存在多家供应商——全链条/冷板工艺非独家。",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "n_ev_maglev_alt": {
+       "evidence_id": "n_ev_maglev_alt",
+       "source_id": "B_maglev_huayuan_20260728",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "磁悬浮离心压缩机 IPLV 提升42%、电机功率较螺杆机降低30%——能效更优的替代制冷路线存在。",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "n_ev_dayuan_pump": {
+       "evidence_id": "n_ev_dayuan_pump",
+       "source_id": "B_dayuan_huayuan_20260819",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "大元泵业屏蔽泵零泄漏、体积缩短≥60%、研报声称适配 NVIDIA Kyber CDU 并经 Google 2MW CDU 确认（单一来源）——泵环节存在独立替代供给。",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "n_ev_m1_supplier_count": {
+       "evidence_id": "n_ev_m1_supplier_count",
+       "source_id": "N_m1_moat_deepening",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "M1核查：具备液冷供给能力的上市公司不止一家（申菱/三花/大元等）；各家液冷收入均未单独拆分披露，节点真实供需缺口无量化一手数据。（内部核查摘要，仅作来源关联）",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "n_ev_m1_hype": {
+       "evidence_id": "n_ev_m1_hype",
+       "source_id": "N_m1_moat_deepening",
+       "direction": "support",
+       "aspect": "hype_only",
+       "dimension": null,
+       "excerpt": "M1核查：液冷主题热度高、多公司被映射为'液冷概念'，但缺乏任一环节产能/交期紧张的一手披露——存在概念关联超过供给证据的成分。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "n_ev_envicool_filing": {
+       "evidence_id": "n_ev_envicool_filing",
+       "source_id": "ru_002837_759",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "dimension": null,
+       "excerpt": "英维克年报'竞争加剧'风险段：若市场竞争加剧，公司产品价格及毛利率或承压——公司级风险提示，不构成节点产能证据。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "n_ev_m1_roster": {
+       "evidence_id": "n_ev_m1_roster",
+       "source_id": "N_m1_moat_deepening",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "M1核查：具备液冷供给能力的上市公司名单可核实——申菱环境、三花智控、大元泵业等；该事实仅证明'供给者不止一家'，不证明供需无缺口。",
+       "review_status": "pending",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "rival_301018_liquid": {
+       "evidence_id": "rival_301018_liquid",
+       "source_id": "ru_301018_ar2025_rival",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "申菱环境2025年报p10-11：液冷系列产品包括CDU、Manifold、一体化冷源、干冷器、预制化管网、液冷门、冷源模块、水力模块、快速接头、冷板等；2024年中国液冷数据中心市场CDU厂商排名第一；新基建智造基地投产提升液冷交付产能；数据服务板块新增订单同比增长约72%",
+       "review_status": "pending",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "rival_301018_liquid_roster": {
+       "evidence_id": "rival_301018_liquid_roster",
+       "source_id": "ru_301018_ar2025_rival",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "申菱环境2025年报p10-11：液冷系列产品包括CDU、Manifold、一体化冷源、干冷器、预制化管网、液冷门、冷源模块、水力模块、快速接头、冷板等；2024年中国液冷数据中心市场CDU厂商排名第一；新基建智造基地投产提升液冷交付产能；数据服务板块新增订单同比增长约72%",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "rival_603757_pump": {
+       "evidence_id": "rival_603757_pump",
+       "source_id": "cninfo_603757_2026h1",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "2026半年报p17-18原文",
+       "review_status": "pending",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "rival_603757_pump_roster": {
+       "evidence_id": "rival_603757_pump_roster",
+       "source_id": "cninfo_603757_2026h1",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "2026半年报p17-18原文",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "rival_002050_sanhua": {
+       "evidence_id": "rival_002050_sanhua",
+       "source_id": "m1_internal_summary",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "M1核查摘要：三花智控具备液冷相关布局（内部摘要，未核原文）",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "rival_002050_sanhua_roster": {
+       "evidence_id": "rival_002050_sanhua_roster",
+       "source_id": "m1_internal_summary",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "M1核查摘要：三花智控具备液冷相关布局（内部摘要，未核原文）",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      }
+     },
+     "claims": [
+      {
+       "claim_id": "nc_capacity_gap",
+       "claim_text": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
+       "claim_role": "supply_scarcity",
+       "dimension": "capacity_constraint",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_process_scarce",
+       "claim_text": "液冷冷板/全链条工艺在当前供给格局下难以被替代方案或同类供应商绕开",
+       "claim_role": "non_substitutability",
+       "dimension": "process_irreplaceability",
+       "verdict": "needs_evidence",
+       "evidence_ids": [
+        "n_ev_guojin_landscape",
+        "n_ev_maglev_alt",
+        "n_ev_dayuan_pump",
+        "n_ev_m1_supplier_count",
+        "rival_301018_liquid",
+        "rival_603757_pump",
+        "rival_002050_sanhua"
+       ],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": [
+        "n_ev_guojin_landscape",
+        "n_ev_maglev_alt",
+        "n_ev_dayuan_pump",
+        "n_ev_m1_supplier_count",
+        "rival_301018_liquid",
+        "rival_603757_pump",
+        "rival_002050_sanhua"
+       ]
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "claim_text": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
+       "claim_role": "entry_barrier",
+       "dimension": "certification_barrier",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_perf_gap",
+       "claim_text": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
+       "claim_role": "entry_barrier",
+       "dimension": "performance_gap",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_hype_component",
+       "claim_text": "节点热度中存在概念关联超过供给证据的炒作成分",
+       "claim_role": "hype",
+       "dimension": "hype_only",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "n_ev_m1_hype"
+       ],
+       "support_count": 1,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_nonexclusive_suppliers",
+       "claim_text": "液冷供给者不止一家（非独家供应格局）",
+       "claim_role": "market_structure",
+       "dimension": "process_irreplaceability",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "n_ev_m1_roster",
+        "rival_301018_liquid_roster",
+        "rival_603757_pump_roster",
+        "rival_002050_sanhua_roster"
+       ],
+       "support_count": 2,
+       "refute_count": 0,
+       "unverified_evidence_ids": [
+        "n_ev_m1_roster",
+        "rival_002050_sanhua_roster"
+       ]
+      }
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_guojin_landscape",
+     "n_ev_maglev_alt",
+     "n_ev_dayuan_pump",
+     "n_ev_m1_supplier_count",
+     "rival_301018_liquid",
+     "rival_603757_pump",
+     "rival_002050_sanhua",
+     "n_ev_m1_hype",
+     "n_ev_m1_roster",
+     "rival_301018_liquid_roster",
+     "rival_603757_pump_roster",
+     "rival_002050_sanhua_roster"
+    ],
+    "uncertainties": [
+     "nc_capacity_gap=unknown",
+     "nc_process_scarce=needs_evidence",
+     "nc_cert_barrier=unknown",
+     "nc_perf_gap=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "86a43d8f67522a0d78e6fda51818fd1e5b3f2926108dfadb032cc46d83a1e378",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "ai_power_liquid_cooling",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "002837": {
+       "revenue_state": "disclosed_broader_scope",
+       "revenue_value": null,
+       "margin_state": "segment_level",
+       "margin_value": null,
+       "delivery_state": "validated",
+       "order_state": "no_major_contract_disclosure",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "delivery_seen",
+       "independent_facts": {
+        "revenue": "disclosed_broader_scope",
+        "margin": "segment_level",
+        "order": "no_major_contract_disclosure",
+        "delivery": "validated",
+        "cash": "unknown"
+       }
+      },
+      "301018": {
+       "revenue_state": "disclosed_broader_scope",
+       "revenue_value": null,
+       "margin_state": "segment_level",
+       "margin_value": null,
+       "delivery_state": "customer_relationship_disclosed_at_industry_board",
+       "order_state": "order_growth_at_industry_board",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "order_seen",
+       "independent_facts": {
+        "revenue": "disclosed_broader_scope",
+        "margin": "segment_level",
+        "order": "order_growth_at_industry_board",
+        "delivery": "customer_relationship_disclosed_at_industry_board",
+        "cash": "unknown"
+       }
+      },
+      "002050": {
+       "revenue_state": "undisclosed",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "not_evaluated",
+       "independent_facts": {
+        "revenue": "undisclosed",
+        "margin": "unknown",
+        "order": "none_seen",
+        "delivery": "none_seen",
+        "cash": "unknown"
+       }
+      },
+      "603757": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "mass_delivery",
+       "order_state": "verified_delivered",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "delivery_seen",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "verified_delivered",
+        "delivery": "mass_delivery",
+        "cash": "unknown"
+       }
+      }
+     },
+     "member_count": 4
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:002837",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:301018",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:002050",
+      "owner": "DATA",
+      "note": "rev_state=undisclosed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:002050",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002050",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:603757",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:603757",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "52bad9372a246c8eb661a0eb9f81d754f3800c23644a0419bd48e6f88662dfe3",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "86a43d8f67522a0d78e6fda51818fd1e5b3f2926108dfadb032cc46d83a1e378"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "ai_power_liquid_cooling",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "002837": {
+       "company_name": "英维克",
+       "scope_class": "direct_product",
+       "overall_verdict": "unverified",
+       "tech_participation": "partially_supported",
+       "product_maturity": "validated",
+       "certification_customer_validation": "validated",
+       "delivery_capability": "validated",
+       "revenue_identifiability": {
+        "revenue": "disclosed_broader_scope",
+        "margin_known": true
+       },
+       "order_visibility": "no_major_contract_disclosure",
+       "advantage_substitutability": {
+        "tech_moat": "partially_supported",
+        "competitive_edge": "partially_supported"
+       },
+       "concept_only_risk": "low",
+       "evidence_coverage": 5,
+       "comparable_with": [
+        "301018"
+       ]
+      },
+      "301018": {
+       "company_name": "申菱环境",
+       "scope_class": "direct_product",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "customer_relationship_disclosed_at_industry_board",
+       "certification_customer_validation": "customer_relationship_disclosed_at_industry_board",
+       "delivery_capability": "customer_relationship_disclosed_at_industry_board",
+       "revenue_identifiability": {
+        "revenue": "disclosed_broader_scope",
+        "margin_known": false
+       },
+       "order_visibility": "order_growth_at_industry_board",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 4,
+       "comparable_with": [
+        "002837",
+        "002050"
+       ]
+      },
+      "002050": {
+       "company_name": "三花智控",
+       "scope_class": "direct_product",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "none_seen",
+       "certification_customer_validation": "none_seen",
+       "delivery_capability": "none_seen",
+       "revenue_identifiability": {
+        "revenue": "undisclosed",
+        "margin_known": false
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 2,
+       "comparable_with": [
+        "301018"
+       ]
+      },
+      "603757": {
+       "company_name": "大元泵业",
+       "scope_class": "direct_component",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "mass_delivery",
+       "certification_customer_validation": "mass_delivery",
+       "delivery_capability": "mass_delivery",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "verified_delivered",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 3,
+       "comparable_with": []
+      }
+     },
+     "pairwise_scope": [
+      {
+       "a": "002837",
+       "b": "301018",
+       "comparison_scope": "directly_comparable",
+       "reason": "同一节点同一产品口径"
+      },
+      {
+       "a": "002837",
+       "b": "002050",
+       "comparison_scope": "insufficient_evidence",
+       "reason": "证据覆盖差距过大(3)，不判强弱"
+      },
+      {
+       "a": "002837",
+       "b": "603757",
+       "comparison_scope": "not_comparable",
+       "reason": "组件/部件口径与系统级口径不可直接比较"
+      },
+      {
+       "a": "301018",
+       "b": "002050",
+       "comparison_scope": "directly_comparable",
+       "reason": "同一节点同一产品口径"
+      },
+      {
+       "a": "301018",
+       "b": "603757",
+       "comparison_scope": "not_comparable",
+       "reason": "组件/部件口径与系统级口径不可直接比较"
+      },
+      {
+       "a": "002050",
+       "b": "603757",
+       "comparison_scope": "not_comparable",
+       "reason": "组件/部件口径与系统级口径不可直接比较"
+      }
+     ],
+     "scope_classes": {
+      "direct_product": [
+       "002050",
+       "002837",
+       "301018"
+      ],
+      "direct_component": [
+       "603757"
+      ]
+     },
+     "note": "同口径比较：组件 vs 系统不直接排名；披露更多≠竞争力更强；无评分无推荐"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "0601e83cc2cdc5e090f7d943635da1ef352d5694bc84fad6ab38781a51e77e12",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "86a43d8f67522a0d78e6fda51818fd1e5b3f2926108dfadb032cc46d83a1e378",
+     "52bad9372a246c8eb661a0eb9f81d754f3800c23644a0419bd48e6f88662dfe3"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "ai_power_liquid_cooling",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "baseline_found": true,
+     "baseline_version": 1,
+     "baseline_as_of": "2026-10-22",
+     "skipped_future_versions": 0,
+     "state_changed": true,
+     "changes": [
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_capacity_gap",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_process_scarce",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_cert_barrier",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_perf_gap",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_hype_component",
+       "from": null,
+       "to": "risk_flagged"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_nonexclusive_suppliers",
+       "from": null,
+       "to": "supported"
+      }
+     ],
+     "added": 6,
+     "removed": 0,
+     "changed": 0,
+     "current_fingerprint": "62d731b6a54629ddf923eca68427519e82a1df3fbe0a2e2224c102124825adab",
+     "baseline_count": 1
+    },
+    "evidence_refs": [
+     "hypothesis:nc_capacity_gap",
+     "hypothesis:nc_process_scarce",
+     "hypothesis:nc_cert_barrier",
+     "hypothesis:nc_perf_gap",
+     "hypothesis:nc_hype_component",
+     "hypothesis:nc_nonexclusive_suppliers"
+    ],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "3070530063c9e93175dc13c2c9c872652195132868060e16364997f97b93627e",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "ai_power_liquid_cooling",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [],
+     "market_structure": [
+      {
+       "claim_id": "nc_nonexclusive_suppliers",
+       "role": "market_structure",
+       "verdict": "partially_supported",
+       "hypothesis": "液冷供给者不止一家（非独家供应格局）",
+       "evidence_ids": [
+        "n_ev_m1_roster",
+        "rival_301018_liquid_roster",
+        "rival_603757_pump_roster",
+        "rival_002050_sanhua_roster"
+       ],
+       "source_ids": [
+        "N_m1_moat_deepening",
+        "cninfo_603757_2026h1",
+        "m1_internal_summary",
+        "ru_301018_ar2025_rival"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "counter_evidence": [],
+     "hype_risks": [
+      {
+       "claim_id": "nc_hype_component",
+       "role": "hype",
+       "verdict": "partially_supported",
+       "hypothesis": "节点热度中存在概念关联超过供给证据的炒作成分",
+       "evidence_ids": [
+        "n_ev_m1_hype"
+       ],
+       "source_ids": [
+        "N_m1_moat_deepening"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "unresolved": [
+      {
+       "claim_id": "nc_capacity_gap",
+       "role": "supply_scarcity",
+       "verdict": "unknown",
+       "hypothesis": "数据中心液冷环节存在可验证的产能/交付瓶颈（排队、交期拉长、扩产受限）",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_process_scarce",
+       "role": "non_substitutability",
+       "verdict": "needs_evidence",
+       "hypothesis": "液冷冷板/全链条工艺在当前供给格局下难以被替代方案或同类供应商绕开",
+       "evidence_ids": [
+        "n_ev_guojin_landscape",
+        "n_ev_maglev_alt",
+        "n_ev_dayuan_pump",
+        "n_ev_m1_supplier_count",
+        "rival_301018_liquid",
+        "rival_603757_pump",
+        "rival_002050_sanhua"
+       ],
+       "source_ids": [
+        "B_dayuan_huayuan_20260819",
+        "B_guojin_liquid_20261010",
+        "B_maglev_huayuan_20260728",
+        "N_m1_moat_deepening",
+        "cninfo_603757_2026h1",
+        "m1_internal_summary",
+        "ru_301018_ar2025_rival"
+       ],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "头部客户（云厂/芯片厂）认证周期构成新进入者壁垒",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_perf_gap",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "节点内供应商间存在可量化的性能差异（PUE/温差/泄漏率指标对比）",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "hypothesis_assessment": [
+      {
+       "hypothesis_id": "nc_capacity_gap",
+       "subject_scope": "ai_power_liquid_cooling/supply_scarcity",
+       "claim_role": "supply_scarcity",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "多供应商格局可吸收需求增长——供给紧缺未证实"
+       ],
+       "decisive_gaps": [
+        "capacity_or_leadtime",
+        "delivery_shortfall",
+        "supplier_count"
+       ],
+       "revision_triggers": [
+        "获得产能利用率/交期/订单排队的合格证据 → 升级",
+        "新进入者实现规模交付或第二供应商放量 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_process_scarce",
+       "subject_scope": "ai_power_liquid_cooling/non_substitutability",
+       "claim_role": "non_substitutability",
+       "verdict": "needs_evidence",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "存在已商业化或可认证替代方案——不可替代未证实"
+       ],
+       "decisive_gaps": [
+        "alternative_function_check",
+        "performance_parity",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "替代方案通过同等级客户认证并量产 → 弱化",
+        "切换成本/良率差距证据出现 → 强化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [
+        {
+         "evidence_id": "n_ev_guojin_landscape",
+         "reason": "review_status=lead_only"
+        },
+        {
+         "evidence_id": "n_ev_maglev_alt",
+         "reason": "review_status=lead_only"
+        },
+        {
+         "evidence_id": "n_ev_dayuan_pump",
+         "reason": "review_status=lead_only"
+        },
+        {
+         "evidence_id": "n_ev_m1_supplier_count",
+         "reason": "review_status=lead_only"
+        },
+        {
+         "evidence_id": "rival_301018_liquid",
+         "reason": "review_status=pending"
+        },
+        {
+         "evidence_id": "rival_603757_pump",
+         "reason": "review_status=pending"
+        },
+        {
+         "evidence_id": "rival_002050_sanhua",
+         "reason": "review_status=lead_only"
+        }
+       ],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_cert_barrier",
+       "subject_scope": "ai_power_liquid_cooling/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_perf_gap",
+       "subject_scope": "ai_power_liquid_cooling/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_hype_component",
+       "subject_scope": "ai_power_liquid_cooling/hype",
+       "claim_role": "hype",
+       "verdict": "partially_supported",
+       "assessment_state": "risk_flagged",
+       "supporting_claim_ids": [
+        "nc_hype_component"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "主题映射与概念热度驱动，非供给/交付证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "主题映射之外的订单/交付/收入证据出现 → 重新评估"
+       ],
+       "evidence_refs": [
+        "n_ev_m1_hype"
+       ],
+       "excluded_evidence": [],
+       "independent_source_count": 1,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_nonexclusive_suppliers",
+       "subject_scope": "ai_power_liquid_cooling/market_structure",
+       "claim_role": "market_structure",
+       "verdict": "partially_supported",
+       "assessment_state": "supported",
+       "supporting_claim_ids": [
+        "nc_nonexclusive_suppliers"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "描述性格局事实，不构成稀缺或壁垒的正反证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "供应商数量或验证状态变化 → 更新格局事实"
+       ],
+       "evidence_refs": [
+        "rival_301018_liquid_roster",
+        "rival_603757_pump_roster"
+       ],
+       "excluded_evidence": [
+        {
+         "evidence_id": "n_ev_m1_roster",
+         "reason": "review_status=pending"
+        },
+        {
+         "evidence_id": "rival_002050_sanhua_roster",
+         "reason": "review_status=lead_only"
+        }
+       ],
+       "independent_source_count": 2,
+       "as_of": "2026-10-22"
+      }
+     ],
+     "support_claim_count": 0,
+     "uncertainties": [
+      "CAP-04:nc_capacity_gap=unknown",
+      "CAP-04:nc_process_scarce=needs_evidence",
+      "CAP-04:nc_cert_barrier=unknown",
+      "CAP-04:nc_perf_gap=unknown"
+     ],
+     "next_verification": [
+      "product_gross_margin:002050",
+      "product_gross_margin:002837",
+      "product_gross_margin:301018",
+      "product_gross_margin:603757",
+      "product_revenue:002050",
+      "product_revenue:603757",
+      "verifiable_order:002050"
+     ],
+     "research_priority": [
+      "product_revenue:002050",
+      "product_gross_margin:002050",
+      "verifiable_order:002050",
+      "product_revenue:603757",
+      "product_gross_margin:603757"
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_dayuan_pump",
+     "n_ev_guojin_landscape",
+     "n_ev_m1_hype",
+     "n_ev_m1_roster",
+     "n_ev_m1_supplier_count",
+     "n_ev_maglev_alt",
+     "rival_002050_sanhua",
+     "rival_002050_sanhua_roster",
+     "rival_301018_liquid",
+     "rival_301018_liquid_roster",
+     "rival_603757_pump",
+     "rival_603757_pump_roster"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:002837",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:301018",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:002050",
+      "owner": "DATA",
+      "note": "rev_state=undisclosed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:002050",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002050",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:603757",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:603757",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "b924e6a27ed556c4d442329bf7397cc0c88ecc1eb7403c165ba8654f6068bb83",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "86a43d8f67522a0d78e6fda51818fd1e5b3f2926108dfadb032cc46d83a1e378",
+     "52bad9372a246c8eb661a0eb9f81d754f3800c23644a0419bd48e6f88662dfe3",
+     "0601e83cc2cdc5e090f7d943635da1ef352d5694bc84fad6ab38781a51e77e12",
+     "3070530063c9e93175dc13c2c9c872652195132868060e16364997f97b93627e"
+    ]
+   }
+  },
+  "liquid_cooling_pump_components": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_pump_components",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "bottleneck_unverified",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_supply_scarce",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "unknown",
+        "claim_text": "CDU泵组件是否存在有效供给约束",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [],
+      "market_structure": [
+       {
+        "claim_id": "nc_multi_supplier",
+        "dimension": "process_irreplaceability",
+        "claim_role": "market_structure",
+        "verdict": "partially_supported",
+        "claim_text": "CDU泵存在多家供应商（含外资在位者）",
+        "evidence_ids": [
+         "e_603757_supply",
+         "e_foreign_incumbents"
+        ],
+        "support_count": 1,
+        "refute_count": 0
+       }
+      ],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_cert_barrier",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "UL等认证及大批量交付壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_hype",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "unknown",
+        "claim_text": "概念关联",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 4,
+     "technical_assessment": {
+      "supply_constraint": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "demand_growth": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "需求增长为事实描述——本身不证明供给短缺"
+        },
+        "capacity_limited": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_supply_scarce"
+         ],
+         "evidence_ids": [],
+         "note": "有效产能/供给约束证据"
+        },
+        "effective_delivery_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "交付能力受限观察（矩阵交付格）",
+         "delivery_states": {
+          "603757": "mass_delivery"
+         },
+         "deliverable_companies": [
+          "603757"
+         ]
+        },
+        "supplier_count_limited": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_multi_supplier"
+         ],
+         "evidence_ids": [
+          "e_603757_supply",
+          "e_foreign_incumbents"
+         ],
+         "note": "已验证供应商数量——多供应商是格局事实，不自动否定紧缺也不证明紧缺"
+        },
+        "cert_gated_supply": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "认证门槛造成的有效供给受限（需客户认证证据）"
+        }
+       },
+       "caveat": "需求增长本身不得推导短缺；多供应商格局不自动否定也不证明紧缺"
+      },
+      "non_substitutability": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "functional_alternative_exists": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_multi_supplier"
+         ],
+         "evidence_ids": [
+          "e_603757_supply",
+          "e_foreign_incumbents"
+         ],
+         "note": "存在功能相近替代——存在替代供应商不等于可无成本替代",
+         "alt_evidence_ids": []
+        },
+        "performance_meets_requirement": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案性能是否达标"
+        },
+        "switching_cost_cert": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [],
+         "note": "替代所需认证与切换成本证据"
+        },
+        "switching_time": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代所需时间证据"
+        },
+        "alternative_commercialized": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案是否已实际商业化",
+         "alt_evidence_ids": []
+        }
+       },
+       "caveat": "存在替代供应商不等于可无成本替代"
+      },
+      "entry_barrier": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "product_certification": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "e_603757_ul"
+         ],
+         "note": "产品级测试/认证事实（Intel/UL 等）——不证明客户认证"
+        },
+        "customer_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "特定客户认证通过证据（周期/成本/失效率）"
+        },
+        "mass_production_line_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "量产线验证证据"
+        },
+        "long_term_supply_qualification": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "长期供应资格证据"
+        },
+        "yield_reliability": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "工艺良率与可靠性证据"
+        }
+       },
+       "caveat": "产品认证（Intel/UL）不证明客户认证壁垒"
+      },
+      "evidence_boundaries": [
+       {
+        "claim_id": "nc_supply_scarce",
+        "hypothesis": "CDU泵组件是否存在有效供给约束",
+        "role": "supply_scarcity",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "capacity_or_leadtime",
+          "met": false
+         },
+         {
+          "item": "delivery_shortfall",
+          "met": false
+         },
+         {
+          "item": "supplier_count",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "capacity_or_leadtime",
+         "delivery_shortfall",
+         "supplier_count"
+        ]
+       },
+       {
+        "claim_id": "nc_multi_supplier",
+        "hypothesis": "CDU泵存在多家供应商（含外资在位者）",
+        "role": "market_structure",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "e_603757_supply"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [
+         {
+          "evidence_id": "e_foreign_incumbents",
+          "reason": "review_status=pending"
+         }
+        ],
+        "source_ids": [
+         "cninfo_603757_2026h1"
+        ],
+        "independent_source_count": 1,
+        "required_evidence": [],
+        "unmet_conditions": []
+       },
+       {
+        "claim_id": "nc_cert_barrier",
+        "hypothesis": "UL等认证及大批量交付壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_hype",
+        "hypothesis": "概念关联",
+        "role": "hype",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "independent_source_count": 0,
+        "required_evidence": [],
+        "unmet_conditions": []
+       }
+      ]
+     },
+     "evidence_index": {
+      "e_603757_supply": {
+       "evidence_id": "e_603757_supply",
+       "source_id": "cninfo_603757_2026h1",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "大元In-Rack泵2025交付~3万台/2026H1~2万台；In-Row 22/37kw完成测试认证含UL；曙光8000浸没泵组供应完成",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "e_foreign_incumbents": {
+       "evidence_id": "e_foreign_incumbents",
+       "source_id": "cninfo_603757_2026h1",
+       "direction": "support",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "大元年报p18：外资头部泵企格兰富CME/CM等CDU专用泵2026H1美国市场销售额+20%；CR系列经40年迭代——外资在位者存在",
+       "review_status": "pending",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "e_603757_ul": {
+       "evidence_id": "e_603757_ul",
+       "source_id": "cninfo_603757_2026h1",
+       "direction": "support",
+       "aspect": "certification_barrier",
+       "dimension": null,
+       "excerpt": "In-Row CDU 22/37kw完成单机测试及认证（含UL）；千瓦级永磁屏蔽泵大批量稳定交付——认证+量产构成进入壁垒",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      }
+     },
+     "claims": [
+      {
+       "claim_id": "nc_supply_scarce",
+       "claim_text": "CDU泵组件是否存在有效供给约束",
+       "claim_role": "supply_scarcity",
+       "dimension": "capacity_constraint",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_multi_supplier",
+       "claim_text": "CDU泵存在多家供应商（含外资在位者）",
+       "claim_role": "market_structure",
+       "dimension": "process_irreplaceability",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "e_603757_supply",
+        "e_foreign_incumbents"
+       ],
+       "support_count": 1,
+       "refute_count": 0,
+       "unverified_evidence_ids": [
+        "e_foreign_incumbents"
+       ]
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "claim_text": "UL等认证及大批量交付壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+       "claim_role": "entry_barrier",
+       "dimension": "certification_barrier",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_hype",
+       "claim_text": "概念关联",
+       "claim_role": "hype",
+       "dimension": "hype_only",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      }
+     ]
+    },
+    "evidence_refs": [
+     "e_603757_supply",
+     "e_foreign_incumbents"
+    ],
+    "uncertainties": [
+     "nc_supply_scarce=unknown",
+     "nc_cert_barrier=unknown",
+     "nc_hype=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "dc5be12f4a1915da883ee015cbac6f817bd18281710083fcd63ad7908e81c321",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_pump_components",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "603757": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "mass_delivery",
+       "order_state": "verified_delivered",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "delivery_seen",
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "verified_delivered",
+        "delivery": "mass_delivery",
+        "cash": "unknown"
+       }
+      }
+     },
+     "member_count": 1
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:603757",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:603757",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "0b670f2d736d0b13a95639690ad50dc37e568c9db486d0e253803c9859a0de56",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "dc5be12f4a1915da883ee015cbac6f817bd18281710083fcd63ad7908e81c321"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_pump_components",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "603757": {
+       "company_name": "大元泵业",
+       "scope_class": "direct_component",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "mass_delivery",
+       "certification_customer_validation": "mass_delivery",
+       "delivery_capability": "mass_delivery",
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "verified_delivered",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 3,
+       "comparable_with": []
+      }
+     },
+     "pairwise_scope": [],
+     "scope_classes": {
+      "direct_component": [
+       "603757"
+      ]
+     },
+     "note": "同口径比较：组件 vs 系统不直接排名；披露更多≠竞争力更强；无评分无推荐"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "d8fc7710fb98690a274afd4244929fc5d7b96e9fc5f1d8b586ec60c94fa1229a",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "dc5be12f4a1915da883ee015cbac6f817bd18281710083fcd63ad7908e81c321",
+     "0b670f2d736d0b13a95639690ad50dc37e568c9db486d0e253803c9859a0de56"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_pump_components",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "baseline_found": true,
+     "baseline_version": 1,
+     "baseline_as_of": "2026-10-22",
+     "skipped_future_versions": 0,
+     "state_changed": true,
+     "changes": [
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_supply_scarce",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_multi_supplier",
+       "from": null,
+       "to": "supported"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_cert_barrier",
+       "from": null,
+       "to": "unresolved"
+      },
+      {
+       "kind": "added",
+       "field": "hypothesis:nc_hype",
+       "from": null,
+       "to": "unresolved"
+      }
+     ],
+     "added": 4,
+     "removed": 0,
+     "changed": 0,
+     "current_fingerprint": "5b979dc6cd791a52e139727c13e084b635819cdeab54006b59a18bb5215f080c",
+     "baseline_count": 1
+    },
+    "evidence_refs": [
+     "hypothesis:nc_supply_scarce",
+     "hypothesis:nc_multi_supplier",
+     "hypothesis:nc_cert_barrier",
+     "hypothesis:nc_hype"
+    ],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "b2da42d8a24da77b89d89ee366ad8305a82243c1629146c5260378fddc7a52a5",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "liquid_cooling_pump_components",
+    "as_of": "2026-10-22",
+    "run_id": "r2a-ai_power_value_capture_v1",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [],
+     "market_structure": [
+      {
+       "claim_id": "nc_multi_supplier",
+       "role": "market_structure",
+       "verdict": "partially_supported",
+       "hypothesis": "CDU泵存在多家供应商（含外资在位者）",
+       "evidence_ids": [
+        "e_603757_supply",
+        "e_foreign_incumbents"
+       ],
+       "source_ids": [
+        "cninfo_603757_2026h1"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "counter_evidence": [],
+     "hype_risks": [],
+     "unresolved": [
+      {
+       "claim_id": "nc_supply_scarce",
+       "role": "supply_scarcity",
+       "verdict": "unknown",
+       "hypothesis": "CDU泵组件是否存在有效供给约束",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "UL等认证及大批量交付壁垒（需认证周期/成本/失效率/切换成本证据，产品通过认证不计）",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_hype",
+       "role": "hype",
+       "verdict": "unknown",
+       "hypothesis": "概念关联",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "hypothesis_assessment": [
+      {
+       "hypothesis_id": "nc_supply_scarce",
+       "subject_scope": "liquid_cooling_pump_components/supply_scarcity",
+       "claim_role": "supply_scarcity",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "多供应商格局可吸收需求增长——供给紧缺未证实"
+       ],
+       "decisive_gaps": [
+        "capacity_or_leadtime",
+        "delivery_shortfall",
+        "supplier_count"
+       ],
+       "revision_triggers": [
+        "获得产能利用率/交期/订单排队的合格证据 → 升级",
+        "新进入者实现规模交付或第二供应商放量 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_multi_supplier",
+       "subject_scope": "liquid_cooling_pump_components/market_structure",
+       "claim_role": "market_structure",
+       "verdict": "partially_supported",
+       "assessment_state": "supported",
+       "supporting_claim_ids": [
+        "nc_multi_supplier"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "描述性格局事实，不构成稀缺或壁垒的正反证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "供应商数量或验证状态变化 → 更新格局事实"
+       ],
+       "evidence_refs": [
+        "e_603757_supply"
+       ],
+       "excluded_evidence": [
+        {
+         "evidence_id": "e_foreign_incumbents",
+         "reason": "review_status=pending"
+        }
+       ],
+       "independent_source_count": 1,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_cert_barrier",
+       "subject_scope": "liquid_cooling_pump_components/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_hype",
+       "subject_scope": "liquid_cooling_pump_components/hype",
+       "claim_role": "hype",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "主题映射与概念热度驱动，非供给/交付证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "主题映射之外的订单/交付/收入证据出现 → 重新评估"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      }
+     ],
+     "support_claim_count": 0,
+     "uncertainties": [
+      "CAP-04:nc_supply_scarce=unknown",
+      "CAP-04:nc_cert_barrier=unknown",
+      "CAP-04:nc_hype=unknown"
+     ],
+     "next_verification": [
+      "product_gross_margin:603757",
+      "product_revenue:603757"
+     ],
+     "research_priority": [
+      "product_revenue:603757",
+      "product_gross_margin:603757"
+     ]
+    },
+    "evidence_refs": [
+     "e_603757_supply",
+     "e_foreign_incumbents"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:603757",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:603757",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "c3cd35b1b5454b8eb6556073b1726ccfdb308030d9fbf2dbf846460df012551f",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "dc5be12f4a1915da883ee015cbac6f817bd18281710083fcd63ad7908e81c321",
+     "0b670f2d736d0b13a95639690ad50dc37e568c9db486d0e253803c9859a0de56",
+     "d8fc7710fb98690a274afd4244929fc5d7b96e9fc5f1d8b586ec60c94fa1229a",
+     "b2da42d8a24da77b89d89ee366ad8305a82243c1629146c5260378fddc7a52a5"
+    ]
+   }
+  }
+ },
+ "errors": [],
+ "gap_backlog": [
+  {
+   "node_id": "liquid_cooling_cdu_system",
+   "kind": "missing_source",
+   "item": "product_revenue:002837",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_cdu_system",
+   "kind": "missing_source",
+   "item": "product_gross_margin:002837",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_cdu_system",
+   "kind": "missing_source",
+   "item": "verifiable_order:002837",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_cdu_system",
+   "kind": "missing_source",
+   "item": "product_revenue:301018",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_cdu_system",
+   "kind": "missing_source",
+   "item": "product_gross_margin:301018",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_cdu_system",
+   "kind": "missing_source",
+   "item": "verifiable_order:301018",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_coldplate_manifold",
+   "kind": "missing_source",
+   "item": "product_revenue:002837",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_coldplate_manifold",
+   "kind": "missing_source",
+   "item": "product_gross_margin:002837",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_coldplate_manifold",
+   "kind": "missing_source",
+   "item": "verifiable_order:002837",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_coldplate_manifold",
+   "kind": "missing_source",
+   "item": "product_revenue:301018",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_coldplate_manifold",
+   "kind": "missing_source",
+   "item": "product_gross_margin:301018",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_coldplate_manifold",
+   "kind": "missing_source",
+   "item": "verifiable_order:301018",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "attribution_unknown",
+   "item": "product_gross_margin:002837",
+   "owner": "DATA",
+   "note": "segment margin exists, product line unattributed",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "attribution_unknown",
+   "item": "product_gross_margin:301018",
+   "owner": "DATA",
+   "note": "segment margin exists, product line unattributed",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "missing_source",
+   "item": "product_revenue:002050",
+   "owner": "DATA",
+   "note": "rev_state=undisclosed",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "missing_source",
+   "item": "product_gross_margin:002050",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "missing_source",
+   "item": "verifiable_order:002050",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "missing_source",
+   "item": "product_revenue:603757",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "ai_power_liquid_cooling",
+   "kind": "missing_source",
+   "item": "product_gross_margin:603757",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_pump_components",
+   "kind": "missing_source",
+   "item": "product_revenue:603757",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "liquid_cooling_pump_components",
+   "kind": "missing_source",
+   "item": "product_gross_margin:603757",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  }
+ ],
+ "research_only": true,
+ "used_for_signal": false,
+ "used_for_admission": false,
+ "theme_synthesis": {
+  "key_findings": [
+   "liquid_cooling_cdu_system: bottleneck_unverified（正向 0 · 风险 0 · 未决 3）",
+   "liquid_cooling_coldplate_manifold: bottleneck_unverified（正向 0 · 风险 0 · 未决 3）",
+   "ai_power_liquid_cooling: bottleneck_unverified（正向 0 · 风险 1 · 未决 4）",
+   "liquid_cooling_pump_components: bottleneck_unverified（正向 0 · 风险 0 · 未决 3）"
+  ],
+  "competing_hypotheses": [
+   {
+    "node_id": "liquid_cooling_cdu_system",
+    "hypothesis_id": "nc_multi_supplier",
+    "state": "supported",
+    "independent_source_count": 2,
+    "new_evidence_refs": [
+     "e_002837_cdu",
+     "e_301018_cdu"
+    ]
+   },
+   {
+    "node_id": "liquid_cooling_coldplate_manifold",
+    "hypothesis_id": "nc_multi_supplier",
+    "state": "supported",
+    "independent_source_count": 2,
+    "new_evidence_refs": [
+     "e_002837_cp",
+     "e_301018_cp"
+    ]
+   },
+   {
+    "node_id": "ai_power_liquid_cooling",
+    "hypothesis_id": "nc_hype_component",
+    "state": "risk_flagged",
+    "independent_source_count": 1,
+    "new_evidence_refs": [
+     "n_ev_m1_hype"
+    ]
+   },
+   {
+    "node_id": "ai_power_liquid_cooling",
+    "hypothesis_id": "nc_nonexclusive_suppliers",
+    "state": "supported",
+    "independent_source_count": 2,
+    "new_evidence_refs": [
+     "rival_301018_liquid_roster",
+     "rival_603757_pump_roster"
+    ]
+   },
+   {
+    "node_id": "liquid_cooling_pump_components",
+    "hypothesis_id": "nc_multi_supplier",
+    "state": "supported",
+    "independent_source_count": 1,
+    "new_evidence_refs": [
+     "e_603757_supply"
+    ]
+   }
+  ],
+  "core_unresolved": [
+   {
+    "node_id": "liquid_cooling_cdu_system",
+    "claim_id": "nc_supply_scarce",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_cdu_system",
+    "claim_id": "nc_cert_barrier",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_cdu_system",
+    "claim_id": "nc_hype",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_coldplate_manifold",
+    "claim_id": "nc_supply_scarce",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_coldplate_manifold",
+    "claim_id": "nc_cert_barrier",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_coldplate_manifold",
+    "claim_id": "nc_hype",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "ai_power_liquid_cooling",
+    "claim_id": "nc_capacity_gap",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "ai_power_liquid_cooling",
+    "claim_id": "nc_process_scarce",
+    "verdict": "needs_evidence"
+   },
+   {
+    "node_id": "ai_power_liquid_cooling",
+    "claim_id": "nc_cert_barrier",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "ai_power_liquid_cooling",
+    "claim_id": "nc_perf_gap",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_pump_components",
+    "claim_id": "nc_supply_scarce",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_pump_components",
+    "claim_id": "nc_cert_barrier",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "liquid_cooling_pump_components",
+    "claim_id": "nc_hype",
+    "verdict": "unknown"
+   }
+  ],
+  "next_verification": [
+   "product_gross_margin:002050",
+   "product_gross_margin:002837",
+   "product_gross_margin:301018",
+   "product_gross_margin:603757",
+   "product_revenue:002050",
+   "product_revenue:002837",
+   "product_revenue:301018",
+   "product_revenue:603757",
+   "verifiable_order:002050",
+   "verifiable_order:002837",
+   "verifiable_order:301018"
+  ],
+  "coverage": {
+   "theme_nodes": 13,
+   "nodes_with_cases": 1,
+   "coverage_gap_nodes": [
+    "transformer",
+    "sic_gan_power_semiconductor",
+    "hvdc_power",
+    "server_power_supply",
+    "grid_connection",
+    "ai_server_integration",
+    "copper_interconnect",
+    "ups",
+    "rack_power_distribution",
+    "switchgear",
+    "data_center_epc",
+    "power_generation"
+   ],
+   "read_source": "artifact"
+  },
+  "note": "结构化研究摘要——非主题评级、非买卖建议"
+ },
+ "workbench_index": "outputs/research/cap_workbench/ai_power_value_capture_v1/index.json"
+}

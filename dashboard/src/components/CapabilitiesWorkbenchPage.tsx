@@ -42,6 +42,131 @@ function CompanyLink({ code, link }: { code: string; link?: string }) {
   );
 }
 
+const STATE_LABELS: Record<string, string> = {
+  supported: '支持', contested: '有争议', refuted: '已反驳',
+  risk_flagged: '风险标记', unresolved: '未决',
+};
+const STATE_TONES: Record<string, string> = {
+  supported: '#15803d', contested: '#b91c1c', refuted: '#7f1d1d',
+  risk_flagged: '#c2410c', unresolved: '#6b7280',
+};
+const AREA_LABELS: Record<string, string> = {
+  supply_constraint: '供给约束', non_substitutability: '技术不可替代性',
+  entry_barrier: '进入壁垒',
+};
+const SUB_LABELS: Record<string, string> = {
+  demand_growth: '需求增长', capacity_limited: '产能受限',
+  effective_delivery_limited: '有效交付受限', supplier_count_limited: '供应商数量有限',
+  cert_gated_supply: '认证门槛限供', functional_alternative_exists: '存在功能替代',
+  performance_meets_requirement: '替代性能达标', switching_cost_cert: '切换认证成本',
+  switching_time: '切换时间', alternative_commercialized: '替代已商业化',
+  product_certification: '产品认证', customer_validation: '客户认证',
+  mass_production_line_validation: '量产线验证', long_term_supply_qualification: '长期供应资格',
+  yield_reliability: '良率可靠性',
+};
+const SCOPE_LABELS: Record<string, string> = {
+  directly_comparable: '可直接比较', partially_comparable: '部分可比',
+  not_comparable: '不可直接比较', insufficient_evidence: '证据不足',
+};
+
+function JudgmentBlock({ node }: { node: CapWorkbenchNode }) {
+  const ta = node.technical_assessment;
+  const hypos = node.hypothesis_assessment ?? [];
+  const pairs = node.pairwise_scope ?? [];
+  return (
+    <div style={{ marginTop: 8, borderTop: '1px dashed #d1d5db', paddingTop: 8 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>研究判断</div>
+      {ta ? (
+        <div style={{ fontSize: 12, marginBottom: 6 }}>
+          {Object.entries(ta).map(([area, v]) => (
+            <div key={area} style={{ marginBottom: 3 }}>
+              <span style={{ fontWeight: 600 }}>{AREA_LABELS[area] ?? area}</span>
+              <code style={{ marginLeft: 6 }}>{v.assessment ?? '—'}</code>
+              <span style={{ color: '#6b7280', marginLeft: 8 }}>
+                {Object.entries(v.sub_checks ?? {}).map(([k, s]) =>
+                  `${SUB_LABELS[k] ?? k}:${s}`).join(' · ')}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {pairs.length ? (
+        <div style={{ fontSize: 12, marginBottom: 6 }}>
+          <span style={{ fontWeight: 600 }}>可比口径：</span>
+          {pairs.map((p, i) => (
+            <span key={i} style={{ marginRight: 10, color: p.comparison_scope === 'directly_comparable' ? '#15803d' : '#92400e' }}>
+              {p.a}×{p.b} {SCOPE_LABELS[p.comparison_scope] ?? p.comparison_scope}（{p.reason}）
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {hypos.map((h) => (
+        <div key={h.hypothesis_id} style={{ fontSize: 12, margin: '4px 0 4px 8px',
+          borderLeft: `3px solid ${STATE_TONES[h.assessment_state] ?? '#9ca3af'}`, paddingLeft: 8 }}>
+          <div>
+            <code>{h.hypothesis_id}</code>
+            <span style={{ fontWeight: 600, color: STATE_TONES[h.assessment_state] ?? '#374151', marginLeft: 6 }}>
+              {STATE_LABELS[h.assessment_state] ?? h.assessment_state}
+            </span>
+            <span style={{ color: '#6b7280' }}> · {h.claim_role} · 独立来源 {h.independent_source_count ?? 0}</span>
+          </div>
+          {h.alternative_explanations?.length ? (
+            <div style={{ color: '#0369a1' }}>替代解释：{h.alternative_explanations.join('；')}</div>
+          ) : null}
+          {h.decisive_gaps?.length ? (
+            <div style={{ color: '#92400e' }}>决定性缺口：{h.decisive_gaps.join(', ')}</div>
+          ) : null}
+          {h.revision_triggers?.length ? (
+            <div style={{ color: '#6b7280' }}>修订触发：{h.revision_triggers.join('；')}</div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ThemeSummary({ ts }: { ts: NonNullable<CapWorkbenchIndex['theme_synthesis']> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: '1px solid #c7d2fe', borderRadius: 8, padding: 10, marginBottom: 12, background: '#eef2ff' }}>
+      <button onClick={() => setOpen(!open)} style={{ all: 'unset', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+        主题研究摘要（研究用，非评级/建议） {open ? '收起' : '展开'}
+      </button>
+      {open ? (
+        <div style={{ marginTop: 8, fontSize: 12 }}>
+          <div style={{ fontWeight: 600 }}>已有研究发现</div>
+          {ts.key_findings.map((f, i) => <div key={i} style={{ margin: '1px 0 1px 12px' }}>{f}</div>)}
+          <div style={{ fontWeight: 600, marginTop: 6 }}>主要竞争假设</div>
+          {ts.competing_hypotheses.map((h, i) => (
+            <div key={i} style={{ margin: '1px 0 1px 12px' }}>
+              <code>{h.hypothesis_id}</code>
+              <span style={{ color: STATE_TONES[h.state] ?? '#374151', marginLeft: 6 }}>
+                {STATE_LABELS[h.state] ?? h.state}
+              </span>
+              <span style={{ color: '#6b7280' }}> · {h.node_id} · 独立来源 {h.independent_source_count ?? '—'}</span>
+            </div>
+          ))}
+          <div style={{ fontWeight: 600, marginTop: 6 }}>尚无法确认（{ts.core_unresolved.length}）</div>
+          {ts.core_unresolved.slice(0, 10).map((u, i) => (
+            <div key={i} style={{ margin: '1px 0 1px 12px', color: '#6b7280' }}>
+              <code>{u.claim_id}</code> · {u.node_id} · {u.verdict}
+            </div>
+          ))}
+          <div style={{ fontWeight: 600, marginTop: 6 }}>最有价值的下一项验证</div>
+          {ts.next_verification.slice(0, 10).map((v, i) => (
+            <div key={i} style={{ margin: '1px 0 1px 12px' }}>{v}</div>
+          ))}
+          <div style={{ color: '#6b7280', marginTop: 6 }}>
+            覆盖：{ts.coverage?.nodes_with_cases ?? 0}/{ts.coverage?.theme_nodes ?? 0} 主题节点有案例
+            {ts.coverage?.coverage_gap_nodes?.length ? ` · 缺口 ${ts.coverage.coverage_gap_nodes.length} 个` : ''}
+            {ts.coverage?.read_source ? ` · 读源 ${ts.coverage.read_source}` : ''}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ChangesBlock({ changes }: { changes: NonNullable<CapWorkbenchNode['changes']> }) {
   if (!changes.baseline_found) {
     return <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>历史变化：无基线（首次研究建立基线）</div>;
@@ -131,11 +256,16 @@ function NodeCard({ node }: { node: CapWorkbenchNode }) {
               {node.companies.map((c) => (
                 <div key={c.stock_code} style={{ margin: '2px 0 2px 12px' }}>
                   <CompanyLink code={c.stock_code} link={c.dashboard_link} /> {c.overall_verdict ?? 'no_dossier'}
+                  {c.scope_class ? <span style={{ color: '#0369a1' }}> [{c.scope_class}]</span> : null}
                   <span style={{ color: '#6b7280' }}> · 交付 {c.delivery ?? '—'} · 收入 {c.revenue ?? '—'} · 订单 {c.order ?? '—'}</span>
+                  {typeof c.evidence_coverage === 'number' ? (
+                    <span style={{ color: '#9ca3af' }}> · 证据覆盖 {c.evidence_coverage}</span>
+                  ) : null}
                 </div>
               ))}
             </div>
           ) : null}
+          <JudgmentBlock node={node} />
           {node.changes ? <ChangesBlock changes={node.changes} /> : null}
           {node.evidence_refs?.length ? (
             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
@@ -206,6 +336,7 @@ export function CapabilitiesWorkbenchPage() {
       </div>
       {index ? (
         <>
+          {index.theme_synthesis ? <ThemeSummary ts={index.theme_synthesis} /> : null}
           {(index.nodes ?? []).map((n) => <NodeCard key={n.node_id} node={n} />)}
           <div style={{ marginTop: 12, borderTop: '1px solid #e5e7eb', paddingTop: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
