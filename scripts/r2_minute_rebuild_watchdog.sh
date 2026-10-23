@@ -32,18 +32,22 @@ fi
 PID="$(pgrep -f 'r2_downstream_rebuild.py minute' | head -1 || true)"
 
 if [ -n "$PID" ]; then
-  # running: check for a stall (no ledger writes for STALL_SECONDS)
-  if [ -f "$LEDGER" ]; then
-    mtime="$(stat -f %m "$LEDGER")"
-    age="$(( $(date +%s) - mtime ))"
-    if [ "$age" -gt "$STALL_SECONDS" ]; then
-      log "stall detected: pid=$PID ledger_age=${age}s > ${STALL_SECONDS}s — killing for restart"
-      kill "$PID" 2>/dev/null || true
-      sleep 5
-      kill -9 "$PID" 2>/dev/null || true
-    else
-      exit 0
-    fi
+  # running: stall = no stdout for STALL_SECONDS AND process old enough to have
+  # produced output (grace period covers the ~2min signature-planning phase).
+  # Ledger mtime is NOT the signal: FACTOR_GAP keys legitimately skip ledger
+  # writes for long stretches while the process is healthy.
+  proc_age="$(ps -o etimes= -p "$PID" 2>/dev/null | tr -d ' ' || echo 0)"
+  if [ -f "$RUN_LOG" ]; then
+    log_mtime="$(stat -f %m "$RUN_LOG")"
+    quiet="$(( $(date +%s) - log_mtime ))"
+  else
+    quiet=999999
+  fi
+  if [ "${proc_age:-0}" -gt "$STALL_SECONDS" ] && [ "$quiet" -gt "$STALL_SECONDS" ]; then
+    log "stall detected: pid=$PID proc_age=${proc_age}s log_quiet=${quiet}s — killing for restart"
+    kill "$PID" 2>/dev/null || true
+    sleep 5
+    kill -9 "$PID" 2>/dev/null || true
   else
     exit 0
   fi
