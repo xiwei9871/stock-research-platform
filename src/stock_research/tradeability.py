@@ -406,6 +406,9 @@ class TradeabilityContext:
     minute_qualified: bool | None = None       # P0-E provider verdict
     minute_qualified_sources: tuple[str, ...] = ()
     minute_version: str | None = None
+    # P1d.2a C: None = no date binding asked; True = date_verified;
+    # False = key-level done but the DATE could not be proven.
+    minute_date_verified: bool | None = None
     minute_provider_configured: bool = False   # fail-closed selector
     minute_required_source: str | None = None
     data_quality_blocks: tuple[str, ...] = ()
@@ -768,6 +771,13 @@ def tradeability_at(
                 and ctx.is_trade is True and ctx.status_present):
             data_ready_minute = False
             reasons.append("minute_rows_missing_for_date")
+        # P1d.2a C: a traded day where the provider could NOT verify the
+        # required source/freq/adjust data at THIS date is fail-closed —
+        # key-level done never self-declares per-day completeness.
+        if (data_ready_minute and ctx.minute_date_verified is False
+                and ctx.is_trade is True and ctx.status_present):
+            data_ready_minute = False
+            reasons.append("minute_date_unverified")
     else:
         # No provider configured: readiness unknown, not row-count-derived.
         data_ready_minute = None
@@ -857,6 +867,7 @@ def tradeability_at(
             "listing_event": event_class,
             "minute_qualified_sources": list(ctx.minute_qualified_sources),
             "minute_version": ctx.minute_version,
+            "minute_date_verified": ctx.minute_date_verified,
             "data_quality_blocks": list(ctx.data_quality_blocks),
             "stored_limit_flag_side": stored_flag,
             # A3 information tiers: 'open' decisions consume only open-knowable
@@ -922,6 +933,15 @@ class LedgerMinuteQualificationProvider(MinuteQualificationProvider):
         self._done = normalized
         self._gap = residual_gap_assets
         self._post_diff = post_diff_assets or set()
+        # P1d.2a C: optional (asset_id, trade_date, freq, source) -> bool|None
+        # checker proving that the matching source/freq/adjust data actually
+        # exists for THAT date (the ledger only proves key-level completion).
+        self._date_checker = None
+
+    def set_date_checker(self, fn) -> None:
+        """Bind a date-level evidence checker, e.g. an EXISTS query against
+        market.stock_minute_bar for (asset, date, freq, source, qfq)."""
+        self._date_checker = fn
 
     @classmethod
     def from_repo(cls, base: str = "outputs/research/data01r1_finance_q2_20261020") -> "LedgerMinuteQualificationProvider":
@@ -961,7 +981,24 @@ class LedgerMinuteQualificationProvider(MinuteQualificationProvider):
         vers = sorted(
             str((v or {}).get("factor_sig") or "") for v in keys.values())[-1]
         blocking = ("minute_factor_gap",) if asset_id in self._gap else ()
-        return True, sources, f"r2_minute_v1:{vers}", blocking
+        # P1d.2a C: key-level done does NOT prove date-level completeness.
+        # If trade_date is given, verify per-key (freq, source) against the
+        # bound checker; without one, emit the degraded 'key_level' tier.
+        if trade_date is None:
+            return True, sources, f"r2_minute_v1:{vers}", blocking
+        if self._date_checker is None:
+            return True, sources, f"r2_minute_v1:{vers}:key_level", (
+                *blocking, "minute_date_unverified")
+        ok_keys = [
+            k for k in keys
+            if self._date_checker(
+                asset_id, trade_date, k.split("|")[1], k.split("|")[2])
+        ]
+        if not ok_keys:
+            return True, sources, f"r2_minute_v1:{vers}:key_level_unverified_date", (
+                *blocking, "minute_date_unverified")
+        sources = tuple(sorted({k.split("|")[2] for k in ok_keys}))
+        return True, sources, f"r2_minute_v1:{vers}:date_verified", blocking
 
 
 # ---------------------------------------------------------------------------
@@ -1050,10 +1087,28 @@ def load_tradeability_context(
         if span <= 15:
             listing_event = "relisting" if ev_count >= 2 else "ipo"
     minute_q, minute_src, minute_ver, minute_blocks = (None, (), None, ())
+    minute_date_verified = None
     if minute_provider is not None:
+        # P1d.2a C: bind a real per-(asset,date,freq,source) existence check
+        # against market.stock_minute_bar so the provider never claims
+        # date-level readiness from key-level done alone.
+        if hasattr(minute_provider, "set_date_checker"):
+            def _check_minute_source(a_id, t_date, freq, source):
+                hit = fetch_all(conn, """
+                    SELECT 1 FROM market.stock_minute_bar
+                    WHERE asset_id = %s AND trade_date = %s
+                      AND freq = %s AND adjust_type = 'qfq' AND source = %s
+                    LIMIT 1""", (a_id, t_date, freq, source))
+                return bool(hit)
+            minute_provider.set_date_checker(_check_minute_source)
         minute_q, minute_src, minute_ver, minute_blocks = minute_provider.verdict(
             asset_id, trade_date=_as_date(trade_date),
             required_source=minute_required_source)
+        if minute_ver is not None:
+            if str(minute_ver).endswith(":date_verified"):
+                minute_date_verified = True
+            elif ":key_level" in str(minute_ver):
+                minute_date_verified = False
     return TradeabilityContext(
         asset_id=asset_id,
         trade_date=_as_date(trade_date),
@@ -1092,7 +1147,158 @@ def load_tradeability_context(
         minute_qualified=minute_q,
         minute_qualified_sources=tuple(minute_src),
         minute_version=minute_ver,
+        minute_date_verified=minute_date_verified,
         minute_provider_configured=minute_provider is not None,
         minute_required_source=minute_required_source,
         data_quality_blocks=tuple(data_quality_blocks) + tuple(minute_blocks),
     )
+
+
+# ---------------------------------------------------------------------------
+# P1d.2a D — shared PIT limit-flag recompute
+# Single source of truth for corrected flags: consumed by the corrected_shadow
+# loader path AND the shadow scripts. Not a parallel system — it wraps the
+# same LIMIT_RULES / resolve_limit_rule / legal_limit_price engine.
+# ---------------------------------------------------------------------------
+
+_FLAGS_CONTEXT_SQL = """
+SELECT s.asset_id, s.trade_date::text AS trade_date,
+       a.symbol, a.exchange, a.board, a.is_star, a.is_chinext, a.is_beijing,
+       a.list_date::text AS list_date,
+       s.is_st, s.is_suspended,
+       b.close AS close_raw, b.preclose AS preclose_raw
+FROM core.asset_status_daily s
+JOIN core.asset_master a ON a.asset_id = s.asset_id
+LEFT JOIN public.market_daily_bar b
+  ON b.asset_id = a.asset_id AND b.trade_date = s.trade_date
+ AND b.adjust_type = 'raw'
+WHERE s.trade_date BETWEEN %s AND %s
+"""
+
+
+def compute_pit_limit_flags(conn, start: str, end: str,
+                            open_days: dict[str, list] | None = None):
+    """Recompute is_limit_up/down per (asset_id, trade_date) under the
+    historically effective rule. rule_unknown rows are marked
+    shadow_rule_unknown=True — fail-closed, never silently tradable.
+
+    open_days: {exchange: sorted open dates} — loaded once by the caller from
+    market.trading_calendar; loaded here when None (needs conn).
+    """
+    import bisect as _bisect
+    from decimal import Decimal as _Decimal
+    from functools import lru_cache as _lru
+
+    import pandas as pd
+
+    from .db import fetch_all
+
+    def _f(v):
+        if v is None:
+            return None
+        if isinstance(v, _Decimal):
+            return float(v)
+        try:
+            f = float(v)
+            return None if f != f else f
+        except (TypeError, ValueError):
+            return None
+
+    @_lru(maxsize=None)
+    def _rule(board, exchange, status_class, event, date_iso, sess_idx):
+        return resolve_limit_rule(
+            board=board, exchange=exchange, status_class=status_class,
+            event_class=event, trade_date=dt.date.fromisoformat(date_iso),
+            listing_age_trading_days=sess_idx,
+        )
+
+    if open_days is None:
+        open_days = {}
+        for r in fetch_all(
+                conn,
+                "select exchange, trade_date::text d from market.trading_calendar "
+                "where is_open order by exchange, trade_date"):
+            open_days.setdefault(r["exchange"], []).append(
+                dt.date.fromisoformat(r["d"]))
+
+    rows = fetch_all(conn, _FLAGS_CONTEXT_SQL, [start, end])
+    recs = []
+    for r in rows:
+        board = classify_board(
+            symbol=str(r.get("symbol") or ""),
+            exchange=str(r.get("exchange") or ""),
+            is_star=bool(r.get("is_star")), is_chinext=bool(r.get("is_chinext")),
+            is_beijing=bool(r.get("is_beijing")), board=r.get("board"))
+        trade_date = _as_date(r["trade_date"])
+        list_date = _as_date(r.get("list_date"))
+        exchange = str(r.get("exchange") or "")
+        status_class = "risk_warning" if r.get("is_st") else "normal"
+        sess_idx = None
+        if list_date is not None and open_days.get(exchange):
+            days = open_days[exchange]
+            lo = _bisect.bisect_left(days, list_date)
+            hi = _bisect.bisect_right(days, trade_date)
+            sess_idx = hi - lo if hi > lo else None
+        if sess_idx is not None:
+            event = "ipo" if sess_idx <= 10 else "continuous"
+        else:
+            event = ("ipo" if list_date and (trade_date - list_date).days <= 30
+                     else "continuous")
+        rule = _rule(board, exchange, status_class, event,
+                     trade_date.isoformat(), sess_idx)
+        close_raw = _f(r.get("close_raw"))
+        preclose_raw = _f(r.get("preclose_raw"))
+        no_limit = bool(
+            rule.no_limit_window_days
+            and event in {"ipo", "relisting"}
+            and sess_idx is not None
+            and 1 <= sess_idx <= rule.no_limit_window_days)
+        unknown = rule.rule_id == "rule_unknown" or not rule.verified
+        if unknown or close_raw is None or preclose_raw is None:
+            recs.append({
+                "asset_id": r["asset_id"], "trade_date": r["trade_date"],
+                "shadow_limit_up": False, "shadow_limit_down": False,
+                "shadow_rule_unknown": True, "shadow_rule_id": rule.rule_id})
+            continue
+        lim_up = lim_dn = False
+        if not no_limit:
+            eff_up = (rule.day1_up_pct if sess_idx == 1
+                      and rule.day1_up_pct is not None else rule.up_limit_pct)
+            eff_dn = (rule.day1_down_pct if sess_idx == 1
+                      and rule.day1_down_pct is not None else rule.down_limit_pct)
+            legal_up = legal_limit_price(preclose_raw, eff_up, "up")
+            legal_dn = legal_limit_price(preclose_raw, eff_dn, "down")
+            lim_up = legal_up is not None and close_raw >= legal_up - 1e-9
+            lim_dn = legal_dn is not None and close_raw <= legal_dn + 1e-9
+        recs.append({
+            "asset_id": r["asset_id"], "trade_date": r["trade_date"],
+            "shadow_limit_up": lim_up, "shadow_limit_down": lim_dn,
+            "shadow_rule_unknown": False, "shadow_rule_id": rule.rule_id})
+    return pd.DataFrame(recs)
+
+
+def apply_pit_flags(prices, flags):
+    """Overlay corrected flags onto a prices frame (corrected_shadow mode).
+
+    rule_unknown and flag-absent rows fail closed: both limit flags forced
+    True so can_open_long/can_close_long block the attempt. Stored v1 flags
+    are NEVER consulted as corrected truth.
+    """
+    import pandas as pd
+
+    flags = flags.copy()
+    flags["trade_date"] = pd.to_datetime(flags["trade_date"])
+    merged = prices.copy()
+    merged["trade_date"] = pd.to_datetime(merged["trade_date"])
+    merged = merged.merge(
+        flags[["asset_id", "trade_date", "shadow_limit_up",
+               "shadow_limit_down", "shadow_rule_unknown", "shadow_rule_id"]],
+        on=["asset_id", "trade_date"], how="left")
+    for col in ("shadow_limit_up", "shadow_limit_down", "shadow_rule_unknown"):
+        merged[col] = merged[col].fillna(False).astype(bool)
+    merged["is_limit_up"] = merged["shadow_limit_up"] | merged["shadow_rule_unknown"]
+    merged["is_limit_down"] = merged["shadow_limit_down"] | merged["shadow_rule_unknown"]
+    merged["limit_state_missing"] = merged["shadow_rule_unknown"]
+    merged = merged.rename(columns={"shadow_rule_id": "limit_rule_id"})
+    return merged.drop(columns=["shadow_limit_up", "shadow_limit_down",
+                                "shadow_rule_unknown"])

@@ -915,7 +915,9 @@ def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
     assert prices.iloc[0]["close"] == 10.0
     assert "FROM factor.stock_score_daily" in calls[0][0]
     assert calls[0][1] == ["manual_v1", "2026-01-01", "2026-01-31"]
-    assert "FROM market_daily_bar" in calls[1][0]
+    assert "market_daily_bar" in calls[1][0]
+    assert "core.asset_status_daily" in calls[1][0]
+    assert "limit_state_missing" in calls[1][0]
     assert calls[1][1] == ["hfq", "2026-01-01", "2026-01-31"]
     assert "open" in calls[1][0]
     assert "is_limit_up" in calls[1][0]

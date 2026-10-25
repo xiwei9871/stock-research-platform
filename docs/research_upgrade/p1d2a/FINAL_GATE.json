@@ -1,0 +1,40 @@
+{
+  "task": "DATA-R3-P1d.2a — pre-cutover safety patch",
+  "generated_at": "2026-10-25T15:23:31.736377+00:00",
+  "review_findings": {
+    "p0_v1_flags_still_read": {
+      "status": "resolved",
+      "by": "explicit qualification_mode: legacy (annotated) / corrected_shadow (engine) / verified_v2 (post-migration, fail-closed)"
+    },
+    "p0_missing_only_row_level": {
+      "status": "resolved",
+      "by": "limit_state_missing = row absent OR any flag NULL, all 7 loader SQLs + _normalize_prices"
+    },
+    "p0_constraints_dropped_at_cost": {
+      "status": "resolved",
+      "by": "dataclasses.replace preserves all fields; 0/15bps parametrized test"
+    },
+    "p1_minute_date_binding": {
+      "status": "resolved",
+      "by": "date_checker -> stock_minute_bar EXISTS per (asset,date,freq,source); key_level_unverified_date tier; 603213/605077 prove thin akshare coverage"
+    },
+    "deploy_semantics": {
+      "status": "documented",
+      "note": "default params unchanged, but previously-inert gates now receive real flags — default-path behavior intentionally differs on formerly-broken paths"
+    }
+  },
+  "tests": {
+    "focused_suite": "383 passed / 0 failed (incl. +9 p1d2a)",
+    "db_assertions": "18/18",
+    "shadow_recheck": "4/4 legs byte-identical"
+  },
+  "overall": "PATCH_COMPLETE — ready for human review toward migration decision",
+  "still_not": "PRODUCTION_READY",
+  "untouched": [
+    "production DB",
+    "formal signals",
+    "EOD",
+    "schedulers",
+    "main branch"
+  ]
+}

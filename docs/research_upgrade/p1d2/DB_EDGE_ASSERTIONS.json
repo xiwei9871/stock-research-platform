@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-10-25T14:50:26.296958+00:00",
+  "generated_at": "2026-10-25T15:11:03.297341+00:00",
   "contract_version": "tradeability_pit_v2.1",
-  "cases_total": 16,
-  "cases_pass": 16,
+  "cases_total": 18,
+  "cases_pass": 18,
   "cases": [
     {
       "case": "pre_listing",
@@ -309,6 +309,31 @@
       "checks": [
         {
           "field": "data_ready_minute",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'minute_date_unverified'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "alt_source_date_verified",
+      "asset": "CN:SH:603213",
+      "date": "2026-06-17",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "data_ready_minute",
           "expected": true,
           "actual": true,
           "pass": true
@@ -370,6 +395,31 @@
       "case": "alt_source_qualified",
       "asset": "CN:SH:605077",
       "date": "2026-10-22",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "data_ready_minute",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'minute_date_unverified'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "alt_source_date_verified_605077",
+      "asset": "CN:SH:605077",
+      "date": "2026-06-17",
       "side": "buy",
       "rule_id": "main_10pct",
       "universe_state": "ELIGIBLE",

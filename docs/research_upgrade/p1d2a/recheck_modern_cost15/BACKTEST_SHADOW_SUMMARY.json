@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-10-25T15:20:53.846590+00:00",
+  "window": {
+    "start": "2024-01-02",
+    "end": "2026-10-23",
+    "score_version": "manual_v1",
+    "top_n": 20,
+    "rebalance_frequency": "daily",
+    "transaction_cost_bps": 15.0
+  },
+  "isolation": "same scores/prices/config; only is_limit_up/down differ",
+  "flag_recompute": {
+    "rows": 3470036,
+    "shadow_limit_up_true": 53353,
+    "shadow_limit_down_true": 20482,
+    "rule_unknown_fail_closed": 4552
+  },
+  "baseline": {
+    "final_equity": 0.19651073415784315,
+    "total_return": -0.8034892658421569,
+    "max_drawdown": -0.8208671813925108,
+    "trade_rows": 9549,
+    "buy_rows": 4859,
+    "sell_rows": 4690,
+    "skipped_limit_up": 380,
+    "skipped_limit_down": 236,
+    "skipped_suspended": 125,
+    "executed_weight": 233.55,
+    "summary": {
+      "total_return": -0.8034892658421569,
+      "max_drawdown": -0.8208671813925108,
+      "average_turnover": 0.6325443786982249,
+      "periods": 676
+    }
+  },
+  "shadow": {
+    "final_equity": 0.1924952916010097,
+    "total_return": -0.8075047083989904,
+    "max_drawdown": -0.8253169806600219,
+    "trade_rows": 9536,
+    "buy_rows": 4852,
+    "sell_rows": 4684,
+    "skipped_limit_up": 370,
+    "skipped_limit_down": 224,
+    "skipped_suspended": 125,
+    "executed_weight": 233.35000000000002,
+    "summary": {
+      "total_return": -0.8075047083989904,
+      "max_drawdown": -0.8253169806600219,
+      "average_turnover": 0.6337278106508877,
+      "periods": 676
+    }
+  },
+  "trade_diff_rows": 63
+}

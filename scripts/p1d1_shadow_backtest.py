@@ -34,7 +34,9 @@ import pandas as pd  # noqa: E402
 
 from stock_research.db import connect, fetch_all  # noqa: E402
 from stock_research.tradeability import (  # noqa: E402
+    apply_pit_flags,
     classify_board,
+    compute_pit_limit_flags,
     legal_limit_price,
     resolve_limit_rule,
 )
@@ -44,21 +46,6 @@ from stock_research.vectorized_topn_backtest import (  # noqa: E402
 )
 
 OUT_DIR = Path("docs/research_upgrade/p1d1")
-
-CONTEXT_SQL = """
-SELECT s.asset_id, s.trade_date::text AS trade_date,
-       a.symbol, a.exchange, a.board, a.is_star, a.is_chinext, a.is_beijing,
-       a.list_date::text AS list_date,
-       s.is_st, s.is_suspended,
-       b.close AS close_raw, b.preclose AS preclose_raw
-FROM core.asset_status_daily s
-JOIN core.asset_master a ON a.asset_id = s.asset_id
-LEFT JOIN public.market_daily_bar b
-  ON b.asset_id = s.asset_id AND b.trade_date = s.trade_date
- AND b.adjust_type = 'raw'
-WHERE s.trade_date BETWEEN %s AND %s
-"""
-
 
 def _f(v):
     if v is None:
@@ -76,109 +63,16 @@ def _d(v):
     return dt.date.fromisoformat(str(v)[:10]) if v else None
 
 
-@lru_cache(maxsize=None)
-def _rule(board, exchange, status_class, event, date_iso, sess_idx):
-    return resolve_limit_rule(
-        board=board,
-        exchange=exchange,
-        status_class=status_class,
-        event_class=event,
-        trade_date=dt.date.fromisoformat(date_iso),
-        listing_age_trading_days=sess_idx,
-    )
-
-
 def recompute_flags(conn, start: str, end: str,
                     open_days: dict[str, list[dt.date]]) -> pd.DataFrame:
-    """Return DataFrame[(asset_id, trade_date)] with corrected flags.
-
-    shadow_limit_up/down: True only when raw close reaches the legal limit
-    price under the historically effective rule (no-limit window -> False).
-    shadow_rule_unknown : no verified rule OR raw bar missing while the
-    status row claims a traded day -> fail-closed marker.
-    shadow_rule_id      : traceability back to LIMIT_RULES.
-    """
-    rows = fetch_all(conn, CONTEXT_SQL, [start, end])
-    recs = []
-    for r in rows:
-        board = classify_board(
-            symbol=str(r.get("symbol") or ""),
-            exchange=str(r.get("exchange") or ""),
-            is_star=bool(r.get("is_star")),
-            is_chinext=bool(r.get("is_chinext")),
-            is_beijing=bool(r.get("is_beijing")),
-            board=r.get("board"),
-        )
-        trade_date = _d(r["trade_date"])
-        list_date = _d(r.get("list_date"))
-        exchange = str(r.get("exchange") or "")
-        status_class = "risk_warning" if r.get("is_st") else "normal"
-        sess_idx = None
-        if list_date is not None and open_days.get(exchange):
-            days = open_days[exchange]
-            lo = bisect.bisect_left(days, list_date)
-            hi = bisect.bisect_right(days, trade_date)
-            sess_idx = hi - lo if hi > lo else None
-        if sess_idx is not None:
-            event = "ipo" if sess_idx <= 10 else "continuous"
-        else:
-            event = ("ipo" if list_date and (trade_date - list_date).days <= 30
-                     else "continuous")
-        rule = _rule(board, exchange, status_class, event,
-                     trade_date.isoformat(), sess_idx)
-        close_raw = _f(r.get("close_raw"))
-        preclose_raw = _f(r.get("preclose_raw"))
-        no_limit = bool(
-            rule.no_limit_window_days
-            and event in {"ipo", "relisting"}
-            and sess_idx is not None
-            and 1 <= sess_idx <= rule.no_limit_window_days
-        )
-        unknown = rule.rule_id == "rule_unknown" or not rule.verified
-        if unknown or close_raw is None or preclose_raw is None:
-            recs.append({
-                "asset_id": r["asset_id"], "trade_date": r["trade_date"],
-                "shadow_limit_up": False, "shadow_limit_down": False,
-                "shadow_rule_unknown": True,
-                "shadow_rule_id": rule.rule_id,
-            })
-            continue
-        lim_up = lim_dn = False
-        if not no_limit:
-            eff_up = (rule.day1_up_pct if sess_idx == 1
-                      and rule.day1_up_pct is not None else rule.up_limit_pct)
-            eff_dn = (rule.day1_down_pct if sess_idx == 1
-                      and rule.day1_down_pct is not None else rule.down_limit_pct)
-            legal_up = legal_limit_price(preclose_raw, eff_up, "up")
-            legal_dn = legal_limit_price(preclose_raw, eff_dn, "down")
-            lim_up = legal_up is not None and close_raw >= legal_up - 1e-9
-            lim_dn = legal_dn is not None and close_raw <= legal_dn + 1e-9
-        recs.append({
-            "asset_id": r["asset_id"], "trade_date": r["trade_date"],
-            "shadow_limit_up": lim_up, "shadow_limit_down": lim_dn,
-            "shadow_rule_unknown": False,
-            "shadow_rule_id": rule.rule_id,
-        })
-    return pd.DataFrame(recs)
+    """Delegate to the shared engine (P1d.2a D): single implementation of
+    PIT flag recompute — this script keeps its CLI/output contract only."""
+    return compute_pit_limit_flags(conn, start, end, open_days=open_days)
 
 
 def apply_shadow_flags(prices: pd.DataFrame, flags: pd.DataFrame) -> pd.DataFrame:
-    """Return a copy of prices with corrected limit flags.
-
-    rule_unknown rows fail closed: both limit flags forced True so
-    can_open_long/can_close_long block the attempt (conservative).
-    """
-    flags = flags.copy()
-    flags["trade_date"] = pd.to_datetime(flags["trade_date"])
-    merged = prices.copy()
-    merged["trade_date"] = pd.to_datetime(merged["trade_date"])
-    merged = merged.merge(flags, on=["asset_id", "trade_date"], how="left")
-    for col in ("shadow_limit_up", "shadow_limit_down", "shadow_rule_unknown"):
-        merged[col] = merged[col].fillna(False).astype(bool)
-    # rows absent from status context entirely -> fail closed too
-    merged["is_limit_up"] = merged["shadow_limit_up"] | merged["shadow_rule_unknown"]
-    merged["is_limit_down"] = merged["shadow_limit_down"] | merged["shadow_rule_unknown"]
-    return merged.drop(columns=["shadow_limit_up", "shadow_limit_down"])
+    """Delegate to apply_pit_flags (same fail-closed semantics)."""
+    return apply_pit_flags(prices, flags)
 
 
 PRICE_WITH_STATUS_SQL = """

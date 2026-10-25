@@ -645,7 +645,10 @@ def load_backtest_inputs(
         s.is_limit_up,
         s.is_limit_down,
         s.is_suspended,
-        (s.asset_id IS NULL) AS limit_state_missing
+        (s.asset_id IS NULL
+            OR s.is_limit_up IS NULL
+            OR s.is_limit_down IS NULL
+            OR s.is_suspended IS NULL) AS limit_state_missing
     FROM market_daily_bar b
     LEFT JOIN core.asset_status_daily s
       ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
@@ -708,7 +711,10 @@ def load_backtest_bars(
         s.is_limit_up,
         s.is_limit_down,
         s.is_suspended,
-        (s.asset_id IS NULL) AS limit_state_missing
+        (s.asset_id IS NULL
+            OR s.is_limit_up IS NULL
+            OR s.is_limit_down IS NULL
+            OR s.is_suspended IS NULL) AS limit_state_missing
     FROM market_daily_bar b
     LEFT JOIN core.asset_status_daily s
       ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date

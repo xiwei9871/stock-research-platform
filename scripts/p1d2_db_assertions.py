@@ -74,10 +74,17 @@ CASES = [
      "expect": {"limit_rule_id": "main_ipo_fullreg_window5",
                 "reasons_contain": ["ipo_no_limit_window"],
                 "can_attempt_buy": True}},
-    # 603213: terminal baostock gap BUT akshare key done — qualified with the
-    # gap marker preserved (P1d.2 A1: alt source does not erase audit info).
+    # 603213: terminal baostock gap; akshare key done BUT akshare rows exist
+    # only on 2026-06-17 — key-level done must NOT self-declare readiness on
+    # 2026-10-22 (P1d.2a C: date-bound verification, honest degrade).
     {"case": "factor_gap_residual", "asset": "CN:SH:603213",
      "date": "2026-10-22", "side": "buy",
+     "expect": {"data_ready_minute": False,
+                "reasons_contain": ["minute_date_unverified"]}},
+    # ...but on 2026-06-17 (where akshare rows actually exist, 5min/qfq) the
+    # same asset IS date-verified while keeping the gap audit marker.
+    {"case": "alt_source_date_verified", "asset": "CN:SH:603213",
+     "date": "2026-06-17", "side": "buy",
      "expect": {"data_ready_minute": True,
                 "reasons_contain": ["factor_gap_covered_by_alt_source"]}},
     {"case": "post_diff_isolation", "asset": "CN:SH:600153",
@@ -88,8 +95,14 @@ CASES = [
      "date": "1993-11-22", "side": "buy",
      "expect": {"limit_rule_id": "pre_19961216_no_limit"}},
     # A1 additions: minute qualification through the REAL provider
+    # 605077: same thin-coverage reality — asset-level akshare key does not
+    # extend to dates without akshare qfq rows.
     {"case": "alt_source_qualified", "asset": "CN:SH:605077",
      "date": "2026-10-22", "side": "buy",
+     "expect": {"data_ready_minute": False,
+                "reasons_contain": ["minute_date_unverified"]}},
+    {"case": "alt_source_date_verified_605077", "asset": "CN:SH:605077",
+     "date": "2026-06-17", "side": "buy",
      "expect": {"data_ready_minute": True,
                 "reasons_contain": ["factor_gap_covered_by_alt_source"]}},
     {"case": "no_done_key_blocked", "asset": "CN:SH:600590",
