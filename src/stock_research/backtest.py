@@ -31,6 +31,12 @@ BAR_COLUMNS = [
     "turnover_rate",
     "trade_status",
     "is_st",
+    # P1d.2: qualification flags now loaded from core.asset_status_daily
+    # (they were never present before, leaving the execution gate inert).
+    "is_limit_up",
+    "is_limit_down",
+    "is_suspended",
+    "limit_state_missing",
 ]
 
 
@@ -66,6 +72,13 @@ class BacktestBar:
     amount: float | None
     trade_status: str
     is_st: bool
+    # P1d.2: qualification flags carried from core.asset_status_daily.
+    # limit_state_missing defaults True so an absent status row is
+    # fail-closed, not silently treated as "not at limit".
+    is_limit_up: bool = False
+    is_limit_down: bool = False
+    is_suspended: bool = False
+    limit_state_missing: bool = True
 
 
 @dataclass(frozen=True)
@@ -128,6 +141,13 @@ def _bar_from_row(row: pd.Series) -> BacktestBar:
         amount=_float_or_none(row["amount"]),
         trade_status=str(row["trade_status"]),
         is_st=bool(row["is_st"]),
+        is_limit_up=bool(row.get("is_limit_up") is True),
+        is_limit_down=bool(row.get("is_limit_down") is True),
+        is_suspended=bool(row.get("is_suspended") is True),
+        limit_state_missing=bool(
+            _is_missing(row.get("limit_state_missing"))
+            or bool(row.get("limit_state_missing"))
+        ),
     )
 
 
@@ -175,6 +195,7 @@ def apply_buy_filter(
     selection: BacktestSelection,
     bar: BacktestBar | None,
     liquidity_threshold: float = LOW_LIQUIDITY_THRESHOLD,
+    use_status_flags: bool = False,
 ) -> BuyDecision:
     if _is_missing(selection.amount_20d_avg) or selection.amount_20d_avg < liquidity_threshold:
         return BuyDecision(False, "low_liquidity")
@@ -188,7 +209,16 @@ def apply_buy_filter(
         return BuyDecision(False, "missing_price")
     if _is_missing(bar.amount) or bar.amount < liquidity_threshold:
         return BuyDecision(False, "low_liquidity")
-    if float(bar.open) >= float(bar.preclose) * 1.095:
+    if use_status_flags:
+        # Corrected path: real PIT flags from asset_status_daily; a missing
+        # status row is fail-closed instead of a "not at limit" assumption.
+        if bar.limit_state_missing:
+            return BuyDecision(False, "limit_state_missing")
+        if bar.is_suspended:
+            return BuyDecision(False, "suspended")
+        if bar.is_limit_up:
+            return BuyDecision(False, "limit_up")
+    elif float(bar.open) >= float(bar.preclose) * 1.095:
         return BuyDecision(False, "limit_up_open")
     return BuyDecision(True)
 
@@ -197,6 +227,7 @@ def sell_bar_for_holding(
     bars: list[BacktestBar],
     buy_date: str,
     holding_days: int,
+    use_status_flags: bool = False,
 ) -> BacktestBar | None:
     """Return the sell bar after holding_days rows after buy date, rolling forward if target is untradable."""
     if holding_days <= 0:
@@ -210,8 +241,13 @@ def sell_bar_for_holding(
 
     target_index = holding_days - 1
     for bar in after_buy[target_index:]:
-        if bar.trade_status == "1" and not _is_missing(bar.open):
-            return bar
+        if bar.trade_status != "1" or _is_missing(bar.open):
+            continue
+        if use_status_flags and (
+            bar.limit_state_missing or bar.is_suspended or bar.is_limit_down
+        ):
+            continue
+        return bar
     return None
 
 
@@ -592,22 +628,31 @@ def load_backtest_inputs(
       AND trade_date <= %s
     ORDER BY trade_date, asset_id, feature_name
     """
+    # P1d.2 fix: join core.asset_status_daily so the execution-constraint
+    # gate actually receives limit flags (previously the columns never
+    # reached the bars frame and the limit gate was silently inert).
     bar_sql = """
     SELECT
-        asset_id,
-        trade_date,
-        open,
-        preclose,
-        close,
-        amount,
-        turnover_rate,
-        trade_status,
-        is_st
-    FROM market_daily_bar
-    WHERE adjust_type = 'hfq'
-      AND trade_date >= %s
-      AND trade_date <= %s
-    ORDER BY trade_date, asset_id
+        b.asset_id,
+        b.trade_date,
+        b.open,
+        b.preclose,
+        b.close,
+        b.amount,
+        b.turnover_rate,
+        b.trade_status,
+        b.is_st,
+        s.is_limit_up,
+        s.is_limit_down,
+        s.is_suspended,
+        (s.asset_id IS NULL) AS limit_state_missing
+    FROM market_daily_bar b
+    LEFT JOIN core.asset_status_daily s
+      ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+    WHERE b.adjust_type = 'hfq'
+      AND b.trade_date >= %s
+      AND b.trade_date <= %s
+    ORDER BY b.trade_date, b.asset_id
     """
     with connect(SETTINGS.research_service) as conn:
         snapshot_features = pd.DataFrame(fetch_all(conn, feature_sql, [start, end]))
@@ -651,20 +696,26 @@ def load_backtest_bars(
     buffered_end = (pd.Timestamp(end_date) + pd.Timedelta(days=future_buffer_days)).date().isoformat()
     bar_sql = """
     SELECT
-        asset_id,
-        trade_date,
-        open,
-        preclose,
-        close,
-        amount,
-        turnover_rate,
-        trade_status,
-        is_st
-    FROM market_daily_bar
-    WHERE adjust_type = 'hfq'
-      AND trade_date >= %s
-      AND trade_date <= %s
-    ORDER BY trade_date, asset_id
+        b.asset_id,
+        b.trade_date,
+        b.open,
+        b.preclose,
+        b.close,
+        b.amount,
+        b.turnover_rate,
+        b.trade_status,
+        b.is_st,
+        s.is_limit_up,
+        s.is_limit_down,
+        s.is_suspended,
+        (s.asset_id IS NULL) AS limit_state_missing
+    FROM market_daily_bar b
+    LEFT JOIN core.asset_status_daily s
+      ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+    WHERE b.adjust_type = 'hfq'
+      AND b.trade_date >= %s
+      AND b.trade_date <= %s
+    ORDER BY b.trade_date, b.asset_id
     """
     with connect(SETTINGS.research_service) as conn:
         bars = pd.DataFrame(fetch_all(conn, bar_sql, [start, buffered_end]))

@@ -1,0 +1,420 @@
+{
+  "generated_at": "2026-10-25T14:50:26.296958+00:00",
+  "contract_version": "tradeability_pit_v2.1",
+  "cases_total": 16,
+  "cases_pass": 16,
+  "cases": [
+    {
+      "case": "pre_listing",
+      "asset": "CN:SH:688287",
+      "date": "2022-05-24",
+      "side": "buy",
+      "rule_id": "rule_unknown",
+      "universe_state": "INELIGIBLE",
+      "buy_state": "RESTRICTED",
+      "sell_state": "RESTRICTED",
+      "checks": [
+        {
+          "field": "universe_state",
+          "expected": "INELIGIBLE",
+          "actual": "INELIGIBLE",
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'not_yet_listed'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "field": "can_attempt_buy",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "post_delisting",
+      "asset": "CN:SH:688287",
+      "date": "2026-06-11",
+      "side": "sell",
+      "rule_id": "rule_unknown",
+      "universe_state": "INELIGIBLE",
+      "buy_state": "RESTRICTED",
+      "sell_state": "RESTRICTED",
+      "checks": [
+        {
+          "field": "universe_state",
+          "expected": "INELIGIBLE",
+          "actual": "INELIGIBLE",
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'delisted'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "field": "can_attempt_sell",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "in_window_delisted_asset",
+      "asset": "CN:SH:688287",
+      "date": "2026-05-20",
+      "side": "buy",
+      "rule_id": "star_20pct_since_20190722",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "universe_state",
+          "expected": "ELIGIBLE",
+          "actual": "ELIGIBLE",
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "st_2018",
+      "asset": "CN:SH:600815",
+      "date": "2018-01-02",
+      "side": "buy",
+      "rule_id": "main_st_5pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "main_st_5pct",
+          "actual": "main_st_5pct",
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'st_risk_warning'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "suspended_20190603",
+      "asset": "CN:SH:600126",
+      "date": "2019-06-03",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "RESTRICTED",
+      "sell_state": "RESTRICTED",
+      "checks": [
+        {
+          "field": "can_attempt_buy",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'suspended'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "limit_up_20150416",
+      "asset": "CN:SH:600519",
+      "date": "2015-04-16",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "RESTRICTED",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "main_10pct",
+          "actual": "main_10pct",
+          "pass": true
+        },
+        {
+          "field": "can_attempt_buy",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "limit_down_20181029",
+      "asset": "CN:SH:600519",
+      "date": "2018-10-29",
+      "side": "sell",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "RESTRICTED",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "main_10pct",
+          "actual": "main_10pct",
+          "pass": true
+        },
+        {
+          "field": "can_attempt_sell",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "chinext_old10pct_limit",
+      "asset": "CN:SZ:300001",
+      "date": "2019-03-11",
+      "side": "buy",
+      "rule_id": "chinext_10pct_pre_20200824",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "RESTRICTED",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "chinext_10pct_pre_20200824",
+          "actual": "chinext_10pct_pre_20200824",
+          "pass": true
+        },
+        {
+          "field": "can_attempt_buy",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "chinext_new20pct_not_limit",
+      "asset": "CN:SZ:300001",
+      "date": "2020-08-25",
+      "side": "buy",
+      "rule_id": "chinext_20pct_from_20200824",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "chinext_20pct_from_20200824",
+          "actual": "chinext_20pct_from_20200824",
+          "pass": true
+        },
+        {
+          "field": "can_attempt_buy",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "star_ipo_day1_875pct",
+      "asset": "CN:SH:688808",
+      "date": "2026-04-24",
+      "side": "buy",
+      "rule_id": "star_ipo_window5",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "star_ipo_window5",
+          "actual": "star_ipo_window5",
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'ipo_no_limit_window'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "field": "can_attempt_buy",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "main_fullreg_ipo_day1",
+      "asset": "CN:SZ:001312",
+      "date": "2026-04-21",
+      "side": "buy",
+      "rule_id": "main_ipo_fullreg_window5",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "main_ipo_fullreg_window5",
+          "actual": "main_ipo_fullreg_window5",
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'ipo_no_limit_window'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "field": "can_attempt_buy",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "factor_gap_residual",
+      "asset": "CN:SH:603213",
+      "date": "2026-10-22",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "data_ready_minute",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'factor_gap_covered_by_alt_source'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "post_diff_isolation",
+      "asset": "CN:SH:600153",
+      "date": "2026-10-22",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "data_ready_minute",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'post_diff_isolated'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "pre_limit_era",
+      "asset": "CN:SZ:000001",
+      "date": "1993-11-22",
+      "side": "buy",
+      "rule_id": "pre_19961216_no_limit",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "limit_rule_id",
+          "expected": "pre_19961216_no_limit",
+          "actual": "pre_19961216_no_limit",
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "alt_source_qualified",
+      "asset": "CN:SH:605077",
+      "date": "2026-10-22",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "data_ready_minute",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'factor_gap_covered_by_alt_source'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "case": "no_done_key_blocked",
+      "asset": "CN:SH:600590",
+      "date": "2026-10-22",
+      "side": "buy",
+      "rule_id": "main_10pct",
+      "universe_state": "ELIGIBLE",
+      "buy_state": "ATTEMPTABLE",
+      "sell_state": "ATTEMPTABLE",
+      "checks": [
+        {
+          "field": "data_ready_minute",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "field": "restriction_reasons contains 'factor_gap_residual'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    }
+  ]
+}

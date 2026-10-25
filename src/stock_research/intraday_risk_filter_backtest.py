@@ -231,12 +231,15 @@ def load_intraday_risk_filter_inputs(
     ORDER BY trade_date, rank, asset_id
     """
     price_sql = """
-    SELECT trade_date, asset_id, open, close, amount, trade_status,
-           false AS is_limit_up, false AS is_limit_down, false AS is_suspended
-    FROM market_daily_bar
-    WHERE adjust_type = %s
-      AND trade_date BETWEEN %s AND %s
-    ORDER BY trade_date, asset_id
+    SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount, b.trade_status,
+           s.is_limit_up, s.is_limit_down, s.is_suspended,
+           (s.asset_id IS NULL) AS limit_state_missing
+    FROM market_daily_bar b
+    LEFT JOIN core.asset_status_daily s
+      ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+    WHERE b.adjust_type = %s
+      AND b.trade_date BETWEEN %s AND %s
+    ORDER BY b.trade_date, b.asset_id
     """
     feature_sql = """
     SELECT trade_date, asset_id, feature_name, feature_value

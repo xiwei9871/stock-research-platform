@@ -1,0 +1,133 @@
+{
+  "scope": "LIMIT_FLAG_RECONCILIATION.csv is a TARGETED scan of regime-divergent segments, NOT a census of the 17.29M-row core.asset_status_daily table",
+  "scanned_rows": 162119,
+  "unique_keys_asset_date_side": 161200,
+  "duplicate_rows_collapsed": 919,
+  "keys_hitting_multiple_segments": 911,
+  "classification_conflicts": 0,
+  "unique_classification": {
+    "CORRECT": 98255,
+    "CONFIRMED_MISLABEL": 62937,
+    "RULE_UNKNOWN": 8
+  },
+  "unique_confirmed_mislabel": 62937,
+  "unique_fp_old_flag_true_not_limit": 19198,
+  "unique_fn_old_flag_false_was_limit": 43739,
+  "mislabel_by_rule": {
+    "chinext_10pct_pre_20200824": 38618,
+    "pre_19961216_no_limit": 8227,
+    "main_st_5pct": 5550,
+    "chinext_ipo_day1_prereg_cap": 3669,
+    "chinext_st_20pct_from_20200824": 3052,
+    "main_10pct": 1676,
+    "chinext_ipo_window5_from_20200824": 625,
+    "star_ipo_window5": 603,
+    "star_st_20pct": 267,
+    "main_ipo_fullreg_window5": 220,
+    "chinext_20pct_from_20200824": 196,
+    "star_20pct_since_20190722": 125,
+    "main_ipo_day1_prereg_cap": 109
+  },
+  "mislabel_by_segment": {
+    "chinext_all": 46160,
+    "pre_19961216": 7345,
+    "main_st_flags": 5548,
+    "main_ipo_recent": 2889,
+    "star_all": 995
+  },
+  "mislabel_by_year": {
+    "1990": 2,
+    "1991": 123,
+    "1992": 453,
+    "1993": 870,
+    "1994": 3507,
+    "1995": 1164,
+    "1996": 2150,
+    "1997": 219,
+    "1998": 142,
+    "1999": 155,
+    "2000": 230,
+    "2001": 136,
+    "2002": 148,
+    "2003": 136,
+    "2004": 239,
+    "2005": 401,
+    "2006": 305,
+    "2007": 509,
+    "2008": 443,
+    "2009": 423,
+    "2010": 777,
+    "2011": 794,
+    "2012": 1213,
+    "2013": 1820,
+    "2014": 1899,
+    "2015": 13529,
+    "2016": 5267,
+    "2017": 3806,
+    "2018": 4779,
+    "2019": 5219,
+    "2020": 5526,
+    "2021": 1016,
+    "2022": 739,
+    "2023": 558,
+    "2024": 1588,
+    "2025": 1424,
+    "2026": 1228
+  },
+  "rule_unknown_keys": [
+    {
+      "asset_id": "CN:SH:600653",
+      "trade_date": "1990-12-19",
+      "side": "buy",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600653",
+      "trade_date": "1990-12-19",
+      "side": "sell",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600651",
+      "trade_date": "1990-12-19",
+      "side": "buy",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600651",
+      "trade_date": "1990-12-19",
+      "side": "sell",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600602",
+      "trade_date": "1990-12-19",
+      "side": "buy",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600602",
+      "trade_date": "1990-12-19",
+      "side": "sell",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600601",
+      "trade_date": "1990-12-19",
+      "side": "buy",
+      "historical_rule": "rule_unknown"
+    },
+    {
+      "asset_id": "CN:SH:600601",
+      "trade_date": "1990-12-19",
+      "side": "sell",
+      "historical_rule": "rule_unknown"
+    }
+  ],
+  "delta_vs_p1d1_row_level": {
+    "row_level_mislabel": 63821,
+    "unique_mislabel": 62937,
+    "delta": -884
+  },
+  "conflict_rows": []
+}

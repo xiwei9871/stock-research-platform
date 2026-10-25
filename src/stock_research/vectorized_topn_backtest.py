@@ -92,12 +92,20 @@ def load_vectorized_topn_inputs(
       AND trade_date BETWEEN %s AND %s
     ORDER BY trade_date, rank, asset_id
     """
+    # P1d.2 fix: market_daily_bar no longer carries the limit/suspended
+    # columns (they live in core.asset_status_daily). Join the status table —
+    # the loader now fails CLOSED-aware via limit_state_missing instead of
+    # crashing on UndefinedColumn or silently passing on absent flags.
     price_sql = """
-    SELECT trade_date, asset_id, open, close, amount, trade_status, is_limit_up, is_limit_down, is_suspended
-    FROM market_daily_bar
-    WHERE adjust_type = %s
-      AND trade_date BETWEEN %s AND %s
-    ORDER BY trade_date, asset_id
+    SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount, b.trade_status,
+           s.is_limit_up, s.is_limit_down, s.is_suspended,
+           (s.asset_id IS NULL) AS limit_state_missing
+    FROM public.market_daily_bar b
+    LEFT JOIN core.asset_status_daily s
+      ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+    WHERE b.adjust_type = %s
+      AND b.trade_date BETWEEN %s AND %s
+    ORDER BY b.trade_date, b.asset_id
     """
     with connect(service) as conn:
         score_rows = fetch_all(conn, score_sql, [score_version, start_date, end_date])
@@ -375,9 +383,26 @@ def _normalize_prices(prices: pd.DataFrame) -> pd.DataFrame:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
     if "trade_status" not in frame.columns:
         frame["trade_status"] = "1"
+    # limit_state_missing: explicit fail-closed marker. A bar with no
+    # matching status row must NOT silently trade as "not at limit".
+    if "limit_state_missing" not in frame.columns:
+        missing_flags = [
+            col for col in ("is_limit_up", "is_limit_down", "is_suspended")
+            if col not in frame.columns
+        ]
+        if missing_flags:
+            frame["limit_state_missing"] = True
+        else:
+            frame["limit_state_missing"] = (
+                frame["is_limit_up"].isna()
+                & frame["is_limit_down"].isna()
+                & frame["is_suspended"].isna()
+            )
     for col in ["is_limit_up", "is_limit_down", "is_suspended"]:
         if col not in frame.columns:
             frame[col] = False
+        else:
+            frame[col] = frame[col].fillna(False).astype(bool)
     frame = frame.dropna(subset=["close"])
     return frame
 

@@ -947,14 +947,17 @@ def _load_prices(
             low,
             close,
             amount,
-            trade_status,
-            false AS is_limit_up,
-            false AS is_limit_down,
-            false AS is_suspended
-        FROM market_daily_bar
-        WHERE adjust_type = %s
+            b.trade_status,
+            s.is_limit_up,
+            s.is_limit_down,
+            s.is_suspended,
+            (s.asset_id IS NULL) AS limit_state_missing
+        FROM market_daily_bar b
+        LEFT JOIN core.asset_status_daily s
+          ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+        WHERE b.adjust_type = %s
           AND trade_date BETWEEN %s AND %s
-        ORDER BY trade_date, asset_id
+        ORDER BY b.trade_date, b.asset_id
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [adjust_type, start_date, end_date])

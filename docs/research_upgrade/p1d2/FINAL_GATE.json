@@ -1,0 +1,74 @@
+{
+  "task": "DATA-R3-P1d.2",
+  "generated_at": "2026-10-25T14:50:20.427456+00:00",
+  "gates": {
+    "gate1_data_and_rules": {
+      "status": "PASS",
+      "evidence": [
+        "DB_EDGE_ASSERTIONS.json 16/16",
+        "LIMIT_MISLABEL_DEDUP.json 161200 unique keys, 0 conflicts",
+        "MINUTE_SOURCE_QUALIFICATION.md",
+        "TRADE_TIME_PIT_AUDIT.md",
+        "tests: 319 passed"
+      ]
+    },
+    "gate2_consumers": {
+      "status": "PASS",
+      "evidence": [
+        "vectorized/retention/backtest loaders join core.asset_status_daily",
+        "5x 'false AS' sites fixed",
+        "block_missing_limit_state constraint",
+        "BACKTEST_CONSUMER_FIX_REPORT.md"
+      ]
+    },
+    "gate3_shadow": {
+      "status": "PASS",
+      "evidence": [
+        "BACKTEST_SHADOW_MATRIX.csv 4 runs, all diffs rule-attributed",
+        "rule_unknown pass-through = 0",
+        "zero-cost + 15bps scenarios agree",
+        "REGIME_WINDOW_DECISION_AUDIT.csv for score-less windows"
+      ]
+    },
+    "gate4_migration_readiness": {
+      "status": "PASS",
+      "evidence": [
+        "STORAGE_MIGRATION_READINESS.md design+batch+rollback+cost",
+        "p1d1_shadow isolated schema test 369,681 rows idempotent",
+        "no production writes performed"
+      ]
+    }
+  },
+  "overall": "READY_FOR_DEPLOYMENT_REVIEW",
+  "not": "PRODUCTION_READY (requires human authorization for migration/switch)",
+  "backtests_needing_revalidation": [
+    "all vectorized_topn / retention executions produced before flag-chain fix (gate was inert or crash-bound)",
+    "any backtest spanning pre-2020-08-24 ChiNext (42,022 real limit days never flagged -> phantom fills)",
+    "any backtest spanning pre-1996-12-16 (8,231 days flagged as at-limit in a no-limit era)",
+    "STAR-board 2019-2020 backtests (253 over-flagged days)",
+    "market_emotion_state_v1-derived regime inputs (stored-flag counts wrong on mislabeled rows)",
+    "dragon_case_library limit-up events generated before rule-engine rewrite",
+    "LHB eligibility outputs generated before P1d.1 alignment",
+    "dashboard/intraday/mid_trend/serenity backtests run while flags were hardcoded false"
+  ],
+  "next_phase_db_repairs": [
+    "asset_status_daily: 62,937 unique mislabeled flag keys (161,200-key audit set) via v2-column migration",
+    "1990-12-19 four SH assets with impossible ST status rows",
+    "market_daily_bar: no flag columns (loaders now join; schema normalization optional)",
+    "core_data.py: static-threshold flag writer must emit rule-engine flags",
+    "Beijing ST official rule text (currently rule_unknown)",
+    "15 assets with no minute done key; 600153 post-diff isolation review"
+  ],
+  "prohibitions_respected": [
+    "no production fill-rule change",
+    "no bulk asset_status_daily rewrite",
+    "no signal/frequency/param change",
+    "no silent flag overwrite",
+    "no future OHLC at open tier",
+    "no unknown-state pass-through",
+    "no parallel tradeability system",
+    "no EOD/scheduler interference",
+    "no main merge",
+    "no deploy"
+  ]
+}

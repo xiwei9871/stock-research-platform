@@ -586,6 +586,10 @@ def test_load_backtest_inputs_queries_features_and_hfq_bars(monkeypatch):
         "turnover_rate",
         "trade_status",
         "is_st",
+        "is_limit_up",
+        "is_limit_down",
+        "is_suspended",
+        "limit_state_missing",
     ]
     feature_query = captured[1]
     bar_query = captured[2]

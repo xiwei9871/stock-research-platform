@@ -320,4 +320,6 @@ def test_dimensions_are_independent(side):
     r = tradeability_at(c, side=side)
     assert r.eligible_for_universe is False
     assert r.data_ready_daily is True  # bars may exist in storage; not eligible
-    assert r.data_ready_minute is True
+    # P1d.2: without a qualification provider, minute readiness is UNKNOWN
+    # (fail-closed) — raw row counts alone no longer prove readiness.
+    assert r.data_ready_minute is None

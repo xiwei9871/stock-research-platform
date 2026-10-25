@@ -13,6 +13,11 @@ class BacktestExecutionConstraints:
     block_suspended: bool = True
     block_limit_up_buy: bool = True
     block_limit_down_sell: bool = True
+    # P1d.2: when True, a bar whose limit-flag state is marked missing
+    # (no status row / NULL flags) blocks the order instead of silently
+    # passing. Default False preserves legacy behavior for compatibility;
+    # corrected-qualification runs set it True.
+    block_missing_limit_state: bool = False
 
     def __post_init__(self) -> None:
         _validate_non_negative("commission_bps", self.commission_bps)
@@ -31,6 +36,10 @@ def can_open_long(
         or not _is_tradable_trade_status(bar.get("trade_status"))
     ):
         return False, "suspended"
+    if constraints.block_missing_limit_state and _flag_is_true(
+        bar.get("limit_state_missing")
+    ):
+        return False, "limit_state_missing"
     if constraints.block_limit_up_buy and _flag_is_true(bar.get("is_limit_up")):
         return False, "limit_up"
     if constraints.min_amount is not None and _amount_is_low(
@@ -50,6 +59,10 @@ def can_close_long(
         or not _is_tradable_trade_status(bar.get("trade_status"))
     ):
         return False, "suspended"
+    if constraints.block_missing_limit_state and _flag_is_true(
+        bar.get("limit_state_missing")
+    ):
+        return False, "limit_state_missing"
     if constraints.block_limit_down_sell and _flag_is_true(bar.get("is_limit_down")):
         return False, "limit_down"
     if constraints.min_amount is not None and _amount_is_low(

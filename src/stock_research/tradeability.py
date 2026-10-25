@@ -406,6 +406,8 @@ class TradeabilityContext:
     minute_qualified: bool | None = None       # P0-E provider verdict
     minute_qualified_sources: tuple[str, ...] = ()
     minute_version: str | None = None
+    minute_provider_configured: bool = False   # fail-closed selector
+    minute_required_source: str | None = None
     data_quality_blocks: tuple[str, ...] = ()
 
 
@@ -628,22 +630,35 @@ def _eval_side(
         side=side, no_limit_window=(no_limit_window is True), rule=rule,
     )
 
-    # Order-time information constraint (P0-D): an 'open' order may only use
-    # facts knowable at the open — never the day's close/high/low.
-    if order_time in {OrderTime.OPEN, OrderTime.UNKNOWN}:
+    # Order-time information constraint (P0-D/A3): an 'open' order may only
+    # use facts knowable AT the open — open price itself, never the day's
+    # high/low/close. Reading h/l/c to reclassify here would leak future data
+    # into the open-time decision. The only close-data usage allowed is the
+    # explicit ex-post conservative rule below, which is labelled as such.
+    ex_post_assumption = False
+    if order_time is OrderTime.OPEN:
         if ctx.open_raw is not None and _price_at(ctx.open_raw, legal_price):
-            limit_class = LimitClass.ONE_WAY_LOCKED.value if (
-                _price_at(ctx.high_raw, legal_price)
-                and _price_at(ctx.low_raw, legal_price)
-                and _price_at(ctx.close_raw, legal_price)
-            ) else LimitClass.CLOSE_AT_LIMIT.value
-        elif policy.restrict_when_session_locked and \
-                limit_class == LimitClass.ONE_WAY_LOCKED.value:
-            pass  # genuinely locked all day — even an early order can't fill
+            # provable at the open: the order opens AT the statutory limit
+            limit_class = LimitClass.CLOSE_AT_LIMIT.value
         else:
             # close/intraday marks are future data for an open order; cannot
             # prove the order was unfillable -> attemptable unless other gates
             limit_class = LimitClass.NOT_LIMIT.value
+    elif order_time is OrderTime.UNKNOWN:
+        if ctx.open_raw is not None and _price_at(ctx.open_raw, legal_price):
+            limit_class = LimitClass.CLOSE_AT_LIMIT.value
+        elif policy.restrict_when_session_locked and \
+                limit_class == LimitClass.ONE_WAY_LOCKED.value:
+            # ex_post_execution_assumption: "an all-day one-way lock cannot
+            # have been filled" uses close-of-day knowledge an order of
+            # unknown timing could not have had. Conservative direction
+            # (restricts), retained only under the explicit policy flag and
+            # labelled in restriction_reasons/details.
+            ex_post_assumption = True
+        else:
+            limit_class = LimitClass.NOT_LIMIT.value
+    if ex_post_assumption:
+        reasons.append("ex_post_execution_assumption")
 
     # Certain restrictions first: suspension is provable without any rule.
     if ctx.is_suspended is True or (ctx.trade_status is not None and ctx.trade_status != "1") \
@@ -734,15 +749,37 @@ def tradeability_at(
 
     # --- dimension 2 ---
     data_ready_daily: bool | None = ctx.daily_bar_rows > 0 or ctx.bar_present
-    if ctx.minute_qualified is not None:
-        data_ready_minute = ctx.minute_qualified
-        if not ctx.minute_qualified:
+    if ctx.minute_qualified is not None or ctx.minute_provider_configured:
+        # Provider-configured path is fail-closed: qualified=True is required;
+        # None (no ledger evidence) and False both mean NOT ready — never
+        # fall back to minute row counts as proof of qualification.
+        data_ready_minute = ctx.minute_qualified is True
+        if ctx.minute_qualified is not True:
             reasons.append("minute_key_not_qualified")
+            if ctx.minute_version == "no_minute_key":
+                reasons.append("no_minute_key")
+            elif ctx.minute_version in {"post_diff_isolated",
+                                        "factor_gap_residual",
+                                        "required_source_missing"}:
+                reasons.append(ctx.minute_version)
+        # date-level readiness: a qualified asset whose minute bars are
+        # absent on a day the status table says it traded is NOT date-ready.
+        if (data_ready_minute and ctx.minute_bar_rows == 0
+                and ctx.is_trade is True and ctx.status_present):
+            data_ready_minute = False
+            reasons.append("minute_rows_missing_for_date")
     else:
-        data_ready_minute = ctx.minute_bar_rows > 0
+        # No provider configured: readiness unknown, not row-count-derived.
+        data_ready_minute = None
     if "minute_factor_gap" in ctx.data_quality_blocks:
-        data_ready_minute = False
-        reasons.append("residual_factor_gap_minute")
+        # audit-visible: the baostock gap marker is preserved even when an
+        # alternate source qualifies the asset — it does NOT mask readiness
+        # granted by a qualified source, and does not silently disappear.
+        if data_ready_minute is True:
+            reasons.append("factor_gap_covered_by_alt_source")
+        else:
+            data_ready_minute = False
+            reasons.append("residual_factor_gap_minute")
     if "post_diff_isolated" in ctx.data_quality_blocks:
         reasons.append("post_diff_isolated")
     if not ctx.bar_present:
@@ -822,6 +859,14 @@ def tradeability_at(
             "minute_version": ctx.minute_version,
             "data_quality_blocks": list(ctx.data_quality_blocks),
             "stored_limit_flag_side": stored_flag,
+            # A3 information tiers: 'open' decisions consume only open-knowable
+            # facts; 'close' decisions consume close-confirmed facts; any
+            # close-data usage behind an open-time gate is labelled ex-post.
+            "information_tier": (
+                "open_pit" if ot is OrderTime.OPEN else
+                "close_pit" if ot is OrderTime.CLOSE else "unknown_pit"),
+            "ex_post_execution_assumption":
+                "ex_post_execution_assumption" in reasons,
         },
     )
 
@@ -833,8 +878,21 @@ def tradeability_at(
 
 
 class MinuteQualificationProvider:
-    def verdict(self, asset_id: str) -> tuple[bool | None, tuple[str, ...], str | None, tuple[str, ...]]:
-        """-> (qualified, qualified_sources, version, blocking_reasons)."""
+    def verdict(self, asset_id: str,
+                trade_date: object = None,
+                required_source: str | None = None,
+                ) -> tuple[bool | None, tuple[str, ...], str | None, tuple[str, ...]]:
+        """-> (qualified, qualified_sources, version, blocking_reasons).
+
+        qualified tri-state:
+          True  — at least one done key covers this asset (and required_source
+                  when given); date-level readiness is evaluated separately.
+          False — proven unqualified (terminal factor gap / post_diff
+                  isolation / done keys exist but none satisfy required_source).
+          None  — no ledger evidence at all (asset outside the rebuilt
+                  universe); callers MUST fail closed on None, never fall back
+                  to minute row counts.
+        """
         raise NotImplementedError
 
 
@@ -842,14 +900,26 @@ class LedgerMinuteQualificationProvider(MinuteQualificationProvider):
     """Binds minute readiness to the actual rebuild ledgers:
 
     - done keys per source in r2_downstream_minute_done.json
+      (key = asset|freq|source; value carries raw_sig/factor_sig versions)
     - terminal factor-gap assets in factor_gap_155_reconciliation.json
     - POST_DIFF audit isolation (600153) — never released here
+
+    Alt-source coverage does NOT erase the original baostock gap: assets
+    qualified only via akshare/eastmoney keep `minute_factor_gap` in
+    blocking_reasons for audit visibility.
     """
 
-    def __init__(self, done_keys: dict[str, list[str]],
+    def __init__(self, done_keys: dict[str, dict] | dict[str, list],
                  residual_gap_assets: set[str],
                  post_diff_assets: set[str] | None = None):
-        self._done = done_keys
+        # done_keys: asset_id -> {key: meta} | legacy asset_id -> [key, ...]
+        normalized: dict[str, dict] = {}
+        for asset, val in done_keys.items():
+            if isinstance(val, dict):
+                normalized[asset] = dict(val)
+            else:
+                normalized[asset] = {k: {} for k in val}
+        self._done = normalized
         self._gap = residual_gap_assets
         self._post_diff = post_diff_assets or set()
 
@@ -857,24 +927,41 @@ class LedgerMinuteQualificationProvider(MinuteQualificationProvider):
     def from_repo(cls, base: str = "outputs/research/data01r1_finance_q2_20261020") -> "LedgerMinuteQualificationProvider":
         import json
         done_led = json.load(open(f"{base}/r2_downstream_minute_done.json"))
-        done_keys: dict[str, list[str]] = {}
-        for k in done_led:
-            done_keys.setdefault(k.split("|")[0], []).append(k)
+        done_keys: dict[str, dict] = {}
+        for k, meta in done_led.items():
+            done_keys.setdefault(k.split("|")[0], {})[k] = meta
         gap = set(json.load(open(f"{base}/factor_gap_155_reconciliation.json"))
                   ["minute_residual_gap_assets"])
         return cls(done_keys, gap, post_diff_assets={"CN:SH:600153"})
 
-    def verdict(self, asset_id: str):
+    def key_versions(self, asset_id: str) -> dict[str, dict]:
+        """Traceable per-key version evidence (raw_sig/factor_sig)."""
+        return dict(self._done.get(asset_id, {}))
+
+    def verdict(self, asset_id: str, trade_date: object = None,
+                required_source: str | None = None):
         if asset_id in self._post_diff:
             return False, (), "post_diff_isolated", ("post_diff_isolated",)
-        keys = self._done.get(asset_id, [])
+        keys = self._done.get(asset_id, {})
+        if required_source is not None:
+            keys = {k: v for k, v in keys.items()
+                    if k.split("|")[2] == required_source}
         sources = tuple(sorted({k.split("|")[2] for k in keys}))
         if not keys:
+            if required_source is not None and self._done.get(asset_id):
+                # done via other sources but NOT the required one
+                return False, (), "required_source_missing", (
+                    "required_source_missing",
+                    *(("minute_factor_gap",) if asset_id in self._gap else ()))
             if asset_id in self._gap:
                 return False, (), "factor_gap_residual", ("minute_factor_gap",)
             return None, (), "no_minute_key", ("no_minute_key",)
+        # version = newest factor_sig timestamp across satisfying keys —
+        # the factor-signature rebuild time IS the data version for that key.
+        vers = sorted(
+            str((v or {}).get("factor_sig") or "") for v in keys.values())[-1]
         blocking = ("minute_factor_gap",) if asset_id in self._gap else ()
-        return True, sources, "r2_minute_v1", blocking
+        return True, sources, f"r2_minute_v1:{vers}", blocking
 
 
 # ---------------------------------------------------------------------------
@@ -935,6 +1022,7 @@ def load_tradeability_context(
     trade_date: str,
     *,
     minute_provider: MinuteQualificationProvider | None = None,
+    minute_required_source: str | None = None,
     data_quality_blocks: Iterable[str] = (),
 ) -> TradeabilityContext | None:
     """Read-only PIT context from existing core tables.
@@ -963,7 +1051,9 @@ def load_tradeability_context(
             listing_event = "relisting" if ev_count >= 2 else "ipo"
     minute_q, minute_src, minute_ver, minute_blocks = (None, (), None, ())
     if minute_provider is not None:
-        minute_q, minute_src, minute_ver, minute_blocks = minute_provider.verdict(asset_id)
+        minute_q, minute_src, minute_ver, minute_blocks = minute_provider.verdict(
+            asset_id, trade_date=_as_date(trade_date),
+            required_source=minute_required_source)
     return TradeabilityContext(
         asset_id=asset_id,
         trade_date=_as_date(trade_date),
@@ -1002,5 +1092,7 @@ def load_tradeability_context(
         minute_qualified=minute_q,
         minute_qualified_sources=tuple(minute_src),
         minute_version=minute_ver,
+        minute_provider_configured=minute_provider is not None,
+        minute_required_source=minute_required_source,
         data_quality_blocks=tuple(data_quality_blocks) + tuple(minute_blocks),
     )

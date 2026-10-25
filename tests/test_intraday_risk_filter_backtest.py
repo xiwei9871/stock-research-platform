@@ -141,7 +141,7 @@ def test_build_intraday_risk_flags_empty_output_preserves_flag_dtypes():
     assert pd.api.types.is_integer_dtype(flags["intraday_risk_flag_count"])
 
 
-def test_load_intraday_risk_filter_inputs_uses_literal_price_status_flags(monkeypatch):
+def test_load_intraday_risk_filter_inputs_uses_status_table_flags(monkeypatch):
     captured = []
 
     class FakeConnection:
@@ -169,10 +169,13 @@ def test_load_intraday_risk_filter_inputs_uses_literal_price_status_flags(monkey
     )
 
     price_sql = captured[1][0]
-    assert "false AS is_limit_up" in price_sql
-    assert "false AS is_limit_down" in price_sql
-    assert "false AS is_suspended" in price_sql
-    assert "trade_status, is_limit_up" not in price_sql
+    # P1d.2: flags come from core.asset_status_daily, not literal `false AS`
+    assert "core.asset_status_daily" in price_sql
+    assert "s.is_limit_up" in price_sql
+    assert "s.is_limit_down" in price_sql
+    assert "s.is_suspended" in price_sql
+    assert "limit_state_missing" in price_sql
+    assert "false AS is_limit_up" not in price_sql
 
 
 def _score_rows():
