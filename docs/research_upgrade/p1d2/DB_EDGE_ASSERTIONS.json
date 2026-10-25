@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-25T15:11:03.297341+00:00",
+  "generated_at": "2026-10-25T15:46:50.823530+00:00",
   "contract_version": "tradeability_pit_v2.1",
   "cases_total": 18,
   "cases_pass": 18,
@@ -323,7 +323,7 @@
       "pass": true
     },
     {
-      "case": "alt_source_date_verified",
+      "case": "alt_source_date_rows_verified",
       "asset": "CN:SH:603213",
       "date": "2026-06-17",
       "side": "buy",
@@ -417,7 +417,7 @@
       "pass": true
     },
     {
-      "case": "alt_source_date_verified_605077",
+      "case": "alt_source_date_rows_verified_605077",
       "asset": "CN:SH:605077",
       "date": "2026-06-17",
       "side": "buy",

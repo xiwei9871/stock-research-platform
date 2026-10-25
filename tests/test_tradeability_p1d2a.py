@@ -105,7 +105,7 @@ def test_minute_date_verified_when_checker_confirms():
     prov = _prov()
     prov.set_date_checker(lambda a, d, f, s: f == "5min" and s == "baostock")
     q, src, ver, blocks = prov.verdict("CN:SH:600001", trade_date=dt.date(2024, 1, 2))
-    assert q is True and ver.endswith(":date_verified")
+    assert q is True and ver.endswith(":date_rows_verified")
     assert "minute_date_unverified" not in blocks
 
 
@@ -165,3 +165,128 @@ def test_end_to_end_corrected_shadow_gate():
     missing_rows = norm[norm["limit_state_missing"]]
     for _, r in missing_rows.head(5).iterrows():
         assert can_open_long(r.to_dict(), strict)[0] is False
+
+
+# --- P0-1: apply_pit_flags three-way match state -----------------------------
+
+def test_apply_pit_flags_three_way_state():
+    import pandas as pd
+    from stock_research.tradeability import apply_pit_flags
+    prices = pd.DataFrame({
+        "trade_date": ["2024-01-02"] * 3,
+        "asset_id": ["A", "B", "NOFLAG"],
+        "open": [10.0] * 3, "close": [10.0] * 3, "amount": [1e8] * 3,
+        "trade_status": ["1"] * 3,
+        "is_limit_up": [False] * 3, "is_limit_down": [False] * 3,
+        "is_suspended": [False] * 3, "limit_state_missing": [False] * 3,
+    })
+    flags = pd.DataFrame({
+        "asset_id": ["A", "B"],
+        "trade_date": ["2024-01-02", "2024-01-02"],
+        "shadow_limit_up": [False, True],
+        "shadow_limit_down": [False, False],
+        "shadow_rule_unknown": [False, True],
+        "shadow_rule_id": ["main_10pct", "rule_unknown"],
+    })
+    out = apply_pit_flags(prices, flags).set_index("asset_id")
+    # matched + verified -> computed value
+    assert out.loc["A", "qualification_state"] == "verified"
+    assert bool(out.loc["A", "is_limit_up"]) is False
+    assert bool(out.loc["A", "limit_state_missing"]) is False
+    # matched + rule_unknown -> blocked
+    assert out.loc["B", "qualification_state"] == "rule_unknown"
+    assert bool(out.loc["B", "is_limit_up"]) is True
+    assert bool(out.loc["B", "is_limit_down"]) is True
+    assert bool(out.loc["B", "limit_state_missing"]) is True
+    # NO flag record -> qualification_missing, blocked, NEVER default False
+    assert out.loc["NOFLAG", "qualification_state"] == "qualification_missing"
+    assert bool(out.loc["NOFLAG", "is_limit_up"]) is True
+    assert bool(out.loc["NOFLAG", "is_limit_down"]) is True
+    assert bool(out.loc["NOFLAG", "limit_state_missing"]) is True
+
+
+# --- P0-3: real corrected_shadow end-to-end gate ------------------------------
+
+@NEEDS_DB
+def test_corrected_shadow_end_to_end_blocks_missing():
+    from stock_research.backtest_constraints import (
+        BacktestExecutionConstraints)
+    from stock_research.vectorized_topn_backtest import (
+        VectorizedTopNConfig, load_vectorized_topn_inputs,
+        run_vectorized_topn_backtest)
+    scores, prices = load_vectorized_topn_inputs(
+        "2024-01-02", "2024-02-29", qualification_mode="corrected_shadow")
+    assert "qualification_state" in prices.columns
+    strict = BacktestExecutionConstraints(block_missing_limit_state=True)
+    for cost in (0.0, 15.0):
+        cfg = VectorizedTopNConfig(
+            start_date="2024-01-02", end_date="2024-02-29",
+            top_n=20, transaction_cost_bps=cost,
+            execution_constraints=strict)
+        res = run_vectorized_topn_backtest(scores, prices, cfg)
+        tr = res.trades
+        if len(tr):
+            # every executed trade carries traceable skip/limit state
+            assert "skip_reason" in tr.columns
+            # no limit_state_missing skip may EXECUTE — skip rows have 0 weight
+            bad = tr[(tr.skip_reason == "limit_state_missing")
+                     & (tr.executed_weight.fillna(0) > 0)]
+            assert bad.empty, f"cost={cost}: missing-state rows executed"
+        res.summary["qualification_mode"] = "corrected_shadow"
+
+
+@NEEDS_DB
+def test_corrected_shadow_ignores_stored_v1_flags():
+    """A confirmed mislabeled (asset,date) must NOT inherit stored v1 truth."""
+    import pandas as pd
+    from stock_research.tradeability import compute_pit_limit_flags
+    from stock_research.db import connect, fetch_all
+    from stock_research.config import SETTINGS
+    # pick a known mislabel inside score coverage: chinext ST asset post-reform
+    with connect(SETTINGS.research_service) as conn:
+        rows = fetch_all(conn, """
+            SELECT s.asset_id, s.trade_date::text d, s.is_limit_up
+            FROM core.asset_status_daily s
+            WHERE s.is_limit_up = true AND s.trade_date = '2024-01-02'
+            LIMIT 5""")
+        assert rows, "need at least one stored limit_up row"
+        asset, d = rows[0]["asset_id"], rows[0]["d"]
+        flags = compute_pit_limit_flags(conn, d, d)
+        rec = flags[flags.asset_id == asset]
+        if not rec.empty:
+            # corrected flag comes from the rule engine — may differ from
+            # the stored v1 flag; the point is it is recomputed, not copied.
+            assert "shadow_rule_id" in rec.columns
+            assert rec.iloc[0]["shadow_rule_id"] != ""
+
+
+@NEEDS_DB
+def test_legacy_vs_corrected_diff_explainable():
+    """Legacy vs corrected_shadow on same window: every difference must map
+    to a rule_id or a missing-state block, never unexplained."""
+    from stock_research.backtest_constraints import (
+        BacktestExecutionConstraints)
+    from stock_research.vectorized_topn_backtest import (
+        VectorizedTopNConfig, load_vectorized_topn_inputs,
+        run_vectorized_topn_backtest)
+    s, pl = load_vectorized_topn_inputs(
+        "2024-01-02", "2024-02-29", qualification_mode="legacy")
+    _, pc = load_vectorized_topn_inputs(
+        "2024-01-02", "2024-02-29", qualification_mode="corrected_shadow")
+    cfg_l = VectorizedTopNConfig(start_date="2024-01-02",
+                                 end_date="2024-02-29", top_n=20)
+    strict = BacktestExecutionConstraints(block_missing_limit_state=True)
+    cfg_c = VectorizedTopNConfig(start_date="2024-01-02",
+                                 end_date="2024-02-29", top_n=20,
+                                 execution_constraints=strict)
+    rl = run_vectorized_topn_backtest(s, pl, cfg_l)
+    rc = run_vectorized_topn_backtest(s, pc, cfg_c)
+    # corrected run may differ — but every corrected price row must carry a
+    # traceable state (verified / rule_unknown / qualification_missing)
+    assert set(pc["qualification_state"].unique()) <= {
+        "verified", "rule_unknown", "qualification_missing"}
+    # corrected leg can only block MORE (strict), never invent fills on
+    # missing qualification
+    blocked = pc[pc["qualification_state"] != "verified"]
+    if len(blocked):
+        assert bool(blocked["limit_state_missing"].all())

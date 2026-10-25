@@ -406,7 +406,7 @@ class TradeabilityContext:
     minute_qualified: bool | None = None       # P0-E provider verdict
     minute_qualified_sources: tuple[str, ...] = ()
     minute_version: str | None = None
-    # P1d.2a C: None = no date binding asked; True = date_verified;
+    # P1d.2a C: None = no date binding asked; True = date_rows_verified;
     # False = key-level done but the DATE could not be proven.
     minute_date_verified: bool | None = None
     minute_provider_configured: bool = False   # fail-closed selector
@@ -998,7 +998,7 @@ class LedgerMinuteQualificationProvider(MinuteQualificationProvider):
             return True, sources, f"r2_minute_v1:{vers}:key_level_unverified_date", (
                 *blocking, "minute_date_unverified")
         sources = tuple(sorted({k.split("|")[2] for k in ok_keys}))
-        return True, sources, f"r2_minute_v1:{vers}:date_verified", blocking
+        return True, sources, f"r2_minute_v1:{vers}:date_rows_verified", blocking
 
 
 # ---------------------------------------------------------------------------
@@ -1105,7 +1105,7 @@ def load_tradeability_context(
             asset_id, trade_date=_as_date(trade_date),
             required_source=minute_required_source)
         if minute_ver is not None:
-            if str(minute_ver).endswith(":date_verified"):
+            if str(minute_ver).endswith(":date_rows_verified"):
                 minute_date_verified = True
             elif ":key_level" in str(minute_ver):
                 minute_date_verified = False
@@ -1280,9 +1280,16 @@ def compute_pit_limit_flags(conn, start: str, end: str,
 def apply_pit_flags(prices, flags):
     """Overlay corrected flags onto a prices frame (corrected_shadow mode).
 
-    rule_unknown and flag-absent rows fail closed: both limit flags forced
-    True so can_open_long/can_close_long block the attempt. Stored v1 flags
-    are NEVER consulted as corrected truth.
+    P1d.2a-closeout P0-1: three-way match state, never fail-open.
+
+    - matched + verified          -> computed flag values
+    - matched + rule UNKNOWN      -> 'rule_unknown': both limit flags True,
+                                    limit_state_missing=True (fail-closed)
+    - NO matching rule record     -> 'qualification_missing': same
+                                    fail-closed treatment — an unmatched row
+                                    must NOT silently become "not at limit".
+
+    Stored v1 flags are NEVER consulted as corrected truth.
     """
     import pandas as pd
 
@@ -1293,12 +1300,18 @@ def apply_pit_flags(prices, flags):
     merged = merged.merge(
         flags[["asset_id", "trade_date", "shadow_limit_up",
                "shadow_limit_down", "shadow_rule_unknown", "shadow_rule_id"]],
-        on=["asset_id", "trade_date"], how="left")
+        on=["asset_id", "trade_date"], how="left", indicator=True)
+    matched = merged["_merge"] == "both"
     for col in ("shadow_limit_up", "shadow_limit_down", "shadow_rule_unknown"):
         merged[col] = merged[col].fillna(False).astype(bool)
-    merged["is_limit_up"] = merged["shadow_limit_up"] | merged["shadow_rule_unknown"]
-    merged["is_limit_down"] = merged["shadow_limit_down"] | merged["shadow_rule_unknown"]
-    merged["limit_state_missing"] = merged["shadow_rule_unknown"]
+    merged["qualification_state"] = "verified"
+    merged.loc[~matched, "qualification_state"] = "qualification_missing"
+    merged.loc[matched & merged["shadow_rule_unknown"], "qualification_state"] = (
+        "rule_unknown")
+    blocked = merged["qualification_state"] != "verified"
+    merged["is_limit_up"] = merged["shadow_limit_up"] | blocked
+    merged["is_limit_down"] = merged["shadow_limit_down"] | blocked
+    merged["limit_state_missing"] = blocked
     merged = merged.rename(columns={"shadow_rule_id": "limit_rule_id"})
     return merged.drop(columns=["shadow_limit_up", "shadow_limit_down",
-                                "shadow_rule_unknown"])
+                                "shadow_rule_unknown", "_merge"])

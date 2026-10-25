@@ -44,7 +44,7 @@ in both, and legacy default remains reproducible.
 (asset, date, freq, source → bool). `load_tradeability_context` binds it to
 `EXISTS` on `market.stock_minute_bar` (qfq). Verdict versions report tier:
 
-- `r2_minute_v1:<sig>:date_verified` — key done AND rows exist for the date
+- `r2_minute_v1:<sig>:date_rows_verified` — key done AND rows exist for the date
 - `r2_minute_v1:<sig>:key_level_unverified_date` — checker bound, no rows
 - `r2_minute_v1:<sig>:key_level` — no checker bound, key done only
 

@@ -133,24 +133,42 @@ def load_vectorized_topn_inputs(
     """
     with connect(service) as conn:
         score_rows = fetch_all(conn, score_sql, [score_version, start_date, end_date])
+        price_rows = None
         if qualification_mode == "verified_v2":
+            # P1d.2a-closeout P0-2: schema calibrated to the migration DDL.
+            # v2 columns are LIMIT flags + state + rule trace only —
+            # is_suspended is source PIT status (not rule-derived), so the
+            # v1 column is already correct and stays in use.
+            v2_required = {"is_limit_up_v2", "is_limit_down_v2",
+                           "limit_state_v2", "limit_rule_id_v2"}
             v2_cols = {r["column_name"] for r in fetch_all(conn, """
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema='core' AND table_name='asset_status_daily'
                   AND column_name IN ('is_limit_up_v2','is_limit_down_v2',
-                                      'is_suspended_v2','limit_state_v2')
+                                      'limit_state_v2','limit_rule_id_v2')
             """)}
-            if v2_cols >= {"is_limit_up_v2", "is_limit_down_v2",
-                           "is_suspended_v2", "limit_state_v2"}:
-                price_sql = price_sql.replace(
-                    "s.is_limit_up, s.is_limit_down, s.is_suspended,\n",
-                    "s.is_limit_up_v2 AS is_limit_up,\n"
-                    "           s.is_limit_down_v2 AS is_limit_down,\n"
-                    "           s.is_suspended_v2 AS is_suspended,\n").replace(
-                    "(s.asset_id IS NULL\n            OR s.is_limit_up IS NULL\n            OR s.is_limit_down IS NULL\n            OR s.is_suspended IS NULL) AS limit_state_missing",
-                    "(s.asset_id IS NULL OR s.limit_state_v2 IS DISTINCT FROM 1"
-                    " OR s.is_limit_up_v2 IS NULL OR s.is_limit_down_v2 IS NULL"
-                    " OR s.is_suspended_v2 IS NULL) AS limit_state_missing")
+            if v2_cols >= v2_required:
+                price_sql = """
+                SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount,
+                       b.trade_status,
+                       s.is_limit_up_v2 AS is_limit_up,
+                       s.is_limit_down_v2 AS is_limit_down,
+                       s.is_suspended,
+                       s.limit_rule_id_v2 AS limit_rule_id,
+                       (s.asset_id IS NULL
+                        OR s.limit_state_v2 IS DISTINCT FROM 1
+                        OR s.is_limit_up_v2 IS NULL
+                        OR s.is_limit_down_v2 IS NULL
+                        OR s.is_suspended IS NULL) AS limit_state_missing
+                FROM public.market_daily_bar b
+                LEFT JOIN core.asset_status_daily s
+                  ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+                WHERE b.adjust_type = %s
+                  AND b.trade_date BETWEEN %s AND %s
+                ORDER BY b.trade_date, b.asset_id
+                """
+                price_rows = fetch_all(
+                    conn, price_sql, [adjust_type, start_date, end_date])
             else:
                 # v2 columns absent -> nothing verified; everything missing.
                 price_rows_all = fetch_all(
@@ -169,7 +187,9 @@ def load_vectorized_topn_inputs(
                 prices = filter_dataframe_by_universe(
                     prices, universe_result, asset_id_col="asset_id")
                 return scores, prices
-        price_rows = fetch_all(conn, price_sql, [adjust_type, start_date, end_date])
+        if price_rows is None:
+            price_rows = fetch_all(
+                conn, price_sql, [adjust_type, start_date, end_date])
         if qualification_mode == "corrected_shadow":
             from stock_research.tradeability import (
                 apply_pit_flags, compute_pit_limit_flags)

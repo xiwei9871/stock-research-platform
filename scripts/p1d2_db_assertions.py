@@ -83,7 +83,7 @@ CASES = [
                 "reasons_contain": ["minute_date_unverified"]}},
     # ...but on 2026-06-17 (where akshare rows actually exist, 5min/qfq) the
     # same asset IS date-verified while keeping the gap audit marker.
-    {"case": "alt_source_date_verified", "asset": "CN:SH:603213",
+    {"case": "alt_source_date_rows_verified", "asset": "CN:SH:603213",
      "date": "2026-06-17", "side": "buy",
      "expect": {"data_ready_minute": True,
                 "reasons_contain": ["factor_gap_covered_by_alt_source"]}},
@@ -101,7 +101,7 @@ CASES = [
      "date": "2026-10-22", "side": "buy",
      "expect": {"data_ready_minute": False,
                 "reasons_contain": ["minute_date_unverified"]}},
-    {"case": "alt_source_date_verified_605077", "asset": "CN:SH:605077",
+    {"case": "alt_source_date_rows_verified_605077", "asset": "CN:SH:605077",
      "date": "2026-06-17", "side": "buy",
      "expect": {"data_ready_minute": True,
                 "reasons_contain": ["factor_gap_covered_by_alt_source"]}},

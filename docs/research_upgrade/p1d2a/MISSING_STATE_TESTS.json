@@ -35,7 +35,7 @@
     },
     {
       "case": "minute_date_verified_when_rows_exist",
-      "covers": "checker True -> :date_verified",
+      "covers": "checker True -> :date_rows_verified",
       "status": "pass"
     },
     {

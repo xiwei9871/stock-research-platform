@@ -19,6 +19,18 @@ Rationale over a new table: same PK (asset_id, trade_date), same write path
 in `core_data.py`, no join fan-out for readers, trivial per-batch rollback
 (`UPDATE ... SET *_v2 = NULL WHERE batch_id = ...`).
 
+### is_suspended stays v1 (P1d.2a-closeout P0-2)
+
+Suspension is source-status PIT data (written from the feed, not derived
+from a price-limit rule) — the existing `is_suspended` column is already
+correct, so NO `is_suspended_v2` exists or is required. Readers must select
+`s.is_suspended` (v1) alongside the v2 limit flags; `limit_state_missing`
+still includes `s.is_suspended IS NULL` because an absent suspension state
+is itself an unknown. The `verified_v2` loader requires exactly
+`{is_limit_up_v2, is_limit_down_v2, limit_state_v2, limit_rule_id_v2}` —
+matching this DDL; `limit_flags_version` records the writer's rule-set
+version for provenance.
+
 ## Forbidden fallback (explicit)
 
 `COALESCE(is_limit_up_v2, is_limit_up_v1)` is **prohibited**: `v2 IS NULL`

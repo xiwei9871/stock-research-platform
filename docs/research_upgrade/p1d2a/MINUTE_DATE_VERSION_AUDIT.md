@@ -26,23 +26,29 @@ and it covers a single session.
 - `load_tradeability_context` binds it to
   `EXISTS(SELECT 1 FROM market.stock_minute_bar WHERE asset_id=%s
    AND trade_date=%s AND freq=%s AND adjust_type='qfq' AND source=%s)`.
-- Version string now encodes tier: `:date_verified` / `:key_level` /
+- Version string now encodes tier: `:date_rows_verified` / `:key_level` /
   `:key_level_unverified_date`; `ctx.minute_date_verified` surfaced into
   result details.
+- **Naming honesty (P1d.2a closeout)**: `date_rows_verified` means
+  "当日 qfq 行存在性已核验" — the required source/freq/adjust rows EXIST for
+  that date. It does NOT claim full-session completeness (expected bar
+  count per session is a separate coverage audit, out of scope here and
+  NOT a blocker for daily-frequency rule migration).
 - Traded day + unverified → `data_ready_minute=False`,
   reason `minute_date_unverified` (fail closed).
 
 ## DB assertions updated (18/18 pass)
 
 - `factor_gap_residual` 603213@2026-10-22 → NOT ready (`minute_date_unverified`)
-- `alt_source_date_verified` 603213@2026-06-17 → ready, gap marker kept
+- `alt_source_date_rows_verified` 603213@2026-06-17 → ready, gap marker kept
 - `alt_source_qualified` 605077@2026-10-22 → NOT ready
-- `alt_source_date_verified_605077` 605077@2026-06-17 → ready
+- `alt_source_date_rows_verified_605077` 605077@2026-06-17 → ready
 - 15 no-done-key assets + 600153 isolation unchanged (still blocked)
 
 ## Remaining honesty note
 
-Even `date_verified` proves row existence, not full-session completeness
-(expected bar count per freq varies with trading hours). Full per-date
-completeness requires expected-vs-actual bar-count checks — recorded as a
-migration-phase enhancement, not claimed here.
+`date_rows_verified` proves **当日 qfq 行存在性已核验**, not full-session
+completeness (expected bar count per freq varies with trading hours). Full
+per-date completeness requires expected-vs-actual bar-count checks —
+recorded as a migration-phase enhancement, not claimed here and not a
+blocker for daily-frequency rule migration.
