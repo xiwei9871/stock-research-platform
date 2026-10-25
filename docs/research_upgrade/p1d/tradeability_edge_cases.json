@@ -1,0 +1,759 @@
+{
+  "generated_at": "2026-10-25T10:46:06.980941+00:00",
+  "contract_version": "tradeability_pit_v1",
+  "scope": "read-only audit; no strategy fill logic modified",
+  "cases": [
+    {
+      "asset_id": "CN:SH:688287",
+      "trade_date": "2022-05-24",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": false,
+      "data_ready_daily": false,
+      "data_ready_minute": false,
+      "can_attempt_buy": false,
+      "can_attempt_sell": false,
+      "restriction_reasons": [
+        "not_yet_listed",
+        "no_daily_bar",
+        "no_status_row",
+        "suspended"
+      ],
+      "status_source": "absent",
+      "effective_date": "2022-05-25",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "star",
+      "limit_rule_id": "star_20pct_since_20190722",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "上交所科创板股票交易特别规定 2019-07-22 开板",
+        "limit_up_pct": 20.0,
+        "limit_down_pct": 20.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": null,
+        "data_quality_blocks": []
+      },
+      "case": "pre_listing",
+      "expect": {
+        "eligible_for_universe": false
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:688287",
+      "trade_date": "2026-06-11",
+      "side": "sell",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": false,
+      "data_ready_daily": false,
+      "data_ready_minute": false,
+      "can_attempt_buy": false,
+      "can_attempt_sell": false,
+      "restriction_reasons": [
+        "delisted",
+        "no_daily_bar",
+        "no_status_row",
+        "suspended"
+      ],
+      "status_source": "absent",
+      "effective_date": "2026-06-10",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "star",
+      "limit_rule_id": "star_20pct_since_20190722",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "上交所科创板股票交易特别规定 2019-07-22 开板",
+        "limit_up_pct": 20.0,
+        "limit_down_pct": 20.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": null,
+        "data_quality_blocks": []
+      },
+      "case": "post_delisting",
+      "expect": {
+        "eligible_for_universe": false
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:688287",
+      "trade_date": "2026-05-20",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": true,
+      "can_attempt_buy": true,
+      "can_attempt_sell": true,
+      "restriction_reasons": [],
+      "status_source": "baostock:status_quality=same_day_lhb_name",
+      "effective_date": "2022-05-25",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "star",
+      "limit_rule_id": "star_20pct_since_20190722",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "上交所科创板股票交易特别规定 2019-07-22 开板",
+        "limit_up_pct": 20.0,
+        "limit_down_pct": 20.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": false,
+        "data_quality_blocks": []
+      },
+      "case": "survivorship_in_window",
+      "expect": {
+        "eligible_for_universe": true
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:600815",
+      "trade_date": "2018-01-02",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": false,
+      "can_attempt_buy": true,
+      "can_attempt_sell": true,
+      "restriction_reasons": [
+        "st_risk_warning"
+      ],
+      "status_source": "baostock",
+      "effective_date": "1994-01-28",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "st_main",
+      "limit_rule_id": "st_main_5pct",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "沪深交易所风险警示板交易规则 ST/*ST ±5%",
+        "limit_up_pct": 5.0,
+        "limit_down_pct": 5.0,
+        "no_limit_window_days": 0,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": false,
+        "data_quality_blocks": []
+      },
+      "case": "st_point_in_time",
+      "expect": {
+        "limit_rule_id": "st_main_5pct"
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:600126",
+      "trade_date": "2019-06-03",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": false,
+      "can_attempt_buy": false,
+      "can_attempt_sell": false,
+      "restriction_reasons": [
+        "suspended"
+      ],
+      "status_source": "baostock",
+      "effective_date": "1998-03-11",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "main",
+      "limit_rule_id": "main_10pct_pre_20230410",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "上交所/深交所交易规则 主板 ±10%;首日+44%/-36%上限",
+        "limit_up_pct": 10.0,
+        "limit_down_pct": 10.0,
+        "no_limit_window_days": 0,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": false,
+        "data_quality_blocks": []
+      },
+      "case": "suspended_day",
+      "expect": {
+        "can_attempt_buy": false
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:600519",
+      "trade_date": "2015-04-16",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": false,
+      "can_attempt_buy": false,
+      "can_attempt_sell": false,
+      "restriction_reasons": [
+        "limit_up"
+      ],
+      "status_source": "baostock",
+      "effective_date": "2001-08-27",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "main",
+      "limit_rule_id": "main_10pct_pre_20230410",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "上交所/深交所交易规则 主板 ±10%;首日+44%/-36%上限",
+        "limit_up_pct": 10.0,
+        "limit_down_pct": 10.0,
+        "no_limit_window_days": 0,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": true,
+        "stored_limit_flag_side": true,
+        "data_quality_blocks": []
+      },
+      "case": "limit_up_buy",
+      "expect": {
+        "can_attempt_buy": false
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:600519",
+      "trade_date": "2018-10-29",
+      "side": "sell",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": false,
+      "can_attempt_buy": false,
+      "can_attempt_sell": false,
+      "restriction_reasons": [
+        "limit_down"
+      ],
+      "status_source": "baostock",
+      "effective_date": "2001-08-27",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "main",
+      "limit_rule_id": "main_10pct_pre_20230410",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "上交所/深交所交易规则 主板 ±10%;首日+44%/-36%上限",
+        "limit_up_pct": 10.0,
+        "limit_down_pct": 10.0,
+        "no_limit_window_days": 0,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": true,
+        "stored_limit_flag_side": true,
+        "data_quality_blocks": []
+      },
+      "case": "limit_down_sell",
+      "expect": {
+        "can_attempt_sell": false
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SZ:300001",
+      "trade_date": "2019-03-11",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": false,
+      "can_attempt_buy": false,
+      "can_attempt_sell": false,
+      "restriction_reasons": [
+        "limit_up",
+        "stored_flag_disagrees_with_effective_rule"
+      ],
+      "status_source": "baostock",
+      "effective_date": "2009-10-30",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "chinext",
+      "limit_rule_id": "chinext_10pct_pre_20200824",
+      "stored_flag_disagrees": true,
+      "details": {
+        "limit_rule_source": "深交所创业板交易规则(2019修订)/注册制前 ±10%",
+        "limit_up_pct": 10.0,
+        "limit_down_pct": 10.0,
+        "no_limit_window_days": 0,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": true,
+        "stored_limit_flag_side": false,
+        "data_quality_blocks": []
+      },
+      "case": "chinext_old_10pct_limit",
+      "expect": {
+        "can_attempt_buy": false,
+        "stored_flag_disagrees": true
+      },
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SZ:300001",
+      "trade_date": "2020-08-25",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": true,
+      "can_attempt_buy": true,
+      "can_attempt_sell": true,
+      "restriction_reasons": [],
+      "status_source": "baostock",
+      "effective_date": "2009-10-30",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "chinext",
+      "limit_rule_id": "chinext_20pct_from_20200824",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "深交所创业板交易特别规定 2020-08-24 注册制改革",
+        "limit_up_pct": 20.0,
+        "limit_down_pct": 20.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": false,
+        "data_quality_blocks": []
+      },
+      "case": "chinext_new_20pct_not_limit",
+      "expect": {},
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:688808",
+      "trade_date": "2026-04-24",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": true,
+      "can_attempt_buy": true,
+      "can_attempt_sell": true,
+      "restriction_reasons": [
+        "ipo_no_limit_window",
+        "stored_flag_disagrees_with_effective_rule"
+      ],
+      "status_source": "baostock:status_quality=daily_bar_unverified_false",
+      "effective_date": "2026-04-24",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "star",
+      "limit_rule_id": "star_20pct_since_20190722",
+      "stored_flag_disagrees": true,
+      "details": {
+        "limit_rule_source": "上交所科创板股票交易特别规定 2019-07-22 开板",
+        "limit_up_pct": 20.0,
+        "limit_down_pct": 20.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": true,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": true,
+        "data_quality_blocks": []
+      },
+      "case": "star_ipo_no_limit_window",
+      "expect": {},
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SZ:001312",
+      "trade_date": "2026-04-21",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": true,
+      "can_attempt_buy": true,
+      "can_attempt_sell": true,
+      "restriction_reasons": [
+        "ipo_no_limit_window",
+        "stored_flag_disagrees_with_effective_rule"
+      ],
+      "status_source": "baostock:status_quality=same_day_lhb_name",
+      "effective_date": "2026-04-21",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "main",
+      "limit_rule_id": "main_10pct_from_20230410",
+      "stored_flag_disagrees": true,
+      "details": {
+        "limit_rule_source": "全面注册制交易规则 2023-04-10 起主板新股前5日无涨跌幅",
+        "limit_up_pct": 10.0,
+        "limit_down_pct": 10.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": true,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": true,
+        "data_quality_blocks": []
+      },
+      "case": "main_ipo_postreg_no_limit",
+      "expect": {},
+      "expect_mismatches": {},
+      "pass": true
+    },
+    {
+      "asset_id": "CN:SH:603213",
+      "trade_date": "2026-10-22",
+      "side": "buy",
+      "data_version": "full_history_v1",
+      "eligible_for_universe": true,
+      "data_ready_daily": true,
+      "data_ready_minute": false,
+      "can_attempt_buy": true,
+      "can_attempt_sell": true,
+      "restriction_reasons": [
+        "residual_factor_gap_minute"
+      ],
+      "status_source": "derived:tushare_raw_latest_factor:status_quality=daily_bar_unverified_false",
+      "effective_date": "2021-11-11",
+      "rule_version": "tradeability_pit_v1",
+      "limit_regime": "main",
+      "limit_rule_id": "main_10pct_from_20230410",
+      "stored_flag_disagrees": false,
+      "details": {
+        "limit_rule_source": "全面注册制交易规则 2023-04-10 起主板新股前5日无涨跌幅",
+        "limit_up_pct": 10.0,
+        "limit_down_pct": 10.0,
+        "no_limit_window_days": 5,
+        "in_no_limit_window": false,
+        "hist_limit_hit_side": false,
+        "stored_limit_flag_side": false,
+        "data_quality_blocks": [
+          "minute_factor_gap"
+        ]
+      },
+      "case": "factor_gap_residual",
+      "expect": {
+        "data_ready_minute": false
+      },
+      "expect_mismatches": {},
+      "pass": true
+    }
+  ],
+  "disagreement_scans": {
+    "chinext_pre_20200824_pct_9.9_19.8_stored_not_limit_up": {
+      "count": 28205,
+      "examples": [
+        {
+          "asset_id": "CN:SZ:300001",
+          "d": "2012-05-21",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300002",
+          "d": "2018-01-12",
+          "pct_chg": 9.95608,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300002",
+          "d": "2018-01-11",
+          "pct_chg": 9.983895,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300006",
+          "d": "2010-08-16",
+          "pct_chg": 10.0,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300007",
+          "d": "2010-04-09",
+          "pct_chg": 10.0,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300007",
+          "d": "2018-01-15",
+          "pct_chg": 9.98,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300008",
+          "d": "2020-06-02",
+          "pct_chg": 9.93,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300008",
+          "d": "2010-10-25",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300008",
+          "d": "2010-10-19",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300008",
+          "d": "2010-04-12",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300008",
+          "d": "2010-04-09",
+          "pct_chg": 10.0,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300008",
+          "d": "2010-04-07",
+          "pct_chg": 10.0,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300009",
+          "d": "2010-11-15",
+          "pct_chg": 10.0,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300009",
+          "d": "2010-10-19",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300010",
+          "d": "2010-01-14",
+          "pct_chg": 10.01,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300010",
+          "d": "2010-04-22",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300010",
+          "d": "2010-06-07",
+          "pct_chg": 9.99,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300011",
+          "d": "2020-01-16",
+          "pct_chg": 9.97,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300013",
+          "d": "2018-01-26",
+          "pct_chg": 9.9,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300013",
+          "d": "2010-06-07",
+          "pct_chg": 10.01,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300013",
+          "d": "2018-02-05",
+          "pct_chg": 10.02,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300014",
+          "d": "2010-05-19",
+          "pct_chg": 10.03,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300014",
+          "d": "2010-10-20",
+          "pct_chg": 10.01,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300014",
+          "d": "2010-05-21",
+          "pct_chg": 10.0,
+          "is_limit_up": false
+        },
+        {
+          "asset_id": "CN:SZ:300014",
+          "d": "2010-05-24",
+          "pct_chg": 10.02,
+          "is_limit_up": false
+        }
+      ]
+    },
+    "ipo_no_limit_window_stored_limit_up": {
+      "count": 1305,
+      "examples": [
+        {
+          "asset_id": "CN:SH:603391",
+          "d": "2024-07-31",
+          "pct_chg": 50.0,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688031",
+          "d": "2022-10-18",
+          "pct_chg": 60.54,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688035",
+          "d": "2022-09-19",
+          "pct_chg": 64.46,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688041",
+          "d": "2022-08-12",
+          "pct_chg": 66.94,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688084",
+          "d": "2022-12-08",
+          "pct_chg": 44.47,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688163",
+          "d": "2022-03-11",
+          "pct_chg": 67.42,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:603004",
+          "d": "2023-12-27",
+          "pct_chg": 79.05,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:603004",
+          "d": "2023-12-29",
+          "pct_chg": 16.5,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688171",
+          "d": "2022-01-27",
+          "pct_chg": 23.57,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688225",
+          "d": "2022-02-09",
+          "pct_chg": 27.53,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:601061",
+          "d": "2023-04-10",
+          "pct_chg": 70.82,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:601065",
+          "d": "2023-04-10",
+          "pct_chg": 57.34,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688271",
+          "d": "2022-08-22",
+          "pct_chg": 64.93,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688281",
+          "d": "2022-03-07",
+          "pct_chg": 37.2,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688322",
+          "d": "2022-07-07",
+          "pct_chg": 38.85,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688327",
+          "d": "2022-05-27",
+          "pct_chg": 39.23,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688327",
+          "d": "2022-05-31",
+          "pct_chg": 34.88,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688362",
+          "d": "2022-11-16",
+          "pct_chg": 62.03,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:603135",
+          "d": "2023-04-10",
+          "pct_chg": 60.0,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:603137",
+          "d": "2023-04-19",
+          "pct_chg": 59.25,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688371",
+          "d": "2022-08-02",
+          "pct_chg": 57.98,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688371",
+          "d": "2022-08-03",
+          "pct_chg": 25.3,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688371",
+          "d": "2022-08-10",
+          "pct_chg": 20.0,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688372",
+          "d": "2022-10-26",
+          "pct_chg": 81.59,
+          "is_limit_up": true
+        },
+        {
+          "asset_id": "CN:SH:688373",
+          "d": "2022-08-05",
+          "pct_chg": 33.33,
+          "is_limit_up": true
+        }
+      ]
+    },
+    "st_on_20pct_board_pct_5_19.8_stored_not_limit": {
+      "count": 0,
+      "examples": []
+    }
+  },
+  "case_pass_count": 12,
+  "case_total": 12
+}
