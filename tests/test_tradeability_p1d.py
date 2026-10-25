@@ -88,8 +88,8 @@ def test_st_status_evaluated_as_of_historical_date():
     c = ctx(asset_id="CN:SH:600815", trade_date=dt.date(2018, 1, 2),
             symbol="600815", exchange="SH", is_st=True)
     r = tradeability_at(c, side="buy")
-    assert r.limit_regime == "st_main"
-    assert r.limit_rule_id == "st_main_5pct"
+    assert r.limit_regime == "main"
+    assert r.limit_rule_id == "main_st_5pct"
     assert r.details["limit_up_pct"] == 5.0
     assert "st_risk_warning" in r.restriction_reasons
 
@@ -109,14 +109,17 @@ def test_suspended_day_blocks_both_sides():
 
 
 def test_limit_up_day_restricts_buy():
-    c = ctx(pct_chg=10.0)  # main board +10% limit-locked
+    # main board +10% limit-locked, raw price confirms close at legal limit
+    c = ctx(pct_chg=10.0, preclose_raw=20.0, open_raw=21.9, high_raw=22.0,
+            low_raw=21.8, close_raw=22.0)
     r = tradeability_at(c, side="buy")
     assert r.can_attempt_buy is False
     assert "limit_up" in r.restriction_reasons
 
 
 def test_limit_down_day_restricts_sell():
-    c = ctx(pct_chg=-10.0)
+    c = ctx(pct_chg=-10.0, preclose_raw=20.0, open_raw=18.1, high_raw=18.2,
+            low_raw=18.0, close_raw=18.0)
     r = tradeability_at(c, side="sell")
     assert r.can_attempt_sell is False
     assert "limit_down" in r.restriction_reasons
@@ -128,7 +131,9 @@ def test_regime_change_chinext_pre_and_post_20200824():
     # limit-locked → buy restricted + disagreement flagged.
     c = ctx(asset_id="CN:SZ:300001", trade_date=dt.date(2019, 3, 11),
             symbol="300001", exchange="SZ", is_chinext=True, board="chinext",
-            pct_chg=10.01676, stored_is_limit_up=False)
+            pct_chg=10.01676, stored_is_limit_up=False,
+            preclose_raw=8.99, open_raw=9.5, high_raw=9.89, low_raw=9.4,
+            close_raw=9.89)  # 8.99*1.10=9.889 -> 9.89 legal limit
     r = tradeability_at(c, side="buy")
     assert r.limit_rule_id == "chinext_10pct_pre_20200824"
     assert r.can_attempt_buy is False
@@ -138,7 +143,9 @@ def test_regime_change_chinext_pre_and_post_20200824():
     # Post-regime: same +10.02% on 2020-08-25 is NOT a limit day (±20% rule).
     c2 = ctx(asset_id="CN:SZ:300001", trade_date=dt.date(2020, 8, 25),
              symbol="300001", exchange="SZ", is_chinext=True, board="chinext",
-             pct_chg=10.01676, stored_is_limit_up=False)
+             pct_chg=10.01676, stored_is_limit_up=False,
+             preclose_raw=8.99, open_raw=9.5, high_raw=9.89, low_raw=9.4,
+             close_raw=9.89)
     r2 = tradeability_at(c2, side="buy")
     assert r2.limit_rule_id == "chinext_20pct_from_20200824"
     assert r2.can_attempt_buy is True
@@ -147,7 +154,9 @@ def test_regime_change_chinext_pre_and_post_20200824():
     # And +20% post-regime IS limit-locked.
     c3 = ctx(asset_id="CN:SZ:300001", trade_date=dt.date(2020, 8, 25),
              symbol="300001", exchange="SZ", is_chinext=True, board="chinext",
-             pct_chg=20.0, stored_is_limit_up=True)
+             pct_chg=20.0, stored_is_limit_up=True,
+             preclose_raw=8.99, open_raw=10.5, high_raw=10.79, low_raw=10.4,
+             close_raw=10.79)  # 8.99*1.20=10.788 -> 10.79
     r3 = tradeability_at(c3, side="buy")
     assert r3.can_attempt_buy is False
     assert "limit_up" in r3.restriction_reasons
@@ -158,7 +167,10 @@ def test_ipo_no_limit_window_not_blocked_by_normal_rule():
     c = ctx(asset_id="CN:SH:688981", trade_date=dt.date(2020, 7, 16),
             list_date=dt.date(2020, 7, 16), symbol="688981", exchange="SH",
             is_star=True, board="star", pct_chg=120.0,
-            stored_is_limit_up=False, listing_age_trading_days=1)
+            stored_is_limit_up=False, listing_age_trading_days=1,
+            listing_age_known=True, listing_event="ipo",
+            preclose_raw=None, open_raw=60.0, high_raw=95.0, low_raw=55.0,
+            close_raw=90.0)
     r = tradeability_at(c, side="buy")
     assert r.details["in_no_limit_window"] is True
     assert "ipo_no_limit_window" in r.restriction_reasons
@@ -169,7 +181,10 @@ def test_ipo_no_limit_window_not_blocked_by_normal_rule():
     c2 = ctx(asset_id="CN:SH:688981", trade_date=dt.date(2020, 7, 24),
              list_date=dt.date(2020, 7, 16), symbol="688981", exchange="SH",
              is_star=True, board="star", pct_chg=20.0,
-             stored_is_limit_up=True, listing_age_trading_days=6)
+             stored_is_limit_up=True, listing_age_trading_days=6,
+             listing_age_known=True, listing_event="ipo",
+             preclose_raw=50.0, open_raw=58.0, high_raw=60.0, low_raw=57.0,
+             close_raw=60.0)  # 50*1.2=60.0 legal limit
     r2 = tradeability_at(c2, side="buy")
     assert r2.details["in_no_limit_window"] is False
     assert r2.can_attempt_buy is False
@@ -181,9 +196,12 @@ def test_main_board_ipo_post_20230410_no_limit_window():
     # the +10% main-board rule must not fire.
     c = ctx(asset_id="CN:SZ:001312", trade_date=dt.date(2026, 4, 21),
             list_date=dt.date(2026, 4, 21), symbol="001312", exchange="SZ",
-            pct_chg=66.32, stored_is_limit_up=True, listing_age_trading_days=1)
+            pct_chg=66.32, stored_is_limit_up=True, listing_age_trading_days=1,
+            listing_age_known=True, listing_event="ipo",
+            preclose_raw=None, open_raw=30.0, high_raw=35.0, low_raw=28.0,
+            close_raw=33.5)
     r = tradeability_at(c, side="buy")
-    assert r.limit_rule_id == "main_10pct_from_20230410"
+    assert r.limit_rule_id == "main_ipo_fullreg_window5"
     assert r.details["in_no_limit_window"] is True
     assert r.can_attempt_buy is True
     # stored flag was computed with the static 9.8 threshold and says limit —
@@ -196,9 +214,12 @@ def test_main_board_ipo_pre_20230410_capped_day_blocks_buy():
     # limit-locked state under the conservative policy → buy restricted.
     c = ctx(asset_id="CN:SH:603000", trade_date=dt.date(2020, 5, 6),
             list_date=dt.date(2020, 5, 6), symbol="603000", exchange="SH",
-            pct_chg=44.0, stored_is_limit_up=True, listing_age_trading_days=1)
+            pct_chg=44.0, stored_is_limit_up=True, listing_age_trading_days=1,
+            listing_age_known=True, listing_event="ipo",
+            preclose_raw=10.0, open_raw=12.0, high_raw=14.4, low_raw=11.8,
+            close_raw=14.4)  # 10*1.44=14.4 day-1 cap
     r = tradeability_at(c, side="buy")
-    assert r.limit_rule_id == "main_10pct_pre_20230410"
+    assert r.limit_rule_id == "main_ipo_day1_prereg_cap"
     assert r.can_attempt_buy is False
     assert "limit_up" in r.restriction_reasons
 
@@ -258,7 +279,7 @@ def test_st_on_chinext_keeps_board_20pct_limit_not_5pct():
             symbol="300104", exchange="SZ", is_chinext=True, board="chinext",
             is_st=True, pct_chg=12.0)
     r = tradeability_at(c, side="buy")
-    assert r.limit_rule_id == "chinext_20pct_from_20200824"
+    assert r.limit_rule_id == "chinext_st_20pct_from_20200824"
     assert r.details["limit_up_pct"] == 20.0
     assert "st_risk_warning" in r.restriction_reasons
 
@@ -283,7 +304,9 @@ def test_board_classification_matches_existing_taxonomy():
 
 def test_rule_table_covers_all_boards_with_sources():
     boards = {r.board for r in LIMIT_RULES}
-    assert {"main", "st_main", "chinext", "star", "beijing"} <= boards
+    assert {"main", "chinext", "star", "beijing"} <= boards
+    classes = {r.status_class for r in LIMIT_RULES}
+    assert {"normal", "risk_warning", "delisting_arrangement"} <= classes
     for rule in LIMIT_RULES:
         assert rule.source_doc, rule.rule_id
 

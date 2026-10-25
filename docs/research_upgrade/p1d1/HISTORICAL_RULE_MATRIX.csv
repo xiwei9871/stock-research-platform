@@ -1,0 +1,23 @@
+rule_id,exchange,board,status_class,event_class,effective_from,effective_to,up_limit_pct,down_limit_pct,no_limit_window_days,day1_up_pct,day1_down_pct,source_doc,doc_number,verified
+pre_19961216_no_limit,any,any,normal,any,,1996-12-13,,,0,,,1996-12-16 起 A 股恢复 ±10% 涨跌幅，此前无涨跌幅限制,交易所交易规则沿革,True
+main_10pct,any,main,normal,any,1996-12-16,,10.0,10.0,0,,,上交所/深交所交易规则 主板 ±10%,交易规则,True
+main_st_5pct,any,main,risk_warning,any,1998-04-22,,5.0,5.0,0,,,沪深交易所风险警示板 ST/*ST ±5%,交易规则/风险警示板安排,True
+main_delisting_arrangement_10pct,any,main,delisting_arrangement,any,,,10.0,10.0,0,,,退市整理期交易机制 ±10%,交易所退市整理期安排,True
+main_ipo_day1_prereg_cap,any,main,normal,ipo,2014-01-17,2023-04-07,10.0,10.0,0,44.0,36.0,主板新股首日有效申报价格上限+44%/下限-36%(2014-01 起),交易所新股上市首日交易机制,True
+main_ipo_fullreg_window5,any,main,normal,ipo,2023-04-10,,10.0,10.0,5,,,全面注册制:主板新股上市前5个交易日不设涨跌幅,沪深主板注册制交易规则 2023-04-10,True
+main_relisting_day1_no_limit,any,main,normal,relisting,,,10.0,10.0,1,,,退市公司重新上市实施办法:重新上市首日不设涨跌幅,上交所/深交所重新上市实施办法,True
+chinext_10pct_pre_20200824,SZ,chinext,normal,any,,2020-08-21,10.0,10.0,0,,,注册制前创业板适用 ±10%,深交所交易规则(注册制前),True
+chinext_ipo_day1_prereg_cap,SZ,chinext,normal,ipo,2014-01-17,2020-08-21,10.0,10.0,0,44.0,36.0,创业板注册制前新股首日上限+44%/-36%,深交所新股上市首日交易机制,True
+chinext_st_5pct_pre_20200824,SZ,chinext,risk_warning,any,,2020-08-21,5.0,5.0,0,,,创业板风险警示股票改革前适用交易规则3.3.15 ±5%,深证上〔2020〕620号 第一条,True
+chinext_20pct_from_20200824,SZ,chinext,normal,any,2020-08-24,,20.0,20.0,0,,,创业板交易特别规定2.1:竞价交易涨跌幅20%,深证上〔2020〕515号,True
+chinext_ipo_window5_from_20200824,SZ,chinext,normal,ipo,2020-08-24,,20.0,20.0,5,,,创业板交易特别规定2.1:IPO前5个交易日不设涨跌幅,深证上〔2020〕515号,True
+chinext_st_20pct_from_20200824,SZ,chinext,risk_warning,any,2020-08-24,,20.0,20.0,0,,,创业板风险警示股票改革后适用20%,深证上〔2020〕620号 第二条,True
+chinext_delist_arr_pre_reform_10pct,SZ,chinext,delisting_arrangement,any,,,10.0,10.0,0,,,改革实施前已进入且实施时仍处退市整理期:维持±10%,深证上〔2020〕620号 第一条,True
+chinext_delist_arr_post_reform_20pct,SZ,chinext,delisting_arrangement,any,,,20.0,20.0,0,,,改革实施后进入退市整理期:适用20%,深证上〔2020〕620号 第二条,True
+star_20pct_since_20190722,SH,star,normal,any,2019-07-22,,20.0,20.0,0,,,科创板交易特别规定第十八条:±20%,上证发〔2019〕23号,True
+star_ipo_window5,SH,star,normal,ipo,2019-07-22,,20.0,20.0,5,,,科创板交易特别规定:IPO前5个交易日不设涨跌幅,上证发〔2019〕23号,True
+star_st_20pct,SH,star,risk_warning,any,2019-07-22,,20.0,20.0,0,,,科创板风险警示股票适用板块 ±20%,科创板交易特别规定,True
+star_delist_arr_20pct,SH,star,delisting_arrangement,any,2019-07-22,,20.0,20.0,0,,,科创板退市整理期适用板块 ±20%,科创板交易特别规定,True
+beijing_30pct_since_20211115,BJ,beijing,normal,any,2021-11-15,,30.0,30.0,0,,,北交所交易规则(试行):±30%,北证公告〔2021〕,True
+beijing_ipo_day1_no_limit,BJ,beijing,normal,ipo,2021-11-15,,30.0,30.0,1,,,北交所新股上市首日不设涨跌幅,北交所交易规则(试行),True
+beijing_st_30pct,BJ,beijing,risk_warning,any,2021-11-15,,30.0,30.0,0,,,北交所风险警示股票适用板块 ±30%,北交所交易规则(试行),False
