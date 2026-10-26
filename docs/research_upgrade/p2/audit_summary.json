@@ -1,0 +1,719 @@
+{
+  "coverage_periods": 139,
+  "pubdate_audit": [
+    {
+      "rows_total": 549987,
+      "null_ann": 0,
+      "sentinel": 0,
+      "ann_before_period": 0,
+      "ann_eq_period": 0,
+      "ann_lag180plus": 76039,
+      "min_real_ann": "1990-03-21",
+      "max_ann": "2026-08-31",
+      "sentinel_assets": 0,
+      "statement": "income"
+    },
+    {
+      "rows_total": 313734,
+      "null_ann": 0,
+      "sentinel": 71,
+      "ann_before_period": 71,
+      "ann_eq_period": 8,
+      "ann_lag180plus": 33570,
+      "min_real_ann": "1989-12-31",
+      "max_ann": "2026-10-23",
+      "sentinel_assets": 9,
+      "statement": "balance"
+    },
+    {
+      "rows_total": 313006,
+      "null_ann": 0,
+      "sentinel": 22,
+      "ann_before_period": 22,
+      "ann_eq_period": 1,
+      "ann_lag180plus": 53637,
+      "min_real_ann": "1997-08-09",
+      "max_ann": "2026-10-23",
+      "sentinel_assets": 11,
+      "statement": "cash_flow"
+    }
+  ],
+  "multi_version_keys": {
+    "income": 0,
+    "balance": 10,
+    "cash_flow": 9
+  },
+  "multi_version_samples": {
+    "income": [],
+    "balance": [
+      {
+        "asset_id": "CN:SH:600032",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-04-28",
+        "last_ann": "2026-08-28"
+      },
+      {
+        "asset_id": "CN:SH:603407",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-08",
+        "last_ann": "2026-08-24"
+      },
+      {
+        "asset_id": "CN:SH:688635",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-08",
+        "last_ann": "2026-08-26"
+      },
+      {
+        "asset_id": "CN:SH:688981",
+        "report_period": "2013-12-31",
+        "report_type": "FY",
+        "source": "akshare_em",
+        "ann_versions": 2,
+        "first_ann": "2016-05-31",
+        "last_ann": "2019-04-25"
+      },
+      {
+        "asset_id": "CN:SZ:001237",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-21",
+        "last_ann": "2026-08-28"
+      },
+      {
+        "asset_id": "CN:SZ:001365",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-15",
+        "last_ann": "2026-08-24"
+      },
+      {
+        "asset_id": "CN:SZ:001393",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-14",
+        "last_ann": "2026-08-19"
+      },
+      {
+        "asset_id": "CN:SZ:002948",
+        "report_period": "2016-12-31",
+        "report_type": "FY",
+        "source": "akshare_em",
+        "ann_versions": 2,
+        "first_ann": "2017-04-26",
+        "last_ann": "2018-01-09"
+      },
+      {
+        "asset_id": "CN:SZ:301531",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-08",
+        "last_ann": "2026-08-25"
+      },
+      {
+        "asset_id": "CN:SZ:301669",
+        "report_period": "2025-12-31",
+        "report_type": "FY",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2026-05-21",
+        "last_ann": "2026-08-28"
+      }
+    ],
+    "cash_flow": [
+      {
+        "asset_id": "CN:SH:600032",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-08-27",
+        "last_ann": "2026-08-28"
+      },
+      {
+        "asset_id": "CN:SH:600197",
+        "report_period": "2007-03-31",
+        "report_type": "Q",
+        "source": "akshare_em",
+        "ann_versions": 2,
+        "first_ann": "2007-04-26",
+        "last_ann": "2008-04-24"
+      },
+      {
+        "asset_id": "CN:SH:603407",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-12-12",
+        "last_ann": "2026-08-24"
+      },
+      {
+        "asset_id": "CN:SH:688981",
+        "report_period": "2013-12-31",
+        "report_type": "FY",
+        "source": "akshare_em",
+        "ann_versions": 2,
+        "first_ann": "2016-05-31",
+        "last_ann": "2019-04-25"
+      },
+      {
+        "asset_id": "CN:SZ:001237",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-11-13",
+        "last_ann": "2026-08-28"
+      },
+      {
+        "asset_id": "CN:SZ:001365",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-12-22",
+        "last_ann": "2026-08-24"
+      },
+      {
+        "asset_id": "CN:SZ:001393",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-11-19",
+        "last_ann": "2026-08-19"
+      },
+      {
+        "asset_id": "CN:SZ:301531",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-12-30",
+        "last_ann": "2026-08-25"
+      },
+      {
+        "asset_id": "CN:SZ:301669",
+        "report_period": "2025-06-30",
+        "report_type": "Q",
+        "source": "akshare_sina",
+        "ann_versions": 2,
+        "first_ann": "2025-12-04",
+        "last_ann": "2026-08-28"
+      }
+    ]
+  },
+  "cross_source_conflicts_n": 200,
+  "cross_source_conflict_samples": [
+    {
+      "asset_id": "CN:SH:601112",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:603284",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:603293",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:603352",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:603402",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:603407",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:603459",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:688635",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:688712",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:688781",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:688785",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:688808",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:688811",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:688813",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SH:688816",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:688818",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SH:688820",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:001220",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:001237",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SZ:001257",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SZ:001312",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:001365",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SZ:001393",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:301513",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:301531",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:301599",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SZ:301666",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SZ:301669",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 1
+    },
+    {
+      "asset_id": "CN:SZ:301680",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    },
+    {
+      "asset_id": "CN:SZ:301682",
+      "report_period": "2026-03-31",
+      "nsrc": 2,
+      "n_revenue": 2,
+      "n_np": 2
+    }
+  ],
+  "delisted_total": 13,
+  "delisted_retention_by_year": [
+    {
+      "dd": "2026-07-17",
+      "assets": 1,
+      "with_income": 1,
+      "with_balance": 1,
+      "with_cf": 1
+    },
+    {
+      "dd": "2026-07-14",
+      "assets": 2,
+      "with_income": 2,
+      "with_balance": 2,
+      "with_cf": 2
+    },
+    {
+      "dd": "2026-07-10",
+      "assets": 1,
+      "with_income": 1,
+      "with_balance": 1,
+      "with_cf": 1
+    },
+    {
+      "dd": "2026-07-06",
+      "assets": 1,
+      "with_income": 1,
+      "with_balance": 1,
+      "with_cf": 1
+    },
+    {
+      "dd": "2026-07-03",
+      "assets": 2,
+      "with_income": 2,
+      "with_balance": 2,
+      "with_cf": 2
+    },
+    {
+      "dd": "2026-06-29",
+      "assets": 2,
+      "with_income": 2,
+      "with_balance": 2,
+      "with_cf": 2
+    },
+    {
+      "dd": "2026-06-26",
+      "assets": 2,
+      "with_income": 2,
+      "with_balance": 2,
+      "with_cf": 2
+    },
+    {
+      "dd": "2026-06-10",
+      "assets": 1,
+      "with_income": 1,
+      "with_balance": 1,
+      "with_cf": 1
+    },
+    {
+      "dd": "2026-06-03",
+      "assets": 1,
+      "with_income": 1,
+      "with_balance": 1,
+      "with_cf": 1
+    }
+  ],
+  "q2_gap": [
+    {
+      "asset_id": "CN:SH:600193",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "1999-05-27",
+      "delist_date": "2026-07-06",
+      "exchange": "SH",
+      "latest_income": "2026-06-30",
+      "n_income": 183,
+      "latest_balance": "2026-03-31",
+      "n_balance": 106,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 101
+    },
+    {
+      "asset_id": "CN:SH:600421",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2004-06-07",
+      "delist_date": "2026-06-26",
+      "exchange": "SH",
+      "latest_income": "2026-03-31",
+      "n_income": 170,
+      "latest_balance": "2026-03-31",
+      "n_balance": 91,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 89
+    },
+    {
+      "asset_id": "CN:SH:600599",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2001-08-28",
+      "delist_date": "2026-06-26",
+      "exchange": "SH",
+      "latest_income": "2026-03-31",
+      "n_income": 179,
+      "latest_balance": "2026-03-31",
+      "n_balance": 103,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 98
+    },
+    {
+      "asset_id": "CN:SH:600608",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "1992-03-27",
+      "delist_date": "2026-07-03",
+      "exchange": "SH",
+      "latest_income": "2026-03-31",
+      "n_income": 197,
+      "latest_balance": "2026-03-31",
+      "n_balance": 121,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 102
+    },
+    {
+      "asset_id": "CN:SH:600636",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "1993-03-16",
+      "delist_date": "2026-06-29",
+      "exchange": "SH",
+      "latest_income": "2026-03-31",
+      "n_income": 192,
+      "latest_balance": "2026-03-31",
+      "n_balance": 117,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 101
+    },
+    {
+      "asset_id": "CN:SH:600696",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "1993-12-06",
+      "delist_date": "2026-06-29",
+      "exchange": "SH",
+      "latest_income": "2026-03-31",
+      "n_income": 194,
+      "latest_balance": "2026-03-31",
+      "n_balance": 118,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 101
+    },
+    {
+      "asset_id": "CN:SH:605081",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2021-02-09",
+      "delist_date": "2026-07-03",
+      "exchange": "SH",
+      "latest_income": "2026-06-30",
+      "n_income": 52,
+      "latest_balance": "2026-03-31",
+      "n_balance": 29,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 31
+    },
+    {
+      "asset_id": "CN:SH:688287",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2022-05-25",
+      "delist_date": "2026-06-10",
+      "exchange": "SH",
+      "latest_income": "2026-03-31",
+      "n_income": 62,
+      "latest_balance": "2026-03-31",
+      "n_balance": 43,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 47
+    },
+    {
+      "asset_id": "CN:SZ:000004",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "1991-01-14",
+      "delist_date": "2026-07-14",
+      "exchange": "SZ",
+      "latest_income": "2026-06-30",
+      "n_income": 193,
+      "latest_balance": "2026-03-31",
+      "n_balance": 115,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 102
+    },
+    {
+      "asset_id": "CN:SZ:000638",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "1996-11-26",
+      "delist_date": "2026-06-03",
+      "exchange": "SZ",
+      "latest_income": "2026-03-31",
+      "n_income": 189,
+      "latest_balance": "2026-03-31",
+      "n_balance": 112,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 100
+    },
+    {
+      "asset_id": "CN:SZ:002808",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2016-08-12",
+      "delist_date": "2026-07-14",
+      "exchange": "SZ",
+      "latest_income": "2026-06-30",
+      "n_income": 92,
+      "latest_balance": "2026-03-31",
+      "n_balance": 50,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 52
+    },
+    {
+      "asset_id": "CN:SZ:002898",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2017-09-12",
+      "delist_date": "2026-07-17",
+      "exchange": "SZ",
+      "latest_income": "2026-06-30",
+      "n_income": 77,
+      "latest_balance": "2026-03-31",
+      "n_balance": 40,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 42
+    },
+    {
+      "asset_id": "CN:SZ:300029",
+      "recon_class": "source_unavailable_delisted",
+      "reason": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed",
+      "list_date": "2009-12-25",
+      "delist_date": "2026-07-10",
+      "exchange": "SZ",
+      "latest_income": "2026-03-31",
+      "n_income": 137,
+      "latest_balance": "2026-03-31",
+      "n_balance": 70,
+      "latest_cash_flow": "2026-03-31",
+      "n_cash_flow": 72
+    },
+    {
+      "asset_id": "CN:SZ:002731",
+      "recon_class": "truly_undisclosed_at_deadline",
+      "reason": "",
+      "list_date": "2014-11-04",
+      "delist_date": null,
+      "exchange": "SZ",
+      "latest_income": "2025-09-30",
+      "n_income": 95,
+      "latest_balance": "2025-09-30",
+      "n_balance": 49,
+      "latest_cash_flow": "2025-09-30",
+      "n_cash_flow": 51
+    }
+  ],
+  "q2_recon_coverage": {
+    "both_complete": 5199,
+    "balance_only": 0,
+    "cashflow_only": 0,
+    "both_missing": 14
+  },
+  "q2_recon_generated": "2026-10-23",
+  "edge_case_statuses": {
+    "period_ended_ann_pending": "not_yet_published",
+    "after_announcement": "verified_public",
+    "same_day_as_ann_blocked": "not_yet_published",
+    "day_after_ann_visible": "verified_public",
+    "sentinel_ann_fail_closed": "publication_date_missing",
+    "delisted_history_queryable": "verified_public",
+    "version_policy_latest": "restated_selected",
+    "version_policy_initial": "restated_selected",
+    "deterministic_repeat": null
+  }
+}

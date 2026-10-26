@@ -1,0 +1,173 @@
+{
+  "period_ended_ann_pending": {
+    "asset_id": "CN:SH:600000",
+    "as_of": "2024-04-01",
+    "statement_type": "income",
+    "report_period": "2023-12-31",
+    "source": null,
+    "publication_evidence": null,
+    "publicly_available_at_asof": false,
+    "operationally_available_at_asof": null,
+    "selected_statement_version": null,
+    "restatement_of": null,
+    "pit_status": "not_yet_published",
+    "restriction_reasons": [
+      "all statements announced at/after as_of+1d (periods ['2023-12-31'])"
+    ],
+    "evidence_trace": {
+      "table": "finance.income_statement",
+      "rows_seen": 2,
+      "version_policy": "latest_public"
+    }
+  },
+  "after_announcement": {
+    "asset_id": "CN:SH:600000",
+    "as_of": "2024-06-01",
+    "statement_type": "income",
+    "report_period": "2023-12-31",
+    "source": "akshare_em_profit_sheet",
+    "publication_evidence": "2024-04-30",
+    "publicly_available_at_asof": true,
+    "operationally_available_at_asof": false,
+    "selected_statement_version": "akshare_em_profit_sheet@ann=2024-04-30",
+    "restatement_of": "baostock@ann=2024-04-30",
+    "pit_status": "verified_public",
+    "restriction_reasons": [
+      "statement was public by as_of but only ingested later (operational gap)",
+      "2 rows knowable at as_of (multi-source/period); latest_public selected"
+    ],
+    "evidence_trace": {
+      "table": "finance.income_statement",
+      "rows_seen": 2,
+      "version_policy": "latest_public"
+    }
+  },
+  "same_day_as_ann_blocked": {
+    "asset_id": "CN:SH:688253",
+    "as_of": "2026-04-28",
+    "statement_type": "income",
+    "report_period": "2026-03-31",
+    "source": null,
+    "publication_evidence": null,
+    "publicly_available_at_asof": false,
+    "operationally_available_at_asof": null,
+    "selected_statement_version": null,
+    "restatement_of": null,
+    "pit_status": "not_yet_published",
+    "restriction_reasons": [
+      "all statements announced at/after as_of+1d (periods ['2026-03-31'])"
+    ],
+    "evidence_trace": {
+      "table": "finance.income_statement",
+      "rows_seen": 1,
+      "version_policy": "latest_public"
+    }
+  },
+  "day_after_ann_visible": {
+    "asset_id": "CN:SH:688253",
+    "as_of": "2026-04-29",
+    "statement_type": "income",
+    "report_period": "2026-03-31",
+    "source": "akshare_em_profit_sheet",
+    "publication_evidence": "2026-04-28",
+    "publicly_available_at_asof": true,
+    "operationally_available_at_asof": false,
+    "selected_statement_version": "akshare_em_profit_sheet@ann=2026-04-28",
+    "restatement_of": null,
+    "pit_status": "verified_public",
+    "restriction_reasons": [
+      "statement was public by as_of but only ingested later (operational gap)"
+    ],
+    "evidence_trace": {
+      "table": "finance.income_statement",
+      "rows_seen": 1,
+      "version_policy": "latest_public"
+    }
+  },
+  "sentinel_ann_fail_closed": {
+    "asset_id": "CN:SH:600999",
+    "as_of": "2026-01-01",
+    "statement_type": "balance",
+    "report_period": "2007-06-30",
+    "source": null,
+    "publication_evidence": null,
+    "publicly_available_at_asof": false,
+    "operationally_available_at_asof": null,
+    "selected_statement_version": null,
+    "restatement_of": null,
+    "pit_status": "publication_date_missing",
+    "restriction_reasons": [
+      "1 row(s) lack a real announcement_date (sentinel/NULL)"
+    ],
+    "evidence_trace": {
+      "table": "finance.balance_sheet",
+      "rows_seen": 1,
+      "version_policy": "latest_public"
+    }
+  },
+  "delisted_history_queryable": {
+    "asset_id": "CN:SH:600193",
+    "as_of": "2027-01-01",
+    "statement_type": "income",
+    "report_period": "2026-06-30",
+    "source": "baostock",
+    "publication_evidence": "2026-08-28",
+    "publicly_available_at_asof": true,
+    "operationally_available_at_asof": true,
+    "selected_statement_version": "baostock@ann=2026-08-28",
+    "restatement_of": null,
+    "pit_status": "verified_public",
+    "restriction_reasons": [],
+    "evidence_trace": {
+      "table": "finance.income_statement",
+      "rows_seen": 1,
+      "version_policy": "latest_public"
+    },
+    "asset": "CN:SH:600193"
+  },
+  "version_policy_latest": {
+    "asset_id": "CN:SH:600032",
+    "as_of": "2027-01-01",
+    "statement_type": "balance",
+    "report_period": "2025-12-31",
+    "source": "akshare_sina",
+    "publication_evidence": "2026-08-28",
+    "publicly_available_at_asof": true,
+    "operationally_available_at_asof": true,
+    "selected_statement_version": "akshare_sina@ann=2026-08-28",
+    "restatement_of": "akshare_em@ann=2026-04-28,akshare_sina@ann=2026-04-28",
+    "pit_status": "restated_selected",
+    "restriction_reasons": [
+      "3 version row(s) incl. same-source re-announcement; latest_public selected"
+    ],
+    "evidence_trace": {
+      "table": "finance.balance_sheet",
+      "rows_seen": 3,
+      "version_policy": "latest_public"
+    }
+  },
+  "version_policy_initial": {
+    "asset_id": "CN:SH:600032",
+    "as_of": "2027-01-01",
+    "statement_type": "balance",
+    "report_period": "2025-12-31",
+    "source": "akshare_em",
+    "publication_evidence": "2026-04-28",
+    "publicly_available_at_asof": true,
+    "operationally_available_at_asof": true,
+    "selected_statement_version": "akshare_em@ann=2026-04-28",
+    "restatement_of": "akshare_sina@ann=2026-04-28,akshare_sina@ann=2026-08-28",
+    "pit_status": "restated_selected",
+    "restriction_reasons": [
+      "3 version row(s) incl. same-source re-announcement; initial_public selected"
+    ],
+    "evidence_trace": {
+      "table": "finance.balance_sheet",
+      "rows_seen": 3,
+      "version_policy": "initial_public"
+    }
+  },
+  "deterministic_repeat": {
+    "equal": true
+  }
+}
