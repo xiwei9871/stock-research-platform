@@ -1,0 +1,10 @@
+rule_id,board,scope,effective_from,effective_to,up_limit_pct,down_limit_pct,no_limit_window_days,rule_doc,issuing_authority,doc_number,official_source_url,verification_note
+chinext_10pct_pre_20200824,chinext,创业板存量股,,2020-08-21,10,10,0,深圳证券交易所交易规则/创业板股票上市规则(注册制前),深交所,,https://www.szse.cn/lawrules/rule/trade/traderrule/,注册制改革前创业板适用主板 ±10% 涨跌幅制度
+chinext_20pct_from_20200824,chinext,创业板全部股票,2020-08-24,,20,20,5,深圳证券交易所创业板交易特别规定,深交所,深证上〔2020〕515号,https://www.szse.cn/lawrules/rule/repeal/rules/P020231230545310237980.pdf,2.1条:竞价交易涨跌幅20%;首次公开发行上市股票前5个交易日不设涨跌幅;自首只注册制股票上市首日起施行(2020-08-24)
+star_20pct_since_20190722,star,科创板全部股票,2019-07-22,,20,20,5,上海证券交易所科创板股票交易特别规定,上交所,上证发〔2019〕23号,https://www.sse.com.cn/aboutus/mediacenter/hotandd/c/c_20190719_4866745.shtml,第十八条:涨跌幅20%;首次公开发行上市股票前5个交易日不设涨跌幅;2019-07-22 科创板开市起适用
+beijing_30pct_since_20211115,beijing,北交所全部股票,2021-11-15,,30,30,1,北京证券交易所交易规则(试行),北交所,,https://www.bse.cn/rules_list.html,2021-11-15 开市起 ±30%;首日不设涨跌幅
+st_main_5pct,st_main,沪深主板风险警示股票,,,5,5,0,沪深交易所风险警示板股票交易相关安排/交易规则 ST及*ST ±5%,上交所/深交所,,https://www.sse.com.cn/lawandrules/sserules/trading/rules/,ST/*ST 股票适用 ±5% 涨跌幅(风险警示板);创业板/科创板/北交所风险警示股票仍适用所在板块涨跌幅(20%/30%)
+main_10pct_pre_20230410,main,沪深主板(注册制前含首日上限),,2023-04-07,10,10,0,上海证券交易所交易规则/深圳证券交易所交易规则,上交所/深交所,,https://www.sse.com.cn/lawandrules/sserules/trading/rules/,主板 ±10%;2014-01 起新股首日有效申报价格上限 +44%/下限 -36%(首日封顶即锁定态)
+main_10pct_from_20230410,main,沪深主板(全面注册制后),2023-04-10,,10,10,5,沪深主板注册制交易规则(全面注册制配套),上交所/深交所/证监会,,https://www.sse.com.cn/lawandrules/sserules/trading/rules/,2023-04-10 全面注册制落地:主板新股上市前5个交易日不设涨跌幅限制其后 ±10%
+suspension_rule,all,停牌/临停适用全部板块,,,,,0,沪深交易所交易规则 停牌与复牌章节,上交所/深交所,,https://www.sse.com.cn/lawandrules/sserules/trading/rules/,全日停牌/临时停牌期间不得成交;回测不得模拟正常买卖
+delisting_arrangement,all,退市整理期股票,,,10,10,0,沪深交易所退市整理期交易安排/退市规则,上交所/深交所,,https://www.sse.com.cn/lawandrules/sserules/trading/rules/,退市整理期通常 ±10% 涨跌幅;整理期结束摘牌后退出可交易池

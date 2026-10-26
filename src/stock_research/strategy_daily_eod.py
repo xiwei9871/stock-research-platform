@@ -1087,6 +1087,19 @@ def check_strategy_daily_eod_dependencies(
         failure = f"deps_status={row.get('deps_status')}"
         detail = _failed_job_reason(row.get("failed_jobs"), stage="deps")
         common_failures.append(f"{failure}: {detail}" if detail else failure)
+    score_rows = _fetch_one(
+        service,
+        """
+        SELECT count(*) AS row_count
+        FROM factor.stock_score_daily
+        WHERE score_version = %s
+          AND trade_date = %s
+        """,
+        ["manual_v1", trade_date],
+    )
+    score_count = int(score_rows[0].get("row_count") or 0) if score_rows else 0
+    if score_count <= 0:
+        common_failures.append(f"score_topn missing for {trade_date}")
     common = (
         {"status": "failed", "reason": "; ".join(common_failures)}
         if common_failures
@@ -1101,6 +1114,49 @@ def check_strategy_daily_eod_dependencies(
             "reason": reason or f"minute5_status={row.get('minute5_status')}",
         }
     return {"common": common, "intraday": intraday}
+
+
+# Failure reasons that mean "upstream data simply has not landed yet" — the
+# cron wait loop may keep polling on these. Anything else is a real failure
+# and must fall through to the CLI immediately instead of burning the wait
+# window.
+WAITABLE_DEPENDENCY_REASON_MARKERS = (
+    "missing daily_pipeline_status",
+    "score_topn missing",
+)
+
+
+def strategy_daily_eod_dependency_probe_exit_code(check: dict[str, Any]) -> int:
+    """Classify a dependency probe result for the cron wait loop.
+
+    Returns 0 when common+intraday dependencies are all ready, 3 when every
+    observed failure is a waitable "not yet written" condition, and 4 when at
+    least one non-waitable failure exists. Waitable granularity is per
+    dependency entry and per "; "-separated failure, so a score-row wait does
+    not mask a genuinely failed daily/deps stage.
+    """
+    common = check.get("common") or {}
+    intraday = check.get("intraday") or {}
+    if common.get("status") == "success" and intraday.get("status") == "success":
+        return 0
+
+    def _waitable(dep: dict[str, Any]) -> bool:
+        if dep.get("status") == "success":
+            return True
+        reasons = [
+            part.strip()
+            for part in str(dep.get("reason") or "").split(";")
+            if part.strip()
+        ]
+        return bool(reasons) and all(
+            any(
+                part.startswith(marker)
+                for marker in WAITABLE_DEPENDENCY_REASON_MARKERS
+            )
+            for part in reasons
+        )
+
+    return 3 if _waitable(common) and _waitable(intraday) else 4
 
 
 def _normalize_dependency_check(check: dict[str, Any]) -> dict[str, dict[str, Any]]:

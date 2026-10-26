@@ -440,6 +440,72 @@ def _asset_id_from_cn_stock_code(raw_code: str) -> str | None:
     return f"CN:{exchange}:{digits}"
 
 
+# --- P1d.3: guarded EOD V2 incremental write ---------------------------------
+# Callable ONLY against a table that already carries the v2 column contract
+# (is_limit_up_v2, is_limit_down_v2, limit_state_v2, limit_rule_id_v2).
+# Production (core.asset_status_daily) does not have those columns yet, so
+# this function self-aborts there — it exists for the shadow rehearsal and
+# the future authorized migration window. It is never invoked automatically
+# by build_asset_status_daily.
+_V2_FLAG_COLUMNS = ("is_limit_up_v2", "is_limit_down_v2",
+                    "limit_state_v2", "limit_rule_id_v2")
+
+
+def emit_v2_flags(
+    conn,
+    start_date: str,
+    end_date: str,
+    target_table: str,
+    flags_version: str = "pit_rules_v1",
+) -> int:
+    """Compute PIT limit flags for [start,end] and upsert into target_table.
+
+    Guarded: refuses to write unless the target exposes the full v2 column
+    contract plus limit_flags_version. Returns the number of rows upserted.
+    """
+    import re as _re
+    if not _re.fullmatch(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*",
+                         target_table):
+        raise ValueError(f"bad target_table identifier: {target_table!r}")
+    t_schema, t_rel = target_table.split(".")
+    have = {r["column_name"] for r in fetch_all(conn, """
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema=%s AND table_name=%s
+    """, [t_schema, t_rel])}
+    need = set(_V2_FLAG_COLUMNS) | {"limit_flags_version",
+                                    "asset_id", "trade_date"}
+    missing = sorted(need - have)
+    if missing:
+        raise RuntimeError(
+            f"{target_table} lacks v2 contract columns {missing}; refusing "
+            f"to write (table not migrated)")
+    from stock_research.tradeability import compute_pit_limit_flags
+    flags = compute_pit_limit_flags(conn, start_date, end_date)
+    # Pure UPDATE — never INSERT. Flags are computed FROM status rows, so
+    # every key must already exist (EOD ordering: build_asset_status_daily
+    # runs first). INSERT..ON CONFLICT would validate NOT NULL on the
+    # proposed tuple before conflict arbitration and break on the
+    # production-shaped table whose v1 columns are NOT NULL.
+    sql = f"""
+        UPDATE {target_table} r
+           SET is_limit_up_v2      = v.up,
+               is_limit_down_v2    = v.dn,
+               limit_state_v2      = v.st,
+               limit_rule_id_v2    = v.rule,
+               limit_flags_version = v.ver
+          FROM (VALUES (%s, %s, %s, %s, %s, %s, %s))
+               AS v(d, a, up, dn, st, rule, ver)
+         WHERE r.trade_date = v.d::date AND r.asset_id = v.a
+    """
+    rows = [(
+        f["trade_date"], f["asset_id"],
+        bool(f["shadow_limit_up"]), bool(f["shadow_limit_down"]),
+        int(f["shadow_state"]), f["shadow_rule_id"], flags_version,
+    ) for f in flags.to_dict("records")]
+    execute_many(conn, sql, rows)
+    return len(rows)
+
+
 def build_asset_status_daily_for_service(
     start_date: str | None = None,
     end_date: str | None = None,
@@ -456,7 +522,23 @@ def build_asset_status_daily(
     start_date: str | None = None,
     end_date: str | None = None,
     adjust_type: str = "hfq",
+    emit_v2_target: str | None = None,
 ) -> None:
+    """Write v1 status rows; optionally emit V2 flags in the SAME
+    transaction (P1d.3 C — toggleable dual-write).
+
+    ``emit_v2_target`` stays None in production until the migration is
+    authorized. When set (e.g. 'core.asset_status_daily' post-DDL), the
+    v2 emit runs inside the caller's transaction — the batch is
+    all-or-nothing, so a half-written day can never advance any success
+    watermark. The emit itself is a pure UPDATE guarded by the v2 column
+    contract (refuses unmigrated targets).
+    """
+    if emit_v2_target is not None and (start_date is None
+                                     or end_date is None):
+        raise ValueError(
+            "emit_v2_target requires explicit start/end dates "
+            "(unbounded v2 emit refused)")
     filters = ["b.adjust_type = %s"]
     params = [adjust_type]
     if start_date:
@@ -551,6 +633,8 @@ def build_asset_status_daily(
         updated_at = now()
     """
     execute(conn, sql, params)
+    if emit_v2_target is not None:
+        emit_v2_flags(conn, start_date, end_date, emit_v2_target)
 
 
 def assert_asset_status_daily_quality(

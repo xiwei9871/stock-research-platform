@@ -1,0 +1,675 @@
+{
+  "shadow_table": "p1d3_shadow.asset_status_daily_v2",
+  "flags_version": "pit_rules_v1",
+  "batches": [
+    {
+      "batch": "year_1990",
+      "start": "1990-12-19",
+      "end": "1990-12-31",
+      "rows_total": 45,
+      "rows_v2": 45,
+      "diff_rows": 7,
+      "seconds": 0.08
+    },
+    {
+      "batch": "year_1991",
+      "start": "1991-01-02",
+      "end": "1991-12-31",
+      "rows_total": 2084,
+      "rows_v2": 2084,
+      "diff_rows": 123,
+      "seconds": 0.15
+    },
+    {
+      "batch": "year_1992",
+      "start": "1992-01-02",
+      "end": "1992-12-31",
+      "rows_total": 6099,
+      "rows_v2": 6099,
+      "diff_rows": 453,
+      "seconds": 0.34
+    },
+    {
+      "batch": "year_1993",
+      "start": "1993-01-04",
+      "end": "1993-12-31",
+      "rows_total": 20596,
+      "rows_v2": 20596,
+      "diff_rows": 871,
+      "seconds": 1.02
+    },
+    {
+      "batch": "year_1994",
+      "start": "1994-01-03",
+      "end": "1994-12-30",
+      "rows_total": 52899,
+      "rows_v2": 52899,
+      "diff_rows": 3511,
+      "seconds": 2.58
+    },
+    {
+      "batch": "year_1995",
+      "start": "1995-01-03",
+      "end": "1995-12-29",
+      "rows_total": 59782,
+      "rows_v2": 59782,
+      "diff_rows": 1178,
+      "seconds": 2.87
+    },
+    {
+      "batch": "year_1996",
+      "start": "1996-01-02",
+      "end": "1996-12-31",
+      "rows_total": 76028,
+      "rows_v2": 76028,
+      "diff_rows": 2301,
+      "seconds": 3.81
+    },
+    {
+      "batch": "year_1997",
+      "start": "1997-01-02",
+      "end": "1997-12-31",
+      "rows_total": 123989,
+      "rows_v2": 123989,
+      "diff_rows": 425,
+      "seconds": 6.46
+    },
+    {
+      "batch": "year_1998",
+      "start": "1998-01-05",
+      "end": "1998-12-31",
+      "rows_total": 155183,
+      "rows_v2": 155183,
+      "diff_rows": 204,
+      "seconds": 7.96
+    },
+    {
+      "batch": "year_1999",
+      "start": "1999-01-04",
+      "end": "1999-12-30",
+      "rows_total": 171152,
+      "rows_v2": 171152,
+      "diff_rows": 255,
+      "seconds": 8.98
+    },
+    {
+      "batch": "year_2000",
+      "start": "2000-01-04",
+      "end": "2000-12-29",
+      "rows_total": 191738,
+      "rows_v2": 191738,
+      "diff_rows": 349,
+      "seconds": 9.84
+    },
+    {
+      "batch": "year_2001",
+      "start": "2001-01-02",
+      "end": "2001-12-31",
+      "rows_total": 219959,
+      "rows_v2": 219959,
+      "diff_rows": 133,
+      "seconds": 10.95
+    },
+    {
+      "batch": "year_2002",
+      "start": "2002-01-04",
+      "end": "2002-12-31",
+      "rows_total": 230855,
+      "rows_v2": 230855,
+      "diff_rows": 259,
+      "seconds": 11.15
+    },
+    {
+      "batch": "year_2003",
+      "start": "2003-01-02",
+      "end": "2003-12-31",
+      "rows_total": 250332,
+      "rows_v2": 250332,
+      "diff_rows": 114,
+      "seconds": 12.28
+    },
+    {
+      "batch": "year_2004",
+      "start": "2004-01-02",
+      "end": "2004-12-31",
+      "rows_total": 273581,
+      "rows_v2": 273581,
+      "diff_rows": 223,
+      "seconds": 13.34
+    },
+    {
+      "batch": "year_2005",
+      "start": "2005-01-04",
+      "end": "2005-12-30",
+      "rows_total": 284041,
+      "rows_v2": 284041,
+      "diff_rows": 492,
+      "seconds": 13.55
+    },
+    {
+      "batch": "year_2006",
+      "start": "2006-01-04",
+      "end": "2006-12-29",
+      "rows_total": 287310,
+      "rows_v2": 287310,
+      "diff_rows": 547,
+      "seconds": 14.63
+    },
+    {
+      "batch": "year_2007",
+      "start": "2007-01-04",
+      "end": "2007-12-28",
+      "rows_total": 313373,
+      "rows_v2": 313373,
+      "diff_rows": 1334,
+      "seconds": 15.55
+    },
+    {
+      "batch": "year_2008",
+      "start": "2008-01-02",
+      "end": "2008-12-31",
+      "rows_total": 346583,
+      "rows_v2": 346583,
+      "diff_rows": 2098,
+      "seconds": 17.84
+    },
+    {
+      "batch": "year_2009",
+      "start": "2009-01-05",
+      "end": "2009-12-31",
+      "rows_total": 354603,
+      "rows_v2": 354603,
+      "diff_rows": 855,
+      "seconds": 17.6
+    },
+    {
+      "batch": "year_2010",
+      "start": "2010-01-04",
+      "end": "2010-12-31",
+      "rows_total": 409545,
+      "rows_v2": 409545,
+      "diff_rows": 902,
+      "seconds": 20.08
+    },
+    {
+      "batch": "year_2011",
+      "start": "2011-01-04",
+      "end": "2011-12-30",
+      "rows_total": 488117,
+      "rows_v2": 488117,
+      "diff_rows": 881,
+      "seconds": 24.85
+    },
+    {
+      "batch": "year_2012",
+      "start": "2012-01-04",
+      "end": "2012-12-31",
+      "rows_total": 535269,
+      "rows_v2": 535269,
+      "diff_rows": 1351,
+      "seconds": 26.46
+    },
+    {
+      "batch": "year_2013",
+      "start": "2013-01-04",
+      "end": "2013-12-31",
+      "rows_total": 536767,
+      "rows_v2": 536767,
+      "diff_rows": 2126,
+      "seconds": 26.44
+    },
+    {
+      "batch": "year_2014",
+      "start": "2014-01-02",
+      "end": "2014-12-31",
+      "rows_total": 566967,
+      "rows_v2": 566967,
+      "diff_rows": 2150,
+      "seconds": 28.11
+    },
+    {
+      "batch": "year_2015",
+      "start": "2015-01-05",
+      "end": "2015-12-31",
+      "rows_total": 611773,
+      "rows_v2": 611773,
+      "diff_rows": 16610,
+      "seconds": 30.21
+    },
+    {
+      "batch": "year_2016",
+      "start": "2016-01-04",
+      "end": "2016-12-30",
+      "rows_total": 650520,
+      "rows_v2": 650520,
+      "diff_rows": 6982,
+      "seconds": 32.25
+    },
+    {
+      "batch": "year_2017",
+      "start": "2017-01-03",
+      "end": "2017-12-29",
+      "rows_total": 745125,
+      "rows_v2": 745125,
+      "diff_rows": 4180,
+      "seconds": 37.04
+    },
+    {
+      "batch": "year_2018",
+      "start": "2018-01-02",
+      "end": "2018-12-28",
+      "rows_total": 803046,
+      "rows_v2": 803046,
+      "diff_rows": 5574,
+      "seconds": 41.42
+    },
+    {
+      "batch": "year_2019",
+      "start": "2019-01-02",
+      "end": "2019-12-31",
+      "rows_total": 837814,
+      "rows_v2": 837814,
+      "diff_rows": 5592,
+      "seconds": 43.12
+    },
+    {
+      "batch": "year_2020",
+      "start": "2020-01-02",
+      "end": "2020-12-31",
+      "rows_total": 902608,
+      "rows_v2": 902608,
+      "diff_rows": 6077,
+      "seconds": 47.68
+    },
+    {
+      "batch": "year_2021",
+      "start": "2021-01-04",
+      "end": "2021-12-31",
+      "rows_total": 1017914,
+      "rows_v2": 1017914,
+      "diff_rows": 1926,
+      "seconds": 53.45
+    },
+    {
+      "batch": "year_2022",
+      "start": "2022-01-04",
+      "end": "2022-12-30",
+      "rows_total": 1112668,
+      "rows_v2": 1112668,
+      "diff_rows": 2785,
+      "seconds": 59.25
+    },
+    {
+      "batch": "year_2023",
+      "start": "2023-01-03",
+      "end": "2023-12-29",
+      "rows_total": 1185601,
+      "rows_v2": 1185601,
+      "diff_rows": 1645,
+      "seconds": 61.99
+    },
+    {
+      "batch": "year_2024",
+      "start": "2024-01-02",
+      "end": "2024-12-31",
+      "rows_total": 1221332,
+      "rows_v2": 1221332,
+      "diff_rows": 3600,
+      "seconds": 66.6
+    },
+    {
+      "batch": "year_2025",
+      "start": "2025-01-02",
+      "end": "2025-12-31",
+      "rows_total": 1246663,
+      "rows_v2": 1246663,
+      "diff_rows": 3984,
+      "seconds": 72.6
+    },
+    {
+      "batch": "year_2026",
+      "start": "2026-01-05",
+      "end": "2026-10-23",
+      "rows_total": 1002041,
+      "rows_v2": 1002041,
+      "diff_rows": 2747,
+      "seconds": 58.7
+    }
+  ],
+  "total_seconds": 901.24,
+  "total_rows": 17294002,
+  "total_diff_rows": 84844,
+  "throughput_rows_per_sec": 19189.0,
+  "recovery_drills": {
+    "small_batch": {
+      "batch": "year_1990",
+      "range": [
+        "1990-12-19",
+        "1990-12-31"
+      ],
+      "pre": {
+        "rows": 45,
+        "v2": 45,
+        "hash": "edbf465509423e7d3dc28723d0b3e78d"
+      },
+      "idempotent": true,
+      "rollback_deleted_rows": 0,
+      "restored_identical": true,
+      "drill_seconds": 0.53
+    },
+    "large_batch": {
+      "batch": "year_2025",
+      "range": [
+        "2025-01-02",
+        "2025-12-31"
+      ],
+      "pre": {
+        "rows": 1246663,
+        "v2": 1246663,
+        "hash": "4d8d5ab4483f4e0f119fe72050e01fa1"
+      },
+      "idempotent": true,
+      "rollback_deleted_rows": 0,
+      "restored_identical": true,
+      "drill_seconds": 151.46
+    }
+  },
+  "log": [
+    {
+      "batch_id": "year_1990",
+      "status": "done",
+      "rows_total": 45,
+      "rows_v2": 45,
+      "diff_rows": 7,
+      "seconds": 0.08081029199820478
+    },
+    {
+      "batch_id": "year_1991",
+      "status": "done",
+      "rows_total": 2084,
+      "rows_v2": 2084,
+      "diff_rows": 123,
+      "seconds": 0.15021474999957718
+    },
+    {
+      "batch_id": "year_1992",
+      "status": "done",
+      "rows_total": 6099,
+      "rows_v2": 6099,
+      "diff_rows": 453,
+      "seconds": 0.3430491670005722
+    },
+    {
+      "batch_id": "year_1993",
+      "status": "done",
+      "rows_total": 20596,
+      "rows_v2": 20596,
+      "diff_rows": 871,
+      "seconds": 1.0182019999992917
+    },
+    {
+      "batch_id": "year_1994",
+      "status": "done",
+      "rows_total": 52899,
+      "rows_v2": 52899,
+      "diff_rows": 3511,
+      "seconds": 2.577291834000789
+    },
+    {
+      "batch_id": "year_1995",
+      "status": "done",
+      "rows_total": 59782,
+      "rows_v2": 59782,
+      "diff_rows": 1178,
+      "seconds": 2.8679427499955636
+    },
+    {
+      "batch_id": "year_1996",
+      "status": "done",
+      "rows_total": 76028,
+      "rows_v2": 76028,
+      "diff_rows": 2301,
+      "seconds": 3.812066666992905
+    },
+    {
+      "batch_id": "year_1997",
+      "status": "done",
+      "rows_total": 123989,
+      "rows_v2": 123989,
+      "diff_rows": 425,
+      "seconds": 6.462410917003581
+    },
+    {
+      "batch_id": "year_1998",
+      "status": "done",
+      "rows_total": 155183,
+      "rows_v2": 155183,
+      "diff_rows": 204,
+      "seconds": 7.957821541000158
+    },
+    {
+      "batch_id": "year_1999",
+      "status": "done",
+      "rows_total": 171152,
+      "rows_v2": 171152,
+      "diff_rows": 255,
+      "seconds": 8.975884792002034
+    },
+    {
+      "batch_id": "year_2000",
+      "status": "done",
+      "rows_total": 191738,
+      "rows_v2": 191738,
+      "diff_rows": 349,
+      "seconds": 9.844392666003841
+    },
+    {
+      "batch_id": "year_2001",
+      "status": "done",
+      "rows_total": 219959,
+      "rows_v2": 219959,
+      "diff_rows": 133,
+      "seconds": 10.95237412500137
+    },
+    {
+      "batch_id": "year_2002",
+      "status": "done",
+      "rows_total": 230855,
+      "rows_v2": 230855,
+      "diff_rows": 259,
+      "seconds": 11.145220792001055
+    },
+    {
+      "batch_id": "year_2003",
+      "status": "done",
+      "rows_total": 250332,
+      "rows_v2": 250332,
+      "diff_rows": 114,
+      "seconds": 12.283081125002354
+    },
+    {
+      "batch_id": "year_2004",
+      "status": "done",
+      "rows_total": 273581,
+      "rows_v2": 273581,
+      "diff_rows": 223,
+      "seconds": 13.339199207999627
+    },
+    {
+      "batch_id": "year_2005",
+      "status": "done",
+      "rows_total": 284041,
+      "rows_v2": 284041,
+      "diff_rows": 492,
+      "seconds": 13.548276999994414
+    },
+    {
+      "batch_id": "year_2006",
+      "status": "done",
+      "rows_total": 287310,
+      "rows_v2": 287310,
+      "diff_rows": 547,
+      "seconds": 14.626911917002872
+    },
+    {
+      "batch_id": "year_2007",
+      "status": "done",
+      "rows_total": 313373,
+      "rows_v2": 313373,
+      "diff_rows": 1334,
+      "seconds": 15.546464750004816
+    },
+    {
+      "batch_id": "year_2008",
+      "status": "done",
+      "rows_total": 346583,
+      "rows_v2": 346583,
+      "diff_rows": 2098,
+      "seconds": 17.839309333001438
+    },
+    {
+      "batch_id": "year_2009",
+      "status": "done",
+      "rows_total": 354603,
+      "rows_v2": 354603,
+      "diff_rows": 855,
+      "seconds": 17.59569724999892
+    },
+    {
+      "batch_id": "year_2010",
+      "status": "done",
+      "rows_total": 409545,
+      "rows_v2": 409545,
+      "diff_rows": 902,
+      "seconds": 20.076954541000305
+    },
+    {
+      "batch_id": "year_2011",
+      "status": "done",
+      "rows_total": 488117,
+      "rows_v2": 488117,
+      "diff_rows": 881,
+      "seconds": 24.845669291993545
+    },
+    {
+      "batch_id": "year_2012",
+      "status": "done",
+      "rows_total": 535269,
+      "rows_v2": 535269,
+      "diff_rows": 1351,
+      "seconds": 26.461217291995126
+    },
+    {
+      "batch_id": "year_2013",
+      "status": "done",
+      "rows_total": 536767,
+      "rows_v2": 536767,
+      "diff_rows": 2126,
+      "seconds": 26.439686457997595
+    },
+    {
+      "batch_id": "year_2014",
+      "status": "done",
+      "rows_total": 566967,
+      "rows_v2": 566967,
+      "diff_rows": 2150,
+      "seconds": 28.10819362499751
+    },
+    {
+      "batch_id": "year_2015",
+      "status": "done",
+      "rows_total": 611773,
+      "rows_v2": 611773,
+      "diff_rows": 16610,
+      "seconds": 30.211900875001447
+    },
+    {
+      "batch_id": "year_2016",
+      "status": "done",
+      "rows_total": 650520,
+      "rows_v2": 650520,
+      "diff_rows": 6982,
+      "seconds": 32.248466500001086
+    },
+    {
+      "batch_id": "year_2017",
+      "status": "done",
+      "rows_total": 745125,
+      "rows_v2": 745125,
+      "diff_rows": 4180,
+      "seconds": 37.0438451250011
+    },
+    {
+      "batch_id": "year_2018",
+      "status": "done",
+      "rows_total": 803046,
+      "rows_v2": 803046,
+      "diff_rows": 5574,
+      "seconds": 41.42085049999878
+    },
+    {
+      "batch_id": "year_2019",
+      "status": "done",
+      "rows_total": 837814,
+      "rows_v2": 837814,
+      "diff_rows": 5592,
+      "seconds": 43.11635716699675
+    },
+    {
+      "batch_id": "year_2020",
+      "status": "done",
+      "rows_total": 902608,
+      "rows_v2": 902608,
+      "diff_rows": 6077,
+      "seconds": 47.678375625000626
+    },
+    {
+      "batch_id": "year_2021",
+      "status": "done",
+      "rows_total": 1017914,
+      "rows_v2": 1017914,
+      "diff_rows": 1926,
+      "seconds": 53.45335091600282
+    },
+    {
+      "batch_id": "year_2022",
+      "status": "done",
+      "rows_total": 1112668,
+      "rows_v2": 1112668,
+      "diff_rows": 2785,
+      "seconds": 59.24505120899994
+    },
+    {
+      "batch_id": "year_2023",
+      "status": "done",
+      "rows_total": 1185601,
+      "rows_v2": 1185601,
+      "diff_rows": 1645,
+      "seconds": 61.992017874996236
+    },
+    {
+      "batch_id": "year_2024",
+      "status": "done",
+      "rows_total": 1221332,
+      "rows_v2": 1221332,
+      "diff_rows": 3600,
+      "seconds": 66.60397404200194
+    },
+    {
+      "batch_id": "year_2025",
+      "status": "done",
+      "rows_total": 1246663,
+      "rows_v2": 1246663,
+      "diff_rows": 3984,
+      "seconds": 72.59967795899865
+    },
+    {
+      "batch_id": "year_2026",
+      "status": "done",
+      "rows_total": 1002041,
+      "rows_v2": 1002041,
+      "diff_rows": 2747,
+      "seconds": 58.695195665997744
+    }
+  ]
+}

@@ -21,11 +21,12 @@ if [[ -z "${TRADE_DATE}" ]]; then
   TRADE_DATE="$("$PYTHON_BIN" -c 'from datetime import date; print(date.today().isoformat())')"
 fi
 
-# The daily pipeline writes ops.daily_pipeline_status during finalize (~21:00+).
-# Earlier invocations would otherwise fail with "missing daily_pipeline_status"
-# every trading day; poll while that is the only blocking reason and let real
-# dependency failures (or probe errors, or timeout) fall through to the CLI,
-# which reports them unchanged.
+# The daily pipeline writes ops.daily_pipeline_status during finalize (~21:00+)
+# and factor.stock_score_daily lands a few minutes after READY flips. Earlier
+# invocations would otherwise fail on "not yet written" races every trading
+# day; poll while the only blocking reasons are waitable (missing status row,
+# missing score rows) and let real dependency failures (or probe errors, or
+# timeout) fall through to the CLI, which reports them unchanged.
 wait_for_daily_pipeline_status() {
   local max_seconds="$(( ${STRATEGY_DAILY_EOD_DEP_WAIT_MINUTES:-240} * 60 ))"
   local interval="${STRATEGY_DAILY_EOD_DEP_WAIT_INTERVAL_SECONDS:-300}"
@@ -37,14 +38,12 @@ wait_for_daily_pipeline_status() {
     set +e
     PYTHONPATH=src "$PYTHON_BIN" - "$TRADE_DATE" >>"$DETAIL_LOG" 2>&1 <<'PY'
 import sys
-from stock_research.strategy_daily_eod import check_strategy_daily_eod_dependencies
+from stock_research.strategy_daily_eod import (
+    check_strategy_daily_eod_dependencies,
+    strategy_daily_eod_dependency_probe_exit_code,
+)
 result = check_strategy_daily_eod_dependencies(trade_date=sys.argv[1])
-common = result.get("common") or {}
-intraday = result.get("intraday") or {}
-if common.get("status") == "success" and intraday.get("status") == "success":
-    sys.exit(0)
-reasons = f"{common.get('reason', '')}; {intraday.get('reason', '')}"
-sys.exit(3 if "missing daily_pipeline_status" in reasons else 4)
+sys.exit(strategy_daily_eod_dependency_probe_exit_code(result))
 PY
     probe_rc=$?
     set -e
@@ -147,6 +146,17 @@ if grep -Eq '^strategy_daily_eod\|status\|(failed|partial)$' "$DETAIL_LOG"; then
 fi
 
 print_summary "策略日终完成" 0
+
+# Post-EOD refresh jobs — keep dashboard surfaces current. Non-fatal by design:
+# a failure here must not flip the EOD run to failed.
+set +e
+PYTHONPATH=src "$PYTHON_BIN" -m stock_research.cli run-daily-review-v1 \
+  --trade-date "$TRADE_DATE" --record-run >>"$DETAIL_LOG" 2>&1
+echo "daily_review_v1|rc|$?" >>"$DETAIL_LOG"
+PYTHONPATH=src "$PYTHON_BIN" -m stock_research.cli research-queue-refresh \
+  --trade-date "$TRADE_DATE" >>"$DETAIL_LOG" 2>&1
+echo "research_queue_refresh|rc|$?" >>"$DETAIL_LOG"
+set -e
 
 ARTIFACT_SYNC_SCRIPT="$ROOT/deploy/sync_dashboard_artifacts.sh"
 if [[ -x "$ARTIFACT_SYNC_SCRIPT" || -f "$ARTIFACT_SYNC_SCRIPT" ]]; then

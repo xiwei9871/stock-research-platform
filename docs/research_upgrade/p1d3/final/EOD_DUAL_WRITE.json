@@ -1,0 +1,42 @@
+{
+  "replica": "p1d3_shadow.eod_replica",
+  "days": {
+    "2024-06-03": {
+      "rows": 5037,
+      "v2": 5037,
+      "rule_unknown": 0,
+      "data_insufficient": 0,
+      "hash": "bcdebcfcd1d54e1b0547a4a250769e37"
+    },
+    "2024-06-04": {
+      "rows": 5037,
+      "v2": 5037,
+      "rule_unknown": 0,
+      "data_insufficient": 0,
+      "hash": "2b1711754e581a9204d36bf87c7daff5"
+    },
+    "2024-06-05": {
+      "rows": 5038,
+      "v2": 5038,
+      "rule_unknown": 0,
+      "data_insufficient": 0,
+      "hash": "fc45240f7cb0452e436fdc9989eb4d37"
+    },
+    "2024-06-06": {
+      "rows": 5038,
+      "v2": 5038,
+      "rule_unknown": 0,
+      "data_insufficient": 0,
+      "hash": "86987a1e9b807e61d52cbc887b16526a"
+    }
+  },
+  "checks": {
+    "idempotent_rerun_same_day": true,
+    "abort_leaves_zero_rows": true,
+    "retry_completes": true,
+    "no_stateless_rows": true,
+    "all_days_v2_complete": true
+  },
+  "fault_error": "UndefinedTable",
+  "all_pass": true
+}

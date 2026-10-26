@@ -52,3 +52,4 @@ config/local_secrets.json
 
 # runtime lock files from scheduled jobs
 .locks/
+.playwright-cli/

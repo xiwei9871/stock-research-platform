@@ -1,0 +1,7 @@
+window,start,end,board,unique_decisions,correct,confirmed_mislabel,wrongly_flagged_FP,wrongly_passed_FN,rule_unknown,score_coverage
+pre_1996_no_limit_era,1990-01-01,1996-12-13,all,8235,0,8227,8231,0,8,no_scores_needs_revalidation
+chinext_prereform_10pct,2010-01-01,2020-08-23,chinext,42644,457,42187,165,42022,0,no_scores_needs_revalidation
+star_reform_era_2019_2020,2019-07-22,2020-12-31,star,397,144,253,253,0,0,no_scores_needs_revalidation
+chinext_20pct_transition,2020-08-24,2021-12-31,chinext,2473,1806,667,667,0,0,no_scores_needs_revalidation
+main_fullreg_2023,2023-01-01,2023-12-31,all,3494,2936,558,508,50,0,yes
+modern_2024_2026,2024-01-01,2026-12-31,all,22426,18186,4240,3798,442,0,yes

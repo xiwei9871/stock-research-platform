@@ -31,6 +31,7 @@ from stock_research.stock_report_web_collection import (
     upsert_stock_report_features,
     upsert_stock_report_sources_events,
 )
+from stock_research.yanbaoke_weekly_topup import yanbaoke_report_id
 
 
 YANBAOKE_SOURCE_TYPE = "yanbaoke_api"
@@ -269,7 +270,7 @@ def download_yanbaoke_report_pdf(
     get_json: Any | None = None,
     get_binary: Any | None = None,
 ) -> dict[str, Any]:
-    key = api_key or os.environ.get("YANBAOKE_API_KEY", "")
+    key = api_key or load_yanbaoke_api_key()
     if not key:
         raise ValueError("YANBAOKE_API_KEY is required for Yanbaoke downloads")
     headers = _yanbaoke_headers(api_key=key)
@@ -315,7 +316,7 @@ def build_yanbaoke_sources_events_from_downloads(downloads: pd.DataFrame) -> dic
             continue
         pdf_path = Path(str(row["pdf_path"])).expanduser().resolve()
         source_url = pdf_path.as_uri()
-        report_id = f"yanbaoke_{_stable_token([str(row.get('uuid') or ''), source_url])}"
+        report_id = yanbaoke_report_id(row)
         metadata = {
             "yanbaoke": {
                 "uuid": row.get("uuid") or "",
@@ -584,6 +585,20 @@ def run_yanbaoke_report_backfill(
         },
         "paths": paths,
     }
+
+
+def load_yanbaoke_api_key() -> str:
+    env = os.environ.get("YANBAOKE_API_KEY", "").strip()
+    if env:
+        return env
+    path = Path(__file__).resolve().parents[2] / "config" / "local_secrets.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    return str((payload.get("yanbaoke") or {}).get("api_key") or "").strip()
 
 
 def _yanbaoke_headers(api_key: str | None = None) -> dict[str, str]:

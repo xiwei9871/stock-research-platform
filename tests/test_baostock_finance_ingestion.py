@@ -218,6 +218,9 @@ def test_sync_finance_for_period_short_circuits_when_no_codes(monkeypatch):
         "income_statement": 0,
         "share_capital_event": 0,
         "queried_assets": 0,
+        "empty_assets": 0,
+        "failed_assets": 0,
+        "failed_codes": [],
     }
     assert calls == []
 
@@ -311,6 +314,9 @@ def test_sync_finance_for_period_retries_not_logged_in(monkeypatch):
         "income_statement": 1,
         "share_capital_event": 1,
         "queried_assets": 1,
+        "empty_assets": 0,
+        "failed_assets": 0,
+        "failed_codes": [],
     }
     assert len(login_calls) == 2
     assert len(logout_calls) == 2
@@ -341,3 +347,42 @@ def test_login_or_raise_retries_transient_network_error(monkeypatch):
         baostock_finance_ingestion.BAOSTOCK_LOGIN_RETRY_SECONDS,
         baostock_finance_ingestion.BAOSTOCK_LOGIN_RETRY_SECONDS,
     ]
+
+
+def test_sync_finance_for_period_commits_per_batch_and_isolates_failures(monkeypatch):
+    import stock_research.loaders.baostock_finance_ingestion as mod
+
+    codes = [f"sh.60{i:04d}" for i in range(5)]
+    monkeypatch.setattr(mod, "_baostock_codes", lambda conn, *a, **k: codes)
+    monkeypatch.setattr(mod, "_login_or_raise", lambda: None)
+    monkeypatch.setattr(mod.bs, "logout", lambda: None)
+
+    def fake_query(func, code, year, quarter):
+        if code == codes[2]:
+            raise RuntimeError("persistent failure")
+        return [{"code": code, "pubDate": "2026-08-30", "statDate": "2026-06-30",
+                 "roeAvg": "1", "npMargin": "1", "gpMargin": "1", "netProfit": "1",
+                 "epsTTM": "1", "MBRevenue": "1", "totalShare": "1", "liqaShare": "1"}]
+
+    monkeypatch.setattr(mod, "_query_rows_with_retry", fake_query)
+    commits = []
+    monkeypatch.setattr(
+        mod, "upsert_finance_rows",
+        lambda conn, **kw: commits.append({k: len(v) for k, v in kw.items()})
+        or {"indicator_quarter": len(kw["indicators"]),
+            "income_statement": len(kw["incomes"]),
+            "share_capital_event": len(kw["share_capital_events"])})
+
+    class FakeConn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return None
+    monkeypatch.setattr(mod, "connect", lambda s: FakeConn())
+
+    result = mod.sync_finance_for_period(2026, 2, batch_size=2)
+    # 5 codes, batches of 2 successful assets -> commits at 2+2 (failed
+    # asset holds no batch slot)
+    assert [sum(c.values()) for c in commits] == [6, 6]
+    assert result["queried_assets"] == 5
+    assert result["failed_assets"] == 1
+    assert result["failed_codes"] == [codes[2]]
+    assert result["income_statement"] == 4

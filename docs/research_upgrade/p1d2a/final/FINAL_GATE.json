@@ -1,0 +1,37 @@
+{
+  "task": "DATA-R3-P1d.2a closeout — three cutover blockers",
+  "generated_at": "2026-10-25T15:48:04.364677+00:00",
+  "fixes": {
+    "p0_1_apply_pit_flags_failopen": {
+      "status": "resolved",
+      "detail": "three-way qualification_state: verified / rule_unknown / qualification_missing — unmatched rows fail closed, never default to not-at-limit",
+      "test": "test_apply_pit_flags_three_way_state"
+    },
+    "p0_2_verified_v2_schema": {
+      "status": "resolved",
+      "detail": "required cols {is_limit_up_v2,is_limit_down_v2,limit_state_v2,limit_rule_id_v2}; is_suspended stays v1 (source PIT status); DDL/read/state enum consistent",
+      "doc": "docs/research_upgrade/p1d2/STORAGE_MIGRATION_READINESS.md"
+    },
+    "p0_3_corrected_shadow_e2e": {
+      "status": "resolved",
+      "detail": "real DB loader->engine->gate, 0/15bps strict; no missing-state executions; v1 flags never consulted; diffs rule-attributed",
+      "tests": [
+        "test_corrected_shadow_end_to_end_blocks_missing",
+        "test_corrected_shadow_ignores_stored_v1_flags",
+        "test_legacy_vs_corrected_diff_explainable"
+      ]
+    },
+    "wording": {
+      "status": "resolved",
+      "detail": "date_rows_verified = 当日 qfq 行存在性已核验 (existence), not full-session completeness"
+    }
+  },
+  "tests": {
+    "focused_suite": "387 passed / 0 failed",
+    "db_assertions": "18/18",
+    "new_tests": 13
+  },
+  "new_failures": 0,
+  "status": "CLOSEOUT_COMPLETE — all three blockers fixed, verified, documented",
+  "next": "await human decision on formal migration (v2 columns, EOD writer, consumer cutover)"
+}

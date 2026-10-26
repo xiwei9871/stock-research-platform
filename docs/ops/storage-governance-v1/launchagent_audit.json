@@ -1,0 +1,78 @@
+{
+  "audit_date": "2026-10-26",
+  "host": "xiwei-mac",
+  "agents": [
+    {
+      "label": "com.stockresearch.dashboard-daily-sync",
+      "plist": "~/Library/LaunchAgents/com.stockresearch.dashboard-daily-sync.plist",
+      "schedule": "daily 22:15",
+      "script": "deploy/sync_dashboard_release.sh",
+      "function": "full release deploy: code + dashboard build + strategy_daily_eod artifacts + docling dirs + reports -> 192.168.3.185, release gate vs stock.manqiaotechnology.com",
+      "last_evidence": "logs/dashboard_release_sync.launchd.out.log shows release check passed 2026-10-13; EXPECTED_TRADE_DATE resolved through 2026-10-23",
+      "status": "loaded, runs on schedule",
+      "verdict": "KEEP — production publish path"
+    },
+    {
+      "label": "com.stockresearch.strategy-eod-publish",
+      "plist": "~/Library/LaunchAgents/com.stockresearch.strategy-eod-publish.plist",
+      "schedule": "daily 20:30",
+      "script": "scripts/run_strategy_daily_eod_cron.sh",
+      "function": "nightly strategy EOD compute + publish",
+      "last_evidence": "last run 2026-10-23 FAILED: LHB/MidTrend/TechBottleneck failed, deps success, exit=1",
+      "status": "loaded, FAILING on last trade day",
+      "verdict": "KEEP but ATTENTION REQUIRED — production pipeline currently failing"
+    },
+    {
+      "label": "com.stockresearch.platform-ready-check",
+      "plist": "~/Library/LaunchAgents/com.stockresearch.platform-ready-check.plist",
+      "schedule": "daily 21:30",
+      "script": "scripts/run_platform_ready_check_cron.sh",
+      "function": "platform readiness / freshness gate check",
+      "last_evidence": "2026-10-23 exit=2 external_sync_failed (consequence of EOD failure)",
+      "status": "loaded, reporting failure",
+      "verdict": "KEEP — this is the monitor that caught the EOD failure"
+    },
+    {
+      "label": "com.stockresearch.r2-minute-rebuild-watchdog",
+      "plist": "~/Library/LaunchAgents/com.stockresearch.r2-minute-rebuild-watchdog.plist",
+      "schedule": "every 300s + RunAtLoad",
+      "script": "scripts/r2_minute_rebuild_watchdog.sh",
+      "function": "restart r2_downstream_rebuild.py minute if stalled",
+      "last_evidence": "run log contains 'minute phase done: 29 jobs processed, 2306 factor-gap jobs skipped'; watchdog log repeats 'done marker present, watchdog idle' every 5 min",
+      "active_process": false,
+      "status": "loaded but permanently idle (mission complete)",
+      "verdict": "DISABLE CANDIDATE — verified complete; no remaining work; safe to bootout"
+    },
+    {
+      "label": "com.stockresearch.factor-gate-backfill-watchdog",
+      "plist": "~/Library/LaunchAgents/com.stockresearch.factor-gate-backfill-watchdog.plist",
+      "schedule": "every 1800s",
+      "script": "scripts/run_wave5_factor_gate_watchdog_host.sh",
+      "function": "restart wave5 factor-gate backfill if stalled",
+      "last_evidence": "completion sentinel exists (2026-05-22): 'factor-gate|1991-06-24|2026-04-28|validation2018-01-01|h5,10,20,60|primary5|manual_v1|v1|max1|workers1|timeout7200' matching current env; host log: 'skipped because backfill completion sentinel is current' every 30min",
+      "active_process": false,
+      "status": "loaded but permanently idle since May (mission complete)",
+      "verdict": "DISABLE CANDIDATE — verified complete; safe to bootout"
+    },
+    {
+      "label": "com.stockresearch.tdx-auction-backfill-watchdog",
+      "plist": "~/Library/LaunchAgents/com.stockresearch.tdx-auction-backfill-watchdog.plist",
+      "schedule": "daily 17:10 / 18:10 / 19:40 + RunAtLoad",
+      "script": "scripts/run_tdx_auction_backfill_watchdog_host.sh",
+      "function": "daily TDX auction data collection + gap repair (mode=daily), 4 external quote hosts",
+      "last_evidence": "daily sentinel current: 'tdx-auction-daily|complete:2026-10-23|coverage0.98'; host log shows clean skip on 2026-10-25 (weekend, no new trade date)",
+      "status": "loaded, working daily",
+      "verdict": "KEEP — active daily collection; name is misleading (not just backfill)"
+    }
+  ],
+  "summary": {
+    "keep": ["dashboard-daily-sync", "strategy-eod-publish", "platform-ready-check", "tdx-auction-backfill-watchdog"],
+    "disable_candidates": ["r2-minute-rebuild-watchdog", "factor-gate-backfill-watchdog"],
+    "disabled_method": "launchctl bootout gui/$UID/<label> + move plist to ~/Library/LaunchAgents/.disabled/ (project convention from AGENTS.md)",
+    "alerts": [
+      "2026-10-23 strategy-eod-publish FAILED (exit 1): LHB/MidTrend/TechBottleneck all failed; Common/Intraday deps success",
+      "platform-ready-check reporting external_sync_failed — downstream of EOD failure",
+      "next trade date run should be monitored; failure is real not stale"
+    ]
+  }
+}

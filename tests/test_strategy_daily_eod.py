@@ -1429,7 +1429,7 @@ def test_latest_successful_status_loader_requires_complete_official_publication(
         "mid_trend_status = 'success'",
         "midtrend_artifacts_status = 'success'",
         "tech_bottleneck_status = 'success'",
-        "review_rows = 15",
+        "review_rows > 0",
         "ORDER BY trade_date DESC",
         "LIMIT 1",
     ):
@@ -1745,11 +1745,19 @@ def test_run_strategy_daily_eod_records_independent_runner_failure_reason(tmp_pa
     assert "model unavailable" in result["strategy_errors"]["mid_trend"]
 
 
+def _pipeline_status_or_score_rows(pipeline_row, score_count=1):
+    def _fake(_service, sql, _params):
+        if "stock_score_daily" in sql:
+            return [{"row_count": score_count}]
+        return [pipeline_row]
+    return _fake
+
+
 def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monkeypatch):
     monkeypatch.setattr(
         eod,
         "_fetch_one",
-        lambda *_args, **_kwargs: [
+        _pipeline_status_or_score_rows(
             {
                 "daily_status": "success",
                 "minute5_status": "failed",
@@ -1762,7 +1770,7 @@ def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monke
                     }
                 ],
             }
-        ],
+        ),
     )
 
     result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
@@ -1774,11 +1782,35 @@ def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monke
     }
 
 
+def test_check_strategy_daily_eod_dependencies_waits_for_score_rows(monkeypatch):
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        _pipeline_status_or_score_rows(
+            {
+                "daily_status": "success",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [],
+            },
+            score_count=0,
+        ),
+    )
+
+    result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert result["common"] == {
+        "status": "failed",
+        "reason": "score_topn missing for 2026-06-24",
+    }
+    assert result["intraday"] == {"status": "success"}
+
+
 def test_check_strategy_daily_eod_dependencies_includes_common_provider_error(monkeypatch):
     monkeypatch.setattr(
         eod,
         "_fetch_one",
-        lambda *_args, **_kwargs: [
+        _pipeline_status_or_score_rows(
             {
                 "daily_status": "failed",
                 "minute5_status": "success",
@@ -1791,7 +1823,7 @@ def test_check_strategy_daily_eod_dependencies_includes_common_provider_error(mo
                     }
                 ],
             }
-        ],
+        ),
     )
 
     result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
@@ -1800,3 +1832,153 @@ def test_check_strategy_daily_eod_dependencies_includes_common_provider_error(mo
         "status": "failed",
         "reason": "daily_status=failed: tushare token rejected",
     }
+
+
+def _pipeline_status_missing_or_score_rows(score_count=1):
+    def _fake(_service, sql, _params):
+        if "stock_score_daily" in sql:
+            return [{"row_count": score_count}]
+        return []
+    return _fake
+
+
+def test_dependency_probe_exit_code_all_ready():
+    check = {"common": {"status": "success"}, "intraday": {"status": "success"}}
+
+    assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 0
+
+
+def test_dependency_probe_exit_code_waits_on_missing_status_row(monkeypatch):
+    monkeypatch.setattr(eod, "_fetch_one", _pipeline_status_missing_or_score_rows())
+
+    check = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 3
+
+
+def test_dependency_probe_exit_code_waits_while_scores_pending(monkeypatch):
+    # the 2026-10-23 race: READY already flipped but score rows land minutes later
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        _pipeline_status_or_score_rows(
+            {
+                "daily_status": "success",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [],
+            },
+            score_count=0,
+        ),
+    )
+
+    check = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 3
+
+
+def test_dependency_probe_exit_code_waits_on_empty_or_null_score_row(monkeypatch):
+    def _fake(_service, sql, _params):
+        if "stock_score_daily" in sql:
+            return _fake.score_result
+        return [
+            {
+                "daily_status": "success",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [],
+            }
+        ]
+
+    _fake.score_result = []
+    monkeypatch.setattr(eod, "_fetch_one", _fake)
+
+    for score_result in ([], [{"row_count": None}]):
+        _fake.score_result = score_result
+        check = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+        assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 3
+
+
+def test_dependency_probe_exit_code_score_wait_does_not_mask_real_failure(monkeypatch):
+    # score rows pending AND a genuinely failed stage must not extend the wait:
+    # the probe stops so the CLI can report the real failure.
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        _pipeline_status_or_score_rows(
+            {
+                "daily_status": "failed",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [
+                    {"stage": "daily", "source": "tushare", "error_summary": "token rejected"}
+                ],
+            },
+            score_count=0,
+        ),
+    )
+
+    check = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 4
+
+
+def test_dependency_probe_exit_code_non_waitable_intraday_failure(monkeypatch):
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        _pipeline_status_or_score_rows(
+            {
+                "daily_status": "success",
+                "minute5_status": "failed",
+                "deps_status": "success",
+                "failed_jobs": [
+                    {"stage": "minute5", "source": "baostock", "error_summary": "blacklisted"}
+                ],
+            }
+        ),
+    )
+
+    check = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 4
+
+
+def test_dependency_probe_exit_code_reasonless_failure_not_waitable():
+    check = {"common": {"status": "failed"}, "intraday": {"status": "success"}}
+
+    assert eod.strategy_daily_eod_dependency_probe_exit_code(check) == 4
+
+
+def test_check_dependencies_pins_manual_v1_score_version(monkeypatch):
+    # publish reads score_version=manual_v1; a same-date row under a different
+    # version must still count as missing (the probe then keeps waiting, which
+    # is the documented tradeoff vs failing fast on a config error).
+    calls = []
+
+    def _fake(_service, sql, params):
+        calls.append(list(params))
+        if "stock_score_daily" in sql:
+            return [{"row_count": 5}]
+        return [
+            {
+                "daily_status": "success",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [],
+            }
+        ]
+
+    monkeypatch.setattr(eod, "_fetch_one", _fake)
+
+    result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert ["manual_v1", "2026-06-24"] in calls
+    assert result["common"] == {"status": "success"}
+
+
+def test_eod_cron_probe_uses_probe_exit_code():
+    repo_root = Path(__file__).resolve().parents[1]
+    script = (repo_root / "scripts" / "run_strategy_daily_eod_cron.sh").read_text()
+
+    assert "strategy_daily_eod_dependency_probe_exit_code" in script

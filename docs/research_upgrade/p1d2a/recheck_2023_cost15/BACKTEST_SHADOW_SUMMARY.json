@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-10-25T15:16:53.616794+00:00",
+  "window": {
+    "start": "2023-01-03",
+    "end": "2023-12-29",
+    "score_version": "manual_v1_research_2023",
+    "top_n": 20,
+    "rebalance_frequency": "daily",
+    "transaction_cost_bps": 15.0
+  },
+  "isolation": "same scores/prices/config; only is_limit_up/down differ",
+  "flag_recompute": {
+    "rows": 1185601,
+    "shadow_limit_up_true": 9596,
+    "shadow_limit_down_true": 2143,
+    "rule_unknown_fail_closed": 749
+  },
+  "baseline": {
+    "final_equity": 0.7093205657004188,
+    "total_return": -0.2906794342995812,
+    "max_drawdown": -0.3752177074509597,
+    "trade_rows": 3170,
+    "buy_rows": 1617,
+    "sell_rows": 1553,
+    "skipped_limit_up": 42,
+    "skipped_limit_down": 20,
+    "skipped_suspended": 3,
+    "executed_weight": 78.85,
+    "summary": {
+      "total_return": -0.2906794342995812,
+      "max_drawdown": -0.3752177074509597,
+      "average_turnover": 0.6391666666666665,
+      "periods": 240
+    }
+  },
+  "shadow": {
+    "final_equity": 0.7128302349384457,
+    "total_return": -0.28716976506155434,
+    "max_drawdown": -0.3721263277579743,
+    "trade_rows": 3168,
+    "buy_rows": 1616,
+    "sell_rows": 1552,
+    "skipped_limit_up": 42,
+    "skipped_limit_down": 19,
+    "skipped_suspended": 3,
+    "executed_weight": 78.8,
+    "summary": {
+      "total_return": -0.28716976506155434,
+      "max_drawdown": -0.3721263277579743,
+      "average_turnover": 0.6391666666666665,
+      "periods": 240
+    }
+  },
+  "trade_diff_rows": 4
+}

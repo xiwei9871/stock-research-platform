@@ -1,0 +1,61 @@
+{
+  "task": "DATA-R3-P1d.1 历史交易资格纠偏、涨跌停规则修复与回测安全验收",
+  "branch": "fix/p1d1-historical-tradeability-gate",
+  "baseline": "data/p1d-tradeability-audit@c7929b800c740d761e19a394ee26f46bdc0ad490",
+  "generated_at": "2026-10-25T21:00:00+08:00",
+  "gate1_algorithm_correctness": {
+    "status": "PASS",
+    "evidence": {
+      "rule_table_verified_official_source": "22 rules; 21 verified with doc numbers (515/620/23号 etc); 1 unverified (beijing_st_30pct) -> rule_unknown",
+      "real_listing_session_index": "market.trading_calendar bisect; weekend/holiday crossing covered in tests",
+      "fail_closed_on_missing_facts": "list_date/calendar/status_row/rule all fail-closed; suspension precedes rule_unknown",
+      "flag_diff_traceable": "LIMIT_FLAG_RECONCILIATION.csv 162,119 rows, per-row rule_id+legal_price+session_index",
+      "version_gate_no_false_pass": "minute done-key bound; 15 no-key assets blocked; pin does not release gap",
+      "tests": "22 P1d + 33 P1d.1 + 414 focused regression = 0 failures; 14/14 real-DB edge cases",
+      "lhb_side_channel_converged": "lhb_eligibility routed to shared rule engine; 127 lhb tests pass"
+    }
+  },
+  "gate2_backtest_safety": {
+    "status": "DEGRADED",
+    "evidence": {
+      "consumers_identified": "BACKTEST_CONSUMER_INVENTORY.md — all is_limit_*/can_open_long/can_close_long/pct_chg paths mapped",
+      "shadow_vs_baseline_explained": "63/63 diff keys attributed to rule rows; 0 rule_unknown-attributed fills",
+      "no_lookahead": "both legs share identical execution-date semantics; no intraday promise added",
+      "needs_revalidation_marked": "vectorized_topn/retention-window backtests + market_emotion_state_v1 downstream + dragon/lhb historical outputs",
+      "production_unchanged": "backtest_constraints/core_data/market_daily_bar schema untouched"
+    },
+    "degradation_reasons": [
+      "vectorized_topn_backtest loader hard-fails on current DB (is_limit_* cols absent from market_daily_bar) — consumer is broken independent of flags; loader fix requires production-code change deferred to migration window",
+      "retention_backtest/backtest.py limit gates are silently inert (bar frames never carry flags) — same migration dependency",
+      "market_daily_bar flag column absence means stored-flag consumption semantics could only be reconstructed via status join (documented in shadow script); full-fidelity replay of a historical production run not possible",
+      "rule_unknown fail-closed cost measured only inside manual_v1 top20 window; other strategies unmeasured"
+    ]
+  },
+  "overall": "ALGORITHM_PASS / INTEGRATION_DEGRADED",
+  "explicitly_not_claimed": "PRODUCTION_READY",
+  "needs_revalidation_backtests": [
+    "all vectorized_topn-based results with execution windows overlapping 2024-01+ (stored flags net over-blocked)",
+    "all retention_backtest results relying on limit gates (gate silently inert — executions never limit-blocked)",
+    "any backtest covering pre-2020-08-24 ChiNext segment (46,160 confirmed mislabels)",
+    "any backtest covering pre-1996-12-16 segment (8,227 rows flagged in a no-limit era)",
+    "any backtest covering IPO windows (2,889 main + 995 star + 4,126 chinext day-1 rows)",
+    "market_emotion_state_v1-derived regime/exposure inputs and their downstream strategy runs",
+    "dragon_case_library is_limit_up_day features (static 4.8/9.5% thresholds)",
+    "lhb historical eligibility outputs pre-fix (date-blind regime thresholds)"
+  ],
+  "database_repair_backlog": [
+    "core.asset_status_daily is_limit_up/is_limit_down/limit_up_price/limit_down_price — 63,821 confirmed mislabels + unknown-flag NULL semantics for rule_unknown rows",
+    "core.asset_status_daily 1990-12-19 is_st=True rows (600601/600602/600651/600653) — ST regime did not exist; status rows suspect",
+    "market_daily_bar is_limit_up/is_limit_down/is_suspended columns missing — production vectorized loader SQL breaks; restore via status join or add columns",
+    "core_data.py generation logic — replace static threshold with rule engine to stop producing new mislabels",
+    "beijing_st_30pct official rule source — currently verified=False -> rule_unknown",
+    "15 assets without any minute done key; 74 terminal FACTOR_GAP assets (59 alt-source covered)",
+    "CN:SH:600153 remains POST_DIFF isolated by design"
+  ],
+  "reproduction": {
+    "audit": ".venv/bin/python scripts/p1d1_audit.py",
+    "shadow": ".venv/bin/python scripts/p1d1_shadow_backtest.py",
+    "tests": ".venv/bin/pytest tests/test_tradeability_p1d.py tests/test_tradeability_p1d1.py -q",
+    "isolated_schema_evidence": "p1d1_shadow.asset_status_flags_v2 (369,681 rows, kept for review)"
+  }
+}

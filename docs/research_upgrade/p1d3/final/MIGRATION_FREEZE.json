@@ -1,0 +1,206 @@
+{
+  "run_id": "p1d3-freeze-34de8b0d",
+  "rule_engine_commit": "34de8b0deceae0ed902b26b69d40f85b1e06effc",
+  "flags_version": "pit_rules_v1",
+  "table": {
+    "rows": 17294002,
+    "size": "3006 MB",
+    "size_bytes": 3152470016,
+    "d0": "1990-12-19",
+    "d1": "2026-10-23"
+  },
+  "indexes": [
+    {
+      "indexname": "asset_status_daily_pkey",
+      "indexdef": "CREATE UNIQUE INDEX asset_status_daily_pkey ON core.asset_status_daily USING btree (trade_date, asset_id)"
+    }
+  ],
+  "partitioning": [],
+  "v1_null_flags": {
+    "up_null": 8806,
+    "dn_null": 8806,
+    "susp_null": 0
+  },
+  "mislabel_baselines": {
+    "targeted_scan_unique_keys": 62937,
+    "full_census_row_diffs": 84844,
+    "full_census_v1_mislabeled_confirmed": 76031,
+    "note": "62,937 = \u5b9a\u5411\u626b\u63cf\u53bb\u91cd\u952e\uff1b84,844 = \u5168\u8868 v1!=v2 \u884c\u7ea7\u666e\u67e5\uff1b76,031 = \u5176\u4e2d v1 \u660e\u786e\u9519\u8bef\u3002UPDATE \u884c\u6570\u6309\u666e\u67e5\u53e3\u5f84"
+  },
+  "v2_state_distribution": [
+    {
+      "limit_state_v2": 1,
+      "n": 16906683
+    },
+    {
+      "limit_state_v2": 2,
+      "n": 5
+    },
+    {
+      "limit_state_v2": 3,
+      "n": 387314
+    }
+  ],
+  "rule_unknown_set": {
+    "rows": {
+      "n": 5
+    },
+    "sample": [
+      {
+        "asset_id": "CN:SH:600601",
+        "trade_date": "1990-12-19",
+        "limit_rule_id_v2": "rule_unknown"
+      },
+      {
+        "asset_id": "CN:SH:600602",
+        "trade_date": "1990-12-19",
+        "limit_rule_id_v2": "rule_unknown"
+      },
+      {
+        "asset_id": "CN:SH:600651",
+        "trade_date": "1990-12-19",
+        "limit_rule_id_v2": "rule_unknown"
+      },
+      {
+        "asset_id": "CN:SH:600653",
+        "trade_date": "1990-12-19",
+        "limit_rule_id_v2": "rule_unknown"
+      },
+      {
+        "asset_id": "CN:SH:600654",
+        "trade_date": "1990-12-19",
+        "limit_rule_id_v2": "rule_unknown"
+      }
+    ]
+  },
+  "data_insufficient_set": {
+    "rows": {
+      "n": 387314
+    },
+    "sample": [
+      {
+        "asset_id": "CN:SZ:000920",
+        "trade_date": "2004-10-18",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000951",
+        "trade_date": "2004-10-18",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SZ:002031",
+        "trade_date": "2004-10-18",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SH:600862",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SH:600873",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SH:600887",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000409",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SZ:000501",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000506",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000520",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000561",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SZ:000638",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SZ:000727",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000786",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000920",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_10pct"
+      },
+      {
+        "asset_id": "CN:SZ:000951",
+        "trade_date": "2004-10-19",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SH:600862",
+        "trade_date": "2004-10-20",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SH:600873",
+        "trade_date": "2004-10-20",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SZ:000409",
+        "trade_date": "2004-10-20",
+        "limit_rule_id_v2": "main_st_5pct"
+      },
+      {
+        "asset_id": "CN:SZ:000520",
+        "trade_date": "2004-10-20",
+        "limit_rule_id_v2": "main_10pct"
+      }
+    ]
+  },
+  "batch_ledger": [
+    {
+      "batches": 37,
+      "done": 37
+    }
+  ],
+  "eod_writer": {
+    "function": "core_data.build_asset_status_daily",
+    "v1_logic": "static CASE threshold (ST 4.8 / bj 29.8 / star+chinext 19.8 / else 9.8) \u2014 mislabel producer",
+    "v2_writer": "emit_v2_flags (guarded pure UPDATE) + build_asset_status_daily(emit_v2_target=...) same-tx dual-write switch, default OFF"
+  },
+  "consumers": [
+    "vectorized_topn_backtest.load_vectorized_topn_inputs (3 modes + status_table)",
+    "backtest.load_backtest_inputs / load_backtest_bars (retention bars)",
+    "dashboard/backtests loader",
+    "intraday_risk_control_v2",
+    "intraday_risk_filter_backtest",
+    "mid_trend_shadow_backtest",
+    "serenity_tight3b_c2_experiment",
+    "dragon_case_library._is_limit_up (rule engine)",
+    "market_emotion_state_v1 (stored v1 \u2014 NEEDS_REVALIDATION)",
+    "lhb_eligibility (rule engine)"
+  ]
+}

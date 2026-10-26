@@ -1,0 +1,52 @@
+{
+  "phase": "DATA-R3-P1d.3",
+  "status": "MIGRATION_PREFLIGHT_PASS",
+  "branch": "data/p1d3-v2-migration",
+  "baseline_commit": "e6d6f5d403512b6b71a4cefda2f23ef4d1218072",
+  "freeze": {
+    "run_id": "p1d3-freeze",
+    "table": "core.asset_status_daily",
+    "rows": 17294002,
+    "size": "3006 MB",
+    "pk": "(trade_date, asset_id)",
+    "partitioned": false,
+    "v1_null_flags": {"is_limit_up": 8806, "is_limit_down": 8806, "is_suspended": 0},
+    "mislabel_baselines": {"targeted_unique_keys": 62937, "census_diffs": 84844, "confirmed_v1_wrong": 76031},
+    "v2_state_census": {"verified": 16906683, "rule_unknown": 5, "data_insufficient": 387314},
+    "flags_version": "pit_rules_v1",
+    "batch_ledger": "p1d3_shadow.migration_log"
+  },
+  "schema_contract": "5 additive columns; state enum 0/1/2/3; is_suspended reuses PIT v1; COALESCE(v2,v1) forbidden",
+  "eod_dual_write": {
+    "mechanism": "build_asset_status_daily(emit_v2_target=...) same-transaction dual-write, default OFF",
+    "drill": "4 consecutive days atomic, idempotent rerun, abort->zero rows, retry completes, no stateless rows",
+    "production_enabled": false
+  },
+  "backfill": {
+    "batches": "37 yearly + auto-split, per-batch commit, resume-capable",
+    "throughput_rows_per_sec": 19189,
+    "measured_wal": "~291MB per 1.22M rows -> ~4-5GB full table",
+    "lock": "RowExclusiveLock",
+    "unrepairable_sets": "rule_unknown 5 rows, data_insufficient 387314, BJ ST unverified -> stay UNKNOWN"
+  },
+  "canary": {
+    "per_key_rows": 455,
+    "v2_eq_corrected_0bps": true,
+    "v2_eq_corrected_15bps": true,
+    "loader_flag_diffs": 258,
+    "retention_gate": "verified allowed, missing blocked",
+    "csv": "CANARY_COMPARISON.csv"
+  },
+  "rollback": "six forms rehearsed: batch abort, column-level, partial-commit, EOD atomic, read-path param, DDL drop",
+  "tests": {"new_failures": 0},
+  "boundaries": {
+    "production_writes": 0,
+    "production_ddl": "NOT_EXECUTED",
+    "eod_dual_write_wired": false,
+    "production_backfill": "NOT_EXECUTED",
+    "consumer_default_switch": "NOT_EXECUTED",
+    "eod_schedule_untouched": true,
+    "main_merge": false
+  },
+  "approval_package": ["MIGRATION_RUNBOOK.md", "PRODUCTION_CHANGE_APPROVAL.md", "PRODUCTION_RUNBOOK.md", "PRODUCTION_APPROVAL_MATRIX.md"]
+}

@@ -788,15 +788,23 @@ def _percent_metric(value: Any, *, fallback: float | None = None) -> float | Non
 
 
 def load_vectorized_topn_prices(start_date: str, end_date: str, adjust_type: str) -> pd.DataFrame:
+    # P1d.2: real flags from core.asset_status_daily — `false AS` hardcodes
+    # made the execution gate silently inert for every dashboard backtest.
     sql = """
-    SELECT trade_date, asset_id, open, close, amount, trade_status,
-           false AS is_limit_up,
-           false AS is_limit_down,
-           trade_status <> '1' AS is_suspended
-    FROM market_daily_bar
-    WHERE adjust_type = %s
-      AND trade_date BETWEEN %s AND %s
-    ORDER BY trade_date, asset_id
+    SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount, b.trade_status,
+           s.is_limit_up,
+           s.is_limit_down,
+           s.is_suspended,
+           (s.asset_id IS NULL
+            OR s.is_limit_up IS NULL
+            OR s.is_limit_down IS NULL
+            OR s.is_suspended IS NULL) AS limit_state_missing
+    FROM market_daily_bar b
+    LEFT JOIN core.asset_status_daily s
+      ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+    WHERE b.adjust_type = %s
+      AND b.trade_date BETWEEN %s AND %s
+    ORDER BY b.trade_date, b.asset_id
     """
     with connect(SETTINGS.research_service) as conn:
         rows = fetch_all(conn, sql, [adjust_type, start_date, end_date])

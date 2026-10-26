@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
+import datetime as dt
 from pathlib import Path
 from typing import Any
 import unicodedata
@@ -1447,10 +1448,64 @@ def _normalize_bars(bars: pd.DataFrame) -> pd.DataFrame:
     return frame.sort_values(["asset_id", "trade_date"]).reset_index(drop=True)
 
 
+def _board_flags_for_ts_code(ts_code: str) -> tuple[str, str, bool, bool, bool]:
+    code, _, exch = str(ts_code).partition(".")
+    exch = exch.upper()
+    is_star = exch == "SH" and code.startswith("688")
+    is_chinext = exch == "SZ" and code.startswith(("300", "301", "302"))
+    is_beijing = exch == "BJ" or code.startswith(("43", "83", "87", "92"))
+    return code, exch, is_star, is_chinext, is_beijing
+
+
 def _is_limit_up(frame: pd.DataFrame) -> pd.Series:
-    threshold = frame["is_st"].map(lambda value: 0.048 if bool(value) else 0.095)
+    """PIT limit-up via the shared rule engine (P1d.2 C).
+
+    Replaces the static 9.5%/4.8% thresholds: board, status and the
+    historically effective rule for each trade_date decide the bound.
+    Unresolvable rules mark the day unverified rather than a limit day —
+    no false limit-up counts on rule_unknown / no-limit regimes.
+    """
+    from stock_research.tradeability import (
+        RULE_UNKNOWN,
+        classify_board,
+        resolve_limit_rule,
+    )
+
     returns = pd.to_numeric(frame["daily_return"], errors="coerce").fillna(0.0)
-    return returns >= threshold
+    flags: list[bool] = []
+    rule_ids: list[str] = []
+    verified: list[bool] = []
+    for ts_code, is_st, trade_date, ret in zip(
+        frame["ts_code"], frame["is_st"], frame["trade_date"], returns
+    ):
+        code, exch, is_star, is_chinext, is_beijing = _board_flags_for_ts_code(ts_code)
+        try:
+            date = dt.date.fromisoformat(str(trade_date)[:10])
+        except ValueError:
+            date = None
+        if date is None:
+            rule = RULE_UNKNOWN
+        else:
+            rule = resolve_limit_rule(
+                board=classify_board(
+                    symbol=code, exchange=exch, is_star=is_star,
+                    is_chinext=is_chinext, is_beijing=is_beijing, board=None,
+                ),
+                exchange=exch,
+                is_st=bool(is_st),
+                trade_date=date,
+            )
+        rule_ids.append(rule.rule_id)
+        if rule.up_limit_pct is None:
+            flags.append(False)
+            verified.append(rule is not RULE_UNKNOWN)
+        else:
+            # up_limit_pct is in percentage points; daily_return is a fraction
+            flags.append(ret >= rule.up_limit_pct / 100.0 - 0.002)
+            verified.append(True)
+    frame["limit_rule_id"] = rule_ids
+    frame["limit_day_verified"] = verified
+    return pd.Series(flags, index=frame.index)
 
 
 def _streak_lengths(series: pd.Series) -> pd.Series:

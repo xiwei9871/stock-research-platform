@@ -1870,6 +1870,9 @@ def _bars_by_date_asset(bar_frame: pd.DataFrame) -> dict[tuple[str, str], dict[s
             "is_suspended": _bool_value(row.get("is_suspended")),
             "is_limit_up": _bool_value(row.get("is_limit_up")),
             "is_limit_down": _bool_value(row.get("is_limit_down")),
+            # P1d.2: explicit missing-state marker so corrected consumers can
+            # fail closed instead of treating absent flags as "not at limit".
+            "limit_state_missing": _bool_value(row.get("limit_state_missing")),
         }
     return indexed
 

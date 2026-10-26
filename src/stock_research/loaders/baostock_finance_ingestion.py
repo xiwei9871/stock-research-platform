@@ -386,6 +386,7 @@ def sync_finance_for_period(
     *,
     limit: int | None = None,
     offset: int = 0,
+    batch_size: int = 100,
     service: str = SETTINGS.research_service,
 ) -> dict[str, int]:
     with connect(service) as conn:
@@ -397,30 +398,24 @@ def sync_finance_for_period(
             "income_statement": 0,
             "share_capital_event": 0,
             "queried_assets": 0,
+            "empty_assets": 0,
+            "failed_assets": 0,
+            "failed_codes": [],
         }
 
     _login_or_raise()
-    try:
-        indicators = []
-        incomes = []
-        share_capital_events = []
-        for code in codes:
-            print(f"baostock_finance_query|{code}", flush=True)
-            profit_rows = _query_rows_with_retry(bs.query_profit_data, code, year, quarter)
-            merged_rows = merge_finance_rows(
-                profit_rows,
-                _query_rows_with_retry(bs.query_balance_data, code, year, quarter),
-                _query_rows_with_retry(bs.query_cash_flow_data, code, year, quarter),
-                _query_rows_with_retry(bs.query_growth_data, code, year, quarter),
-                _query_rows_with_retry(bs.query_operation_data, code, year, quarter),
-                _query_rows_with_retry(bs.query_dupont_data, code, year, quarter),
-            )
-            for row in merged_rows:
-                indicators.append(normalize_indicator_row(row))
-            for row in profit_rows:
-                incomes.append(normalize_income_row(row))
-                share_capital_events.append(normalize_share_capital_row(row))
+    totals = {"indicator_quarter": 0, "income_statement": 0, "share_capital_event": 0}
+    indicators: list[dict[str, Any]] = []
+    incomes: list[dict[str, Any]] = []
+    share_capital_events: list[dict[str, Any]] = []
+    failed_codes: list[str] = []
+    empty_assets = 0
+    pending = 0
 
+    def flush() -> None:
+        nonlocal pending
+        if not pending:
+            return
         with connect(service) as conn:
             counts = upsert_finance_rows(
                 conn,
@@ -428,7 +423,45 @@ def sync_finance_for_period(
                 incomes=incomes,
                 share_capital_events=share_capital_events,
             )
-        counts["queried_assets"] = len(codes)
-        return counts
+        for key in totals:
+            totals[key] += int(counts.get(key) or 0)
+        indicators.clear()
+        incomes.clear()
+        share_capital_events.clear()
+        pending = 0
+
+    try:
+        for code in codes:
+            print(f"baostock_finance_query|{code}", flush=True)
+            try:
+                profit_rows = _query_rows_with_retry(bs.query_profit_data, code, year, quarter)
+                merged_rows = merge_finance_rows(
+                    profit_rows,
+                    _query_rows_with_retry(bs.query_balance_data, code, year, quarter),
+                    _query_rows_with_retry(bs.query_cash_flow_data, code, year, quarter),
+                    _query_rows_with_retry(bs.query_growth_data, code, year, quarter),
+                    _query_rows_with_retry(bs.query_operation_data, code, year, quarter),
+                    _query_rows_with_retry(bs.query_dupont_data, code, year, quarter),
+                )
+            except Exception as exc:  # noqa: BLE001 - isolate single-asset failure
+                failed_codes.append(code)
+                print(f"baostock_finance_failed|{code}|{exc}", flush=True)
+                continue
+            if not profit_rows and not merged_rows:
+                empty_assets += 1
+            for row in merged_rows:
+                indicators.append(normalize_indicator_row(row))
+            for row in profit_rows:
+                incomes.append(normalize_income_row(row))
+                share_capital_events.append(normalize_share_capital_row(row))
+            pending += 1
+            if pending >= batch_size:
+                flush()
+        flush()
+        totals["queried_assets"] = len(codes)
+        totals["empty_assets"] = empty_assets
+        totals["failed_assets"] = len(failed_codes)
+        totals["failed_codes"] = failed_codes
+        return totals
     finally:
         bs.logout()

@@ -1,0 +1,5 @@
+run,window,score_version,top_n,cost_bps,baseline_final_equity,shadow_final_equity,equity_delta_pp,baseline_mdd,shadow_mdd,trade_diff_keys,baseline_trades,shadow_trades,b_skip_limit_up,s_skip_limit_up,b_skip_limit_down,s_skip_limit_down,rule_unknown_failclosed_rows,unexplained_diffs,status
+modern_2024_2026_cost0_p1d1,2024-01-02..2026-10-23,manual_v1,20,0.0,0.374184,0.366983,-0.7201,-0.710458,-0.717347,63,9549,9536,380,370,236,224,4552,0,PASS
+2023_fullreg_cost0,2023-01-03..2023-12-29,manual_v1_research_2023,20,0.0,0.893454,0.897868,0.4414,-0.272044,-0.268448,4,3170,3168,42,42,20,19,749,0,PASS
+2023_fullreg_cost15bps,2023-01-03..2023-12-29,manual_v1_research_2023,20,15.0,0.709321,0.71283,0.351,-0.375218,-0.372126,4,3170,3168,42,42,20,19,749,0,PASS
+modern_2024_2026_cost15bps,2024-01-02..2026-10-23,manual_v1,20,15.0,0.196511,0.192495,-0.4015,-0.820867,-0.825317,63,9549,9536,380,370,236,224,4552,0,PASS

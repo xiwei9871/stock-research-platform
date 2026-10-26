@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import datetime as dt
 import math
 import re
 from typing import Any
+
+from stock_research.tradeability import classify_board, resolve_limit_rule
 
 
 LHB_ELIGIBILITY_CONTRACT_VERSION = "lhb_eligibility_v2"
@@ -50,24 +53,27 @@ def resolve_price_limit_state(
     list_date: object,
     listing_age_trading_days: object = None,
 ) -> PriceLimitState:
-    del trade_date, current_name, list_date
+    del current_name, list_date
     is_st, status_source = _resolve_point_in_time_st(
         same_day_name=same_day_name,
         stored_is_st=stored_is_st,
         stored_status_quality=stored_status_quality,
     )
     listing_age = _optional_int(listing_age_trading_days)
-    if listing_age is not None and 0 <= listing_age <= 5:
-        regime = "listing_no_limit"
-        threshold = None
-    else:
-        regime, threshold = _regime_and_threshold(ts_code=ts_code, is_st=is_st)
+    regime, threshold = _regime_and_threshold(
+        ts_code=ts_code,
+        is_st=is_st,
+        trade_date=trade_date,
+        listing_age_trading_days=listing_age,
+    )
 
     change = _optional_float(pct_chg)
     if change is None:
         quality = "pct_chg_missing"
     elif is_st is None:
         quality = "st_status_unknown"
+    elif regime == "rule_unknown":
+        quality = "rule_unknown"
     else:
         quality = "complete"
     near_limit_down = bool(change is not None and threshold is not None and change <= threshold)
@@ -225,19 +231,73 @@ def _resolve_point_in_time_st(
     return None, "unavailable"
 
 
-def _regime_and_threshold(*, ts_code: str, is_st: bool | None) -> tuple[str, float]:
-    if is_st is True:
-        return "st", -4.8
+def _regime_and_threshold(
+    *,
+    ts_code: str,
+    is_st: bool | None,
+    trade_date: object = None,
+    listing_age_trading_days: int | None = None,
+) -> tuple[str, float | None]:
+    """Near-limit-down regime via the shared P1d.1 historical rule engine.
+
+    Previously this returned static board thresholds (-4.8/-9.5/-19/-29) with
+    trade_date discarded, which mis-stated ChiNext pre-2020-08-24 (should be
+    10% normal / 5% ST), ChiNext+STAR ST under the 20% regime, pre-reform
+    main IPO days 2-5 (10%-limited, not no-limit), and gave rule_unknown
+    cases a fabricated threshold. The rule engine is now the single source
+    of truth; the returned near-limit margin preserves the prior semantics
+    (~0.2pt under a 5% bound, ~0.5pt under 10%, ~1pt under 20-30%).
+    """
     text = str(ts_code or "").strip().upper()
     symbol, exchange = (text.split(".", 1) + [""])[:2] if "." in text else (text, "")
     symbol = symbol.zfill(6)
-    if exchange == "BJ" or symbol.startswith(("43", "83", "87", "92")):
-        return "beijing", -29.0
-    if exchange == "SH" and symbol.startswith("688"):
-        return "star", -19.0
-    if exchange == "SZ" and symbol.startswith(("300", "301", "302")):
-        return "chinext", -19.0
-    return "main_board", -9.5
+    is_star = exchange == "SH" and symbol.startswith("688")
+    is_chinext = exchange == "SZ" and symbol.startswith(("300", "301", "302"))
+    is_beijing = exchange == "BJ" or symbol.startswith(("43", "83", "87", "92"))
+    board = classify_board(
+        symbol=symbol, exchange=exchange, is_star=is_star,
+        is_chinext=is_chinext, is_beijing=is_beijing, board=None,
+    )
+    date_obj = None
+    if trade_date:
+        try:
+            date_obj = dt.date.fromisoformat(str(trade_date)[:10])
+        except ValueError:
+            date_obj = None
+    if date_obj is None:
+        return "rule_unknown", None
+    event = ("ipo" if listing_age_trading_days is not None
+             and listing_age_trading_days <= 10 else "continuous")
+    rule = resolve_limit_rule(
+        board=board,
+        exchange=exchange,
+        status_class="risk_warning" if is_st is True else "normal",
+        event_class=event,
+        trade_date=date_obj,
+        listing_age_trading_days=listing_age_trading_days,
+    )
+    if rule.rule_id == "rule_unknown" or not rule.verified:
+        return "rule_unknown", None
+    if (rule.no_limit_window_days and event in {"ipo", "relisting"}
+            and listing_age_trading_days is not None
+            and 1 <= listing_age_trading_days <= rule.no_limit_window_days):
+        return "listing_no_limit", None
+    down_pct = rule.down_limit_pct
+    if (listing_age_trading_days == 1
+            and rule.day1_down_pct is not None):
+        down_pct = rule.day1_down_pct
+    if down_pct is None:
+        return "rule_unknown", None
+    margin = 0.2 if down_pct <= 5 else (0.5 if down_pct <= 10 else 1.0)
+    if is_st is True:
+        return "st", -(down_pct - margin)
+    if is_beijing:
+        return "beijing", -(down_pct - margin)
+    if is_star:
+        return "star", -(down_pct - margin)
+    if is_chinext:
+        return "chinext", -(down_pct - margin)
+    return "main_board", -(down_pct - margin)
 
 
 def _optional_float(value: Any) -> float | None:

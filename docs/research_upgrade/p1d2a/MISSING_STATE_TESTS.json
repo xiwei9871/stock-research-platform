@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-10-25T15:23:13.168418+00:00",
+  "suite": "tests/test_tradeability_p1d2a.py",
+  "result_line": "9 passed in 3.33s",
+  "missing_state_cases": [
+    {
+      "case": "partial_null_flag_marked_missing",
+      "covers": "status row exists, one flag NULL -> limit_state_missing=True",
+      "status": "pass"
+    },
+    {
+      "case": "all_flags_present_verified_false",
+      "covers": "explicit False flags -> not missing (verified false != NULL)",
+      "status": "pass"
+    },
+    {
+      "case": "strict_blocks_missing_buy_and_sell",
+      "covers": "block_missing_limit_state=True -> limit_state_missing reason, both sides",
+      "status": "pass"
+    },
+    {
+      "case": "legacy_default_does_not_block",
+      "covers": "default constraints keep old behavior (reproduction)",
+      "status": "pass"
+    },
+    {
+      "case": "nonzero_cost_preserves_strict_block",
+      "covers": "_effective_execution_constraints via dataclasses.replace at 15bps",
+      "status": "pass"
+    },
+    {
+      "case": "minute_key_level_without_checker",
+      "covers": "no date checker bound -> :key_level + minute_date_unverified",
+      "status": "pass"
+    },
+    {
+      "case": "minute_date_verified_when_rows_exist",
+      "covers": "checker True -> :date_rows_verified",
+      "status": "pass"
+    },
+    {
+      "case": "minute_key_level_unverified_date",
+      "covers": "checker False -> degraded tier + reason",
+      "status": "pass"
+    },
+    {
+      "case": "verified_v2_absent_columns_fail_closed",
+      "covers": "v2 not migrated -> all rows limit_state_missing",
+      "status": "pass"
+    }
+  ],
+  "db_assertion_cases_18": "scripts/p1d2_db_assertions.py -> docs/research_upgrade/p1d2/DB_EDGE_ASSERTIONS.json (18/18 pass incl. date-bound alt-source cases)"
+}

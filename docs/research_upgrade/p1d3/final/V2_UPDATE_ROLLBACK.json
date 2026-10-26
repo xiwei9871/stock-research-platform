@@ -1,0 +1,204 @@
+{
+  "replica": "p1d3_shadow.prod_replica",
+  "year": [
+    "2024-01-01",
+    "2024-12-31"
+  ],
+  "batches": [
+    {
+      "month": "2024-01",
+      "range": [
+        "2024-01-01",
+        "2024-02-01"
+      ],
+      "rows_affected": 110310,
+      "statement_ms": 1484,
+      "wal_bytes": 42003200,
+      "lock_mode_seen": [
+        "AccessShareLock"
+      ]
+    },
+    {
+      "month": "2024-02",
+      "range": [
+        "2024-02-01",
+        "2024-03-01"
+      ],
+      "rows_affected": 75332,
+      "statement_ms": 800,
+      "wal_bytes": 18753808,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-03",
+      "range": [
+        "2024-03-01",
+        "2024-04-01"
+      ],
+      "rows_affected": 105571,
+      "statement_ms": 1041,
+      "wal_bytes": 24519592,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-04",
+      "range": [
+        "2024-04-01",
+        "2024-05-01"
+      ],
+      "interruption": {
+        "error": "QueryCanceled",
+        "partial_rows_after_abort": 0
+      },
+      "rows_affected": 100682,
+      "statement_ms": 912,
+      "wal_bytes": 20677752,
+      "lock_mode_seen": [
+        "AccessShareLock"
+      ]
+    },
+    {
+      "month": "2024-04",
+      "range": [
+        "2024-04-01",
+        "2024-05-01"
+      ],
+      "interruption": {
+        "error": "QueryCanceled",
+        "partial_rows_after_abort": 0
+      },
+      "rows_affected": 100682,
+      "statement_ms": 912,
+      "wal_bytes": 20677752,
+      "lock_mode_seen": [
+        "AccessShareLock"
+      ]
+    },
+    {
+      "month": "2024-05",
+      "range": [
+        "2024-05-01",
+        "2024-06-01"
+      ],
+      "rows_affected": 100732,
+      "statement_ms": 926,
+      "wal_bytes": 20400784,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-06",
+      "range": [
+        "2024-06-01",
+        "2024-07-01"
+      ],
+      "rows_affected": 95761,
+      "statement_ms": 925,
+      "wal_bytes": 20619400,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-07",
+      "range": [
+        "2024-07-01",
+        "2024-08-01"
+      ],
+      "eod_emit_before_backfill": "2024-07-01",
+      "rows_affected": 116058,
+      "statement_ms": 1171,
+      "wal_bytes": 26999392,
+      "lock_mode_seen": [
+        "AccessShareLock",
+        "RowExclusiveLock"
+      ]
+    },
+    {
+      "month": "2024-08",
+      "range": [
+        "2024-08-01",
+        "2024-09-01"
+      ],
+      "rows_affected": 111159,
+      "statement_ms": 1051,
+      "wal_bytes": 21950144,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-09",
+      "range": [
+        "2024-09-01",
+        "2024-10-01"
+      ],
+      "rows_affected": 96143,
+      "statement_ms": 836,
+      "wal_bytes": 16769800,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-10",
+      "range": [
+        "2024-10-01",
+        "2024-11-01"
+      ],
+      "rows_affected": 91211,
+      "statement_ms": 783,
+      "wal_bytes": 16047944,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-11",
+      "range": [
+        "2024-11-01",
+        "2024-12-01"
+      ],
+      "rows_affected": 106565,
+      "statement_ms": 971,
+      "wal_bytes": 20607704,
+      "lock_mode_seen": []
+    },
+    {
+      "month": "2024-12",
+      "range": [
+        "2024-12-01",
+        "2025-01-01"
+      ],
+      "rows_affected": 111808,
+      "statement_ms": 983,
+      "wal_bytes": 20802536,
+      "lock_mode_seen": []
+    }
+  ],
+  "checks": {
+    "eod_backfill_single_version": true,
+    "zero_partial_on_abort": true,
+    "all_months_backfilled": true,
+    "v1_unchanged_through_update": true,
+    "rollback_restores_empty_v2": true,
+    "v1_unchanged_through_rollback": true,
+    "eod_backfill_values_match_shadow": true
+  },
+  "replica_build": {
+    "rows": 1221332,
+    "copy_seconds": 6.8
+  },
+  "v1_checksum_before": "27afa90cba60a3cbb67072a1fe40852f",
+  "v2_checksum_empty": {
+    "v2_rows": 0,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "v2_checksum_after_update": {
+    "v2_rows": 1221332,
+    "hash": "4e645ea06a9d203edcebea7bea68f257"
+  },
+  "v1_checksum_after_update": "27afa90cba60a3cbb67072a1fe40852f",
+  "eod_interleaved_date": "2024-07-01",
+  "rollback": {
+    "statement_ms": 9598,
+    "wal_bytes": 535956656,
+    "checksum_after_rollback": {
+      "v2_rows": 0,
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "v1_checksum_final": "27afa90cba60a3cbb67072a1fe40852f",
+  "all_pass": true
+}

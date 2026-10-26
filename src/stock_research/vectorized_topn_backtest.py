@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,9 @@ class VectorizedTopNResult:
     summary: dict[str, Any] = field(default_factory=dict)
 
 
+QUALIFICATION_MODES = ("legacy", "corrected_shadow", "verified_v2")
+
+
 def load_vectorized_topn_inputs(
     start_date: str,
     end_date: str,
@@ -84,7 +88,37 @@ def load_vectorized_topn_inputs(
     adjust_type: str = "hfq",
     universe_result: UniverseResult | None = None,
     service: str = SETTINGS.research_service,
+    qualification_mode: str = "legacy",
+    status_table: str = "core.asset_status_daily",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load scores+prices with an explicit qualification mode (P1d.2a D):
+
+    - ``legacy``: stored v1 flags joined from core.asset_status_daily —
+      reproduce historical runs; carries KNOWN risk (62,937 confirmed
+      mislabeled keys are NOT repaired).
+    - ``corrected_shadow``: v1 flags replaced by the shared rule engine's
+      recomputation (compute_pit_limit_flags). rule_unknown / missing rows
+      fail closed. Never writes production state.
+    - ``verified_v2``: reads is_limit_*_v2 columns which must already exist
+      AND carry limit_state_v2=1; anything else -> limit_state_missing
+      (fail closed). Never auto-activated — absent columns mean "not
+      migrated yet", not "no limit".
+
+    ``status_table`` defaults to the production status table; a shadow
+    table may be supplied ONLY for isolated migration rehearsal / gray
+    read-path validation (P1d.3). It must expose the same columns
+    (v1 flags + is_suspended; the v2 set for verified_v2 mode).
+    """
+    import re as _re
+    if qualification_mode not in QUALIFICATION_MODES:
+        raise ValueError(
+            f"qualification_mode must be one of {QUALIFICATION_MODES}")
+    if not _re.fullmatch(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*",
+                         status_table):
+        raise ValueError(
+            f"status_table must be 'schema.table' identifiers, got "
+            f"{status_table!r}")
+    status_schema, status_rel = status_table.split(".")
     score_sql = """
     SELECT trade_date, asset_id, rank, score_total
     FROM factor.stock_score_daily
@@ -92,16 +126,92 @@ def load_vectorized_topn_inputs(
       AND trade_date BETWEEN %s AND %s
     ORDER BY trade_date, rank, asset_id
     """
-    price_sql = """
-    SELECT trade_date, asset_id, open, close, amount, trade_status, is_limit_up, is_limit_down, is_suspended
-    FROM market_daily_bar
-    WHERE adjust_type = %s
-      AND trade_date BETWEEN %s AND %s
-    ORDER BY trade_date, asset_id
+    # P1d.2 fix: market_daily_bar no longer carries the limit/suspended
+    # columns (they live in core.asset_status_daily). Join the status table —
+    # the loader now fails CLOSED-aware via limit_state_missing instead of
+    # crashing on UndefinedColumn or silently passing on absent flags.
+    price_sql = f"""
+    SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount, b.trade_status,
+           s.is_limit_up, s.is_limit_down, s.is_suspended,
+           (s.asset_id IS NULL
+            OR s.is_limit_up IS NULL
+            OR s.is_limit_down IS NULL
+            OR s.is_suspended IS NULL) AS limit_state_missing
+    FROM public.market_daily_bar b
+    LEFT JOIN {status_table} s
+      ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+    WHERE b.adjust_type = %s
+      AND b.trade_date BETWEEN %s AND %s
+    ORDER BY b.trade_date, b.asset_id
     """
     with connect(service) as conn:
         score_rows = fetch_all(conn, score_sql, [score_version, start_date, end_date])
-        price_rows = fetch_all(conn, price_sql, [adjust_type, start_date, end_date])
+        price_rows = None
+        if qualification_mode == "verified_v2":
+            # P1d.2a-closeout P0-2: schema calibrated to the migration DDL.
+            # v2 columns are LIMIT flags + state + rule trace only —
+            # is_suspended is source PIT status (not rule-derived), so the
+            # v1 column is already correct and stays in use.
+            v2_required = {"is_limit_up_v2", "is_limit_down_v2",
+                           "limit_state_v2", "limit_rule_id_v2",
+                           "limit_flags_version"}
+            v2_cols = {r["column_name"] for r in fetch_all(conn, """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema=%s AND table_name=%s
+                  AND column_name IN ('is_limit_up_v2','is_limit_down_v2',
+                                      'limit_state_v2','limit_rule_id_v2',
+                                      'limit_flags_version')
+            """, [status_schema, status_rel])}
+            if v2_cols >= v2_required:
+                price_sql = f"""
+                SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount,
+                       b.trade_status,
+                       s.is_limit_up_v2 AS is_limit_up,
+                       s.is_limit_down_v2 AS is_limit_down,
+                       s.is_suspended,
+                       s.limit_rule_id_v2 AS limit_rule_id,
+                       s.limit_flags_version,
+                       (s.asset_id IS NULL
+                        OR s.limit_state_v2 IS DISTINCT FROM 1
+                        OR s.is_limit_up_v2 IS NULL
+                        OR s.is_limit_down_v2 IS NULL
+                        OR s.is_suspended IS NULL) AS limit_state_missing
+                FROM public.market_daily_bar b
+                LEFT JOIN {status_table} s
+                  ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
+                WHERE b.adjust_type = %s
+                  AND b.trade_date BETWEEN %s AND %s
+                ORDER BY b.trade_date, b.asset_id
+                """
+                price_rows = fetch_all(
+                    conn, price_sql, [adjust_type, start_date, end_date])
+            else:
+                # v2 columns absent -> nothing verified; everything missing.
+                price_rows_all = fetch_all(
+                    conn, price_sql, [adjust_type, start_date, end_date])
+                for r in price_rows_all:
+                    r["is_limit_up"] = r["is_limit_down"] = r["is_suspended"] = None
+                    r["limit_state_missing"] = True
+                price_rows = price_rows_all
+                score_rows = pd.DataFrame(score_rows)
+                prices = pd.DataFrame(price_rows)
+                prices.attrs["qualification_mode"] = "verified_v2"
+                prices.attrs["qualification_note"] = (
+                    "v2 columns absent -> all rows fail-closed missing")
+                scores = filter_dataframe_by_universe(
+                    score_rows, universe_result, asset_id_col="asset_id")
+                prices = filter_dataframe_by_universe(
+                    prices, universe_result, asset_id_col="asset_id")
+                return scores, prices
+        if price_rows is None:
+            price_rows = fetch_all(
+                conn, price_sql, [adjust_type, start_date, end_date])
+        if qualification_mode == "corrected_shadow":
+            from stock_research.tradeability import (
+                apply_pit_flags, compute_pit_limit_flags)
+            flags = compute_pit_limit_flags(conn, start_date, end_date)
+            price_frame = apply_pit_flags(pd.DataFrame(price_rows), flags)
+            price_rows = price_frame.to_dict("records")
     scores = filter_dataframe_by_universe(
         pd.DataFrame(score_rows),
         universe_result,
@@ -112,6 +222,14 @@ def load_vectorized_topn_inputs(
         universe_result,
         asset_id_col="asset_id",
     )
+    prices.attrs["qualification_mode"] = qualification_mode
+    if qualification_mode == "legacy":
+        prices.attrs["qualification_note"] = (
+            "stored v1 flags — 62,937 confirmed mislabeled keys unrepaired; "
+            "reproduction-only, not corrected truth")
+    elif qualification_mode == "corrected_shadow":
+        prices.attrs["qualification_note"] = (
+            "flags recomputed by shared rule engine; rule_unknown fail-closed")
     return scores, prices
 
 
@@ -375,9 +493,28 @@ def _normalize_prices(prices: pd.DataFrame) -> pd.DataFrame:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
     if "trade_status" not in frame.columns:
         frame["trade_status"] = "1"
+    # limit_state_missing: explicit fail-closed marker. A bar with no
+    # matching status row must NOT silently trade as "not at limit".
+    if "limit_state_missing" not in frame.columns:
+        missing_flags = [
+            col for col in ("is_limit_up", "is_limit_down", "is_suspended")
+            if col not in frame.columns
+        ]
+        if missing_flags:
+            frame["limit_state_missing"] = True
+        else:
+            # P1d.2a: ANY NULL flag = missing. A status row that exists but
+            # carries NULL flags is NOT a verified "not at limit".
+            frame["limit_state_missing"] = (
+                frame["is_limit_up"].isna()
+                | frame["is_limit_down"].isna()
+                | frame["is_suspended"].isna()
+            )
     for col in ["is_limit_up", "is_limit_down", "is_suspended"]:
         if col not in frame.columns:
             frame[col] = False
+        else:
+            frame[col] = frame[col].fillna(False).astype(bool)
     frame = frame.dropna(subset=["close"])
     return frame
 
@@ -445,14 +582,12 @@ def _effective_execution_constraints(config: VectorizedTopNConfig) -> BacktestEx
         and constraints.stamp_duty_bps == 0.0
         and constraints.slippage_bps == 0.0
     ):
-        return BacktestExecutionConstraints(
+        # P1d.2a: replace() preserves EVERY configured field (incl.
+        # block_missing_limit_state) — the old explicit rebuild silently
+        # dropped it whenever a nonzero cost was set.
+        return dataclasses.replace(
+            constraints,
             commission_bps=float(config.transaction_cost_bps),
-            stamp_duty_bps=constraints.stamp_duty_bps,
-            slippage_bps=constraints.slippage_bps,
-            min_amount=constraints.min_amount,
-            block_suspended=constraints.block_suspended,
-            block_limit_up_buy=constraints.block_limit_up_buy,
-            block_limit_down_sell=constraints.block_limit_down_sell,
         )
     return constraints
 

@@ -1,0 +1,5 @@
+diff_status,asset_id,side,execution_date,baseline_executed_weight,shadow_executed_weight,baseline_skip_reason,shadow_skip_reason,shadow_rule_id,shadow_rule_unknown,rebalance_date
+CHANGED,CN:SH:603729,sell,2023-11-10,0.05,0.0,limit_down,,main_10pct,False,2023-11-09
+ONLY_BASELINE,CN:SH:603729,sell,2023-11-13,0.0,0.0,,,main_10pct,False,2023-11-10
+CHANGED,CN:SZ:301237,buy,2023-11-10,1.3877787807814457e-17,0.05,insufficient_cash,,chinext_20pct_from_20200824,False,2023-11-09
+ONLY_BASELINE,CN:SZ:301237,buy,2023-11-13,0.05,0.0,,,chinext_20pct_from_20200824,False,2023-11-10

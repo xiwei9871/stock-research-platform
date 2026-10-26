@@ -1,0 +1,47 @@
+{
+  "phase": "DATA-R3-P1d.3",
+  "status": "REHEARSAL_COMPLETE",
+  "branch": "fix/p1d3-migration-rehearsal",
+  "baseline_commit": "e6d6f5d403512b6b71a4cefda2f23ef4d1218072",
+  "scope": "controlled V2 migration rehearsal at full 17.29M scale; EOD v2 incremental write design; batch recovery; rollback; gray read-path validation",
+  "migration_rehearsal": {
+    "shadow_table": "p1d3_shadow.asset_status_daily_v2",
+    "total_rows": 17294002,
+    "total_seconds": 901.24,
+    "throughput_rows_per_sec": 19189,
+    "batches": "37 calendar-year + auto-split fallback",
+    "per_batch_commit": true,
+    "checkpoint_log": "p1d3_shadow.migration_log",
+    "full_table_diff_census_v1_vs_v2": 84844,
+    "idempotency": "PASS (checksum identical on re-run)",
+    "rollback": "PASS (delete+rerun restores identical checksum)",
+    "dsm_finding": "parallel hash join on year-batch context query can exceed container DSM; mitigated via session max_parallel_workers_per_gather=0 + auto-split"
+  },
+  "eod_v2_write": {
+    "function": "core_data.emit_v2_flags",
+    "shared_engine": "compute_pit_limit_flags",
+    "guard": "refuses to write when target lacks full v2 column contract",
+    "production_wired": false,
+    "sequence": "ALTER add v2 columns -> EOD emit same-day -> batch backfill -> read-path gray"
+  },
+  "gray_read": {
+    "windows_checked": 4,
+    "all_pass": true,
+    "flag_mismatches_on_verified": 0,
+    "verified_rows_marked_missing": 0,
+    "rule_id_coverage": 1.0
+  },
+  "tests": {
+    "focused_suites": "13 files, 296 passed / 0 failed",
+    "new_tests": "tests/test_p1d3_migration_rehearsal.py (5)",
+    "expected_test_change": "qualification_state assertion set extended to 4 states"
+  },
+  "boundaries": {
+    "production_table_writes": 0,
+    "production_migration": "NOT_AUTHORIZED — not performed",
+    "production_signal_changes": false,
+    "main_merge": false,
+    "deployment": false
+  },
+  "next_gate": "集中审批正式迁移（ALTER DDL + EOD emit 接线 + 分批回填 + 消费方灰度切换）"
+}
