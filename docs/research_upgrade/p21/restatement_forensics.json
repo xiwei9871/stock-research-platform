@@ -1,0 +1,15 @@
+{
+ "raw_akshare_rows": 16586,
+ "raw_baostock_rows": 0,
+ "baostock_note": "empty table — baostock payloads never persisted; baostock-side restatement evidence permanently unavailable",
+ "version_keys": 15720,
+ "classification": {
+  "single_fetch": 14874,
+  "payload_changed_same_metrics": 553,
+  "duplicate_refetch": 293
+ },
+ "metrics_changed_keys": 0,
+ "initial_recoverable": 0,
+ "initial_unrecoverable": 0,
+ "changed_events": []
+}

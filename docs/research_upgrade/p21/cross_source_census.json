@@ -1,0 +1,449 @@
+{
+ "dual_source_keys": 230363,
+ "per_key_worst": {
+  "conflict": 227321,
+  "null_conflict": 2343,
+  "unit_scale": 699
+ },
+ "per_metric": {
+  "revenue": {
+   "equal": 42192,
+   "conflict": 66788,
+   "null_conflict": 118586,
+   "precision": 2778,
+   "unit_scale": 19
+  },
+  "operating_profit": {
+   "null_conflict": 230358,
+   "equal": 5
+  },
+  "total_profit": {
+   "null_conflict": 230360,
+   "equal": 3
+  },
+  "net_profit": {
+   "equal": 211223,
+   "conflict": 17653,
+   "precision": 1425,
+   "unit_scale": 28,
+   "null_conflict": 34
+  },
+  "np_parent": {
+   "null_conflict": 230237,
+   "equal": 60,
+   "conflict": 65,
+   "precision": 1
+  },
+  "np_parent_deducted": {
+   "null_conflict": 229882,
+   "equal": 481
+  },
+  "eps_basic": {
+   "conflict": 224449,
+   "precision": 4536,
+   "null_conflict": 445,
+   "unit_scale": 819,
+   "equal": 114
+  }
+ },
+ "worst_metric_dist": {
+  "eps_basic": 151525,
+  "revenue": 67059,
+  "operating_profit": 2067,
+  "net_profit": 9650,
+  "np_parent": 60,
+  "total_profit": 2
+ },
+ "samples": {
+  "conflict": [
+   {
+    "asset_id": "CN:SH:600071",
+    "rp": "2025-12-31",
+    "a": "0.12",
+    "b": "0.12225",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600072",
+    "rp": "2025-12-31",
+    "a": "-2.2486",
+    "b": "-2.253985",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600073",
+    "rp": "2025-12-31",
+    "a": "-0.14",
+    "b": "-0.141233",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600075",
+    "rp": "2025-12-31",
+    "a": "-0.03",
+    "b": "-0.033429",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600076",
+    "rp": "2025-12-31",
+    "a": "-0.29",
+    "b": "-0.286048",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600078",
+    "rp": "2025-12-31",
+    "a": "0.01",
+    "b": "0.012518",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600079",
+    "rp": "2025-12-31",
+    "a": "1.14",
+    "b": "1.13669",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600080",
+    "rp": "2025-12-31",
+    "a": "0.0442",
+    "b": "0.04173",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "conflict"
+    }
+   }
+  ],
+  "null_conflict": [
+   {
+    "asset_id": "CN:SH:600096",
+    "rp": "2025-12-31",
+    "a": "6594793305.32",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600101",
+    "rp": "2025-12-31",
+    "a": "229096113.34",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600151",
+    "rp": "2025-12-31",
+    "a": "-453913176.16",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600158",
+    "rp": "2025-12-31",
+    "a": "-163927279.97",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600203",
+    "rp": "2025-12-31",
+    "a": "-44403876.56",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600207",
+    "rp": "2025-12-31",
+    "a": "-725179335.92",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600282",
+    "rp": "2025-12-31",
+    "a": "3508152454.54",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600284",
+    "rp": "2025-12-31",
+    "a": "492311660.8",
+    "b": null,
+    "metric": "operating_profit",
+    "classes": {
+     "revenue": "equal",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "precision"
+    }
+   }
+  ],
+  "unit_scale": [
+   {
+    "asset_id": "CN:SZ:000719",
+    "rp": "2007-03-31",
+    "a": "-0.17",
+    "b": "-1.716103",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600388",
+    "rp": "2007-03-31",
+    "a": "0.09",
+    "b": "0.891374",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600444",
+    "rp": "2007-03-31",
+    "a": "0.014",
+    "b": "0.13878",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "equal",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600495",
+    "rp": "2007-03-31",
+    "a": "0.05",
+    "b": "0.506941",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600857",
+    "rp": "2007-03-31",
+    "a": "0.0047",
+    "b": "0.047544",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600535",
+    "rp": "2007-03-31",
+    "a": "0.0667",
+    "b": "0.663002",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SZ:000990",
+    "rp": "2007-03-31",
+    "a": "0.021",
+    "b": "0.213051",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   },
+   {
+    "asset_id": "CN:SH:600984",
+    "rp": "2007-03-31",
+    "a": "-0.03",
+    "b": "-0.303106",
+    "metric": "eps_basic",
+    "classes": {
+     "revenue": "null_conflict",
+     "operating_profit": "null_conflict",
+     "total_profit": "null_conflict",
+     "net_profit": "equal",
+     "np_parent": "null_conflict",
+     "np_parent_deducted": "null_conflict",
+     "eps_basic": "unit_scale"
+    }
+   }
+  ]
+ }
+}

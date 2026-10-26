@@ -1,0 +1,122 @@
+{
+ "coverage_baseline": {
+  "both_complete": 5199,
+  "balance_only": 0,
+  "cashflow_only": 0,
+  "both_missing": 14
+ },
+ "assets": [
+  {
+   "asset_id": "CN:SH:600193",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-06",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:600421",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-06-26",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:600599",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-06-26",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:600608",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-03",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:600636",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-06-29",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:600696",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-06-29",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:605081",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-03",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SH:688287",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-06-10",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SZ:000004",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-14",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SZ:000638",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-06-03",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SZ:002808",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-14",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SZ:002898",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-17",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SZ:300029",
+   "recon_class": "source_unavailable_delisted",
+   "evidence_level": "L2_db_delist_plus_source_absent",
+   "delist_date": "2026-07-10",
+   "independently_verified_disclosure": false,
+   "note": "2026-06/07退市，EM接口不再提供；DB最新期2026-03-31。披露截止日前是否发布合法半年报待逐源核实——不标truly_undisclosed"
+  },
+  {
+   "asset_id": "CN:SZ:002731",
+   "recon_class": "truly_undisclosed_at_deadline",
+   "evidence_level": "L3_external_announcement",
+   "delist_date": null,
+   "independently_verified_disclosure": true,
+   "note": ""
+  }
+ ]
+}
