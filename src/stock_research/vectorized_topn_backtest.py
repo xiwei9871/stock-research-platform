@@ -89,6 +89,7 @@ def load_vectorized_topn_inputs(
     universe_result: UniverseResult | None = None,
     service: str = SETTINGS.research_service,
     qualification_mode: str = "legacy",
+    status_table: str = "core.asset_status_daily",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load scores+prices with an explicit qualification mode (P1d.2a D):
 
@@ -102,10 +103,22 @@ def load_vectorized_topn_inputs(
       AND carry limit_state_v2=1; anything else -> limit_state_missing
       (fail closed). Never auto-activated — absent columns mean "not
       migrated yet", not "no limit".
+
+    ``status_table`` defaults to the production status table; a shadow
+    table may be supplied ONLY for isolated migration rehearsal / gray
+    read-path validation (P1d.3). It must expose the same columns
+    (v1 flags + is_suspended; the v2 set for verified_v2 mode).
     """
+    import re as _re
     if qualification_mode not in QUALIFICATION_MODES:
         raise ValueError(
             f"qualification_mode must be one of {QUALIFICATION_MODES}")
+    if not _re.fullmatch(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*",
+                         status_table):
+        raise ValueError(
+            f"status_table must be 'schema.table' identifiers, got "
+            f"{status_table!r}")
+    status_schema, status_rel = status_table.split(".")
     score_sql = """
     SELECT trade_date, asset_id, rank, score_total
     FROM factor.stock_score_daily
@@ -117,7 +130,7 @@ def load_vectorized_topn_inputs(
     # columns (they live in core.asset_status_daily). Join the status table —
     # the loader now fails CLOSED-aware via limit_state_missing instead of
     # crashing on UndefinedColumn or silently passing on absent flags.
-    price_sql = """
+    price_sql = f"""
     SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount, b.trade_status,
            s.is_limit_up, s.is_limit_down, s.is_suspended,
            (s.asset_id IS NULL
@@ -125,7 +138,7 @@ def load_vectorized_topn_inputs(
             OR s.is_limit_down IS NULL
             OR s.is_suspended IS NULL) AS limit_state_missing
     FROM public.market_daily_bar b
-    LEFT JOIN core.asset_status_daily s
+    LEFT JOIN {status_table} s
       ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
     WHERE b.adjust_type = %s
       AND b.trade_date BETWEEN %s AND %s
@@ -143,12 +156,12 @@ def load_vectorized_topn_inputs(
                            "limit_state_v2", "limit_rule_id_v2"}
             v2_cols = {r["column_name"] for r in fetch_all(conn, """
                 SELECT column_name FROM information_schema.columns
-                WHERE table_schema='core' AND table_name='asset_status_daily'
+                WHERE table_schema=%s AND table_name=%s
                   AND column_name IN ('is_limit_up_v2','is_limit_down_v2',
                                       'limit_state_v2','limit_rule_id_v2')
-            """)}
+            """, [status_schema, status_rel])}
             if v2_cols >= v2_required:
-                price_sql = """
+                price_sql = f"""
                 SELECT b.trade_date, b.asset_id, b.open, b.close, b.amount,
                        b.trade_status,
                        s.is_limit_up_v2 AS is_limit_up,
@@ -161,7 +174,7 @@ def load_vectorized_topn_inputs(
                         OR s.is_limit_down_v2 IS NULL
                         OR s.is_suspended IS NULL) AS limit_state_missing
                 FROM public.market_daily_bar b
-                LEFT JOIN core.asset_status_daily s
+                LEFT JOIN {status_table} s
                   ON s.asset_id = b.asset_id AND s.trade_date = b.trade_date
                 WHERE b.adjust_type = %s
                   AND b.trade_date BETWEEN %s AND %s

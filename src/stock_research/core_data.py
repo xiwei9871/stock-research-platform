@@ -440,6 +440,69 @@ def _asset_id_from_cn_stock_code(raw_code: str) -> str | None:
     return f"CN:{exchange}:{digits}"
 
 
+# --- P1d.3: guarded EOD V2 incremental write ---------------------------------
+# Callable ONLY against a table that already carries the v2 column contract
+# (is_limit_up_v2, is_limit_down_v2, limit_state_v2, limit_rule_id_v2).
+# Production (core.asset_status_daily) does not have those columns yet, so
+# this function self-aborts there — it exists for the shadow rehearsal and
+# the future authorized migration window. It is never invoked automatically
+# by build_asset_status_daily.
+_V2_FLAG_COLUMNS = ("is_limit_up_v2", "is_limit_down_v2",
+                    "limit_state_v2", "limit_rule_id_v2")
+
+
+def emit_v2_flags(
+    conn,
+    start_date: str,
+    end_date: str,
+    target_table: str,
+    flags_version: str = "pit_rules_v1",
+) -> int:
+    """Compute PIT limit flags for [start,end] and upsert into target_table.
+
+    Guarded: refuses to write unless the target exposes the full v2 column
+    contract plus limit_flags_version. Returns the number of rows upserted.
+    """
+    import re as _re
+    if not _re.fullmatch(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*",
+                         target_table):
+        raise ValueError(f"bad target_table identifier: {target_table!r}")
+    t_schema, t_rel = target_table.split(".")
+    have = {r["column_name"] for r in fetch_all(conn, """
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema=%s AND table_name=%s
+    """, [t_schema, t_rel])}
+    need = set(_V2_FLAG_COLUMNS) | {"limit_flags_version",
+                                    "asset_id", "trade_date"}
+    missing = sorted(need - have)
+    if missing:
+        raise RuntimeError(
+            f"{target_table} lacks v2 contract columns {missing}; refusing "
+            f"to write (table not migrated)")
+    from stock_research.tradeability import compute_pit_limit_flags
+    flags = compute_pit_limit_flags(conn, start_date, end_date)
+    sql = f"""
+        INSERT INTO {target_table} (
+            asset_id, trade_date,
+            is_limit_up_v2, is_limit_down_v2,
+            limit_state_v2, limit_rule_id_v2, limit_flags_version)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (trade_date, asset_id) DO UPDATE SET
+            is_limit_up_v2 = EXCLUDED.is_limit_up_v2,
+            is_limit_down_v2 = EXCLUDED.is_limit_down_v2,
+            limit_state_v2 = EXCLUDED.limit_state_v2,
+            limit_rule_id_v2 = EXCLUDED.limit_rule_id_v2,
+            limit_flags_version = EXCLUDED.limit_flags_version
+    """
+    rows = [(
+        f["asset_id"], f["trade_date"],
+        bool(f["shadow_limit_up"]), bool(f["shadow_limit_down"]),
+        int(f["shadow_state"]), f["shadow_rule_id"], flags_version,
+    ) for f in flags.to_dict("records")]
+    execute_many(conn, sql, rows)
+    return len(rows)
+
+
 def build_asset_status_daily_for_service(
     start_date: str | None = None,
     end_date: str | None = None,

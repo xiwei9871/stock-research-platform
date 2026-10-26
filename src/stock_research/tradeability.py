@@ -1166,6 +1166,8 @@ SELECT s.asset_id, s.trade_date::text AS trade_date,
        a.symbol, a.exchange, a.board, a.is_star, a.is_chinext, a.is_beijing,
        a.list_date::text AS list_date,
        s.is_st, s.is_suspended,
+       s.is_limit_up AS old_is_limit_up,
+       s.is_limit_down AS old_is_limit_down,
        b.close AS close_raw, b.preclose AS preclose_raw
 FROM core.asset_status_daily s
 JOIN core.asset_master a ON a.asset_id = s.asset_id
@@ -1174,6 +1176,12 @@ LEFT JOIN public.market_daily_bar b
  AND b.adjust_type = 'raw'
 WHERE s.trade_date BETWEEN %s AND %s
 """
+
+# v2 limit_state enum (STORAGE_MIGRATION_READINESS contract):
+#   0 not_computed | 1 verified | 2 rule_unknown | 3 data_insufficient
+LIMIT_STATE_VERIFIED = 1
+LIMIT_STATE_RULE_UNKNOWN = 2
+LIMIT_STATE_DATA_INSUFFICIENT = 3
 
 
 def compute_pit_limit_flags(conn, start: str, end: str,
@@ -1255,10 +1263,16 @@ def compute_pit_limit_flags(conn, start: str, end: str,
             and 1 <= sess_idx <= rule.no_limit_window_days)
         unknown = rule.rule_id == "rule_unknown" or not rule.verified
         if unknown or close_raw is None or preclose_raw is None:
+            state = (LIMIT_STATE_RULE_UNKNOWN if unknown
+                     else LIMIT_STATE_DATA_INSUFFICIENT)
             recs.append({
                 "asset_id": r["asset_id"], "trade_date": r["trade_date"],
                 "shadow_limit_up": False, "shadow_limit_down": False,
-                "shadow_rule_unknown": True, "shadow_rule_id": rule.rule_id})
+                "shadow_rule_unknown": True, "shadow_rule_id": rule.rule_id,
+                "shadow_state": state,
+                "old_is_limit_up": r.get("old_is_limit_up"),
+                "old_is_limit_down": r.get("old_is_limit_down"),
+                "is_suspended": r.get("is_suspended")})
             continue
         lim_up = lim_dn = False
         if not no_limit:
@@ -1273,7 +1287,11 @@ def compute_pit_limit_flags(conn, start: str, end: str,
         recs.append({
             "asset_id": r["asset_id"], "trade_date": r["trade_date"],
             "shadow_limit_up": lim_up, "shadow_limit_down": lim_dn,
-            "shadow_rule_unknown": False, "shadow_rule_id": rule.rule_id})
+            "shadow_rule_unknown": False, "shadow_rule_id": rule.rule_id,
+            "shadow_state": LIMIT_STATE_VERIFIED,
+            "old_is_limit_up": r.get("old_is_limit_up"),
+            "old_is_limit_down": r.get("old_is_limit_down"),
+            "is_suspended": r.get("is_suspended")})
     return pd.DataFrame(recs)
 
 
@@ -1297,21 +1315,32 @@ def apply_pit_flags(prices, flags):
     flags["trade_date"] = pd.to_datetime(flags["trade_date"])
     merged = prices.copy()
     merged["trade_date"] = pd.to_datetime(merged["trade_date"])
+    if "shadow_state" not in flags.columns:
+        flags = flags.assign(shadow_state=flags["shadow_rule_unknown"].map(
+            {True: LIMIT_STATE_RULE_UNKNOWN,
+             False: LIMIT_STATE_VERIFIED}))
     merged = merged.merge(
         flags[["asset_id", "trade_date", "shadow_limit_up",
-               "shadow_limit_down", "shadow_rule_unknown", "shadow_rule_id"]],
+               "shadow_limit_down", "shadow_rule_unknown", "shadow_rule_id",
+               "shadow_state"]],
         on=["asset_id", "trade_date"], how="left", indicator=True)
     matched = merged["_merge"] == "both"
     for col in ("shadow_limit_up", "shadow_limit_down", "shadow_rule_unknown"):
         merged[col] = merged[col].fillna(False).astype(bool)
     merged["qualification_state"] = "verified"
     merged.loc[~matched, "qualification_state"] = "qualification_missing"
-    merged.loc[matched & merged["shadow_rule_unknown"], "qualification_state"] = (
-        "rule_unknown")
+    state = pd.to_numeric(merged["shadow_state"], errors="coerce")
+    merged.loc[matched & (state == LIMIT_STATE_RULE_UNKNOWN),
+               "qualification_state"] = "rule_unknown"
+    merged.loc[matched & (state == LIMIT_STATE_DATA_INSUFFICIENT),
+               "qualification_state"] = "data_insufficient"
+    merged.loc[matched & state.isna() & merged["shadow_rule_unknown"],
+               "qualification_state"] = "rule_unknown"  # legacy frames w/o state
     blocked = merged["qualification_state"] != "verified"
     merged["is_limit_up"] = merged["shadow_limit_up"] | blocked
     merged["is_limit_down"] = merged["shadow_limit_down"] | blocked
     merged["limit_state_missing"] = blocked
     merged = merged.rename(columns={"shadow_rule_id": "limit_rule_id"})
     return merged.drop(columns=["shadow_limit_up", "shadow_limit_down",
-                                "shadow_rule_unknown", "_merge"])
+                                "shadow_rule_unknown", "shadow_state",
+                                "_merge"])

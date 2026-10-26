@@ -1,0 +1,68 @@
+{
+  "shadow_table": "p1d3_shadow.asset_status_daily_v2",
+  "checks": [
+    {
+      "window": [
+        "2024-06-03",
+        "2024-06-07"
+      ],
+      "rows": 25189,
+      "verified_rows": 25185,
+      "missing_rows": 4,
+      "flag_mismatches_on_verified": 0,
+      "missing_state_breakdown": {
+        "data_insufficient": 4
+      },
+      "verified_rows_marked_missing": 0,
+      "rule_id_coverage_v2": 1.0,
+      "pass": true
+    },
+    {
+      "window": [
+        "2019-08-01",
+        "2019-08-09"
+      ],
+      "rows": 24185,
+      "verified_rows": 24150,
+      "missing_rows": 35,
+      "flag_mismatches_on_verified": 0,
+      "missing_state_breakdown": {
+        "data_insufficient": 35
+      },
+      "verified_rows_marked_missing": 0,
+      "rule_id_coverage_v2": 1.0,
+      "pass": true
+    },
+    {
+      "window": [
+        "2023-04-10",
+        "2023-04-14"
+      ],
+      "rows": 24175,
+      "verified_rows": 24161,
+      "missing_rows": 14,
+      "flag_mismatches_on_verified": 0,
+      "missing_state_breakdown": {
+        "data_insufficient": 14
+      },
+      "verified_rows_marked_missing": 0,
+      "rule_id_coverage_v2": 1.0,
+      "pass": true
+    },
+    {
+      "window": [
+        "1996-12-02",
+        "1996-12-06"
+      ],
+      "rows": 1959,
+      "verified_rows": 1959,
+      "missing_rows": 0,
+      "flag_mismatches_on_verified": 0,
+      "missing_state_breakdown": {},
+      "verified_rows_marked_missing": 0,
+      "rule_id_coverage_v2": 1.0,
+      "pass": true
+    }
+  ],
+  "all_pass": true
+}

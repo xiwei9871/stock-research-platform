@@ -282,9 +282,11 @@ def test_legacy_vs_corrected_diff_explainable():
     rl = run_vectorized_topn_backtest(s, pl, cfg_l)
     rc = run_vectorized_topn_backtest(s, pc, cfg_c)
     # corrected run may differ — but every corrected price row must carry a
-    # traceable state (verified / rule_unknown / qualification_missing)
+    # traceable state (verified / rule_unknown / data_insufficient /
+    # qualification_missing)
     assert set(pc["qualification_state"].unique()) <= {
-        "verified", "rule_unknown", "qualification_missing"}
+        "verified", "rule_unknown", "data_insufficient",
+        "qualification_missing"}
     # corrected leg can only block MORE (strict), never invent fills on
     # missing qualification
     blocked = pc[pc["qualification_state"] != "verified"]
