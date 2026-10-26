@@ -1,0 +1,8 @@
+{
+  "captured_at": "2026-10-26T16:30:00+08:00",
+  "branch": "hotfix/eod-dependency-wait-gate",
+  "head": "9cd9e2c1b58fe94b2dc0d816908f46494a74a7ab",
+  "status_porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "status_entries": 0,
+  "note": "baseline taken after P1D3 commit was moved back to data/p1d3-v2-migration; canonical worktree is clean. Tomorrow's status may differ if owner edits files — branch+HEAD equality is the deploy-integrity check."
+}
