@@ -1745,11 +1745,19 @@ def test_run_strategy_daily_eod_records_independent_runner_failure_reason(tmp_pa
     assert "model unavailable" in result["strategy_errors"]["mid_trend"]
 
 
+def _pipeline_status_or_score_rows(pipeline_row, score_count=1):
+    def _fake(_service, sql, _params):
+        if "stock_score_daily" in sql:
+            return [{"row_count": score_count}]
+        return [pipeline_row]
+    return _fake
+
+
 def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monkeypatch):
     monkeypatch.setattr(
         eod,
         "_fetch_one",
-        lambda *_args, **_kwargs: [
+        _pipeline_status_or_score_rows(
             {
                 "daily_status": "success",
                 "minute5_status": "failed",
@@ -1762,7 +1770,7 @@ def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monke
                     }
                 ],
             }
-        ],
+        ),
     )
 
     result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
@@ -1774,11 +1782,35 @@ def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monke
     }
 
 
+def test_check_strategy_daily_eod_dependencies_waits_for_score_rows(monkeypatch):
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        _pipeline_status_or_score_rows(
+            {
+                "daily_status": "success",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [],
+            },
+            score_count=0,
+        ),
+    )
+
+    result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert result["common"] == {
+        "status": "failed",
+        "reason": "score_topn missing for 2026-06-24",
+    }
+    assert result["intraday"] == {"status": "success"}
+
+
 def test_check_strategy_daily_eod_dependencies_includes_common_provider_error(monkeypatch):
     monkeypatch.setattr(
         eod,
         "_fetch_one",
-        lambda *_args, **_kwargs: [
+        _pipeline_status_or_score_rows(
             {
                 "daily_status": "failed",
                 "minute5_status": "success",
@@ -1791,7 +1823,7 @@ def test_check_strategy_daily_eod_dependencies_includes_common_provider_error(mo
                     }
                 ],
             }
-        ],
+        ),
     )
 
     result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")

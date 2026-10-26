@@ -1087,6 +1087,19 @@ def check_strategy_daily_eod_dependencies(
         failure = f"deps_status={row.get('deps_status')}"
         detail = _failed_job_reason(row.get("failed_jobs"), stage="deps")
         common_failures.append(f"{failure}: {detail}" if detail else failure)
+    score_rows = _fetch_one(
+        service,
+        """
+        SELECT count(*) AS row_count
+        FROM factor.stock_score_daily
+        WHERE score_version = %s
+          AND trade_date = %s
+        """,
+        ["manual_v1", trade_date],
+    )
+    score_count = int(score_rows[0].get("row_count") or 0) if score_rows else 0
+    if score_count <= 0:
+        common_failures.append(f"score_topn missing for {trade_date}")
     common = (
         {"status": "failed", "reason": "; ".join(common_failures)}
         if common_failures
