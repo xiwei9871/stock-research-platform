@@ -1,0 +1,77 @@
+{
+  "task": "DATA-R3-P2 financial-statement PIT audit",
+  "branch": "data/r3-p2-financial-pit-audit",
+  "audit_scope": {
+    "tables": ["finance.income_statement", "finance.balance_sheet",
+               "finance.cash_flow", "finance.indicator_quarter",
+               "finance.share_capital_event", "event.earnings_express",
+               "event.earnings_forecast", "raw_akshare.finance_payload",
+               "raw_baostock.finance_payload"],
+    "assets": 5213,
+    "rows": {"income": 549987, "balance": 313734, "cash_flow": 313006},
+    "periods_covered": 139,
+    "period_range": "1988-12-31..2026-09-30",
+    "announcement_range": "1990-03-21..2026-10-23",
+    "production_writes": 0
+  },
+  "gates": {
+    "GATE1_COVERAGE": {
+      "status": "PASS_WITH_GAPS",
+      "evidence": "STATEMENT_COVERAGE_MATRIX.csv: 139 periods; post-2018 median all-three 5,056/period; 2026-06-30 income 5,104 / balance 5,199 / all3 5,099; pre-1998 cash_flow=0 (statement did not exist pre-1998 standard, legit); 2026-09-30 partial (filing season in progress)",
+      "gaps": ["pre-2018 coverage thins with smaller historical universe", "no delisted assets beyond the 13 in asset_master universe scope", "2026-06-30: 14 assets missing balance+cf, 109 missing income"]
+    },
+    "GATE2_PUBLICATION_PIT": {
+      "status": "PASS_WITH_GAPS",
+      "evidence": "announcement_date present on 99.97% rows; sentinel 1900-01-01 rows: balance 71 (9 assets), cash_flow 22 (11 assets) -> fail-closed; PUBLICATION_DATE_AUDIT.csv; financial_pit_at enforces ann<as_of (D+1); edge cases verified on real rows",
+      "gaps": ["no published_at time-of-day field -> D+1 conservatism is permanent for history", "ann_lag>180d anomalies: income 76,039 / balance 33,570 / cf 53,637 rows (baostock pubDate semantics vs real disclosure needs attribution)"]
+    },
+    "GATE3_VERSIONING": {
+      "status": "FAIL_CLOSED_GAPS_FOUND",
+      "evidence": "RESTATEMENT_VERSION_AUDIT.md: multi-ann keys income 0 / balance 10 / cf 9, ALL with identical values (re-announcements, not restatements); same-ann-date restatements silently overwrite (UPSERT on full PK incl ann_date); zero value-level restatement chains preserved",
+      "conclusion": "HISTORICAL_VERSION_MISSING is the operative classification; initial published values are NOT provably retained; only forensic source = raw_*_payload fetched_at+payload_hash",
+      "cross_source_conflicts": {"income_revenue_keys": 188171, "cause": "akshare_em_profit_sheet vs baostock value disagreement; consumers have no source precedence -> version/source drift"}
+    },
+    "GATE4_CONSUMER_SAFETY": {
+      "status": "NEEDS_REVALIDATION",
+      "confirmed_forward_bias": [
+        "same-day-announcement leak: all consumers use announcement_date<=as_of (post-close filings visible same day) — affects factor_pipeline/point_in_time_finance, finance_ttm, fundamental_pipeline, midtrend features, dashboard anchor",
+        "multi-source drift: 188,171 income keys with conflicting revenue across sources; selection by ann desc only, no source precedence -> historical factors non-reproducible",
+        "restatement backfill: overwritten initial values mean any as_of sees latest version (unquantifiable, classified HISTORICAL_VERSION_MISSING)"
+      ],
+      "consumers_flagged": ["factor_pipeline", "finance_ttm", "fundamental_pipeline", "midtrend_pit_fundamental_features"],
+      "note": "financial PIT does not certify theme product-line revenue attribution (CAP-05 boundary stated)"
+    },
+    "GATE5_REPAIR_READINESS": {
+      "status": "PASS",
+      "evidence": "REPAIR_BACKLOG.md R1-R10 with source/cost; contract implemented (financial_pit.py); adversarial suite green",
+      "repairable": ["R2 same-day policy parameterization", "R3 source precedence", "R4 sentinel backfill (93 rows)", "R6 gap terminal marking", "R10 gate integration"],
+      "not_repairable": ["lost initial-version values (mitigate forward via R1 versioning DDL)"]
+    }
+  },
+  "edge_cases_json": "FINANCIAL_PIT_EDGE_CASES.json — 9 cases incl. same-day block, sentinel fail-closed, delisted history, restated policy selection, deterministic repeat",
+  "q2_reconciliation": {
+    "file": "Q2_14_GAP_RECONCILIATION.csv",
+    "baseline": {"universe": 5213, "both_complete": 5199, "both_missing": 14},
+    "result": {"source_unavailable_delisted": 13, "truly_undisclosed": 1,
+               "truly_undisclosed_asset": "CN:SZ:002731",
+               "evidence": "company announcement 2026-09-01 failure to disclose by legal deadline; delisting decision 2026-10-15"},
+    "recon_snapshot": "outputs/research/data01r1_finance_q2_20261020/akshare_q2_reconciliation.json (generated 2026-10-23)"
+  },
+  "tests": {"new_file": "tests/test_financial_pit_p2.py", "passed": 10, "failed": 0, "new_failures_vs_baseline": 0},
+  "deliverables": [
+    "FINANCIAL_DATA_INVENTORY.md", "STATEMENT_COVERAGE_MATRIX.csv",
+    "PUBLICATION_DATE_AUDIT.csv", "RESTATEMENT_VERSION_AUDIT.md",
+    "FINANCIAL_PIT_CONTRACT.md", "QUARTERLY_TTM_SEMANTICS.md",
+    "Q2_14_GAP_RECONCILIATION.csv", "DELISTED_COMPANY_RETENTION_AUDIT.md",
+    "FINANCIAL_PIT_EDGE_CASES.json", "FINANCIAL_CONSUMER_RISK_MATRIX.md",
+    "REPAIR_BACKLOG.md", "REGRESSION_DIFF.md", "audit_summary.json",
+    "FINAL_GATE.json"
+  ],
+  "verdict": "AUDIT_PASS_WITH_GAPS",
+  "blocking_findings": [
+    "CONFIRMED forward-bias surface: same-day announcement convention across all finance consumers",
+    "CONFIRMED initial-version loss channel: same-announcement-date UPSERT overwrite",
+    "188,171 cross-source income value conflicts with no consumer source precedence"
+  ],
+  "boundaries": "read-only audit; no prod writes; no mass refetch; no backtest switch; awaits separate repair-phase approval"
+}
