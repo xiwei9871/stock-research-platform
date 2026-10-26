@@ -57,12 +57,20 @@ def create_shadow(conn) -> None:
         CREATE TABLE IF NOT EXISTS p1d3_shadow.migration_log (
             batch_id    text PRIMARY KEY,
             status      text,
+            range_start date,
+            range_end   date,
+            error       text,
             rows_total  bigint,
             rows_v2     bigint,
             diff_rows   bigint,
             seconds     double precision,
             started_at  timestamptz DEFAULT now(),
             finished_at timestamptz)""")
+    # preflight fix: pre-existing log tables gain the range/error columns
+    execute(conn, """ALTER TABLE p1d3_shadow.migration_log
+        ADD COLUMN IF NOT EXISTS range_start date,
+        ADD COLUMN IF NOT EXISTS range_end date,
+        ADD COLUMN IF NOT EXISTS error text""")
 
 
 def year_batches(conn) -> list[dict]:
@@ -77,13 +85,22 @@ def year_batches(conn) -> list[dict]:
              "expected": int(r["n"])} for r in rows]
 
 
-def run_batch(conn, batch: dict) -> dict:
+def run_batch(conn, batch: dict, fault_hook=None) -> dict:
     b, t0 = batch["batch"], time.monotonic()
+    # 'running' marker committed in its own transaction — visible to other
+    # processes immediately; a crash later leaves it 'running' (not 'done'),
+    # so resume always re-enters the batch.
     execute(conn, """
-        INSERT INTO p1d3_shadow.migration_log (batch_id, status)
-        VALUES (%s, 'running')
+        INSERT INTO p1d3_shadow.migration_log
+            (batch_id, status, range_start, range_end)
+        VALUES (%s, 'running', %s, %s)
         ON CONFLICT (batch_id) DO UPDATE
-          SET status='running', finished_at=NULL""", [b])
+          SET status='running', range_start=EXCLUDED.range_start,
+              range_end=EXCLUDED.range_end, error=NULL, finished_at=NULL""",
+        [b, batch["start"], batch["end"]])
+    conn.commit()
+    if fault_hook is not None:
+        fault_hook()
     # step 1 — v1 column copy
     execute(conn, f"""
         INSERT INTO {SHADOW_TABLE}
@@ -114,10 +131,12 @@ def run_batch(conn, batch: dict) -> dict:
     secs = time.monotonic() - t0
     execute(conn, """
         UPDATE p1d3_shadow.migration_log
-           SET status='done', rows_total=%s, rows_v2=%s, diff_rows=%s,
+           SET status='done', range_start=%s, range_end=%s, error=NULL,
+               rows_total=%s, rows_v2=%s, diff_rows=%s,
                seconds=%s, finished_at=now()
          WHERE batch_id=%s""",
-        [int(stats["rows_total"]), int(stats["rows_v2"]),
+        [batch["start"], batch["end"],
+         int(stats["rows_total"]), int(stats["rows_v2"]),
          int(stats["diff_rows"]), secs, b])
     # durable checkpoint: connect() commits once on clean exit, so without an
     # explicit commit a late-batch crash would roll back every prior batch.
@@ -125,37 +144,102 @@ def run_batch(conn, batch: dict) -> dict:
     return _out(batch, stats, secs)
 
 
-def run_batch_safe(conn, batch: dict, depth: int = 0) -> list[dict]:
-    """Run a batch; on shared-memory exhaustion split it in half and retry —
-    production finding: the context join can exceed the DSM limit on large
-    windows even with parallel gather disabled, so the migration runner
-    must degrade batch granularity automatically."""
+def _log_status(conn, batch_id: str) -> str | None:
+    r = fetch_all(conn, """
+        SELECT status FROM p1d3_shadow.migration_log WHERE batch_id=%s""",
+        [batch_id])
+    return r[0]["status"] if r else None
+
+
+def _done_sub_batches(conn, batch_id: str) -> list[str]:
+    """Committed sub-batches under this batch's split tree (cross-process:
+    the log is the only resume state a new process needs)."""
+    r = fetch_all(conn, """
+        SELECT batch_id FROM p1d3_shadow.migration_log
+        WHERE status='done' AND batch_id LIKE %s""",
+        [batch_id + "\\_%"])
+    return [x["batch_id"] for x in r]
+
+
+def _out_from_log(conn, batch: dict) -> dict:
+    r = fetch_all(conn, """
+        SELECT rows_total, rows_v2, diff_rows, seconds
+        FROM p1d3_shadow.migration_log WHERE batch_id=%s""",
+        [batch["batch"]])[0]
+    return {"batch": batch["batch"], "start": batch["start"],
+            "end": batch["end"], "skipped_done": True,
+            "rows_total": int(r["rows_total"] or 0),
+            "rows_v2": int(r["rows_v2"] or 0),
+            "diff_rows": int(r["diff_rows"] or 0),
+            "seconds": r["seconds"]}
+
+
+def _split_batch(conn, batch: dict) -> tuple[dict, dict] | tuple[dict] | None:
+    """Deterministic halving on the status-table trade_date median."""
+    mid = fetch_all(conn, """
+        SELECT min(trade_date)::text AS d FROM core.asset_status_daily
+        WHERE trade_date > %s AND trade_date <=
+              (%s::date + (%s::date - %s::date)/2)""",
+        [batch["start"], batch["start"], batch["end"], batch["start"]])
+    mid_d = mid[0]["d"] or batch["start"]
+    nxt = fetch_all(conn, """
+        SELECT min(trade_date)::text AS d FROM core.asset_status_daily
+        WHERE trade_date > %s AND trade_date <= %s""",
+        [mid_d, batch["end"]])
+    if nxt[0]["d"] is None:
+        if mid_d == batch["start"]:
+            return None  # single-point batch — nothing to split
+        return ({"batch": batch["batch"] + "_a",
+                 "start": batch["start"], "end": mid_d},)
+    return ({"batch": batch["batch"] + "_a",
+             "start": batch["start"], "end": mid_d},
+            {"batch": batch["batch"] + "_b",
+             "start": nxt[0]["d"], "end": batch["end"]})
+
+
+def run_batch_safe(conn, batch: dict, depth: int = 0,
+                   fault_hook=None) -> list[dict]:
+    """Run a batch in its own committed transaction; on ANY DB failure:
+    rollback the aborted transaction FIRST, log the failure, then split
+    and retry. Committed sub-batches are never recomputed — on entry,
+    done markers short-circuit this batch and force descent into the
+    split tree instead."""
+    if _log_status(conn, batch["batch"]) == "done":
+        return [_out_from_log(conn, batch)]  # committed — do not recompute
+    if _done_sub_batches(conn, batch["batch"]):
+        # a prior (possibly other-process) run committed sub-batches —
+        # descend rather than re-running the parent wholesale
+        halves = _split_batch(conn, batch)
+        if not halves:
+            return []
+        out = []
+        for h in halves:
+            out.extend(run_batch_safe(conn, h, depth + 1,
+                                      fault_hook=fault_hook))
+        return out
     try:
-        return [run_batch(conn, batch)]
+        return [run_batch(conn, batch, fault_hook=fault_hook)]
     except Exception as exc:  # noqa: BLE001
-        if "DiskFull" not in type(exc).__name__ + str(exc) or depth > 6:
+        conn.rollback()  # undo the aborted transaction before anything else
+        if depth > 6:
             raise
-        mid = fetch_all(conn, """
-            SELECT min(trade_date)::text AS d FROM core.asset_status_daily
-            WHERE trade_date > %s AND trade_date <=
-                  (%s::date + (%s::date - %s::date)/2)""",
-            [batch["start"], batch["start"], batch["end"], batch["start"]])
-        mid_d = mid[0]["d"] or batch["start"]
-        nxt = fetch_all(conn, """
-            SELECT min(trade_date)::text AS d FROM core.asset_status_daily
-            WHERE trade_date > %s AND trade_date <= %s""",
-            [mid_d, batch["end"]])
-        right_start = nxt[0]["d"]
-        if right_start is None:  # nothing left in right half — retry left only
-            return run_batch_safe(
-                conn, {"batch": batch["batch"] + "_a",
-                       "start": batch["start"], "end": mid_d}, depth + 1)
-        left = {"batch": batch["batch"] + "_a", "start": batch["start"],
-                "end": mid_d}
-        right = {"batch": batch["batch"] + "_b", "start": right_start,
-                 "end": batch["end"]}
-        return (run_batch_safe(conn, left, depth + 1) +
-                run_batch_safe(conn, right, depth + 1))
+        execute(conn, """
+            INSERT INTO p1d3_shadow.migration_log
+                (batch_id, status, range_start, range_end, error)
+            VALUES (%s, 'failed_split', %s, %s, %s)
+            ON CONFLICT (batch_id) DO UPDATE
+              SET status='failed_split', error=EXCLUDED.error""",
+            [batch["batch"], batch["start"], batch["end"],
+             f"{type(exc).__name__}: {exc}"[:500]])
+        conn.commit()
+        halves = _split_batch(conn, batch)
+        if not halves:
+            raise
+        out = []
+        for h in halves:
+            out.extend(run_batch_safe(conn, h, depth + 1,
+                                      fault_hook=fault_hook))
+        return out
 
 
 def _out(batch, stats, secs):

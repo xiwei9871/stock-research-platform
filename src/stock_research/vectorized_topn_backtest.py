@@ -153,12 +153,14 @@ def load_vectorized_topn_inputs(
             # is_suspended is source PIT status (not rule-derived), so the
             # v1 column is already correct and stays in use.
             v2_required = {"is_limit_up_v2", "is_limit_down_v2",
-                           "limit_state_v2", "limit_rule_id_v2"}
+                           "limit_state_v2", "limit_rule_id_v2",
+                           "limit_flags_version"}
             v2_cols = {r["column_name"] for r in fetch_all(conn, """
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema=%s AND table_name=%s
                   AND column_name IN ('is_limit_up_v2','is_limit_down_v2',
-                                      'limit_state_v2','limit_rule_id_v2')
+                                      'limit_state_v2','limit_rule_id_v2',
+                                      'limit_flags_version')
             """, [status_schema, status_rel])}
             if v2_cols >= v2_required:
                 price_sql = f"""
@@ -168,6 +170,7 @@ def load_vectorized_topn_inputs(
                        s.is_limit_down_v2 AS is_limit_down,
                        s.is_suspended,
                        s.limit_rule_id_v2 AS limit_rule_id,
+                       s.limit_flags_version,
                        (s.asset_id IS NULL
                         OR s.limit_state_v2 IS DISTINCT FROM 1
                         OR s.is_limit_up_v2 IS NULL

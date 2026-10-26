@@ -1,0 +1,111 @@
+{
+  "shadow_table": "p1d3_shadow.asset_status_daily_v2",
+  "flags_version_expected": "pit_rules_v1",
+  "checks": [
+    {
+      "window": [
+        "2024-06-03",
+        "2024-06-07"
+      ],
+      "pass": true,
+      "keys_v2": 25189,
+      "keys_cs": 25189,
+      "key_sets_equal": true,
+      "only_in_v2": 0,
+      "only_in_cs": 0,
+      "rows_joined": 25189,
+      "unmatched_outer_rows": 0,
+      "verified_rows": 25185,
+      "fail_closed_rows": 4,
+      "fail_closed_breakdown": {
+        "data_insufficient": 4
+      },
+      "flag_mismatches_on_verified": 0,
+      "rule_id_mismatches_on_verified": 0,
+      "flags_versions_seen": [
+        "pit_rules_v1"
+      ],
+      "version_consistent": true,
+      "nonverified_escaping_fail_closed": 0
+    },
+    {
+      "window": [
+        "2019-08-01",
+        "2019-08-09"
+      ],
+      "pass": true,
+      "keys_v2": 24185,
+      "keys_cs": 24185,
+      "key_sets_equal": true,
+      "only_in_v2": 0,
+      "only_in_cs": 0,
+      "rows_joined": 24185,
+      "unmatched_outer_rows": 0,
+      "verified_rows": 24150,
+      "fail_closed_rows": 35,
+      "fail_closed_breakdown": {
+        "data_insufficient": 35
+      },
+      "flag_mismatches_on_verified": 0,
+      "rule_id_mismatches_on_verified": 0,
+      "flags_versions_seen": [
+        "pit_rules_v1"
+      ],
+      "version_consistent": true,
+      "nonverified_escaping_fail_closed": 0
+    },
+    {
+      "window": [
+        "2023-04-10",
+        "2023-04-14"
+      ],
+      "pass": true,
+      "keys_v2": 24175,
+      "keys_cs": 24175,
+      "key_sets_equal": true,
+      "only_in_v2": 0,
+      "only_in_cs": 0,
+      "rows_joined": 24175,
+      "unmatched_outer_rows": 0,
+      "verified_rows": 24161,
+      "fail_closed_rows": 14,
+      "fail_closed_breakdown": {
+        "data_insufficient": 14
+      },
+      "flag_mismatches_on_verified": 0,
+      "rule_id_mismatches_on_verified": 0,
+      "flags_versions_seen": [
+        "pit_rules_v1"
+      ],
+      "version_consistent": true,
+      "nonverified_escaping_fail_closed": 0
+    },
+    {
+      "window": [
+        "1996-12-16",
+        "1996-12-20"
+      ],
+      "pass": true,
+      "keys_v2": 2005,
+      "keys_cs": 2005,
+      "key_sets_equal": true,
+      "only_in_v2": 0,
+      "only_in_cs": 0,
+      "rows_joined": 2005,
+      "unmatched_outer_rows": 0,
+      "verified_rows": 1997,
+      "fail_closed_rows": 8,
+      "fail_closed_breakdown": {
+        "data_insufficient": 8
+      },
+      "flag_mismatches_on_verified": 0,
+      "rule_id_mismatches_on_verified": 0,
+      "flags_versions_seen": [
+        "pit_rules_v1"
+      ],
+      "version_consistent": true,
+      "nonverified_escaping_fail_closed": 0
+    }
+  ],
+  "all_pass": true
+}

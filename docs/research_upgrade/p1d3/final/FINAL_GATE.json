@@ -1,0 +1,44 @@
+{
+  "phase": "DATA-R3-P1d.3-final",
+  "status": "PREFLIGHT_COMPLETE",
+  "branch": "fix/p1d3-production-preflight",
+  "baseline_commit": "45d58083a582ca57b18d2486d7330b69ca4e515f",
+  "scope": "deployment-safety fixes only; no recompute, no repeat of the 17.29M rehearsal",
+  "findings": {
+    "batch_recovery": {
+      "fixes": [
+        "running marker committed independently",
+        "rollback aborted tx before split; failed_split logged with error",
+        "migration_log gains range_start/range_end/error (backward-compat ALTER)",
+        "done sub-batches never recomputed; entry descends split tree",
+        "real UndefinedTable injection proves abort->rollback->split->complete"
+      ],
+      "evidence": "FAILURE_RECOVERY.json pass=true; resume emits=0"
+    },
+    "emit_shape": "INSERT..ON CONFLICT replaced with pure UPDATE — PostgreSQL validates NOT NULL on the proposed row before conflict arbitration; production-shaped table requires UPDATE form",
+    "gray_gate": "4/4 windows PASS: key sets equal (outer join, 0 unmatched), verified flags+rule_id+version 0 mismatch, non-verified all fail-closed; errors/empty => FAIL",
+    "prodshape_drill": "12 month batches, 1,221,332 rows, ~12.8s, ~291MB WAL, RowExclusiveLock, QueryCanceled -> 0 partial, column rollback restores checksum, v1 unchanged, EOD-emit/backfill single version",
+    "diff_classification": {
+      "total": 84844,
+      "v1_mislabeled_confirmed": 76031,
+      "v2_data_insufficient": 8191,
+      "v1_null_v2_verified": 617,
+      "v2_rule_unknown": 5,
+      "other_state_change": 0
+    }
+  },
+  "production_runbook": "A additive DDL / B EOD emit / C backfill / D consumer gray / E revalidation — each independently authorized with precheck, abort, rollback",
+  "tests": {
+    "focused_suites": "13 files, 298 passed / 0 failed",
+    "new_failures": 0
+  },
+  "boundaries": {
+    "production_table_writes": 0,
+    "production_ddl": "NOT_EXECUTED",
+    "eod_emit_wired": false,
+    "production_backfill": "NOT_EXECUTED",
+    "consumer_switch": "NOT_EXECUTED",
+    "main_merge": false
+  },
+  "awaiting": "集中审批 A-E（PRODUCTION_APPROVAL_MATRIX.md）"
+}

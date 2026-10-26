@@ -1,0 +1,11 @@
+{
+  "total_diff": 84844,
+  "categories": {
+    "v1_mislabeled_confirmed": 76031,
+    "v2_data_insufficient": 8191,
+    "v1_null_v2_verified": 617,
+    "v2_rule_unknown": 5
+  },
+  "csv": "docs/research_upgrade/p1d3/final/FULL_DIFF_CLASSIFICATION.csv",
+  "samples": "docs/research_upgrade/p1d3/final/FULL_DIFF_SAMPLES.csv"
+}

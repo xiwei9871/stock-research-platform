@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "conn_usable_after_abort": true,
+    "root_logged_failed_split": true,
+    "sub_batches_done": [
+      "drill_recovery_2024h1_a",
+      "drill_recovery_2024h1_b"
+    ],
+    "checksum_matches_reference": true,
+    "rows": 25189,
+    "emits_first_pass": 2,
+    "emits_on_resume": 0,
+    "resume_no_recompute": true,
+    "resume_all_skipped": true,
+    "pass": true
+  }
+}

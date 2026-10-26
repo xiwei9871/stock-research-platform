@@ -115,6 +115,49 @@ def test_status_table_validation():
 
 
 @NEEDS_DB
+def test_shadow_migration_log_all_done():
+    """Full-scale rehearsal completed: every year batch checkpointed."""
+    from stock_research.config import SETTINGS
+    from stock_research.db import connect, fetch_all
+    with connect(SETTINGS.research_service) as conn:
+        r = fetch_all(conn, """
+            SELECT count(*) AS total,
+                   count(*) FILTER (WHERE status='done') AS done,
+                   sum(rows_total) AS rows
+            FROM p1d3_shadow.migration_log""")
+    assert int(r[0]["done"]) >= 37
+    assert int(r[0]["rows"]) >= 17_000_000
+
+
+@NEEDS_DB
+def test_emit_updates_only_no_insert_on_prodshape():
+    """Pure-UPDATE emit must not insert rows — keys absent from target stay
+    absent (production shape contract)."""
+    from stock_research.config import SETTINGS
+    from stock_research.db import connect, execute, fetch_all
+    from stock_research.core_data import emit_v2_flags
+    with connect(SETTINGS.research_service) as conn:
+        execute(conn, "DROP TABLE IF EXISTS p1d3_test.emit_update_only")
+        execute(conn, "CREATE SCHEMA IF NOT EXISTS p1d3_test")
+        execute(conn, """CREATE TABLE p1d3_test.emit_update_only (
+            trade_date date NOT NULL, asset_id text NOT NULL,
+            is_limit_up boolean NOT NULL DEFAULT false,
+            is_limit_down boolean NOT NULL DEFAULT false,
+            is_suspended boolean NOT NULL DEFAULT false,
+            is_limit_up_v2 boolean, is_limit_down_v2 boolean,
+            limit_state_v2 smallint, limit_rule_id_v2 text,
+            limit_flags_version text,
+            PRIMARY KEY (trade_date, asset_id))""")
+        n = emit_v2_flags(conn, "2024-06-03", "2024-06-03",
+                          "p1d3_test.emit_update_only")
+        cnt = fetch_all(conn, """SELECT count(*) AS n
+            FROM p1d3_test.emit_update_only""")[0]["n"]
+        execute(conn, "DROP TABLE p1d3_test.emit_update_only")
+        conn.commit()
+    assert int(cnt) == 0  # zero pre-existing rows -> zero updates, no insert
+
+
+@NEEDS_DB
 def test_verified_v2_gray_read_on_shadow_table():
     """Shadow rehearsal table must drive verified_v2 identically to
     corrected_shadow on verified keys (gray read-path proof)."""

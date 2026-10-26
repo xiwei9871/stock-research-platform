@@ -481,21 +481,24 @@ def emit_v2_flags(
             f"to write (table not migrated)")
     from stock_research.tradeability import compute_pit_limit_flags
     flags = compute_pit_limit_flags(conn, start_date, end_date)
+    # Pure UPDATE — never INSERT. Flags are computed FROM status rows, so
+    # every key must already exist (EOD ordering: build_asset_status_daily
+    # runs first). INSERT..ON CONFLICT would validate NOT NULL on the
+    # proposed tuple before conflict arbitration and break on the
+    # production-shaped table whose v1 columns are NOT NULL.
     sql = f"""
-        INSERT INTO {target_table} (
-            asset_id, trade_date,
-            is_limit_up_v2, is_limit_down_v2,
-            limit_state_v2, limit_rule_id_v2, limit_flags_version)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (trade_date, asset_id) DO UPDATE SET
-            is_limit_up_v2 = EXCLUDED.is_limit_up_v2,
-            is_limit_down_v2 = EXCLUDED.is_limit_down_v2,
-            limit_state_v2 = EXCLUDED.limit_state_v2,
-            limit_rule_id_v2 = EXCLUDED.limit_rule_id_v2,
-            limit_flags_version = EXCLUDED.limit_flags_version
+        UPDATE {target_table} r
+           SET is_limit_up_v2      = v.up,
+               is_limit_down_v2    = v.dn,
+               limit_state_v2      = v.st,
+               limit_rule_id_v2    = v.rule,
+               limit_flags_version = v.ver
+          FROM (VALUES (%s, %s, %s, %s, %s, %s, %s))
+               AS v(d, a, up, dn, st, rule, ver)
+         WHERE r.trade_date = v.d::date AND r.asset_id = v.a
     """
     rows = [(
-        f["asset_id"], f["trade_date"],
+        f["trade_date"], f["asset_id"],
         bool(f["shadow_limit_up"]), bool(f["shadow_limit_down"]),
         int(f["shadow_state"]), f["shadow_rule_id"], flags_version,
     ) for f in flags.to_dict("records")]
