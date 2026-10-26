@@ -93,6 +93,22 @@ def test_emit_v2_flags_refuses_unmigrated_table():
         execute(conn, "DROP TABLE p1d3_test.no_v2_table")
 
 
+def test_dual_write_requires_bounded_dates():
+    """build_asset_status_daily(emit_v2_target=...) must refuse unbounded
+    emit before touching the DB."""
+    from stock_research.core_data import build_asset_status_daily
+    with pytest.raises(ValueError, match="explicit start/end"):
+        build_asset_status_daily(None, emit_v2_target="core.x")
+    # switch off + no dates -> no early error (conn=None fails later, which
+    # is fine — we only assert the guard didn't fire first)
+    try:
+        build_asset_status_daily(None)
+    except ValueError:
+        pytest.fail("guard fired without emit_v2_target")
+    except Exception:
+        pass
+
+
 def test_emit_v2_flags_rejects_bad_identifier():
     from stock_research.core_data import emit_v2_flags
     with pytest.raises(ValueError):

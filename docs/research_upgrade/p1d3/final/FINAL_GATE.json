@@ -1,44 +1,52 @@
 {
-  "phase": "DATA-R3-P1d.3-final",
-  "status": "PREFLIGHT_COMPLETE",
-  "branch": "fix/p1d3-production-preflight",
-  "baseline_commit": "45d58083a582ca57b18d2486d7330b69ca4e515f",
-  "scope": "deployment-safety fixes only; no recompute, no repeat of the 17.29M rehearsal",
-  "findings": {
-    "batch_recovery": {
-      "fixes": [
-        "running marker committed independently",
-        "rollback aborted tx before split; failed_split logged with error",
-        "migration_log gains range_start/range_end/error (backward-compat ALTER)",
-        "done sub-batches never recomputed; entry descends split tree",
-        "real UndefinedTable injection proves abort->rollback->split->complete"
-      ],
-      "evidence": "FAILURE_RECOVERY.json pass=true; resume emits=0"
-    },
-    "emit_shape": "INSERT..ON CONFLICT replaced with pure UPDATE — PostgreSQL validates NOT NULL on the proposed row before conflict arbitration; production-shaped table requires UPDATE form",
-    "gray_gate": "4/4 windows PASS: key sets equal (outer join, 0 unmatched), verified flags+rule_id+version 0 mismatch, non-verified all fail-closed; errors/empty => FAIL",
-    "prodshape_drill": "12 month batches, 1,221,332 rows, ~12.8s, ~291MB WAL, RowExclusiveLock, QueryCanceled -> 0 partial, column rollback restores checksum, v1 unchanged, EOD-emit/backfill single version",
-    "diff_classification": {
-      "total": 84844,
-      "v1_mislabeled_confirmed": 76031,
-      "v2_data_insufficient": 8191,
-      "v1_null_v2_verified": 617,
-      "v2_rule_unknown": 5,
-      "other_state_change": 0
-    }
+  "phase": "DATA-R3-P1d.3",
+  "status": "MIGRATION_PREFLIGHT_PASS",
+  "branch": "data/p1d3-v2-migration",
+  "baseline_commit": "e6d6f5d403512b6b71a4cefda2f23ef4d1218072",
+  "freeze": {
+    "run_id": "p1d3-freeze",
+    "table": "core.asset_status_daily",
+    "rows": 17294002,
+    "size": "3006 MB",
+    "pk": "(trade_date, asset_id)",
+    "partitioned": false,
+    "v1_null_flags": {"is_limit_up": 8806, "is_limit_down": 8806, "is_suspended": 0},
+    "mislabel_baselines": {"targeted_unique_keys": 62937, "census_diffs": 84844, "confirmed_v1_wrong": 76031},
+    "v2_state_census": {"verified": 16906683, "rule_unknown": 5, "data_insufficient": 387314},
+    "flags_version": "pit_rules_v1",
+    "batch_ledger": "p1d3_shadow.migration_log"
   },
-  "production_runbook": "A additive DDL / B EOD emit / C backfill / D consumer gray / E revalidation — each independently authorized with precheck, abort, rollback",
-  "tests": {
-    "focused_suites": "13 files, 298 passed / 0 failed",
-    "new_failures": 0
+  "schema_contract": "5 additive columns; state enum 0/1/2/3; is_suspended reuses PIT v1; COALESCE(v2,v1) forbidden",
+  "eod_dual_write": {
+    "mechanism": "build_asset_status_daily(emit_v2_target=...) same-transaction dual-write, default OFF",
+    "drill": "4 consecutive days atomic, idempotent rerun, abort->zero rows, retry completes, no stateless rows",
+    "production_enabled": false
   },
+  "backfill": {
+    "batches": "37 yearly + auto-split, per-batch commit, resume-capable",
+    "throughput_rows_per_sec": 19189,
+    "measured_wal": "~291MB per 1.22M rows -> ~4-5GB full table",
+    "lock": "RowExclusiveLock",
+    "unrepairable_sets": "rule_unknown 5 rows, data_insufficient 387314, BJ ST unverified -> stay UNKNOWN"
+  },
+  "canary": {
+    "per_key_rows": 455,
+    "v2_eq_corrected_0bps": true,
+    "v2_eq_corrected_15bps": true,
+    "loader_flag_diffs": 258,
+    "retention_gate": "verified allowed, missing blocked",
+    "csv": "CANARY_COMPARISON.csv"
+  },
+  "rollback": "six forms rehearsed: batch abort, column-level, partial-commit, EOD atomic, read-path param, DDL drop",
+  "tests": {"new_failures": 0},
   "boundaries": {
-    "production_table_writes": 0,
+    "production_writes": 0,
     "production_ddl": "NOT_EXECUTED",
-    "eod_emit_wired": false,
+    "eod_dual_write_wired": false,
     "production_backfill": "NOT_EXECUTED",
-    "consumer_switch": "NOT_EXECUTED",
+    "consumer_default_switch": "NOT_EXECUTED",
+    "eod_schedule_untouched": true,
     "main_merge": false
   },
-  "awaiting": "集中审批 A-E（PRODUCTION_APPROVAL_MATRIX.md）"
+  "approval_package": ["MIGRATION_RUNBOOK.md", "PRODUCTION_CHANGE_APPROVAL.md", "PRODUCTION_RUNBOOK.md", "PRODUCTION_APPROVAL_MATRIX.md"]
 }

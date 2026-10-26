@@ -1,0 +1,30 @@
+{
+  "per_key_rows": 455,
+  "topn": {
+    "cost_0bps": {
+      "v2_eq_corrected": true,
+      "v2_minus_cs": [],
+      "cs_minus_v2": [],
+      "legacy_diff_keys": 0,
+      "return_v2": 0.015763376186905598,
+      "return_cs": 0.015763376186905598,
+      "return_lg": 0.015763376186905598
+    },
+    "cost_15bps": {
+      "v2_eq_corrected": true,
+      "v2_minus_cs": [],
+      "cs_minus_v2": [],
+      "legacy_diff_keys": 0,
+      "return_v2": 0.003060300222508472,
+      "return_cs": 0.003060300222508472,
+      "return_lg": 0.003060300222508472
+    },
+    "loader_flag_diffs": 258
+  },
+  "retention": {
+    "verified_nonlimit_allowed": true,
+    "missing_state_blocked": true,
+    "constraint": "block_missing_limit_state=True"
+  },
+  "all_pass": true
+}

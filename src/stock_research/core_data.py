@@ -522,7 +522,23 @@ def build_asset_status_daily(
     start_date: str | None = None,
     end_date: str | None = None,
     adjust_type: str = "hfq",
+    emit_v2_target: str | None = None,
 ) -> None:
+    """Write v1 status rows; optionally emit V2 flags in the SAME
+    transaction (P1d.3 C — toggleable dual-write).
+
+    ``emit_v2_target`` stays None in production until the migration is
+    authorized. When set (e.g. 'core.asset_status_daily' post-DDL), the
+    v2 emit runs inside the caller's transaction — the batch is
+    all-or-nothing, so a half-written day can never advance any success
+    watermark. The emit itself is a pure UPDATE guarded by the v2 column
+    contract (refuses unmigrated targets).
+    """
+    if emit_v2_target is not None and (start_date is None
+                                     or end_date is None):
+        raise ValueError(
+            "emit_v2_target requires explicit start/end dates "
+            "(unbounded v2 emit refused)")
     filters = ["b.adjust_type = %s"]
     params = [adjust_type]
     if start_date:
@@ -617,6 +633,8 @@ def build_asset_status_daily(
         updated_at = now()
     """
     execute(conn, sql, params)
+    if emit_v2_target is not None:
+        emit_v2_flags(conn, start_date, end_date, emit_v2_target)
 
 
 def assert_asset_status_daily_quality(
