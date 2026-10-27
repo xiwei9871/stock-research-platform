@@ -1,0 +1,22 @@
+{
+ "cases": {
+  "A1_unknown_dsn_refused": true,
+  "A1b_prod_double_permit": true,
+  "A1c_prod_dryrun_no_permit_needed": true,
+  "A2_nontest_db_refused": true,
+  "A3_out_of_scope_table": true,
+  "A4_ckpt_missing_blocked": true,
+  "A5_wrong_version_flagged": true,
+  "A6_pending_and_running_detected": true,
+  "A7_kill_resume": true,
+  "A8_txn_rollback_on_crash": true,
+  "A9_idempotent_rerun": true,
+  "A10_stop_file_halts": true,
+  "A10b_resume_after_stop": true,
+  "A11_disk_watermark": true,
+  "A12_data_gap_caught": true
+ },
+ "passed": 15,
+ "total": 15,
+ "all_pass": true
+}

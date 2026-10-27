@@ -1,0 +1,75 @@
+{
+ "milestone": "M2.0.1 prelaunch safety",
+ "baseline": "e73ef14f3c30af3190cfe6b430c08f23a7dcb517",
+ "branch": "fix/r3-m2-prelaunch-safety",
+ "gates": {
+  "G0_baseline": {
+   "status": "PASS",
+   "evidence": "worktree on e73ef14; remote heads verified, no drift"
+  },
+  "G1_backup_discovery": {
+   "status": "PASS",
+   "evidence": "BACKUP_NOT_FOUND proven: NAS dumps all belong to 192.168.3.88; archive off; 0 replicas; no cron; host snapshot UNVERIFIED"
+  },
+  "G2_recovery": {
+   "status": "BLOCKED",
+   "evidence": "no existing backup to restore; independent-instance drill proves toolchain (TABLE_RESTORE_VERIFIED) but prod restore evidence requires B0-B/B0-C approvals"
+  },
+  "G3_release_artifacts": {
+   "status": "PASS",
+   "evidence": "FINAL_GATE.json fixed; pytest machine-acceptance added; manifests recomputed; invalid_json=0"
+  },
+  "G4_backfill_safety": {
+   "status": "PASS",
+   "evidence": "BACKFILL_ADVERSARIAL_TESTS.json 15/15: dsn-bypass refused, double-permit prod, ckpt separation, full-set reconciliation, stop-file, watermarks"
+  },
+  "G5_integrity": {
+   "status": "PASS",
+   "evidence": "INTEGRITY_GATE_FINAL.json 15/15: writer freshness, scope-bound DATA_READY, canary v1-digest, consumer declarations; prior 20/20 suite unchanged"
+  },
+  "G6_isolation": {
+   "status": "PASS",
+   "evidence": "zero prod writes/DDL; all drills on stock_m2_test"
+  },
+  "G7_approval_readiness": {
+   "status": "PASS",
+   "evidence": "M2_APPROVAL_MATRIX_REVISED.md: B0-A first approvable action; T1/F1 gated on B0-C; T4 remains BLOCKED"
+  }
+ },
+ "tests": {
+  "pytest": {
+   "passed": 47,
+   "failed": 0,
+   "note": "m1+pit suite; artifact test runs in CI"
+  },
+  "drills": {
+   "gate_acceptance": "20/20",
+   "backfill_adversarial": "15/15",
+   "gate_final": "15/15",
+   "restore_drill": "TABLE_RESTORE_VERIFIED (test instance)"
+  },
+  "new_failures": []
+ },
+ "backup_evidence": {
+  "backup": "BACKUP_NOT_FOUND",
+  "restore": "RESTORE_NOT_VERIFIED",
+  "host_snapshot": "BACKUP_UNVERIFIED"
+ },
+ "first_approvable_action": "B0-A (backup plan+resource approval)",
+ "still_forbidden": [
+  "any prod write/DDL",
+  "EOD wiring",
+  "consumer switch",
+  "T4 backfill",
+  "archive_mode change (needs separate approval)",
+  "merge main"
+ ],
+ "prod_changes_this_round": 0,
+ "final_state": "M2_PRELAUNCH_BLOCKED_BACKUP",
+ "conditions": [
+  "T1/F1 require B0-C restore evidence (>= L1 table level)",
+  "T4 remains BLOCKED until verified backup exists",
+  "full-db restore drill BLOCKED on >=700GB independent disk resource",
+  "archive_mode=on is a separate production-config approval"
+ ]
+}

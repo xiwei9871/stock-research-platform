@@ -1,0 +1,41 @@
+{
+ "checked_at": "2026-10-27",
+ "target": "stock_research@192.168.3.187 (PG16.13, ~686GB)",
+ "backup_status": "BACKUP_NOT_FOUND",
+ "host_volume_snapshot": "BACKUP_UNVERIFIED (host unreachable, cannot confirm or deny)",
+ "restore_status": "RESTORE_NOT_VERIFIED",
+ "table_restore_drill": "TABLE_RESTORE_VERIFIED on independent instance only (toolchain proof, not prod evidence)",
+ "evidence": {
+  "pg_dumps_found": "94 files on NAS, ALL belong to 192.168.3.88 manq/mq_platform, last run 2025-11-13, none stock_research",
+  "archive": "archive_mode=off, archive_command disabled",
+  "replicas": 0,
+  "cron_185": "no stock_research job",
+  "launchd_mac": "no db backup job",
+  "host_access": "192.168.3.187 ssh unreachable (port open, no key)"
+ },
+ "layers": {
+  "L1_table_dump": {
+   "status": "designed+scripted",
+   "exec": "B0-B approval"
+  },
+  "L2_full_logical": {
+   "status": "designed",
+   "exec": "B0-B approval + window"
+  },
+  "L3_physical_archive": {
+   "status": "designed",
+   "exec": "blocked on archive_mode change (separate approval)"
+  },
+  "L4_finver_audit": {
+   "status": "designed",
+   "exec": "post-F3"
+  }
+ },
+ "approvals_needed": [
+  "B0-A plan+resource",
+  "B0-B first controlled backup",
+  "B0-C restore verification",
+  "archive config change (separate)"
+ ],
+ "t4_backfill": "BLOCKED until B0-C produces verified restore evidence"
+}

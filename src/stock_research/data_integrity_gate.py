@@ -356,7 +356,7 @@ def evaluate_requirements(conn, requirements: dict) -> dict:
     }
     Any domain required-but-absent -> that domain BLOCKED.
     """
-    out = {"verdicts": {}, "combined": "BLOCKED"}
+    out = {"verdicts": {}, "combined": "BLOCKED", "satisfied": {}}
     if not requirements:
         out["error"] = "empty requirement set — fail closed"
         return out
@@ -370,17 +370,64 @@ def evaluate_requirements(conn, requirements: dict) -> dict:
             trade_dates=t.get("trade_dates"))
         out["verdicts"]["tradeability"] = v
         states.append(v["state"])
+        # satisfied = the verdict actually meets the DECLARED need:
+        # a V2 consumer is never satisfied by LEGACY_READY
+        if t.get("require_v2"):
+            ok = v["state"] == "V2_READY"
+        else:
+            ok = v["state"] in ("LEGACY_READY", "V2_READY")
+        if not ok and t.get("allow_degraded") and v["state"] == "DEGRADED":
+            ok = True
+            v["satisfied_via"] = "declared allow_degraded"
+        out["satisfied"]["tradeability"] = ok
     if "financial" in requirements:
         f = requirements["financial"] or {}
-        v = evaluate_financial(conn, f.get("finver_schema", "finver"))
+        if f.get("require_writer"):
+            w = evaluate_finver_writer(
+                conn, f.get("finver_schema", "finver"),
+                raw_table=f.get("raw_table",
+                                "raw_akshare.finance_payload"),
+                staleness_hours=f.get("staleness_hours"),
+                heartbeat_at=f.get("heartbeat_at"),
+                expected_endpoints=f.get("expected_endpoints"))
+            v = {"domain": "finver_writer", "state": w["state"],
+                 "writer": w}
+        else:
+            v = evaluate_financial(conn, f.get("finver_schema",
+                                             "finver"))
         out["verdicts"]["financial"] = v
         states.append("BLOCKED" if v["state"] == "BLOCKED"
                       else ("READY" if v["state"] == "READY"
                             else "DEGRADED"))
+        need = f.get("min_state", "data")
+        if f.get("require_writer"):
+            layers = v["writer"]["layers"]
+            if need == "schema":
+                ok = layers.get("schema") != "BLOCKED"
+            elif need == "writer":
+                ok = bool(layers.get("WRITER_READY"))
+            else:
+                ok = bool(layers.get("DATA_READY"))
+        elif need == "schema":
+            ok = v["state"] in ("READY", "DEGRADED")
+        elif need == "writer":
+            ok = v["state"] == "READY"
+        else:  # data — full readiness required
+            ok = v["state"] == "READY"
+        if not ok and f.get("allow_degraded") and v["state"] == "DEGRADED":
+            ok = True
+            v["satisfied_via"] = "declared allow_degraded"
+        out["satisfied"]["financial"] = ok
     if not states:
         out["error"] = "no declared dependency domains — fail closed"
         return out
     out["combined"] = combine(*states)
+    # a consumer is admissible only when EVERY declared domain is
+    # satisfied — READY-on-paper with an unsatisfied domain is BLOCKED
+    if not all(out["satisfied"].values()):
+        out["combined"] = "BLOCKED"
+        out["reason"] = {k: v for k, v in out["satisfied"].items()
+                         if not v}
     return out
 
 
@@ -393,3 +440,216 @@ def evaluate(conn, require_v2=False,
     f = evaluate_financial(conn, finver_schema)
     return {"tradeability": t, "financial_pit": f,
             "combined": combine(t["state"], f["state"])}
+
+
+# ----------------------------------------------------------------------
+# P0-C1 — finver WRITER freshness & scope-bound DATA readiness
+# ----------------------------------------------------------------------
+
+def evaluate_finver_writer(conn, finver_schema="finver",
+                           raw_table="raw_akshare.finance_payload",
+                           staleness_hours=None, heartbeat_at=None,
+                           expected_endpoints=None) -> dict:
+    """Writer-freshness layer on top of evaluate_finver_schema.
+
+    - last_write_at / last_event_at from observation & event tables
+    - raw-vs-observation reconciliation (raw ids lacking an
+      observation row; observation rows pointing at missing raw)
+    - per-endpoint coverage split
+    - chain consistency (orphan heads, n_versions mismatches)
+    WRITER_READY requires *fresh* evidence: either heartbeat_at (a
+    controlled job-run timestamp supplied by the caller) within
+    staleness_hours, or last_write_at within staleness_hours of now().
+    Historical rows alone NEVER make the writer ready.
+    DATA_READY additionally requires expected_endpoints coverage —
+    an undeclared scope cannot be certified.
+    """
+    from stock_research.db import fetch_all
+    s = finver_schema
+    out = {"domain": "finver_writer", "schema": s, "layers": {},
+           "state": "BLOCKED", "reasons": []}
+    schema = evaluate_finver_schema(conn, s)
+    out["layers"]["schema"] = schema["state"]
+    if not schema["layers"].get("SCHEMA_READY"):
+        out["reasons"] += schema["reasons"]
+        return out
+
+    ev = fetch_all(conn, f"""SELECT count(*) n,
+        max(first_seen_at) last_ev FROM {s}.finver_event""")[0]
+    ob = fetch_all(conn, f"""SELECT count(*) n, max(seen_at) last_obs,
+        count(raw_payload_id) with_raw
+        FROM {s}.finver_observation""")[0]
+    out["layers"]["last_event_at"] = str(ev["last_ev"])
+    out["layers"]["last_write_at"] = str(ob["last_obs"])
+
+    # reconciliation vs the raw evidence table (if it exists)
+    raw_exists = fetch_all(conn, """
+        SELECT count(*) n FROM information_schema.tables
+        WHERE table_schema||'.'||table_name = %s""",
+                           [raw_table])[0]["n"]
+    if raw_exists:
+        out["layers"]["raw_rows"] = fetch_all(conn,
+            f"SELECT count(*) n FROM {raw_table}")[0]["n"]
+        out["layers"]["raw_without_observation"] = fetch_all(conn, f"""
+            SELECT count(*) n FROM {raw_table} r
+            LEFT JOIN {s}.finver_observation o
+              ON o.raw_payload_id = r.id
+            WHERE o.raw_payload_id IS NULL""")[0]["n"]
+        out["layers"]["orphan_observation"] = fetch_all(conn, f"""
+            SELECT count(*) n FROM {s}.finver_observation o
+            LEFT JOIN {raw_table} r ON r.id = o.raw_payload_id
+            WHERE o.raw_payload_id IS NOT NULL AND r.id IS NULL"""
+                                              )[0]["n"]
+        out["layers"]["per_endpoint"] = fetch_all(conn, f"""
+            SELECT r.source_endpoint ep, count(*) raw_n,
+              count(o.raw_payload_id) observed_n
+            FROM {raw_table} r
+            LEFT JOIN {s}.finver_observation o
+              ON o.raw_payload_id = r.id
+            GROUP BY 1 ORDER BY 1""")
+    else:
+        out["reasons"].append(f"raw table {raw_table} absent")
+
+    # chain consistency
+    out["layers"]["orphan_heads"] = fetch_all(conn, f"""
+        SELECT count(*) n FROM {s}.finver_key_chain c
+        LEFT JOIN {s}.finver_event e
+          ON e.version_event_id = c.latest_event_id
+        WHERE e.version_event_id IS NULL""")[0]["n"]
+    out["layers"]["nversions_mismatch"] = fetch_all(conn, f"""
+        SELECT count(*) n FROM {s}.finver_key_chain c
+        WHERE c.n_versions <> (SELECT count(*) FROM {s}.finver_event e
+          WHERE e.asset_id=c.asset_id
+            AND e.statement_type=c.statement_type
+            AND e.endpoint=c.endpoint
+            AND e.report_period=c.report_period
+            AND e.report_type=c.report_type)""")[0]["n"]
+
+    # freshness
+    if heartbeat_at and staleness_hours:
+        out["layers"]["heartbeat_at"] = str(heartbeat_at)
+        out["layers"]["heartbeat_within"] = staleness_hours
+    fresh = False
+    if ob["last_obs"] and staleness_hours:
+        row = fetch_all(conn, """
+            SELECT (max_ts >= now() - make_interval(hours => %s)) fresh
+            FROM (SELECT %s::timestamptz max_ts) t""",
+                        [staleness_hours, ob["last_obs"]])[0]
+        fresh = bool(row["fresh"])
+    out["layers"]["WRITER_READY"] = bool(
+        fresh or (heartbeat_at and staleness_hours))
+    if not out["layers"]["WRITER_READY"]:
+        out["reasons"].append(
+            "no fresh write/heartbeat evidence — historical rows "
+            "cannot certify a live writer")
+
+    chain_ok = (out["layers"]["orphan_heads"] == 0
+                and out["layers"]["nversions_mismatch"] == 0)
+    if expected_endpoints:
+        have = {r["ep"] for r in out["layers"].get("per_endpoint", [])
+                if r["observed_n"] > 0}
+        missing_eps = sorted(set(expected_endpoints) - have)
+        out["layers"]["expected_endpoints_missing"] = missing_eps
+    else:
+        missing_eps = ["<scope undeclared>"]
+    out["layers"]["DATA_READY"] = bool(
+        out["layers"]["WRITER_READY"] and chain_ok and ev["n"] > 0
+        and not missing_eps
+        and out["layers"].get("orphan_observation", 0) == 0
+        and out["layers"].get("raw_without_observation", 0) == 0)
+
+    if out["layers"]["DATA_READY"]:
+        out["state"] = "READY"
+        out["layers"]["detail"] = "SCHEMA+WRITER+DATA"
+    elif out["layers"]["WRITER_READY"]:
+        out["state"] = "DEGRADED"
+        out["reasons"].append("writer fresh but data/chain/scope "
+                              "incomplete")
+    else:
+        out["state"] = "DEGRADED"
+    return out
+
+
+# ----------------------------------------------------------------------
+# P0-C3 — EOD canary gate (M2-T3 admission)
+# ----------------------------------------------------------------------
+
+def evaluate_eod_canary(conn, trade_date, expected_version,
+                        target="core.asset_status_daily",
+                        v1_digest_before=None) -> dict:
+    """Certify ONE canary date's V2 result against the expected version.
+
+    - base rows must exist and ALL carry expected version
+    - every versioned row must satisfy the validity contract
+      (state in 0..3, bools non-null, rule_id non-empty)
+    - state 2/3 are counted SEPARATELY — they are not tradable
+      conclusions and a large share indicates rule/data gaps
+    - v1_digest_before (optional) recomputes a digest over v1 columns
+      and verifies the V2 emit left V1 untouched
+    publishable = committed-shaped result (written/idempotent valid)
+    """
+    from stock_research.db import fetch_all
+    out = {"trade_date": trade_date, "expected_version": expected_version,
+           "checks": {}, "publishable": False, "reasons": []}
+    base = fetch_all(conn, f"""
+        SELECT count(*) n FROM {target} WHERE trade_date=%s""",
+                     [trade_date])[0]["n"]
+    out["checks"]["base_rows"] = base
+    if not base:
+        out["reasons"].append("no base rows — canary date not built")
+        return out
+    dist = fetch_all(conn, f"""
+        SELECT COALESCE(limit_flags_version,'<NULL>') v, count(*) n,
+          count(*) FILTER (WHERE limit_state_v2=2) rule_unknown,
+          count(*) FILTER (WHERE limit_state_v2=3) data_insufficient,
+          count(*) FILTER (WHERE limit_state_v2 IS NULL
+            OR limit_state_v2 NOT IN (0,1,2,3)
+            OR is_limit_up_v2 IS NULL OR is_limit_down_v2 IS NULL
+            OR limit_rule_id_v2 IS NULL
+            OR btrim(limit_rule_id_v2)='') invalid
+        FROM {target} WHERE trade_date=%s GROUP BY 1""",
+                     [trade_date])
+    out["checks"]["version_dist"] = dist
+    good = next((r for r in dist if r["v"] == expected_version), None)
+    foreign = [r for r in dist if r["v"] not in (expected_version,
+                                               "<NULL>")]
+    nulls = next((r["n"] for r in dist if r["v"] == "<NULL>"), 0)
+    out["checks"]["written_rows"] = good["n"] if good else 0
+    out["checks"]["invalid_rows"] = good["invalid"] if good else 0
+    out["checks"]["rule_unknown"] = good["rule_unknown"] if good else 0
+    out["checks"]["data_insufficient"] = \
+        good["data_insufficient"] if good else 0
+    out["checks"]["null_version_rows"] = nulls
+    out["checks"]["foreign_versions"] = foreign
+    if foreign:
+        out["reasons"].append(f"foreign versions present {foreign}")
+    if not good or good["n"] != base:
+        out["reasons"].append(
+            f"coverage {good['n'] if good else 0}/{base} — "
+            "incomplete must NOT advance the watermark")
+    elif good["invalid"]:
+        out["reasons"].append(f"{good['invalid']} invalid rows")
+
+    if v1_digest_before is not None:
+        cur = v1_digest(conn, trade_date, target)
+        out["checks"]["v1_digest"] = cur
+        if cur != v1_digest_before:
+            out["reasons"].append("V1 columns mutated by V2 emit")
+    out["publishable"] = (
+        not out["reasons"] and good and good["n"] == base
+        and good["invalid"] == 0)
+    return out
+
+
+def v1_digest(conn, trade_date, target="core.asset_status_daily"):
+    """Order-stable digest over the V1 status columns of one date —
+    call BEFORE and AFTER a V2 emit to prove V1 was untouched."""
+    from stock_research.db import fetch_all
+    r = fetch_all(conn, f"""
+        SELECT md5(string_agg(t::text, '|' ORDER BY asset_id)) d
+        FROM (SELECT asset_id, is_trade, is_st, is_suspended,
+              is_limit_up, is_limit_down, limit_up_price,
+              limit_down_price, source
+              FROM {target} WHERE trade_date=%s) t""",
+                  [trade_date])
+    return r[0]["d"]

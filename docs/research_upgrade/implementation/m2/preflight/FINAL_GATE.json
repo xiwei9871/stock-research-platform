@@ -14,53 +14,48 @@
  "gates": {
   "G0_baseline": {
    "status": "PASS",
-   "evidence": "remote HEADs match spec SHAs; worktree on da7009bf; "
-               "prod runs canonical main@9bd95562 (plist-verified)"
+   "evidence": "remote HEADs match spec SHAs; worktree on da7009bf; prod runs canonical main@9bd95562 (plist-verified)"
   },
   "G1_isolation": {
    "status": "PASS",
-   "evidence": "all write drills on stock_m2_test (local PG16, "
-               "independent instance); zero prod writes/DDL/wiring"
+   "evidence": "all write drills on stock_m2_test (local PG16, independent instance); zero prod writes/DDL/wiring"
   },
   "G2_integrity": {
    "status": "PASS",
-   "evidence": "INTEGRITY_GATE_ACCEPTANCE.json 20/20: empty/unknown "
-               "fail-closed, legacy!=v2, per-date version checks, "
-               "finver layered, shadow!=prod"
+   "evidence": "INTEGRITY_GATE_ACCEPTANCE.json 20/20: empty/unknown fail-closed, legacy!=v2, per-date version checks, finver layered, shadow!=prod"
   },
   "G3_eod_e2e": {
    "status": "PASS",
-   "evidence": "eod_e2e_results.json 9/9: real chain (build txn then "
-               "stage txn), abort->rollback->retry, incomplete->no "
-               "commit, foreign version blocked"
+   "evidence": "eod_e2e_results.json 9/9: real chain (build txn then stage txn), abort->rollback->retry, incomplete->no commit, foreign version blocked"
   },
   "G4_finver_e2e": {
    "status": "PASS",
-   "evidence": "FINVER_CONCURRENCY_AND_REPLAY_TESTS.json 7/7: "
-               "dual-conn concurrent same-key, out-of-order replay "
-               "no head regress, atomic rollback, chain audit"
+   "evidence": "FINVER_CONCURRENCY_AND_REPLAY_TESTS.json 7/7: dual-conn concurrent same-key, out-of-order replay no head regress, atomic rollback, chain audit"
   },
   "G5_resource": {
    "status": "PASS_WITH_CONDITIONS",
-   "evidence": "RESOURCE_BACKUP_ROLLBACK_GATE.md: 17.3M/3GB, WAL "
-               "~3GB+, no archive, RESTORE_NOT_VERIFIED -> T4 BLOCKED"
+   "evidence": "RESOURCE_BACKUP_ROLLBACK_GATE.md: 17.3M/3GB, WAL ~3GB+, no archive, RESTORE_NOT_VERIFIED -> T4 BLOCKED"
   },
   "G6_release": {
    "status": "PASS",
-   "evidence": "M2_T/M2_F packages + runbooks + unexecuted SQL + "
-               "SHA256 manifest"
+   "evidence": "M2_T/M2_F packages + runbooks + unexecuted SQL + SHA256 manifest"
   },
   "G7_approval": {
    "status": "PASS",
-   "evidence": "M2_APPROVAL_MATRIX.md: per-step authorization, T4 "
-               "blocked on backup evidence, first action = T1 or F1"
+   "evidence": "M2_APPROVAL_MATRIX.md: per-step authorization, T4 blocked on backup evidence, first action = T1 or F1"
   }
  },
  "tests": {
-  "pytest": {"passed": 47, "failed": 0, "skipped": 0},
+  "pytest": {
+   "passed": 47,
+   "failed": 0,
+   "skipped": 0
+  },
   "drills": {
-   "eod_e2e": "9/9", "finver_e2e": "7/7",
-   "gate_acceptance": "20/20", "backfill": "4/4"
+   "eod_e2e": "9/9",
+   "finver_e2e": "7/7",
+   "gate_acceptance": "20/20",
+   "backfill": "4/4"
   },
   "new_failures": []
  },
@@ -71,13 +66,18 @@
   "asset_status_daily": "17,299,191 rows / 3008MB / no v2 cols",
   "finver": "only exists in m1_shadow (drill artifacts)"
  },
- "backup_evidence": "RESTORE_NOT_VERIFIED — no pg_dump/archive/replica "
-                    "evidence found; T4 requires dump first",
- "first_approvable_action": ["T1 additive DDL", "F1 finver schema"],
+ "backup_evidence": "RESTORE_NOT_VERIFIED - no pg_dump/archive/replica evidence found; T4 requires dump first",
+ "first_approvable_action": [
+  "T1 additive DDL",
+  "F1 finver schema"
+ ],
  "still_forbidden": [
-  "production DDL beyond T1/F1 approval", "EOD wiring",
-  "consumer switch", "T4 without backup evidence",
-  "baostock mass re-fetch", "merge main"
+  "production DDL beyond T1/F1 approval",
+  "EOD wiring",
+  "consumer switch",
+  "T4 without backup evidence",
+  "baostock mass re-fetch",
+  "merge main"
  ],
  "prod_changes_this_round": 0,
  "final_state": "M2_PREFLIGHT_PASS_WITH_CONDITIONS",
