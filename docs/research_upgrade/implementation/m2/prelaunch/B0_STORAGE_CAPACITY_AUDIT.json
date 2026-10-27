@@ -1,0 +1,99 @@
+{
+ "audit_at": "2026-10-27",
+ "mode": "read-only",
+ "writes": 0,
+ "host_187": {
+  "reachable": "pg 5432 only; ssh port open, no credentials",
+  "host_disks": "UNVERIFIED",
+  "docker_volume_mapping": "UNVERIFIED",
+  "snapshot_or_quota": "UNVERIFIED",
+  "db_size": "678GB (measured)",
+  "wal_dir": "656MB (measured)",
+  "tablespaces": {
+   "pg_default": "686GB",
+   "pg_global": "965kB"
+  },
+  "top_tables_gb": {
+   "factor.factor_daily": 228,
+   "market.stock_minute_bar_default": 135,
+   "public.label_snapshot": 45,
+   "factor.stock_technical_features_daily": 29,
+   "raw_baostock.daily_bar_payload": 25
+  }
+ },
+ "host_185": {
+  "root_lv": {
+   "type": "ext4 LVM on nvme",
+   "size": "1.1T",
+   "avail": "249G",
+   "use": "77%",
+   "note": "OS + 82 docker volumes; NOT for backups"
+  },
+  "mnt_data1": {
+   "type": "ext4 /dev/sda1 local SATA",
+   "size": "1.8T",
+   "avail": "1.1T",
+   "use": "34%",
+   "verified": "stock_research_backup lives here (207MB)"
+  },
+  "nas_mounts": {
+   "/mnt/Public": {
+    "src": "//192.168.3.253/Public",
+    "cifs": "3.1.1",
+    "avail": "20.3T",
+    "writable": true
+   },
+   "~/NAS": {
+    "src": "//192.168.3.253/public/msDataBackup",
+    "writable": false
+   }
+  }
+ },
+ "nas_253": {
+  "total": "59T",
+  "used": "39T",
+  "avail": "~20.3T",
+  "usable_share": "/mnt/Public (writable, no test files created)",
+  "quota": "UNVERIFIED",
+  "constraint": "cifs cannot host a PG data_directory \u2014 backup FILES only"
+ },
+ "mac_local": {
+  "data_volume_free": "17GiB",
+  "verdict": "cannot host full-db restore"
+ },
+ "capacity_plan": {
+  "L1_single_table": {
+   "per_run": "206MB measured",
+   "4gen": "<1GB"
+  },
+  "L2_full_logical": {
+   "per_run": "70-170GB estimated(10-25% of 686GB)",
+   "4gen": "140-680GB",
+   "landing": "data1 or NAS"
+  },
+  "L3_physical": {
+   "per_run": "200-400GB estimated",
+   "landing": "NAS only (data1 fits 1-2 gens)"
+  },
+  "wal_archive": {
+   "per_day": "1-5GB estimated",
+   "14d": "<70GB"
+  },
+  "full_restore_drill": {
+   "need": ">=800GB contiguous",
+   "only_viable": "185 /mnt/data1",
+   "blocked_on": "mac 17GiB, NAS no-pg-datadir"
+  }
+ },
+ "verdict": {
+  "L2_full_backup_feasible": true,
+  "independent_restore_feasible": "yes, on 185 /mnt/data1 with docker pg16",
+  "bottlenecks": [
+   "187 host invisible -> snapshot/volume claims stay UNVERIFIED",
+   "185 pg client is v14 (server 16.13) -> install PG16 client or push artifacts from mac",
+   "msDataBackup share not writable -> use /mnt/Public",
+   "185 root 249G -> never land dumps on /",
+   "archive_mode change needs separate prod-config approval"
+  ]
+ }
+}
