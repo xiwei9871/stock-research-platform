@@ -96,8 +96,9 @@ def financial_pit_at(
       verified_public            single version, ann < as_of
       restated_selected          same-source multi-ann versions exist
       historical_version_missing initial_public requested but the
-                                 surviving row shows re-announcement
-                                 signature (initial version unprovable)
+                                 initial published version is
+                                 unverifiable (surviving version may
+                                 still be public — see reasons)
       not_yet_published          all statements ann >= as_of
       publication_date_missing   only sentinel/NULL ann rows
       period_not_reported        no rows for scope
@@ -192,25 +193,32 @@ def financial_pit_at(
     if others:
         res.restatement_of = ",".join(sorted(set(others)))[:400]
 
-    upd = chosen.get("updated_at")
-    res.operationally_available_at_asof = (
-        _as_date(upd) <= asof_d if upd else None)
-    if res.operationally_available_at_asof is False:
-        reasons.append("public by as_of but ingested later "
-                       "(operational gap)")
-    elif res.operationally_available_at_asof is None:
-        reasons.append("operational availability UNKNOWN "
-                       "(no ingestion timestamp evidence)")
+    # updated_at is last-refresh, NOT first-seen: it cannot prove
+    # operational availability at a past instant in either direction.
+    res.operationally_available_at_asof = None
+    reasons.append("operational availability UNKNOWN — updated_at is "
+                   "a refresh timestamp, not first_seen evidence")
+    res.evidence_trace["last_updated_at"] = chosen.get("updated_at")
 
     lag = (_as_date(chosen["announcement_date"])
            - _as_date(chosen["report_period"])).days
-    if version_policy == "initial_public" and not restated \
-            and lag > REANNOUNCE_LAG_DAYS:
+    # long lag is *suspicion* of re-announcement, not proof of the true
+    # initial disclosure date (which may predate this row entirely).
+    suspected = lag > REANNOUNCE_LAG_DAYS
+    if suspected:
+        reasons.append(f"ann-period lag {lag}d — suspected "
+                       f"re-announcement (initial date unprovable)")
+    # initial-version provability: only the earliest surviving version
+    # inside a statutory-window announcement is treated as plausibly
+    # initial; nothing here proves the true first publication.
+    initial_provable = (not restated) and not suspected
+    res.evidence_trace["initial_version_provable"] = initial_provable
+    if version_policy == "initial_public" and not initial_provable:
         res.pit_status = "historical_version_missing"
         reasons.append(
-            f"ann-period lag {lag}d indicates the surviving row is a "
-            f"re-announcement; the initial published version is "
-            f"unprovable from the statement table")
+            "initial_public requested but the initial published version "
+            "is unverifiable; the surviving version was public — do not "
+            "consume it as a verified initial value")
     elif restated:
         res.pit_status = "restated_selected"
         reasons.append(f"same-source re-announcement on key; "

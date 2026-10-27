@@ -1,0 +1,191 @@
+{
+ "eval_dates": 1386,
+ "changed_selections": 285351,
+ "by_kind": {
+  "income:period_change": 93882,
+  "income:lost_availability": 1055,
+  "balance:period_change": 94387,
+  "balance:lost_availability": 1056,
+  "balance:version_change": 5,
+  "cash_flow:period_change": 93910,
+  "cash_flow:lost_availability": 1055,
+  "cash_flow:version_change": 1
+ },
+ "sentinel_assets": {
+  "balance": [
+   "CN:SH:600999",
+   "CN:SH:601099",
+   "CN:SH:601377",
+   "CN:SH:601555",
+   "CN:SH:601688",
+   "CN:SH:601788",
+   "CN:SH:601901",
+   "CN:SZ:002500",
+   "CN:SZ:002673"
+  ],
+  "cash_flow": [
+   "CN:SH:600109",
+   "CN:SH:600999",
+   "CN:SH:601377",
+   "CN:SH:601555",
+   "CN:SH:601688",
+   "CN:SH:601788",
+   "CN:SZ:000686",
+   "CN:SZ:000728",
+   "CN:SZ:000783",
+   "CN:SZ:002500",
+   "CN:SZ:002673"
+  ]
+ },
+ "real_path_spot_checks": [
+  {
+   "statement": "income",
+   "asset": "CN:SZ:300066",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-24",
+    "2026-06-30",
+    "baostock"
+   ],
+   "shadow": [
+    "2026-08-24",
+    "2026-06-30",
+    "baostock"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "income",
+   "asset": "CN:SZ:300067",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-27",
+    "2026-06-30",
+    "baostock"
+   ],
+   "shadow": [
+    "2026-08-27",
+    "2026-06-30",
+    "baostock"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "income",
+   "asset": "CN:SZ:300068",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-29",
+    "2026-06-30",
+    "baostock"
+   ],
+   "shadow": [
+    "2026-08-29",
+    "2026-06-30",
+    "baostock"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "balance",
+   "asset": "CN:SH:600428",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-27",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "shadow": [
+    "2026-08-27",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "balance",
+   "asset": "CN:SH:600428",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-27",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "shadow": [
+    "2026-08-27",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "balance",
+   "asset": "CN:SH:600428",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-27",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "shadow": [
+    "2026-08-27",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "cash_flow",
+   "asset": "CN:SH:600455",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-15",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "shadow": [
+    "2026-08-15",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "cash_flow",
+   "asset": "CN:SH:600455",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-15",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "shadow": [
+    "2026-08-15",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "period_match": true
+  },
+  {
+   "statement": "cash_flow",
+   "asset": "CN:SH:600455",
+   "td": "2026-10-26",
+   "real": [
+    "2026-08-15",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "shadow": [
+    "2026-08-15",
+    "2026-06-30",
+    "akshare_em"
+   ],
+   "period_match": true
+  }
+ ],
+ "v1_vs_v2": {
+  "v1_changed": 286704,
+  "v2_changed": 285351,
+  "attribution": "v1 counted bare (ann,rp) tuple mismatch incl. source-less picks; v2 applies two-level selection with explicit source preference"
+ }
+}

@@ -218,3 +218,75 @@ def test_delisted_asset_history_survives(conn):
         pytest.skip("no delisted assets in asset_master")
     r = financial_pit_at(conn, rows[0]["asset_id"], "2027-01-01", "income")
     assert r.publicly_available_at_asof is True
+
+
+# ---------- P2.1-Final: parser adversarial + operational semantics ----------
+
+import sys as _sys
+_sys.path.insert(0, "scripts")
+import p21_forensics_v2 as fx  # noqa: E402
+
+
+def test_parser_list_payload_multi_period():
+    pl = [{"REPORT_DATE": "2025-12-31", "NOTICE_DATE": "2026-03-30",
+           "REPORT_TYPE": "年报", "NETPROFIT": 100, "OPERATE_INCOME": 500},
+          {"REPORT_DATE": "2025-09-30", "NOTICE_DATE": "2025-10-30",
+           "REPORT_TYPE": "三季报", "NETPROFIT": 80}]
+    rows = fx.to_rows(pl)
+    assert len(rows) == 2
+    assert fx.pkey(rows[0]) == "2025-12-31"
+    assert "NETPROFIT" in fx.metrics_of(rows[0])
+    assert "NOTICE_DATE" not in fx.metrics_of(rows[0])
+
+
+def test_parser_dict_and_wrapper_shapes():
+    assert fx.to_rows({"data": [{"REPORT_DATE": "2025-12-31"}]})
+    assert fx.to_rows({"REPORT_DATE": "2025-12-31"})
+    assert fx.to_rows("garbage") == []
+    assert fx.to_rows(None) == []
+
+
+def test_field_classification():
+    a = {"NETPROFIT": 100.0, "OPERATE_INCOME": 500, "MISSING_B": 1}
+    b = {"NETPROFIT": 100.5, "OPERATE_INCOME": 500,
+         "NEW_FIELD": 2, "MISSING_A": 3}
+    per, worst = fx.classify_fields(a, b)
+    assert per["OPERATE_INCOME"] == "equal"
+    assert per["NETPROFIT"] in ("precision", "changed")
+    assert per["MISSING_B"] == "missing" and per["NEW_FIELD"] == "missing"
+    a2, b2 = {"X": None}, {"X": 5}
+    per2, _ = fx.classify_fields(a2, b2)
+    assert per2["X"] == "null_asymmetry"
+    a3, b3 = {"X": 100.0001}, {"X": 100.0000}
+    per3, _ = fx.classify_fields(a3, b3)
+    assert per3["X"] in ("precision", "equal")
+
+
+def test_empty_extraction_not_unchanged():
+    assert fx.metrics_of({"REPORT_DATE": "2025-12-31"}) == {}
+    # a payload with only meta keys must not feed a fake "same" verdict —
+    # handled at comparison level (extraction_empty classification)
+
+
+def test_operational_availability_is_unknown(conn):
+    r = financial_pit_at(conn, "CN:SH:600000", "2024-06-01", "income")
+    assert r.operationally_available_at_asof is None
+    assert any("UNKNOWN" in x for x in r.restriction_reasons)
+
+
+def test_initial_provable_flag_and_no_disguise(conn):
+    rows = fetch_all(conn, """
+        SELECT asset_id, report_period::text rp
+        FROM finance.income_statement
+        WHERE announcement_date > report_period + interval '240 days'
+        GROUP BY 1,2,source
+        HAVING count(DISTINCT announcement_date)=1 LIMIT 1""")
+    if not rows:
+        pytest.skip("no re-announcement-signature rows")
+    r = financial_pit_at(conn, rows[0]["asset_id"], "2027-01-01",
+                         "income", report_period=rows[0]["rp"],
+                         version_policy="initial_public")
+    assert r.pit_status == "historical_version_missing"
+    assert r.evidence_trace["initial_version_provable"] is False
+    # surviving version may still be public — the two facts stay separate
+    assert isinstance(r.publicly_available_at_asof, bool)
