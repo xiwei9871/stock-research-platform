@@ -1,0 +1,48 @@
+{
+ "date": "2026-10-27",
+ "scope": "B0 NAS landing + finance_payload L1",
+ "l1_copy": {
+  "file": "asset_status_daily_20261027_164259.dump",
+  "nas_path": "//192.168.3.253/Public/stock_research_backup/L1/",
+  "bytes": 216892416,
+  "sha256": "e85233c29e6e421e986ee0bcebe3114e23cb0bbcf7bd17019910c21aa7429ace",
+  "verified_vs_source": true,
+  "local_copies_kept": true
+ },
+ "pg16_client_185": {
+  "method": "docker postgres:16.4-alpine (existing image, run --rm)",
+  "pg14_untouched": true
+ },
+ "finance_payload_l1": {
+  "file": "finance_payload_20261027_173205.dump",
+  "bytes_est": "718MB",
+  "sha256": "f3ec2d9061d4bc7bdd1eeba37eb6055403aa73df8640bc75dc58a847dbdddec4",
+  "toc_verified": true,
+  "restore_drill": {
+   "instance": "docker m2_restore_drill postgres:16.4-alpine @185, datadir=/mnt/data1",
+   "rows": 16586,
+   "fetched_range": [
+    "2026-07-09",
+    "2026-10-22"
+   ],
+   "md5_utc_normalized_match": true,
+   "note": "raw md5 diff was timestamptz rendering TZ only",
+   "verdict": "TABLE_RESTORE_VERIFIED (production artifact)"
+  }
+ },
+ "l2_dryrun": {
+  "schema_dump": "0.32s / 662KB ok",
+  "heap_toast_input": "312.5GB measured",
+  "estimated_output": "30-130GB (estimated)",
+  "replication_probe": "IDENTIFY_SYSTEM ok -> pg_basebackup path viable",
+  "data1_avail": "1.1T",
+  "restore_drill_capacity": {
+   "need_datadir": "~686GB",
+   "headroom_if_dump_on_nas": "~414GB (38%)",
+   "headroom_if_dump_on_data1": "~244GB (22%, tight)",
+   "recommendation": "dump stays on NAS; data1 hosts datadir only"
+  }
+ },
+ "leftover": "drill pgdata /mnt/data1/restore_drill needs sudo rm (container uid)",
+ "prod_writes": 0
+}
