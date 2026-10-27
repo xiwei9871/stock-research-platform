@@ -150,7 +150,9 @@ def test_gate_combine_never_promotes_blocked():
     assert combine("READY", "BLOCKED") == "BLOCKED"
     assert combine("READY", "DEGRADED") == "DEGRADED"
     assert combine("READY", "READY") == "READY"
-    assert combine() == "READY"
+    # M2-0-B2: empty input and unknown tokens fail closed
+    assert combine() == "BLOCKED"
+    assert combine("READY", "BOGUS") == "BLOCKED"
 
 
 # ---- P0-1: V2 completeness + LEGACY/V2 state split ----

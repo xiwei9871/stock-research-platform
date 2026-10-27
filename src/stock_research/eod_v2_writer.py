@@ -122,3 +122,68 @@ def emit_eod_v2_flags(conn, trade_date: str, target_table: str,
     else:
         res["status"] = "written"
     return res
+
+
+def run_eod_v2_stage(service, trade_date: str,
+                     target_table="core.asset_status_daily",
+                     flags_version="pit_rules_v1",
+                     enabled: bool = False) -> dict:
+    """Independent, recoverable V2 stage for the real EOD chain.
+
+    Mirrors the production reality found in M2-0-A1: base status is
+    committed by its own transaction inside
+    build_asset_status_daily_for_service; V2 emit therefore runs as a
+    SEPARATE stage in its OWN transaction — never silently folded into
+    an ambiguous boundary.
+
+    Frontier rule (caller-independent):
+      * commits ONLY on status 'written' or 'idempotent'
+      * 'blocked'/'incomplete' roll back — nothing persists, the V2
+        watermark must not advance
+      * returns res with 'committed' flag; a caller that advances a
+        frontier must require res['committed'] == True
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _session():
+        if "=" in str(service):
+            # raw conninfo (e.g. an isolated test instance) — used by
+            # drills; production always passes a pg-service name
+            import psycopg
+            from psycopg.rows import dict_row
+            c = psycopg.connect(service, row_factory=dict_row)
+            try:
+                yield c
+                c.commit()
+            except BaseException:
+                c.rollback()
+                raise
+            finally:
+                c.close()
+        else:
+            from stock_research.db import connect
+            with connect(service) as c:
+                yield c
+
+    res = {"trade_date": trade_date, "committed": False}
+    with _session() as conn:
+        try:
+            r = emit_eod_v2_flags(conn, trade_date, target_table,
+                                  flags_version, enabled=enabled)
+        except Exception as e:  # noqa: BLE001
+            conn.rollback()
+            res.update(status="blocked",
+                       reasons=[f"stage exception: "
+                                f"{type(e).__name__}: {e}"])
+            return res
+        res.update(r)
+        if r["status"] in ("written", "idempotent"):
+            res["committed"] = True
+            return res
+        # partial/blocked writes must not persist — roll back inside
+        # the caller-owned txn before returning
+        conn.rollback()
+        res["reasons"] = (res.get("reasons") or []) + [
+            "stage rolled back (status not written/idempotent)"]
+        return res

@@ -1,0 +1,49 @@
+{
+ "drills": {
+  "B1_full_run": {
+   "state": "done",
+   "batches": 3,
+   "covered": 24,
+   "total": 24,
+   "pass": true
+  },
+  "B2_kill_resume_pending": {
+   "state": "stopped",
+   "batches_run": [],
+   "pass": true
+  },
+  "B3_resume": {
+   "state": "done",
+   "checkpoints": [
+    {
+     "d": "2026-10-20",
+     "status": "done"
+    },
+    {
+     "d": "2026-10-21",
+     "status": "done"
+    },
+    {
+     "d": "2026-10-22",
+     "status": "done"
+    }
+   ],
+   "covered": 24,
+   "total": 24,
+   "audit_pending": [],
+   "pass": true
+  },
+  "B4_rerun_skip": {
+   "state": "done",
+   "batches": 0,
+   "pass": true
+  }
+ },
+ "gate": {
+  "B1_full_run": true,
+  "B2_kill_resume_pending": true,
+  "B3_resume": true,
+  "B4_rerun_skip": true,
+  "all_pass": true
+ }
+}
