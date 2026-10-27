@@ -1,28 +1,17 @@
-"""M1-C — append-only financial statement version event store.
+"""M1-C v2 — append-only financial statement version event store.
 
-Purpose: stop losing NEWLY OBSERVED version evidence to same-key
-UPSERTs in the normalized finance tables. The store is an independent
-event layer — the production statement tables are untouched.
+Deployment-safety revision (P0-3):
 
-Design:
-  finver.event      immutable version observations
-  finver.key_chain  materialized pointer to the latest event per key
-
-A "version key" = (asset_id, statement_type, endpoint, report_period,
-report_type). Each event carries the normalized metric fingerprint,
-the raw payload evidence (id + hash), observation times, a per-key
-version sequence, a supersedes link, and a change_class relative to the
-prior observed version:
-
-  identical          same fingerprint — idempotent, bumps last_seen only
-  metadata_only      hash changed but metric vector equal
-  precision_only     within 1e-4 relative tolerance
-  null_asymmetry     NULL<->value flips only
-  field_missing      fields present/absent asymmetrically
-  metrics_changed    real numeric change — the append-only restatement
-
-Observed vendor mutation is NOT proof of a formal corporate
-restatement announcement; change_class records only what the data did.
+  * content fingerprint is NOT the event identity — identity is
+    version_event_id + (key, version_seq). Identical metric vectors may
+    recur (A->B->A) and each is its own immutable event.
+  * every fetch observation is recorded in finver_observation
+    (raw_payload_id/hash/seen_at); committed events are NEVER mutated —
+    mutable metadata lives only in the observation/state layer.
+  * per-key serialization uses a transaction-scoped advisory lock so
+    concurrent ingests cannot collide on version_seq or orphan events.
+  * read_as_of uses first_seen_at = PLATFORM observation time. It can
+    never stand in for the market's first publication date.
 """
 from __future__ import annotations
 
@@ -55,30 +44,38 @@ def ddl(schema: str = "m1_shadow") -> str:
     return f"""
     CREATE SCHEMA IF NOT EXISTS {schema};
     CREATE TABLE IF NOT EXISTS {schema}.finver_event (
-      version_event_id  bigserial PRIMARY KEY,
-      asset_id          text        NOT NULL,
-      statement_type    text        NOT NULL,
-      endpoint          text        NOT NULL,
-      report_period     date        NOT NULL,
-      report_type       text        NOT NULL DEFAULT '',
-      metric_fingerprint text       NOT NULL,
-      metrics           jsonb       NOT NULL,
-      announcement_date date,
-      announcement_evidence text    NOT NULL DEFAULT 'unknown',
-      raw_payload_id    bigint,
-      raw_payload_hash  text,
-      first_seen_at     timestamptz NOT NULL,
-      last_seen_at      timestamptz NOT NULL,
-      version_seq       int         NOT NULL,
-      supersedes_event_id bigint REFERENCES {schema}.finver_event(version_event_id),
-      change_class      text        NOT NULL,
-      created_at        timestamptz NOT NULL DEFAULT now(),
+      version_event_id   bigserial PRIMARY KEY,
+      asset_id           text NOT NULL,
+      statement_type     text NOT NULL,
+      endpoint           text NOT NULL,
+      report_period      date NOT NULL,
+      report_type        text NOT NULL DEFAULT '',
+      version_seq        int  NOT NULL,
+      supersedes_event_id bigint
+        REFERENCES {schema}.finver_event(version_event_id),
+      metric_fingerprint text NOT NULL,
+      metrics            jsonb NOT NULL,
+      announcement_date  date,
+      announcement_evidence text NOT NULL DEFAULT 'unknown',
+      first_seen_at      timestamptz NOT NULL,
+      created_at         timestamptz NOT NULL DEFAULT now(),
       UNIQUE (asset_id, statement_type, endpoint, report_period,
-              report_type, metric_fingerprint)
+              report_type, version_seq)
     );
     CREATE INDEX IF NOT EXISTS finver_event_key_idx
       ON {schema}.finver_event
-      (asset_id, statement_type, report_period, version_seq);
+      (asset_id, statement_type, endpoint, report_period,
+       report_type, version_seq);
+    CREATE TABLE IF NOT EXISTS {schema}.finver_observation (
+      observation_id   bigserial PRIMARY KEY,
+      version_event_id bigint NOT NULL
+        REFERENCES {schema}.finver_event(version_event_id),
+      raw_payload_id   bigint,
+      raw_payload_hash text,
+      seen_at          timestamptz NOT NULL,
+      change_class     text NOT NULL,
+      UNIQUE (version_event_id, raw_payload_id)
+    );
     CREATE TABLE IF NOT EXISTS {schema}.finver_key_chain (
       asset_id        text NOT NULL,
       statement_type  text NOT NULL,
@@ -137,7 +134,6 @@ def fingerprint(metrics: dict) -> str:
 
 
 def field_class(a: dict, b: dict) -> str:
-    """a = prior metrics, b = new metrics."""
     keys = set(a) | set(b)
     worst = "identical"
     rank = {"metrics_changed": 5, "field_missing": 4,
@@ -167,20 +163,22 @@ def field_class(a: dict, b: dict) -> str:
 
 
 def _ann_evidence(ann: str | None) -> str:
-    if not ann or ann == SENT:
-        return "unknown"
-    return "vendor_supplied_date"
+    return "unknown" if (not ann or ann == SENT) else "vendor_supplied_date"
+
+
+def _lock_key(conn, schema, asset, st, ep, period, rt):
+    """Serialize ingest per key inside the transaction."""
+    from stock_research.db import execute
+    execute(conn, "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            [f"{asset}|{st}|{ep}|{period}|{rt}"])
 
 
 def ingest_payload(conn, schema: str, asset_id: str, endpoint: str,
                    fetched_at, payload, raw_payload_id=None,
                    raw_payload_hash=None,
                    report_type_default: str = "") -> dict:
-    """Expand one raw payload into version events. Idempotent.
-
-    Returns counters: new_version / identical_bump / no_period /
-    empty_metrics / skipped_rows.
-    """
+    """Expand one raw payload into immutable version events +
+    observation records. Idempotent per (event, raw_payload_id)."""
     from stock_research.db import execute, fetch_all
     out = {"new_version": 0, "identical_bump": 0, "no_period": 0,
            "empty_metrics": 0, "skipped_rows": 0}
@@ -197,8 +195,10 @@ def ingest_payload(conn, schema: str, asset_id: str, endpoint: str,
         ann = _pick(row, ANN_KEYS)
         rt = str(row.get("REPORT_TYPE") or report_type_default)
         fp = fingerprint(metrics)
+        _lock_key(conn, schema, asset_id, st, endpoint, period, rt)
         chain = fetch_all(conn, f"""
-          SELECT c.latest_event_id, c.n_versions, e.metrics, e.change_class
+          SELECT c.latest_event_id, c.n_versions, e.metrics,
+                 e.metric_fingerprint
           FROM {schema}.finver_key_chain c
           JOIN {schema}.finver_event e
             ON e.version_event_id = c.latest_event_id
@@ -206,75 +206,77 @@ def ingest_payload(conn, schema: str, asset_id: str, endpoint: str,
             AND c.report_period=%s AND c.report_type=%s""",
                           [asset_id, st, endpoint, period, rt])
         if not chain:
-            execute(conn, f"""
+            eid = fetch_all(conn, f"""
               INSERT INTO {schema}.finver_event
                 (asset_id, statement_type, endpoint, report_period,
-                 report_type, metric_fingerprint, metrics,
+                 report_type, version_seq, metric_fingerprint, metrics,
                  announcement_date, announcement_evidence,
-                 raw_payload_id, raw_payload_hash,
-                 first_seen_at, last_seen_at, version_seq, change_class)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,'initial_observed')
+                 first_seen_at)
+              VALUES (%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s)
               RETURNING version_event_id""",
                     [asset_id, st, endpoint, period, rt, fp,
                      json.dumps(metrics), ann, _ann_evidence(ann),
-                     raw_payload_id, raw_payload_hash, fetched_at,
-                     fetched_at])
-            eid = fetch_all(conn, "SELECT lastval() i")[0]["i"]
+                     fetched_at])[0]["version_event_id"]
             execute(conn, f"""
               INSERT INTO {schema}.finver_key_chain
                 (asset_id, statement_type, endpoint, report_period,
                  report_type, n_versions, latest_event_id)
               VALUES (%s,%s,%s,%s,%s,1,%s)""",
                     [asset_id, st, endpoint, period, rt, eid])
+            execute(conn, f"""
+              INSERT INTO {schema}.finver_observation
+                (version_event_id, raw_payload_id, raw_payload_hash,
+                 seen_at, change_class)
+              VALUES (%s,%s,%s,%s,'initial_observed')
+              ON CONFLICT DO NOTHING""",
+                    [eid, raw_payload_id, raw_payload_hash, fetched_at])
             out["new_version"] += 1
             continue
         cur = chain[0]
         cls = field_class(cur["metrics"], metrics)
         if cls == "identical":
+            # same effective version — record the sighting only
             execute(conn, f"""
-              UPDATE {schema}.finver_event SET last_seen_at=%s
-              WHERE version_event_id=%s""", [fetched_at,
-                                            cur["latest_event_id"]])
+              INSERT INTO {schema}.finver_observation
+                (version_event_id, raw_payload_id, raw_payload_hash,
+                 seen_at, change_class)
+              VALUES (%s,%s,%s,%s,'identical')
+              ON CONFLICT DO NOTHING""",
+                    [cur["latest_event_id"], raw_payload_id,
+                     raw_payload_hash, fetched_at])
             out["identical_bump"] += 1
             continue
-        if cls in ("metrics_changed", "field_missing", "null_asymmetry",
-                   "precision_only"):
-            execute(conn, f"""
-              INSERT INTO {schema}.finver_event
-                (asset_id, statement_type, endpoint, report_period,
-                 report_type, metric_fingerprint, metrics,
-                 announcement_date, announcement_evidence,
-                 raw_payload_id, raw_payload_hash,
-                 first_seen_at, last_seen_at, version_seq,
-                 supersedes_event_id, change_class)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-              RETURNING version_event_id""",
-                    [asset_id, st, endpoint, period, rt, fp,
-                     json.dumps(metrics), ann, _ann_evidence(ann),
-                     raw_payload_id, raw_payload_hash, fetched_at,
-                     fetched_at, cur["n_versions"] + 1,
-                     cur["latest_event_id"], cls])
-            eid = fetch_all(conn, "SELECT lastval() i")[0]["i"]
-            execute(conn, f"""
-              UPDATE {schema}.finver_key_chain
-              SET n_versions=%s, latest_event_id=%s
-              WHERE asset_id=%s AND statement_type=%s AND endpoint=%s
-                AND report_period=%s AND report_type=%s""",
-                    [cur["n_versions"] + 1, eid, asset_id, st, endpoint,
-                     period, rt])
-            out["new_version"] += 1
-        else:  # identical metric vector, different payload hash
-            execute(conn, f"""
-              UPDATE {schema}.finver_event SET last_seen_at=%s
-              WHERE version_event_id=%s""", [fetched_at,
-                                            cur["latest_event_id"]])
-            out["identical_bump"] += 1
+        eid = fetch_all(conn, f"""
+          INSERT INTO {schema}.finver_event
+            (asset_id, statement_type, endpoint, report_period,
+             report_type, version_seq, supersedes_event_id,
+             metric_fingerprint, metrics, announcement_date,
+             announcement_evidence, first_seen_at)
+          VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+          RETURNING version_event_id""",
+                [asset_id, st, endpoint, period, rt,
+                 cur["n_versions"] + 1, cur["latest_event_id"], fp,
+                 json.dumps(metrics), ann, _ann_evidence(ann),
+                 fetched_at])[0]["version_event_id"]
+        execute(conn, f"""
+          UPDATE {schema}.finver_key_chain
+          SET n_versions=%s, latest_event_id=%s
+          WHERE asset_id=%s AND statement_type=%s AND endpoint=%s
+            AND report_period=%s AND report_type=%s""",
+                [cur["n_versions"] + 1, eid, asset_id, st, endpoint,
+                 period, rt])
+        execute(conn, f"""
+          INSERT INTO {schema}.finver_observation
+            (version_event_id, raw_payload_id, raw_payload_hash,
+             seen_at, change_class)
+          VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                [eid, raw_payload_id, raw_payload_hash, fetched_at, cls])
+        out["new_version"] += 1
     return out
 
 
 def latest(conn, schema: str, asset_id: str, statement_type: str,
            report_period: str, endpoint: str | None = None) -> dict | None:
-    """Latest observed version for a key (any endpoint or pinned)."""
     from stock_research.db import fetch_all
     cond = "AND e.endpoint=%s" if endpoint else ""
     params = [asset_id, statement_type, report_period] + (
@@ -292,9 +294,9 @@ def latest(conn, schema: str, asset_id: str, statement_type: str,
 def read_as_of(conn, schema: str, asset_id: str, statement_type: str,
                report_period: str, as_of,
                endpoint: str | None = None) -> dict | None:
-    """Version observed by the platform at as_of (first_seen_at <= as_of).
+    """Version first OBSERVED BY THE PLATFORM at/before as_of.
 
-    first_seen_at proves PLATFORM observation time only — never the
+    first_seen_at is platform observation time — never proof of the
     market's first publication date.
     """
     from stock_research.db import fetch_all

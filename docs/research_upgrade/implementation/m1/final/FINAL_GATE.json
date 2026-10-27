@@ -1,0 +1,63 @@
+{
+ "milestone": "M1 deployment-safety closeout",
+ "baseline": "a1c0be567a525555e6c8197edade375b298c3637",
+ "branch": "fix/r3-m1-deployment-safety",
+ "gates": {
+  "G1_isolation": {
+   "status": "PASS",
+   "evidence": "all work in .worktrees/r3-m1s; m1_shadow objects only; "
+               "zero production writes/DDL; canonical and P1d.3 "
+               "worktrees untouched"
+  },
+  "G2_eod_incremental_safety": {
+   "status": "PASS",
+   "evidence": "EOD_FAILURE_DRILLS.json 10/10: real mid-UPDATE abort "
+               "on a populated date, checksum-identical rollback, "
+               "successful same-version retry, partial+corrupt heal, "
+               "unknown-state fail-closed, incomplete!=success"
+  },
+  "G3_financial_version_preservation": {
+   "status": "PASS",
+   "evidence": "FINVER_EVENT_CHAIN_TESTS.json 7/7: A->B->A=3 events, "
+               "dedupe via observation layer, immutable committed "
+               "events, seq/pointer integrity, real chains reproduced"
+  },
+  "G4_consumer_compat": {
+   "status": "PASS",
+   "evidence": "no production callers touched; financial_pit change "
+               "is evidence-grade precision only (INFERRED not "
+               "VERIFIED for surviving-version selections)"
+  },
+  "G5_resources_recovery": {
+   "status": "PASS",
+   "evidence": "fault-injection + rollback proven on populated date; "
+               "no new heavyweight jobs; drills run on shadow schema"
+  },
+  "P0_1_eod_integrity": "PASS",
+  "P0_2_fault_drills": "PASS",
+  "P0_3_version_chain": "PASS",
+  "P0_4_evidence_grades": "PASS"
+ },
+ "tests": {
+  "test_r3_m1.py": {"passed": 24, "failed": 0},
+  "test_financial_pit_p2.py": {"passed": 23, "failed": 0},
+  "new_failures": []
+ },
+ "integrity_gate_recheck": {
+  "production_default": "DEGRADED",
+  "production_require_v2": "BLOCKED",
+  "shadow_require_v2_tradeability": "V2_READY",
+  "file": "INTEGRITY_GATE_RECHECK.json"
+ },
+ "m2_admission": {
+  "status": "M1_DEPLOYMENT_PREFLIGHT_PASS",
+  "note": "M2 requires independent approval; no production action "
+          "was taken or wired in this closeout",
+  "pending_production_actions": [
+   "core.asset_status_daily v2 column DDL",
+   "EOD wiring of emit_eod_v2_flags (switch default OFF)",
+   "finver schema deployment + ingestion-side ingest_payload calls",
+   "raw-payload historical replay into finver"
+  ]
+ }
+}

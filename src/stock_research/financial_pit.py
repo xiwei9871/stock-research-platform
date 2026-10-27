@@ -227,9 +227,12 @@ def financial_pit_at(
             "consume it as a verified initial value")
     elif restated:
         res.pit_status = "restated_selected"
-        res.version_evidence_level = "VERIFIED"
+        # earliest SURVIVING version is inference, not proof of the
+        # true initial filing — statement tables alone never VERIFY.
+        res.version_evidence_level = "INFERRED"
         reasons.append(f"same-source re-announcement on key; "
-                       f"{version_policy} selected")
+                       f"{version_policy} selected (earliest-surviving, "
+                       f"not proven-initial)")
     else:
         res.pit_status = "verified_public"
         # window-based inference is not proof of the true first filing

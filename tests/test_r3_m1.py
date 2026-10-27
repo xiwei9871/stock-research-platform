@@ -153,6 +153,146 @@ def test_gate_combine_never_promotes_blocked():
     assert combine() == "READY"
 
 
+# ---- P0-1: V2 completeness + LEGACY/V2 state split ----
+
+def test_gate_distinguishes_legacy_and_v2(conn):
+    from stock_research.data_integrity_gate import \
+        evaluate_tradeability
+    prod = evaluate_tradeability(conn, "core.asset_status_daily")
+    assert prod["state"] == "LEGACY_READY"  # never V2_READY w/o cols
+    req = evaluate_tradeability(conn, "core.asset_status_daily",
+                                require_v2=True)
+    assert req["state"] == "BLOCKED"
+    conn.rollback()
+
+
+def test_gate_empty_table_blocked_not_ready(conn):
+    from stock_research.db import execute
+    from stock_research.data_integrity_gate import \
+        evaluate_tradeability
+    execute(conn, f"""CREATE TABLE IF NOT EXISTS {S}.empty_status
+        (LIKE core.asset_status_daily INCLUDING ALL)""")
+    r = evaluate_tradeability(conn, f"{S}.empty_status")
+    assert r["state"] == "BLOCKED"
+    conn.rollback()
+
+
+def test_incomplete_when_base_row_unflagged(conn):
+    # rename one base row to an asset with no computed flags -> emit
+    # cannot cover it -> must report INCOMPLETE, never success
+    from stock_research.db import execute
+    execute(conn, f"""UPDATE {T} SET asset_id='CN:ZZ:999999',
+               limit_flags_version=NULL
+        WHERE trade_date='2026-10-20' AND asset_id = (
+          SELECT asset_id FROM {T} WHERE trade_date='2026-10-20'
+          ORDER BY asset_id LIMIT 1)""")
+    r = emit_eod_v2_flags(conn, "2026-10-20", T, "pit_rules_v1",
+                          enabled=True)
+    # the renamed row may still hold stale flags under this version;
+    # either way full VALID coverage is impossible
+    assert r["status"] in ("incomplete", "blocked")
+    if r["status"] == "incomplete":
+        assert r["missing_keys"] + r["invalid_rows"] >= 1
+        assert r["matched_rows"] - r["invalid_rows"] < r["base_rows"]
+    conn.rollback()
+
+
+def test_mixed_version_blocked(conn):
+    from stock_research.db import execute
+    # poison one row with a foreign version string
+    execute(conn, f"""UPDATE {T} SET limit_flags_version='rogue_v9'
+        WHERE trade_date='2026-10-20' AND asset_id = (
+          SELECT asset_id FROM {T} WHERE trade_date='2026-10-20'
+          LIMIT 1)""")
+    r = emit_eod_v2_flags(conn, "2026-10-20", T, "pit_rules_v1",
+                          enabled=True)
+    assert r["status"] == "blocked"
+    assert any("version conflict" in x for x in r["reasons"])
+    conn.rollback()
+
+
+def test_null_version_rewrite_is_idempotent(conn):
+    # NULL-version rows + same-version rows must converge to fully
+    # valid coverage under that version (not wrongly 'idempotent')
+    from stock_research.db import execute
+    execute(conn, f"""UPDATE {T} SET limit_flags_version=NULL
+        WHERE trade_date='2026-10-21' AND asset_id IN (
+          SELECT asset_id FROM {T} WHERE trade_date='2026-10-21'
+          ORDER BY asset_id LIMIT 10)""")
+    r = emit_eod_v2_flags(conn, "2026-10-21", T, "pit_rules_v1",
+                          enabled=True)
+    assert r["status"] == "written"
+    assert r["matched_rows"] == r["base_rows"]
+    conn.rollback()
+
+
+# ---- P0-3: version chain identity ----
+
+def test_fingerprint_is_not_event_identity():
+    d = fvs.ddl("m1_shadow")
+    assert "UNIQUE (metric_fingerprint)" not in d
+    assert "version_seq)" in d  # uniqueness is key+seq
+
+
+def test_aba_three_versions(conn):
+    from stock_research.db import execute
+    for stmt in fvs.ddl(S).split(";"):
+        if stmt.strip():
+            execute(conn, stmt)
+    a = [{"REPORT_DATE": "2025-06-30", "NOTICE_DATE": "2025-08-30",
+          "REPORT_TYPE": "中报", "NETPROFIT": 100.0}]
+    b = [dict(a[0], NETPROFIT=250.0)]
+    for i, pl in enumerate((a, b, a)):
+        fvs.ingest_payload(conn, S, "CN:T:ABA2",
+                           "stock_profit_sheet_by_report_em",
+                           f"2025-09-0{i+1}T00:00:00", pl, 8000 + i,
+                           f"ab{i}")
+    rows = fetch_all(conn, f"""
+        SELECT version_seq, (metrics->>'NETPROFIT')::float np
+        FROM {S}.finver_event WHERE asset_id='CN:T:ABA2'
+        ORDER BY version_seq""")
+    assert [r["version_seq"] for r in rows] == [1, 2, 3]
+    assert [r["np"] for r in rows] == [100.0, 250.0, 100.0]
+    conn.rollback()
+
+
+def test_repeat_ingest_observation_only(conn):
+    # re-ingesting the SAME content bumps observation, not versions
+    a = [{"REPORT_DATE": "2025-03-31", "NETPROFIT": 7.0}]
+    fvs.ingest_payload(conn, S, "CN:T:DUP",
+                       "stock_profit_sheet_by_report_em",
+                       "2025-05-01", a, 8100, "d1")
+    fvs.ingest_payload(conn, S, "CN:T:DUP",
+                       "stock_profit_sheet_by_report_em",
+                       "2025-06-01", a, 8101, "d2")
+    ev = fetch_all(conn, f"""SELECT count(*) n FROM {S}.finver_event
+        WHERE asset_id='CN:T:DUP'""")[0]["n"]
+    obs = fetch_all(conn, f"""SELECT count(*) n
+        FROM {S}.finver_observation o JOIN {S}.finver_event e
+        ON o.version_event_id=e.version_event_id
+        WHERE e.asset_id='CN:T:DUP'""")[0]["n"]
+    assert ev == 1 and obs == 2
+    conn.rollback()
+
+
+# ---- P0-4: evidence levels ----
+
+def test_restated_never_verified(conn):
+    rows = fetch_all(conn, """
+        SELECT asset_id, report_period::text rp, source
+        FROM finance.balance_sheet
+        GROUP BY 1,2,3,report_type
+        HAVING count(DISTINCT announcement_date) > 1 LIMIT 1""")
+    if not rows:
+        pytest.skip("no same-source restated key")
+    r = financial_pit_at(conn, rows[0]["asset_id"], "2027-01-01",
+                         "balance", report_period=rows[0]["rp"],
+                         version_policy="latest_public",
+                         source_preference=(rows[0]["source"],))
+    assert r.pit_status == "restated_selected"
+    assert r.version_evidence_level == "INFERRED"
+
+
 # ---- parser regression (re-used P2.1 final) ----
 
 def test_parser_still_expands_lists():
