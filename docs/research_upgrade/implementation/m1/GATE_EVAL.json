@@ -1,0 +1,67 @@
+{
+ "prod": {
+  "tradeability": {
+   "domain": "tradeability",
+   "table": "core.asset_status_daily",
+   "checks": {
+    "v2_columns": [],
+    "rows": 17299191
+   },
+   "state": "READY",
+   "reasons": []
+  },
+  "financial_pit": {
+   "domain": "financial_pit",
+   "checks": {
+    "sentinel_rows": {
+     "b": 71,
+     "c": 22
+    },
+    "raw_payload_rows": 16586,
+    "versioned_keys": 10
+   },
+   "state": "DEGRADED",
+   "reasons": [
+    "sentinel announcement rows b=71 c=22",
+    "normalized tables overwrite same-key versions; versioned evidence lives in finver/raw layers only"
+   ]
+  },
+  "combined": "DEGRADED"
+ },
+ "shadow_v2": {
+  "tradeability": {
+   "domain": "tradeability",
+   "table": "m1_shadow.asset_status_daily",
+   "checks": {
+    "v2_columns": [
+     "is_limit_down_v2",
+     "is_limit_up_v2",
+     "limit_flags_version",
+     "limit_rule_id_v2",
+     "limit_state_v2"
+    ],
+    "flags_versions": 1,
+    "rows": 15569
+   },
+   "state": "READY",
+   "reasons": []
+  },
+  "financial_pit": {
+   "domain": "financial_pit",
+   "checks": {
+    "sentinel_rows": {
+     "b": 71,
+     "c": 22
+    },
+    "raw_payload_rows": 16586,
+    "versioned_keys": 10
+   },
+   "state": "DEGRADED",
+   "reasons": [
+    "sentinel announcement rows b=71 c=22",
+    "normalized tables overwrite same-key versions; versioned evidence lives in finver/raw layers only"
+   ]
+  },
+  "combined": "DEGRADED"
+ }
+}

@@ -48,6 +48,10 @@ class FinancialPitResult:
     pit_status: str
     restriction_reasons: list[str] = field(default_factory=list)
     evidence_trace: dict[str, Any] = field(default_factory=dict)
+    # M1-D credibility tiers
+    data_version: str | None = None          # = selected_statement_version
+    version_evidence_level: str = "UNKNOWN"  # VERIFIED/INFERRED/UNKNOWN
+    missing_reason: str | None = None
 
 
 def _as_date(v) -> dt.date | None:
@@ -215,16 +219,26 @@ def financial_pit_at(
     res.evidence_trace["initial_version_provable"] = initial_provable
     if version_policy == "initial_public" and not initial_provable:
         res.pit_status = "historical_version_missing"
+        res.version_evidence_level = "UNKNOWN"
+        res.missing_reason = "initial version unverifiable"
         reasons.append(
             "initial_public requested but the initial published version "
             "is unverifiable; the surviving version was public — do not "
             "consume it as a verified initial value")
     elif restated:
         res.pit_status = "restated_selected"
+        res.version_evidence_level = "VERIFIED"
         reasons.append(f"same-source re-announcement on key; "
                        f"{version_policy} selected")
     else:
         res.pit_status = "verified_public"
+        # window-based inference is not proof of the true first filing
+        res.version_evidence_level = ("UNKNOWN" if suspected
+                                      else "INFERRED")
+        if suspected:
+            res.missing_reason = ("suspected re-announcement; "
+                                  "initial date unprovable")
+    res.data_version = res.selected_statement_version
     if len(per_src) > 1:
         reasons.append(f"{len(per_src)} sources on key; "
                        f"preference={source_preference or 'alpha'}")
