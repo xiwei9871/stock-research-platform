@@ -1,0 +1,78 @@
+verifying sc_14100378.zip:14100378.csv -> 14100378.csv ...
+  -> PASS
+verifying sc_17100148.zip:17100148.csv -> 17100148.csv ...
+  -> PASS
+verifying sc_18100004.zip:18100004.csv -> 18100004.csv ...
+  -> PASS
+verifying sc_34100066.zip:34100066.csv -> 34100066.csv ...
+  -> PASS
+[
+  {
+    "zip": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_14100378.zip",
+    "member": "14100378.csv",
+    "csv": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_14100378/14100378.csv",
+    "zip_declared_size": 396650981,
+    "zip_declared_crc32": "b1198d75",
+    "zip_compress_size": 28221218,
+    "zip_member_sha256": "00e342c9f47fd8fbbb87a87fe1cca1c58cf722ee70d4a0ddc8fad63855ae8884",
+    "zip_member_crc32": "b1198d75",
+    "zip_member_size": 396650981,
+    "zip_crc_ok": true,
+    "disk_sha256": "00e342c9f47fd8fbbb87a87fe1cca1c58cf722ee70d4a0ddc8fad63855ae8884",
+    "disk_crc32": "b1198d75",
+    "disk_size": 396650981,
+    "content_equal": true,
+    "verdict": "PASS"
+  },
+  {
+    "zip": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_17100148.zip",
+    "member": "17100148.csv",
+    "csv": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_17100148/17100148.csv",
+    "zip_declared_size": 277885640,
+    "zip_declared_crc32": "c519a4ef",
+    "zip_compress_size": 22683040,
+    "zip_member_sha256": "ebcfa60d046ec7c547ed5bf0a4328f10c275d8e48541fa8d344a0a68cb502b89",
+    "zip_member_crc32": "c519a4ef",
+    "zip_member_size": 277885640,
+    "zip_crc_ok": true,
+    "disk_sha256": "ebcfa60d046ec7c547ed5bf0a4328f10c275d8e48541fa8d344a0a68cb502b89",
+    "disk_crc32": "c519a4ef",
+    "disk_size": 277885640,
+    "content_equal": true,
+    "verdict": "PASS"
+  },
+  {
+    "zip": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_18100004.zip",
+    "member": "18100004.csv",
+    "csv": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_18100004/18100004.csv",
+    "zip_declared_size": 161295102,
+    "zip_declared_crc32": "d5010f2e",
+    "zip_compress_size": 15325593,
+    "zip_member_sha256": "73a9a1528412c7fa2ab2d9100ec61f97fafe886379cf8192c0b13cd58533fc75",
+    "zip_member_crc32": "d5010f2e",
+    "zip_member_size": 161295102,
+    "zip_crc_ok": true,
+    "disk_sha256": "73a9a1528412c7fa2ab2d9100ec61f97fafe886379cf8192c0b13cd58533fc75",
+    "disk_crc32": "d5010f2e",
+    "disk_size": 161295102,
+    "content_equal": true,
+    "verdict": "PASS"
+  },
+  {
+    "zip": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_34100066.zip",
+    "member": "34100066.csv",
+    "csv": "/Users/xiwei/northshore_property_watchdog/data/research/macro/raw/statcan/sc_34100066/34100066.csv",
+    "zip_declared_size": 9571149733,
+    "zip_declared_crc32": "8bdc04d1",
+    "zip_compress_size": 390536765,
+    "zip_member_sha256": "b53b04043b3c1c9c12d2cd8b72551fcc893031dbef5f29ee62f9a9a5bc313535",
+    "zip_member_crc32": "8bdc04d1",
+    "zip_member_size": 9571149733,
+    "zip_crc_ok": true,
+    "disk_sha256": "b53b04043b3c1c9c12d2cd8b72551fcc893031dbef5f29ee62f9a9a5bc313535",
+    "disk_crc32": "8bdc04d1",
+    "disk_size": 9571149733,
+    "content_equal": true,
+    "verdict": "PASS"
+  }
+]
