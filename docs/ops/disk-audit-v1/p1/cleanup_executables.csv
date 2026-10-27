@@ -1,12 +1,12 @@
 path,size_bytes,category,verification,recovery_command,execution_notes,status
-~/northshore_property_watchdog/data/research/macro/raw/statcan/sc_34100066/34100066.csv,9571149733,EXECUTE_CANDIDATE,"3-gate PASS: zip kept + official URL; sha256 b53b0404 equal; pipeline reads zip not expanded file; no open handles","unzip -o ../sc_34100066.zip -d .  (from inside sc_34100066/) or re-run macro_v1_acquire.py --only statcan","delete file only; keep dir + MetaData + zip",AWAITING_APPROVAL
-~/Library/Application Support/Google/GoogleUpdater/crx_cache,791674880,SAFE_REGENERABLE,"update payload cache; applied update already running","auto re-downloaded by GoogleUpdater","delete contents of crx_cache",AWAITING_APPROVAL
-~/.gradle/caches,650117120,SAFE_REGENERABLE,"build cache","gradle re-resolves on next build",,AWAITING_APPROVAL
-~/.gradle/wrapper,305135616,SAFE_REGENERABLE,"gradle distribution cache","re-downloaded by gradle wrapper",,AWAITING_APPROVAL
-~/Library/Caches/ms-playwright,599785472,SAFE_REGENERABLE,"browser binaries; re-downloads on next playwright run","npx playwright install (auto)",,AWAITING_APPROVAL
-~/Library/Caches/pip,271581184,SAFE_REGENERABLE,"wheel cache","pip re-downloads",,AWAITING_APPROVAL
-~/Library/Caches/Homebrew,45088768,SAFE_REGENERABLE,"download cache","brew re-downloads",,AWAITING_APPROVAL
-~/Library/Caches/pip-tools,18874368,SAFE_REGENERABLE,,pip-tools re-downloads,,AWAITING_APPROVAL
+~/northshore_property_watchdog/data/research/macro/raw/statcan/sc_34100066/34100066.csv,9571149733,EXECUTED,"3-gate PASS: zip kept + official URL; sha256 b53b0404 equal; pipeline reads zip not expanded file; no open handles","unzip -o ../sc_34100066.zip -d .  (from inside sc_34100066/) or re-run macro_v1_acquire.py --only statcan","deleted 22:55; dir + MetaData + zip retained",EXECUTED
+~/Library/Application Support/Google/GoogleUpdater/crx_cache,791674880,EXECUTED,"update payload cache; applied update already running","auto re-downloaded by GoogleUpdater","2 blobs deleted 22:55",EXECUTED
+~/.gradle/caches,650117120,SAFE_REGENERABLE,"build cache","gradle re-resolves on next build",,DEFERRED_DAEMON_RUNNING
+~/.gradle/wrapper,305135616,SAFE_REGENERABLE,"gradle distribution cache","re-downloaded by gradle wrapper",,DEFERRED_DAEMON_RUNNING
+~/Library/Caches/ms-playwright,599785472,SAFE_REGENERABLE,"browser binaries; re-downloads on next playwright run","npx playwright install (auto)",,DEFERRED_ACTIVE_RUN
+~/Library/Caches/pip,271581184,EXECUTED,"wheel cache","deleted 22:55",EXECUTED
+~/Library/Caches/Homebrew,45088768,EXECUTED,"download cache","deleted 22:55",EXECUTED
+~/Library/Caches/pip-tools,18874368,EXECUTED,,"deleted 22:55",,EXECUTED
 ~/northshore_property_watchdog/data/research/macro/raw/statcan/sc_14100378/14100378.csv,396650981,REVIEW_REQUIRED,"verified PASS but read by extract_statcan on refresh","unzip -o ../sc_14100378.zip -d .","optional; keep to avoid refresh staleness",HOLD_RECOMMENDED
 ~/northshore_property_watchdog/data/research/macro/raw/statcan/sc_17100148/17100148.csv,277885640,REVIEW_REQUIRED,"verified PASS but read by extract_statcan on refresh","unzip -o ../sc_17100148.zip -d .","optional; keep to avoid refresh staleness",HOLD_RECOMMENDED
 ~/northshore_property_watchdog/data/research/macro/raw/statcan/sc_18100004/18100004.csv,161295102,REVIEW_REQUIRED,"verified PASS but read by extract_statcan on refresh","unzip -o ../sc_18100004.zip -d .","optional; keep to avoid refresh staleness",HOLD_RECOMMENDED
