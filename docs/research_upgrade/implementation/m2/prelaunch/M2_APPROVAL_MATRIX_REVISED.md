@@ -4,10 +4,10 @@
 
 | 阶段 | 动作 | 前置条件 | 停止/回滚 | 本轮状态 |
 |---|---|---|---|---|
-| **B0-A** | 备份方案+资源审批 | 只读核查（已完成：BACKUP_NOT_FOUND） | — | **就绪待批** |
-| **B0-B** | 首次受控备份（L1 表级先行，L2/L3 排窗） | B0-A 批准 + 资源确认 | kill 作业；半成品文件删除 | 待 B0-A |
-| **B0-C** | 独立实例恢复验证 | B0-B 产物 | — | 待 B0-B |
-| T1 | asset_status_daily +5 列 | **对应表恢复保障已验证（L1 dump+恢复演练）** + DDL 窗口已批 | 锁超时×3 / post-check 不符 | 待 B0-C（L1） |
+| **B0-A** | 备份方案+资源审批 | 只读核查（已完成：BACKUP_NOT_FOUND） | — | **已批准（L1 范围）** |
+| **B0-B** | 首次受控备份（L1 表级先行，L2/L3 排窗） | B0-A 批准 + 资源确认 | kill 作业；半成品文件删除 | **L1(asset_status_daily) 已执行**；finance_payload L1 与 L2/L3 待续批 |
+| **B0-C** | 独立实例恢复验证 | B0-B 产物 | — | **L1 已通过**（17.3M 行 checksum 一致） |
+| T1 | asset_status_daily +5 列 | **对应表恢复保障已验证（L1 dump+恢复演练）** + DDL 窗口已批 | 锁超时×3 / post-check 不符 | **恢复前置已满足，可申请（需 DDL 窗口批准）** |
 | F1 | finver 空 schema | 恢复保障（至少 L2/L3 或表级兜底达成）+ SQL 已批 | 未写数据前 DROP SCHEMA | 待 B0-C（至少 L1 兜底可论证） |
 | T2 | writer/stage 部署（OFF） | T1 完成 | 代码回退 | 待 T1 |
 | T3 | 增量 canary | T1+T2 + `evaluate_eod_canary` 逐日验收 | 关 enabled；incomplete 不推水位 | 待 T2 |

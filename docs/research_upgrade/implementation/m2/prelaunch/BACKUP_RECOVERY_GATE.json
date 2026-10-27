@@ -1,9 +1,9 @@
 {
  "checked_at": "2026-10-27",
  "target": "stock_research@192.168.3.187 (PG16.13, ~686GB)",
- "backup_status": "BACKUP_NOT_FOUND",
+ "backup_status": "BACKUP_NOT_FOUND (full DB); L1 table artifact exists",
  "host_volume_snapshot": "BACKUP_UNVERIFIED (host unreachable, cannot confirm or deny)",
- "restore_status": "RESTORE_NOT_VERIFIED",
+ "restore_status": "RESTORE_NOT_VERIFIED (full DB); TABLE_RESTORE_VERIFIED for core.asset_status_daily",
  "table_restore_drill": "TABLE_RESTORE_VERIFIED on independent instance only (toolchain proof, not prod evidence)",
  "evidence": {
   "pg_dumps_found": "94 files on NAS, ALL belong to 192.168.3.88 manq/mq_platform, last run 2025-11-13, none stock_research",
@@ -15,7 +15,7 @@
  },
  "layers": {
   "L1_table_dump": {
-   "status": "designed+scripted",
+   "status": "EXECUTED+VERIFIED (asset_status_daily)",
    "exec": "B0-B approval"
   },
   "L2_full_logical": {
@@ -37,5 +37,15 @@
   "B0-C restore verification",
   "archive config change (separate)"
  ],
- "t4_backfill": "BLOCKED until B0-C produces verified restore evidence"
+ "t4_backfill": "still BLOCKED \u2014 full-scope restore evidence recommended (L2/L3)",
+ "executed_l1": {
+  "when": "2026-10-27 16:43 CST",
+  "artifact": "asset_status_daily_20261027_164259.dump (206MB, pg_dump -Fc)",
+  "sha256": "e85233c29e6e421e986ee0bcebe3114e23cb0bbcf7bd17019910c21aa7429ace",
+  "location_primary": "185:/mnt/data1/stock_research_backup/L1/",
+  "location_secondary": "mac:~/stock_research_backup/L1/",
+  "restore_drill": "stock_restore_drill @ local PG16: 17,299,191 rows, 4 sampled dates md5 all match prod",
+  "scope_verdict": "TABLE_RESTORE_VERIFIED (core.asset_status_daily only)"
+ },
+ "t1_precondition": "L1 restore evidence satisfied for the table scope"
 }
