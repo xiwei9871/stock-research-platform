@@ -19,7 +19,7 @@
    "exec": "B0-B approval"
   },
   "L2_full_logical": {
-   "status": "designed",
+   "status": "execution plan drafted (L2_FULL_BACKUP_EXECUTION_PLAN.md), awaiting scoped approval",
    "exec": "B0-B approval + window"
   },
   "L3_physical_archive": {
@@ -45,7 +45,8 @@
   "location_primary": "185:/mnt/data1/stock_research_backup/L1/",
   "location_secondary": "mac:~/stock_research_backup/L1/",
   "restore_drill": "stock_restore_drill @ local PG16: 17,299,191 rows, 4 sampled dates md5 all match prod",
-  "scope_verdict": "TABLE_RESTORE_VERIFIED (core.asset_status_daily only)"
+  "scope_verdict": "TABLE_RESTORE_VERIFIED (core.asset_status_daily only)",
+  "restore_drill_nas": "re-verified 2026-10-27 via NAS->185-PG16 container (pg16-native dump 3e963e02...); TABLE_RESTORE_VERIFIED end-to-end"
  },
  "t1_precondition": "L1 restore evidence satisfied for the table scope"
 }

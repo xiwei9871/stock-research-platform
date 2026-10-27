@@ -38,7 +38,7 @@
 
 | 范围 | 判定 |
 |---|---|
-| `core.asset_status_daily`（L1 范围） | **BACKUP_FOUND + TABLE_RESTORE_VERIFIED** |
+| `core.asset_status_daily`（L1 范围） | **BACKUP_FOUND + TABLE_RESTORE_VERIFIED**（首轮本机恢复；2026-10-27 18:20 复验：NAS→185 PG16 容器链路同口径通过，17.3M 行+4 日 md5 全等） |
 | 全库 686GB | **BACKUP_NOT_FOUND + RESTORE_NOT_VERIFIED** |
 | 187 卷快照 | **BACKUP_UNVERIFIED** |
 

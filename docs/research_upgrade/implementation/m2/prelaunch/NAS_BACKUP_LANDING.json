@@ -44,5 +44,18 @@
   }
  },
  "leftover": "drill pgdata /mnt/data1/restore_drill needs sudo rm (container uid)",
- "prod_writes": 0
+ "prod_writes": 0,
+ "asset_status_daily_pg16_redump": {
+  "file": "asset_status_daily_20261027_181827_pg16.dump",
+  "why": "original 206MB dump was written by pg_dump 18.3 -> format v1.16 unreadable by pg_restore 16.x; re-dumped with docker pg16.4 for toolchain coherence",
+  "sha256": "3e963e02b3f0fd452b1f8dcd44aba1aca3ede21056a0bb7252348a260fb75ecc",
+  "nas_path": "//192.168.3.253/Public/stock_research_backup/L1/",
+  "restore_drill_nas_path": {
+   "instance": "docker postgres:16.4-alpine @185 datadir=/mnt/data1/restore_drill2, wal_level=minimal",
+   "rows": 17299191,
+   "md5_sampled_dates": "4/4 identical to prod",
+   "wal_growth": "16MB for 2.3GB restore -> minimal-WAL capacity model validated",
+   "verdict": "TABLE_RESTORE_VERIFIED via NAS->185-PG16 path"
+  }
+ }
 }
