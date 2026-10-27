@@ -1,0 +1,25 @@
+path,size_gb,category,notes
+/System/Volumes/Data (APFS),193.8,volume,"Capacity Consumed per diskutil apfs list; 228GiB volume, ~8-11GiB avail, 96-97%"
+/System/Volumes/VM (APFS),19.3,volume,swap+sleepimage volume (post-reboot, already reclaimed)
+~/interior_design,35.0,project,"design assets; cleanup frozen pending v15 dependency audit"
+~/Library,29.0,user,"dominated by Application Support ~24G"
+~/northshore_property_watchdog,19.0,project,"data/=14G (macro statcan 10G new today), outputs/=3.5G sqlite, .venv 0.5G"
+~/stock_research,7.2,project,"canonical checkout on hotfix/eod-dependency-wait-gate @9cd9e2c1; outputs compressed earlier"
+~/.local,6.5,user,"devin cli sessions.db 4.3G+0.4G WAL; node 0.6G; npm 0.4G"
+~/.codex,4.9,user,"packages 1.9G, sessions 0.85G, thread_history 0.74G, archived 0.53G"
+~/Documents,3.1,user,
+~/video making,2.8,project,
+~/gitlab-repos,2.5,project,
+~/geomap2arcgis,2.3,project,"git pack regrew 0.1G today"
+~/.gradle,1.5,user,build cache (regenerable)
+~/.cc-switch,1.4,user,
+~/.openclaw,1.3,user,
+~/Library/Application Support/Claude-3p,12.0,cache,"vm_bundles 12G created 2026-10-27 14:45 — claude-code VM sandbox, ACTIVE session"
+~/Library/Application Support/Chaos,3.8,app,"V-Ray for Blender"
+~/Library/Application Support/Devin,3.6,app,
+~/Library/Application Support/Google,1.0,app,"0.7G updater crx_cache today"
+~/Library/Caches,1.2,cache,"playwright re-downloaded today (0.2G)"
+/Applications,20.0,system,
+/opt,6.1,system,homebrew
+/Library,5.0,system,
+/private/var,3.6,system,"root-owned subtrees unreadable; see system_permission_gaps.md"

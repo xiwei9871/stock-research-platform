@@ -1,0 +1,13 @@
+path,size_gb,modified_at,file_type,owning_process,related_project,evidence,suspected_cause,confidence
+~/Library/Application Support/Claude-3p/vm_bundles/claudevm.bundle,12.0,2026-10-27 14:45..22:22,disk-image bundle,claude-code VM (pid 21072 running),Claude desktop,"bundle created today 14:45; rootfs.img still being written 22:22; +zst 1.2G +sessiondata 0.5G","claude-code session today spawned a full VM sandbox (~12G)",CONFIRMED_GROWTH
+~/northshore_property_watchdog/data/research/macro/raw/statcan,10.2,2026-10-27 10:26..10:44,csv+zip,macro data pipeline,northshore_property_watchdog,"dir was ~4G in audit 2 days ago; sc_34100066.csv alone 8.9G; zips + 3 more tables today","today's statcan macro dataset fetch; largest single-file addition",CONFIRMED_GROWTH
+~/Library/Application Support/Google/GoogleUpdater/crx_cache,0.7,2026-10-27 10:21,crx cache,GoogleUpdater,system,"new crx bundle written today","chrome/edge update package staging",CONFIRMED_GROWTH
+~/.local/share/devin/cli/sessions.db(+wal),0.6,2026-10-27 22:26,sqlite,devin cli,devin,"db 4.3G + wal 0.4G vs 4.1+0.4G two days ago","devin session transcript accumulation",CONFIRMED_GROWTH(small)
+~/Library/Application Support/Devin/User/acp-messages/*.db,0.5,2026-10-27 22:26,sqlite,Devin IDE,devin,"multiple acp-message dbs touched tonight","IDE message store growth",CONFIRMED_GROWTH(small)
+~/stock_research_backup/L1/asset_status_daily_20261027_164259.dump,0.2,2026-10-27 16:43,pg dump,owner backup run,stock_research,"new file created today in new backup dir","manual/automated pg dump; KEEP — it is a backup",CONFIRMED_GROWTH(intentional)
+~/Library/Caches/ms-playwright,0.2,2026-10-27 13:35,binary cache,playwright,dev tools,"re-downloaded today after earlier cache purge","regenerable cache re-appearing as expected",CONFIRMED_GROWTH(regenerable)
+~/Library/Containers/*/xwechat_files/*/biz_message_0.db,0.2,2026-10-27 22:25,sqlite,wechat,system,"db modified tonight","IM db organic growth",CONFIRMED_GROWTH(small)
+.Spotlight-V100,UNKNOWN,,system index,mds_stores,system,"unreadable without FDA; Spotlight was at 22% CPU this morning rebuilding index after panic","index rebuild may hold GBs; cannot measure — see permission gaps",UNKNOWN
+/private/var root subtrees,UNKNOWN,,system,various,system,"3.6G readable; db/diagnostics/folders roots unreadable","possible diagnostics/spool growth after 3 crash days",UNKNOWN
+deleted-open file handles,0,—,ghost files,various,system,"lsof +L1 (user scope) shows nothing >100M held","none found this boot — post-panic handles released by reboot",RULED_OUT
+APFS snapshots,0,—,snapshot,—,system,"listlocalsnapshots: none on / or Data","no snapshot retention",RULED_OUT

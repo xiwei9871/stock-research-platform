@@ -1,0 +1,16 @@
+path,size_gb,category,owner,safe_to_delete,recovery_method,expected_reclaim_gb,risk,approval_required
+~/Library/Application Support/Google/GoogleUpdater/crx_cache/*,0.7,SAFE_REGENERABLE,google,NO — stale versions only,"auto re-downloaded on next update",0.7,none,yes-trivial
+~/Library/Caches/*,1.2,SAFE_REGENERABLE,user,YES,"auto re-created on demand",1.2,none,yes-trivial
+~/Library/Application Support/Claude-3p/vm_bundles/claudevm.bundle,12.0,REVIEW_REQUIRED,user,NO — while session active,"VM recreated on next claude-code run (re-download rootfs)",~12.0,"kills/corrupts running claude VM if deleted now; delete only after confirming no active session",explicit
+~/northshore_property_watchdog/data/research/macro/raw/statcan/*/*.csv,9.9,REVIEW_REQUIRED,user,NO — pending confirm consumed,"re-downloadable from statcan.gc.ca; or gzip first (8.9G→~1G)",~8.9,"raw research data; verify macro/master+out contain needed series first",explicit
+~/northshore_property_watchdog/data/research/macro/raw/statcan/*.zip,0.7,REVIEW_REQUIRED,user,NO — keep as archive,"already compressed source archives — keep these, drop the expanded CSVs instead",0,"keep — it is the archive form",explicit
+~/.local/share/devin/cli/sessions.db,4.3,REVIEW_REQUIRED,devin,NO,"VACUUM after stopping devin cli; or prune old sessions",~1-2,"session transcript history loss if naive-delete; do not touch WAL while running",explicit
+~/.codex/sessions + archived_sessions,1.4,REVIEW_REQUIRED,codex,NO,"codex session prune; user asked previously to keep",~1.0,"loses agent history — user values these",explicit
+~/.gradle/caches,1.5,SAFE_REGENERABLE,gradle,YES,"gradle re-downloads on build",1.5,none,yes-trivial
+~/northshore_property_watchdog/outputs/research_mls_first.sqlite,3.5,PRESERVE,user,NO,—,0,"research DB — protected by spec",—
+~/interior_design,35.0,PRESERVE,user,NO,—,0,"frozen pending v15/GT dependency audit",—
+~/stock_research,7.2,PRESERVE,user,NO,—,0,"canonical checkout + protected outputs; tonight is EOD hotfix live run",—
+~/Library/Application Support/Claude-3p/claude-code + claude-code-vm,0.6,REVIEW_REQUIRED,claude,NO — auto-managed,"app-managed runtime dirs; leave to app",0,"app may break if runtime removed mid-run",no
+.Spotlight-V100,?,SYSTEM_PROTECTED,system,NO,—,?,"system-managed; rebuild resolves naturally — do not rm",—
+DocumentRevisions/fseventsd/var-db,?,SYSTEM_PROTECTED,system,NO,—,?,"do not touch; investigate via sudo du first",—
+~/Library/Application Support/Chaos,3.8,PRESERVE,app,NO,—,0,"V-Ray assets Blender relies on",—
