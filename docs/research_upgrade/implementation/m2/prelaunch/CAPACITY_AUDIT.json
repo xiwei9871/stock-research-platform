@@ -1,0 +1,119 @@
+{
+  "audit": "CAPACITY-P1",
+  "date": "2026-10-28",
+  "scope": "read_only",
+  "prod_writes": 0,
+  "host_disk": {
+    "fs": "/dev/mapper/root-98d1f8b1f435",
+    "total_gb": 937,
+    "used_gb": 869,
+    "avail_gb": 21,
+    "pct": 98,
+    "pgdata_gb": 688,
+    "non_pgdata_unverified_gb": 180,
+    "method": "COPY FROM PROGRAM df (read-only)"
+  },
+  "database": {
+    "size_gb": 679,
+    "wal_mb": 881,
+    "schemas_top": {
+      "factor_gb": 270,
+      "market_gb": 264,
+      "public_gb": 81,
+      "raw_baostock_gb": 25,
+      "backup_gb": 15.7,
+      "staging_gb": 11
+    }
+  },
+  "indexes_factor_daily": [
+    {
+      "name": "factor_daily_pkey",
+      "bytes": 46948335616,
+      "scans": 3977870,
+      "constraint": "PK",
+      "verdict": "DO_NOT_TOUCH"
+    },
+    {
+      "name": "idx_factor_daily_lookup",
+      "bytes": 5035687936,
+      "scans": 836,
+      "constraint": null,
+      "verdict": "KEEP_ACTIVE"
+    },
+    {
+      "name": "idx_factor_daily_eval_lookup",
+      "bytes": 59108597760,
+      "scans": 25,
+      "constraint": null,
+      "consumer": "factor_eval_store.py",
+      "verdict": "SAFE_CANDIDATE",
+      "reclaim_bytes": 59108597760,
+      "rebuild_blocked": "needs ~55GB free first"
+    },
+    {
+      "name": "idx_factor_daily_asset_history",
+      "bytes": 58170433536,
+      "scans": 202,
+      "constraint": null,
+      "consumer": "per-asset factor history queries",
+      "verdict": "SAFE_CANDIDATE",
+      "reclaim_bytes": 58170433536,
+      "rebuild_blocked": "needs ~54GB free first"
+    }
+  ],
+  "bloat": [
+    {
+      "table": "factor.factor_daily",
+      "dead_pct": 29.6,
+      "reclaim_est_gb": 20,
+      "verdict": "NEEDS_EVIDENCE",
+      "note": "repack blocked until index space freed"
+    },
+    {
+      "table": "public.label_snapshot",
+      "bytes": 48129679360,
+      "verdict": "NEEDS_EVIDENCE",
+      "note": "stale stats; >=100K real rows; research consumers"
+    },
+    {
+      "table": "public.feature_snapshot",
+      "bytes": 15279265792,
+      "verdict": "NEEDS_EVIDENCE",
+      "note": "same"
+    },
+    {
+      "table": "public.market_daily_bar",
+      "dead_pct": 11.7,
+      "verdict": "LOW_PRIORITY"
+    }
+  ],
+  "backup_schema": {
+    "tables": 151,
+    "bytes": 15692341248,
+    "verdict": "DO_NOT_TOUCH",
+    "reason": "active R2 revision workspace; file mtimes through 2026-10-25; r2_repair/rollback batches consuming",
+    "inventory": "BACKUP_SCHEMA_INVENTORY.csv"
+  },
+  "other_candidates": {
+    "legacy_dbs": {
+      "cn_a_stock_daily_hfq_qfq_bytes": 7864320000,
+      "verdict": "NEEDS_EVIDENCE"
+    },
+    "staging": {
+      "verdict": "NEEDS_EVIDENCE",
+      "note": "retention policy needed"
+    }
+  },
+  "recovery_status": {
+    "L2": "L2_BACKUP_VERIFIED",
+    "FULL": "NOT_VERIFIED",
+    "drill_plan": "L2_FULL_RESTORE_DRILL_PLAN.md awaiting approval"
+  },
+  "approval_order": [
+    "A-1/A-2 index drops (immediate ~109GB, zero space needed)",
+    "D-1 non-pgdata 180GB host investigation",
+    "B-1 ANALYZE label/feature (read-only expansion)",
+    "B-2 repack (after A)",
+    "C-1 after R2 acceptance"
+  ]
+}
