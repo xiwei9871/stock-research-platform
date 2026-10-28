@@ -28,3 +28,17 @@ Owner approved: item 1 (statcan CSV) + item 2 (Tier-1 caches).
 - Verification command if 34100066.csv is ever needed again:
   `cd data/research/macro/raw/statcan && unzip -o sc_34100066.zip -d sc_34100066/`
   (restores byte-identical file, sha256 b53b0404…).
+
+## Round 2 — 2026-10-28 morning (owner: "继续安全清理")
+
+Blockers rechecked: GradleDaemons exited → `.gradle/caches` +
+`.gradle/wrapper` (911 MiB) deleted. ms-playwright (572 MiB) deleted after
+`lsof +D` confirmed zero open handles — the owning screenshot job
+(pid 42142/42144) has been hung ~20h pre-launch and is reported to owner
+separately for kill decision.
+
+df free: 25 GiB → **26 GiB**. Cumulative P1 reclaim ≈ **11.5 GiB**.
+
+Still held: claudevm.bundle 12 GiB (VM pid 56459 live, rootfs.img written
+09:22 today); devin sessions.db (cli running); ~40-45 GiB
+permission-blocked system space pending owner `sudo du`.

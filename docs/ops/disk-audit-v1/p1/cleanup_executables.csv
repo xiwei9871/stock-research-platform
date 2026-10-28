@@ -1,9 +1,9 @@
 path,size_bytes,category,verification,recovery_command,execution_notes,status
 ~/northshore_property_watchdog/data/research/macro/raw/statcan/sc_34100066/34100066.csv,9571149733,EXECUTED,"3-gate PASS: zip kept + official URL; sha256 b53b0404 equal; pipeline reads zip not expanded file; no open handles","unzip -o ../sc_34100066.zip -d .  (from inside sc_34100066/) or re-run macro_v1_acquire.py --only statcan","deleted 22:55; dir + MetaData + zip retained",EXECUTED
 ~/Library/Application Support/Google/GoogleUpdater/crx_cache,791674880,EXECUTED,"update payload cache; applied update already running","auto re-downloaded by GoogleUpdater","2 blobs deleted 22:55",EXECUTED
-~/.gradle/caches,650117120,SAFE_REGENERABLE,"build cache","gradle re-resolves on next build",,DEFERRED_DAEMON_RUNNING
-~/.gradle/wrapper,305135616,SAFE_REGENERABLE,"gradle distribution cache","re-downloaded by gradle wrapper",,DEFERRED_DAEMON_RUNNING
-~/Library/Caches/ms-playwright,599785472,SAFE_REGENERABLE,"browser binaries; re-downloads on next playwright run","npx playwright install (auto)",,DEFERRED_ACTIVE_RUN
+~/.gradle/caches,650117120,SAFE_REGENERABLE,"build cache","deleted 10-28 morning; daemons had exited",,EXECUTED
+~/.gradle/wrapper,305135616,SAFE_REGENERABLE,"gradle distribution cache","deleted 10-28 morning; daemons had exited",,EXECUTED
+~/Library/Caches/ms-playwright,599785472,SAFE_REGENERABLE,"browser binaries; re-downloads on next playwright run","deleted 10-28; lsof showed zero open handles (job hung 20h pre-launch)",,EXECUTED
 ~/Library/Caches/pip,271581184,EXECUTED,"wheel cache","deleted 22:55",EXECUTED
 ~/Library/Caches/Homebrew,45088768,EXECUTED,"download cache","deleted 22:55",EXECUTED
 ~/Library/Caches/pip-tools,18874368,EXECUTED,,"deleted 22:55",,EXECUTED
