@@ -1,0 +1,6 @@
+source,item,dates,rows,funds,range,status
+上交所ETF产品列表 query.sse.com.cn (akshare fund_etf_scale_sse),每日全市场基金份额,1650,807483,990,2020-01-02~2026-10-27,ok
+深交所基金规模日频 (akshare fund_scale_daily_szse),每日全市场基金份额,1650,550845,806,2020-01-02~2026-10-27,ok
+新浪财经 fund_etf_hist_sina,每日收盘价(估值基准),,,373,上市~2026-10,ok
+天天基金F10 api.fund.eastmoney.com/f10/lsjz,每日单位净值(样本对账),,,9,2019-12~2026-10,"ok(分页限流,仅样本)"
+天天基金F10 FundArchivesDatas.aspx?type=cyrjg,基金半年度持有人结构,,,1686,各报告期,ok
