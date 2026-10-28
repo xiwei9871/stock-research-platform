@@ -1,0 +1,15 @@
+{
+ "environment":"m2_l2_restore PG16.4 isolated, wal_level=minimal, host185 /mnt/data1",
+ "rebuilds":[
+  {"index":"factor_daily_pkey","size_before":35074277376,"size_after":35074277376,"duration_s":3828,"cpu_user_s":695,"cpu_sys_s":243,"wal_gb_est":27},
+  {"index":"idx_factor_daily_eval_lookup","size_before":37669240832,"size_after":37669240832,"duration_s":3312,"cpu_user_s":1315,"cpu_sys_s":232,"wal_gb_est":32},
+  {"index":"idx_factor_daily_asset_history","size_before":35142139904,"size_after":35142139904,"duration_s":3136,"cpu_user_s":1248,"cpu_sys_s":208,"wal_gb_est":30},
+  {"index":"idx_factor_daily_lookup","size_before":4460068864,"size_after":4460068864,"duration_s":673,"cpu_user_s":519,"cpu_sys_s":69,"wal_gb_est":7}
+ ],
+ "disk_peak_mb":{"baseline":1159025,"peak":1223198,"delta_mb":64173,"rule":"~65GB transient per 35-38GB index (new idx+WAL+sort temp)"},
+ "wal_total_gb_observed":101,
+ "equality":{"W2_md5_pre":"532d777e406fb8ae29c919e976e1b3f4","W2_md5_post":"532d777e406fb8ae29c919e976e1b3f4","W3_md5_pre":"09a58c8aa3cb4b1ab2a3ce37350175dd","W3_md5_post":"09a58c8aa3cb4b1ab2a3ce37350175dd","plans_unchanged":true},
+ "timings":{"W2_ms_baseline_cold":186775,"W2_ms_post":13.79,"W3_ms_baseline_cold":376738,"W3_ms_post":2982,"caveat":"post-run warm cache+ANALYZE; claim is no-regression+identical results, not rebuild-attributable speedup"},
+ "incidents":["orphaned parallel workers after client kill held snapshots","2x invalid _ccnew debris dropped","DROP CONCURRENTLY vs REINDEX CONCURRENTLY deadlock on same table -> serialize maintenance"],
+ "prod_min_headroom":{"disk_gb":65,"wal_gb":35,"window":"no xact>10min, no concurrent DDL; 60-90min per large index","rollback":"drop new _ccnew index / keep old until swap"}
+}

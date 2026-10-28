@@ -1,0 +1,11 @@
+{
+  "timestamp":"2026-10-28","method":"in-container COPY FROM PROGRAM (read-only); no host SSH",
+  "device":"/dev/mapper/root-98d1f8b1f435 (LVM ext4, containerd host)",
+  "fs_total_mb":959271,"fs_used_mb":889973,"fs_avail_mb":20498,"fs_used_pct":98,
+  "reserved_blocks_mb_est":48800,"inodes_used_pct":2,
+  "attributed":{"pgdata_total_mb":703950,"pgdata":{"base":702922,"pg_wal":1025,"other":3},"postgres_container_rootfs_mb":447,"deleted_open_files":"1 WAL segment (~16MB) held open - trivial"},
+  "unattributed_non_pgdata_mb":186023,
+  "unattributed_breakdown":"estimates only: containerd image layers/snapshots + other container volumes + container/system logs + OS dirs; requires admin checklist",
+  "reclaimable_confident":"old images/exited containers/log truncation/package caches/core dumps ~30-120GB pending checklist",
+  "reclaimable_within_pgdata":"none at host level; bloat handled via STORAGE-R1 REINDEX path (~57GB) not file deletion"
+}
