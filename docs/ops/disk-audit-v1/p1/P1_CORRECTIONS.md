@@ -48,3 +48,24 @@ out.
 Plus Tier-2 now-verified: `sc_34100066/34100066.csv` **8.91 GiB** (gates
 PASS — awaiting approval). Combined approved-now reclaim ≈ **11.5 GiB**,
 which would take free space from 6.1 → ~17.6 GiB (WARNING band).
+
+## Correction 2 — the "unaccounted" gap resolved itself (2026-10-28)
+
+Fresh `du -xhd 1 /System/Volumes/Data` (user scope): **152 GiB readable**
+vs df used 160 GiB → **true gap ≈ 8 GiB**, not 40-45.
+
+Root causes of the earlier overestimate:
+1. Deleted-but-open blocks: df counts them, du cannot see them. EOD/repair
+   temp files, Claude VM intermediate writes, and crash remnants were held
+   by live processes. When those processes exited (EOD finished, VM
+   SIGTERMed), the space returned — explaining the 4.0→14→25→39 GiB free
+   recovery pattern without corresponding du-visible deletions.
+2. The earlier "~116 GiB readable" was itself an undercount assembled from
+   several partial du runs each skipping different permission-denied
+   subtrees.
+
+Remaining ~8 GiB sits in root-owned subtrees (`.Spotlight-V100`,
+`.DocumentRevisions-V100`, `/private/var/db`, `/Library` system subtrees).
+Owner to run the sudo du commands for the exact split. No bulk deletion
+of system-managed paths will be proposed regardless of size — per owner
+policy 2026-10-28: locate specific reclaimable objects only.
