@@ -56,3 +56,20 @@ Data growth.
 `disk_inventory.csv` · `largest_files.csv` · `growth_suspects.csv` ·
 `cleanup_candidates.csv` · `system_permission_gaps.md` ·
 `disk_cleanup_plan.md` · `disk_monitor.py` · this report.
+
+## FINAL RESOLUTION (2026-10-28, owner sudo scan)
+
+`sudo du -xhd 1` total: **153G** vs df 160Gi → residual ~7 GiB.
+- `.fseventsd`: 624 KiB (ruled out, measured)
+- `/private/var/folders`: 1.1 GiB (system temp, modest)
+- `.Spotlight-V100`, `.DocumentRevisions-V100`, TCC db, Bluetooth etc.:
+  exist but `Operation not permitted` even for sudo — TCC-gated, would
+  need Full Disk Access to measure. Bounded by the ~7 GiB residual.
+- `/System/Volumes/Data/System/Library`: 8.6 GiB system-managed.
+
+**The "abnormal 40-45 GiB" is fully explained**: real growth was the
+Claude cowork VM bundle (12 GiB, removed with owner approval) + StatCan
+raw expansion (8.9 GiB, removed after 3-gate verification); phantom
+growth was deleted-but-open blocks released when processes exited.
+Residual ~7 GiB is normal system overhead — no further cleanup proposed.
+All system-managed paths remain SYSTEM_PROTECTED per owner policy.
