@@ -1,0 +1,2610 @@
+{
+ "theme_id": "semi_equipment",
+ "as_of": "2026-10-23",
+ "run_id": "cap00-2026-10-23",
+ "envelopes": {
+  "CAP-03": {
+   "capability_id": "CAP-03",
+   "subject_type": "theme",
+   "subject_id": "semi_equipment",
+   "as_of": "2026-10-23",
+   "run_id": "cap00-2026-10-23",
+   "status": "ok",
+   "findings": {
+    "theme_id": "semi_equipment",
+    "nodes": [
+     {
+      "node_id": "semi_front_end_equipment",
+      "name": "半导体前道设备环节",
+      "product_lines": [
+       "semi_front_end"
+      ],
+      "members": [
+       "002371",
+       "688037"
+      ]
+     }
+    ],
+    "research_tasks": [
+     {
+      "subject_type": "company",
+      "subject_id": "002371",
+      "capability": "CAP-01",
+      "node_id": "semi_front_end_equipment"
+     },
+     {
+      "subject_type": "company",
+      "subject_id": "688037",
+      "capability": "CAP-01",
+      "node_id": "semi_front_end_equipment"
+     }
+    ],
+    "task_count": 2,
+    "invalid_cases": []
+   },
+   "evidence_refs": [],
+   "uncertainties": [],
+   "data_gaps": [],
+   "fingerprint": "0dfb9621a4913b708b65adb16a99f91b7f1c74ee6605609da667337a8d5d52e8",
+   "rule_version": "cap00-r0",
+   "research_only": true,
+   "used_for_signal": false,
+   "used_for_admission": false,
+   "upstream_fingerprints": []
+  }
+ },
+ "per_node": {
+  "semi_front_end_equipment": {
+   "CAP-04": {
+    "capability_id": "CAP-04",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-23",
+    "status": "ok",
+    "findings": {
+     "node_verdict": "bottleneck_unverified",
+     "views": {
+      "supply_scarcity": [
+       {
+        "claim_id": "nc_import_substitution_demand",
+        "dimension": "capacity_constraint",
+        "claim_role": "supply_scarcity",
+        "verdict": "partially_supported",
+        "claim_text": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+        "evidence_ids": [
+         "n_ev_naura_industry"
+        ],
+        "support_count": 1,
+        "refute_count": 0
+       }
+      ],
+      "non_substitutability": [
+       {
+        "claim_id": "nc_process_monopoly",
+        "dimension": "process_irreplaceability",
+        "claim_role": "non_substitutability",
+        "verdict": "needs_evidence",
+        "claim_text": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+        "evidence_ids": [
+         "n_ev_puda_alternative"
+        ],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "market_structure": [],
+      "entry_barrier": [
+       {
+        "claim_id": "nc_cert_barrier",
+        "dimension": "certification_barrier",
+        "claim_role": "entry_barrier",
+        "verdict": "needs_evidence",
+        "claim_text": "晶圆厂产线验证周期长构成后进入者壁垒",
+        "evidence_ids": [
+         "n_ev_m1_cert"
+        ],
+        "support_count": 0,
+        "refute_count": 0
+       },
+       {
+        "claim_id": "nc_perf_gap",
+        "dimension": "performance_gap",
+        "claim_role": "entry_barrier",
+        "verdict": "unknown",
+        "claim_text": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "hype": [
+       {
+        "claim_id": "nc_hype_component",
+        "dimension": "hype_only",
+        "claim_role": "hype",
+        "verdict": "unknown",
+        "claim_text": "国产替代主题存在概念关联超过实际供给约束的成分",
+        "evidence_ids": [],
+        "support_count": 0,
+        "refute_count": 0
+       }
+      ],
+      "unclassified": []
+     },
+     "claim_count": 5,
+     "technical_assessment": {
+      "supply_constraint": {
+       "assessment": "plausibly_constrained",
+       "sub_checks": {
+        "demand_growth": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_import_substitution_demand"
+         ],
+         "evidence_ids": [
+          "n_ev_naura_industry"
+         ],
+         "note": "需求增长为事实描述——本身不证明供给短缺"
+        },
+        "capacity_limited": {
+         "state": "partial",
+         "claim_ids": [
+          "nc_import_substitution_demand"
+         ],
+         "evidence_ids": [
+          "n_ev_naura_industry"
+         ],
+         "note": "有效产能/供给约束证据"
+        },
+        "effective_delivery_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "交付能力受限观察（矩阵交付格）",
+         "delivery_states": {
+          "002371": "none_seen",
+          "688037": "none_seen"
+         },
+         "deliverable_companies": []
+        },
+        "supplier_count_limited": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "已验证供应商数量——多供应商是格局事实，不自动否定紧缺也不证明紧缺"
+        },
+        "cert_gated_supply": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "n_ev_m1_cert"
+         ],
+         "note": "认证门槛造成的有效供给受限（需客户认证证据）"
+        }
+       },
+       "caveat": "需求增长本身不得推导短缺；多供应商格局不自动否定也不证明紧缺"
+      },
+      "non_substitutability": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "functional_alternative_exists": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_process_monopoly"
+         ],
+         "evidence_ids": [
+          "n_ev_puda_alternative"
+         ],
+         "note": "存在功能相近替代——存在替代供应商不等于可无成本替代",
+         "alt_evidence_ids": []
+        },
+        "performance_meets_requirement": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_perf_gap"
+         ],
+         "evidence_ids": [],
+         "note": "替代方案性能是否达标"
+        },
+        "switching_cost_cert": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "n_ev_m1_cert"
+         ],
+         "note": "替代所需认证与切换成本证据"
+        },
+        "switching_time": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代所需时间证据"
+        },
+        "alternative_commercialized": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "替代方案是否已实际商业化",
+         "alt_evidence_ids": []
+        }
+       },
+       "caveat": "存在替代供应商不等于可无成本替代"
+      },
+      "entry_barrier": {
+       "assessment": "unverified",
+       "sub_checks": {
+        "product_certification": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "n_ev_m1_cert"
+         ],
+         "note": "产品级测试/认证事实（Intel/UL 等）——不证明客户认证"
+        },
+        "customer_validation": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "特定客户认证通过证据（周期/成本/失效率）"
+        },
+        "mass_production_line_validation": {
+         "state": "unverified",
+         "claim_ids": [
+          "nc_cert_barrier"
+         ],
+         "evidence_ids": [
+          "n_ev_m1_cert"
+         ],
+         "note": "量产线验证证据"
+        },
+        "long_term_supply_qualification": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "长期供应资格证据"
+        },
+        "yield_reliability": {
+         "state": "no_evidence",
+         "claim_ids": [],
+         "evidence_ids": [],
+         "note": "工艺良率与可靠性证据"
+        }
+       },
+       "caveat": "产品认证（Intel/UL）不证明客户认证壁垒"
+      },
+      "evidence_boundaries": [
+       {
+        "claim_id": "nc_import_substitution_demand",
+        "hypothesis": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+        "role": "supply_scarcity",
+        "verdict": "partially_supported",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "n_ev_naura_industry"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [
+         "ru_002371_428"
+        ],
+        "support_source_ids": [
+         "ru_002371_428"
+        ],
+        "counter_source_ids": [],
+        "supporting_source_count": 1,
+        "counter_source_count": 0,
+        "independent_source_count": 1,
+        "required_evidence": [
+         {
+          "item": "capacity_or_leadtime",
+          "met": true
+         },
+         {
+          "item": "delivery_shortfall",
+          "met": false
+         },
+         {
+          "item": "supplier_count",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "delivery_shortfall",
+         "supplier_count"
+        ]
+       },
+       {
+        "claim_id": "nc_process_monopoly",
+        "hypothesis": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+        "role": "non_substitutability",
+        "verdict": "needs_evidence",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [
+         {
+          "evidence_id": "n_ev_puda_alternative",
+          "reason": "review_status=lead_only"
+         }
+        ],
+        "source_ids": [],
+        "support_source_ids": [],
+        "counter_source_ids": [],
+        "supporting_source_count": 0,
+        "counter_source_count": 0,
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "alternative_function_check",
+          "met": false
+         },
+         {
+          "item": "performance_parity",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "alternative_function_check",
+         "performance_parity",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_cert_barrier",
+        "hypothesis": "晶圆厂产线验证周期长构成后进入者壁垒",
+        "role": "entry_barrier",
+        "verdict": "needs_evidence",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [
+         "n_ev_m1_cert"
+        ],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [
+         "N_m1_node_evidence"
+        ],
+        "support_source_ids": [
+         "N_m1_node_evidence"
+        ],
+        "counter_source_ids": [],
+        "supporting_source_count": 1,
+        "counter_source_count": 0,
+        "independent_source_count": 1,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_perf_gap",
+        "hypothesis": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+        "role": "entry_barrier",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "support_source_ids": [],
+        "counter_source_ids": [],
+        "supporting_source_count": 0,
+        "counter_source_count": 0,
+        "independent_source_count": 0,
+        "required_evidence": [
+         {
+          "item": "customer_cert_cycle_cost",
+          "met": false
+         },
+         {
+          "item": "line_validation",
+          "met": false
+         },
+         {
+          "item": "switching_cost",
+          "met": false
+         }
+        ],
+        "unmet_conditions": [
+         "customer_cert_cycle_cost",
+         "line_validation",
+         "switching_cost"
+        ]
+       },
+       {
+        "claim_id": "nc_hype_component",
+        "hypothesis": "国产替代主题存在概念关联超过实际供给约束的成分",
+        "role": "hype",
+        "verdict": "unknown",
+        "as_of": "2026-10-22",
+        "support_evidence_ids": [],
+        "counter_evidence_ids": [],
+        "excluded_evidence": [],
+        "source_ids": [],
+        "support_source_ids": [],
+        "counter_source_ids": [],
+        "supporting_source_count": 0,
+        "counter_source_count": 0,
+        "independent_source_count": 0,
+        "required_evidence": [],
+        "unmet_conditions": []
+       }
+      ]
+     },
+     "evidence_index": {
+      "n_ev_naura_industry": {
+       "evidence_id": "n_ev_naura_industry",
+       "source_id": "ru_002371_428",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "dimension": null,
+       "excerpt": "北方华创年报行业段：国内半导体设备国产化率仍低，AI算力驱动晶圆厂扩产周期——环节需求扩张但国产化率低（行业级表述摘自公司年报）。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "n_ev_puda_alternative": {
+       "evidence_id": "n_ev_puda_alternative",
+       "source_id": "B_puda_huaxin_20260410",
+       "direction": "refute",
+       "aspect": "process_irreplaceability",
+       "dimension": null,
+       "excerpt": "普达特在清洗设备与LPCVD热处理设备形成'双驱'布局并主打国产替代（华鑫 p24）——清洗/炉管环节国产供给不止一家。",
+       "review_status": "lead_only",
+       "pit_status": "in_scope",
+       "verdict_weight": "unverified"
+      },
+      "n_ev_m1_cert": {
+       "evidence_id": "n_ev_m1_cert",
+       "source_id": "N_m1_node_evidence",
+       "direction": "unclear",
+       "aspect": "certification_barrier",
+       "dimension": null,
+       "excerpt": "M1核查：晶圆厂设备验证周期长为行业常识，但现有语料未见具体机台的验证周期、验证失败率或可引用的一手披露——认证壁垒存在性待一手证据。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      },
+      "n_ev_naura_milestone": {
+       "evidence_id": "n_ev_naura_milestone",
+       "source_id": "ru_002371_428",
+       "direction": "support",
+       "aspect": "capacity_constraint",
+       "dimension": null,
+       "excerpt": "北方华创立式炉/PVD/刻蚀均达第1000台交付里程碑——单一公司交付规模证据。",
+       "review_status": "accepted",
+       "pit_status": "in_scope",
+       "verdict_weight": "counted"
+      }
+     },
+     "claims": [
+      {
+       "claim_id": "nc_import_substitution_demand",
+       "claim_text": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+       "claim_role": "supply_scarcity",
+       "dimension": "capacity_constraint",
+       "verdict": "partially_supported",
+       "evidence_ids": [
+        "n_ev_naura_industry"
+       ],
+       "support_count": 1,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_process_monopoly",
+       "claim_text": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+       "claim_role": "non_substitutability",
+       "dimension": "process_irreplaceability",
+       "verdict": "needs_evidence",
+       "evidence_ids": [
+        "n_ev_puda_alternative"
+       ],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": [
+        "n_ev_puda_alternative"
+       ]
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "claim_text": "晶圆厂产线验证周期长构成后进入者壁垒",
+       "claim_role": "entry_barrier",
+       "dimension": "certification_barrier",
+       "verdict": "needs_evidence",
+       "evidence_ids": [
+        "n_ev_m1_cert"
+       ],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_perf_gap",
+       "claim_text": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+       "claim_role": "entry_barrier",
+       "dimension": "performance_gap",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      },
+      {
+       "claim_id": "nc_hype_component",
+       "claim_text": "国产替代主题存在概念关联超过实际供给约束的成分",
+       "claim_role": "hype",
+       "dimension": "hype_only",
+       "verdict": "unknown",
+       "evidence_ids": [],
+       "support_count": 0,
+       "refute_count": 0,
+       "unverified_evidence_ids": []
+      }
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_naura_industry",
+     "n_ev_puda_alternative",
+     "n_ev_m1_cert"
+    ],
+    "uncertainties": [
+     "nc_process_monopoly=needs_evidence",
+     "nc_cert_barrier=needs_evidence",
+     "nc_perf_gap=unknown",
+     "nc_hype_component=unknown"
+    ],
+    "data_gaps": [],
+    "fingerprint": "9a9ca833ccb5fe966eb73323373f3b52f6d6e7af8a5be315f118120043e43ee6",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-05": {
+    "capability_id": "CAP-05",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-23",
+    "status": "ok",
+    "findings": {
+     "economics": {
+      "002371": {
+       "revenue_state": "disclosed_broader_scope",
+       "revenue_value": null,
+       "margin_state": "segment_level",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "not_evaluated",
+       "commercialization_assessment": {
+        "company_code": "002371",
+        "theme_node_id": "semi_front_end_equipment",
+        "product_lines": [
+         "semi_front_end"
+        ],
+        "stage_evidence": {
+         "technology_demonstrated": {
+          "confirmed": true,
+          "evidence_ids": [
+           "ru_002371_409",
+           "ru_002371_410",
+           "ru_002371_416",
+           "ru_002371_424",
+           "ru_002371_424_x_edge",
+           "ru_002371_425_x_edge",
+           "ru_002371_426",
+           "ru_002371_426_x_edge"
+          ],
+          "source_ids": [
+           "ru_002371_409",
+           "ru_002371_410",
+           "ru_002371_416",
+           "ru_002371_424",
+           "ru_002371_425",
+           "ru_002371_426"
+          ],
+          "note": "产品/技术能力可信证据（矩阵 tech_participation 或 dossier tech_moat claim 证据）",
+          "trace": [
+           {
+            "record_id": "ru_002371_409",
+            "source_id": "ru_002371_409",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2025-08"
+           },
+           {
+            "record_id": "ru_002371_410",
+            "source_id": "ru_002371_410",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2025-08"
+           },
+           {
+            "record_id": "ru_002371_416",
+            "source_id": "ru_002371_416",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2025-08"
+           },
+           {
+            "record_id": "ru_002371_424",
+            "source_id": "ru_002371_424",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2026"
+           },
+           {
+            "record_id": "ru_002371_426",
+            "source_id": "ru_002371_426",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2026"
+           },
+           {
+            "record_id": "ru_002371_424_x_edge",
+            "source_id": "ru_002371_424",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2026"
+           },
+           {
+            "record_id": "ru_002371_425_x_edge",
+            "source_id": "ru_002371_425",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2026"
+           },
+           {
+            "record_id": "ru_002371_426_x_edge",
+            "source_id": "ru_002371_426",
+            "review_status": "accepted",
+            "scope": "company",
+            "effective_as_of": "2026"
+           }
+          ]
+         },
+         "customer_validated": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "具名客户验证通过证据（产品线口径）",
+          "trace": []
+         },
+         "commercial_delivery": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "量产声明≠商业交付——缺交付里程碑证据"
+         },
+         "revenue_attributed": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "仅板块/更大口径收入——不冒产品线收入",
+          "trace": []
+         },
+         "profitability_visible": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "节点产品线毛利证据缺失",
+          "trace": []
+         },
+         "cash_realization_visible": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "T3 无回款归属记录类型——不可用财务三表现金流推定",
+          "trace": []
+         }
+        },
+        "confirmed_stages": [
+         "technology_demonstrated"
+        ],
+        "missing_stages": [
+         "customer_validated",
+         "commercial_delivery",
+         "revenue_attributed",
+         "profitability_visible",
+         "cash_realization_visible"
+        ],
+        "demoted_stages": [],
+        "highest_confirmed_stage": "technology_demonstrated",
+        "attribution_scope": "segment",
+        "product_line_attribution": "broader_scope_only",
+        "theme_application_attribution": "unknown",
+        "theme_specific_revenue": "not_evaluated",
+        "related_company_facts": [],
+        "source_ids": [
+         "ru_002371_409",
+         "ru_002371_410",
+         "ru_002371_416",
+         "ru_002371_424",
+         "ru_002371_425",
+         "ru_002371_426"
+        ],
+        "as_of": "2026-10-22",
+        "note": "阶段描述已证实事实——不假设顺序推进、不跳级、非评级"
+       },
+       "independent_facts": {
+        "revenue": "disclosed_broader_scope",
+        "margin": "segment_level",
+        "order": "none_seen",
+        "delivery": "none_seen",
+        "cash": "unknown"
+       }
+      },
+      "688037": {
+       "revenue_state": "missing",
+       "revenue_value": null,
+       "margin_state": "unknown",
+       "margin_value": null,
+       "delivery_state": "none_seen",
+       "order_state": "none_seen",
+       "value_capture_verdict": "not_evaluated",
+       "value_capture_requires": [
+        "product_line_attributed_revenue",
+        "operating_evidence(margin/order/cash)"
+       ],
+       "cash_state": "unknown",
+       "commercialization_stage": "not_evaluated",
+       "commercialization_assessment": {
+        "company_code": "688037",
+        "theme_node_id": "semi_front_end_equipment",
+        "product_lines": [
+         "semi_front_end"
+        ],
+        "stage_evidence": {
+         "technology_demonstrated": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "产品/技术能力可信证据（矩阵 tech_participation 或 dossier tech_moat claim 证据）",
+          "trace": []
+         },
+         "customer_validated": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "具名客户验证通过证据（产品线口径）",
+          "trace": []
+         },
+         "commercial_delivery": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "无商业交付证据"
+         },
+         "revenue_attributed": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "无收入归属证据",
+          "trace": []
+         },
+         "profitability_visible": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "节点产品线毛利证据缺失",
+          "trace": []
+         },
+         "cash_realization_visible": {
+          "confirmed": false,
+          "evidence_ids": [],
+          "source_ids": [],
+          "note": "T3 无回款归属记录类型——不可用财务三表现金流推定",
+          "trace": []
+         }
+        },
+        "confirmed_stages": [],
+        "missing_stages": [
+         "technology_demonstrated",
+         "customer_validated",
+         "commercial_delivery",
+         "revenue_attributed",
+         "profitability_visible",
+         "cash_realization_visible"
+        ],
+        "demoted_stages": [],
+        "highest_confirmed_stage": null,
+        "attribution_scope": "unattributed",
+        "product_line_attribution": "missing",
+        "theme_application_attribution": "not_evaluated",
+        "theme_specific_revenue": "not_evaluated",
+        "related_company_facts": [],
+        "source_ids": [],
+        "as_of": "2026-10-22",
+        "note": "阶段描述已证实事实——不假设顺序推进、不跳级、非评级"
+       },
+       "independent_facts": {
+        "revenue": "missing",
+        "margin": "unknown",
+        "order": "none_seen",
+        "delivery": "none_seen",
+        "cash": "unknown"
+       }
+      }
+     },
+     "member_count": 2
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:002371",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002371",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688037",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688037",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:688037",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "e4f2f292dddf9276d3f978506ba548481b2735eafee09cfc3c0686cffa29a8a7",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "9a9ca833ccb5fe966eb73323373f3b52f6d6e7af8a5be315f118120043e43ee6"
+    ]
+   },
+   "CAP-06": {
+    "capability_id": "CAP-06",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-23",
+    "status": "ok",
+    "findings": {
+     "comparison": {
+      "002371": {
+       "company_name": "北方华创",
+       "scope_class": "direct_product",
+       "overall_verdict": "needs_evidence",
+       "tech_participation": "partially_supported",
+       "product_maturity": "production_claimed",
+       "certification_customer_validation": "unknown",
+       "delivery_capability": "production_claimed",
+       "cert_facts": {
+        "product_certification": "unknown",
+        "ecosystem_participation": "none_seen",
+        "customer_validation": "unknown",
+        "commercial_delivery": "production_claimed"
+       },
+       "cert_delivery_record_ids": [],
+       "revenue_identifiability": {
+        "revenue": "disclosed_broader_scope",
+        "margin_known": true
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": "partially_supported",
+        "competitive_edge": "partially_supported"
+       },
+       "concept_only_risk": "low",
+       "evidence_coverage": 3,
+       "comparable_with": []
+      },
+      "688037": {
+       "company_name": "芯源微(北方华创子公司)",
+       "scope_class": "subsidiary",
+       "overall_verdict": "no_dossier",
+       "tech_participation": "unknown",
+       "product_maturity": "unknown",
+       "certification_customer_validation": "unknown",
+       "delivery_capability": "unknown",
+       "cert_facts": {
+        "product_certification": "unknown",
+        "ecosystem_participation": "none_seen",
+        "customer_validation": "unknown",
+        "commercial_delivery": "unknown"
+       },
+       "cert_delivery_record_ids": [],
+       "revenue_identifiability": {
+        "revenue": "missing",
+        "margin_known": false
+       },
+       "order_visibility": "none_seen",
+       "advantage_substitutability": {
+        "tech_moat": null,
+        "competitive_edge": null
+       },
+       "concept_only_risk": "unevaluated",
+       "evidence_coverage": 1,
+       "comparable_with": []
+      }
+     },
+     "pairwise_scope": [
+      {
+       "a": "002371",
+       "b": "688037",
+       "comparison_scope": "partially_comparable",
+       "reason": "同一集团/母子公司口径，产品线归属需注意"
+      }
+     ],
+     "scope_classes": {
+      "subsidiary": [
+       "688037"
+      ],
+      "direct_product": [
+       "002371"
+      ]
+     },
+     "note": "同口径比较：组件 vs 系统不直接排名；披露更多≠竞争力更强；无评分无推荐"
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "fdb70e47dcd29ad85293ae4577507dc0356cf5697e9680cbaea89ee84d6bce94",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "9a9ca833ccb5fe966eb73323373f3b52f6d6e7af8a5be315f118120043e43ee6",
+     "e4f2f292dddf9276d3f978506ba548481b2735eafee09cfc3c0686cffa29a8a7"
+    ]
+   },
+   "CAP-07": {
+    "capability_id": "CAP-07",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-23",
+    "status": "ok",
+    "findings": {
+     "baseline_found": true,
+     "baseline_version": 4,
+     "baseline_as_of": "2026-10-22",
+     "skipped_future_versions": 0,
+     "state_changed": false,
+     "changes": [],
+     "materiality": {
+      "counts": {
+       "material": 0,
+       "notable": 0,
+       "minor": 0,
+       "non_substantive": 0
+      },
+      "requires_re_review": false,
+      "note": "重要性=对研究判断的影响程度，非价格预测"
+     },
+     "added": 0,
+     "removed": 0,
+     "changed": 0,
+     "current_fingerprint": "ab286ae5e709577ef9f78b4ddeb5b49df74330b6064060ce3222fdb70e29f3ab",
+     "baseline_count": 4
+    },
+    "evidence_refs": [],
+    "uncertainties": [],
+    "data_gaps": [],
+    "fingerprint": "ac4767903c8a54c7a2373404d93c5abe8fe5aa9bb0dece509de294d2ffac3a68",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": []
+   },
+   "CAP-08": {
+    "capability_id": "CAP-08",
+    "subject_type": "node",
+    "subject_id": "semi_front_end_equipment",
+    "as_of": "2026-10-22",
+    "run_id": "cap00-2026-10-23",
+    "status": "ok",
+    "findings": {
+     "favorable_support": [
+      {
+       "claim_id": "nc_import_substitution_demand",
+       "role": "supply_scarcity",
+       "verdict": "partially_supported",
+       "hypothesis": "国产化率低+AI扩产使前道设备环节存在持续供需缺口",
+       "evidence_ids": [
+        "n_ev_naura_industry"
+       ],
+       "source_ids": [
+        "ru_002371_428"
+       ],
+       "capability": "CAP-04"
+      }
+     ],
+     "market_structure": [],
+     "counter_evidence": [],
+     "hype_risks": [],
+     "unresolved": [
+      {
+       "claim_id": "nc_process_monopoly",
+       "role": "non_substitutability",
+       "verdict": "needs_evidence",
+       "hypothesis": "清洗/热处理等关键工艺在国内无第二家可替代供应商",
+       "evidence_ids": [
+        "n_ev_puda_alternative"
+       ],
+       "source_ids": [
+        "B_puda_huaxin_20260410"
+       ],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_cert_barrier",
+       "role": "entry_barrier",
+       "verdict": "needs_evidence",
+       "hypothesis": "晶圆厂产线验证周期长构成后进入者壁垒",
+       "evidence_ids": [
+        "n_ev_m1_cert"
+       ],
+       "source_ids": [
+        "N_m1_node_evidence"
+       ],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_perf_gap",
+       "role": "entry_barrier",
+       "verdict": "unknown",
+       "hypothesis": "国产设备与国际厂商在同节点工艺性能上存在可量化差距",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      },
+      {
+       "claim_id": "nc_hype_component",
+       "role": "hype",
+       "verdict": "unknown",
+       "hypothesis": "国产替代主题存在概念关联超过实际供给约束的成分",
+       "evidence_ids": [],
+       "source_ids": [],
+       "capability": "CAP-04"
+      }
+     ],
+     "hypothesis_assessment": [
+      {
+       "hypothesis_id": "nc_import_substitution_demand",
+       "subject_scope": "semi_front_end_equipment/supply_scarcity",
+       "claim_role": "supply_scarcity",
+       "verdict": "partially_supported",
+       "assessment_state": "supported",
+       "supporting_claim_ids": [
+        "nc_import_substitution_demand"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "多供应商格局可吸收需求增长——供给紧缺未证实"
+       ],
+       "decisive_gaps": [
+        "delivery_shortfall",
+        "supplier_count"
+       ],
+       "revision_triggers": [
+        "获得产能利用率/交期/订单排队的合格证据 → 升级",
+        "新进入者实现规模交付或第二供应商放量 → 弱化"
+       ],
+       "evidence_refs": [
+        "n_ev_naura_industry"
+       ],
+       "excluded_evidence": [],
+       "support_source_ids": [
+        "ru_002371_428"
+       ],
+       "counter_source_ids": [],
+       "supporting_source_count": 1,
+       "counter_source_count": 0,
+       "independent_source_count": 1,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_process_monopoly",
+       "subject_scope": "semi_front_end_equipment/non_substitutability",
+       "claim_role": "non_substitutability",
+       "verdict": "needs_evidence",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "存在已商业化或可认证替代方案——不可替代未证实"
+       ],
+       "decisive_gaps": [
+        "alternative_function_check",
+        "performance_parity",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "替代方案通过同等级客户认证并量产 → 弱化",
+        "切换成本/良率差距证据出现 → 强化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [
+        {
+         "evidence_id": "n_ev_puda_alternative",
+         "reason": "review_status=lead_only"
+        }
+       ],
+       "support_source_ids": [],
+       "counter_source_ids": [],
+       "supporting_source_count": 0,
+       "counter_source_count": 0,
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_cert_barrier",
+       "subject_scope": "semi_front_end_equipment/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "needs_evidence",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [
+        "nc_cert_barrier"
+       ],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [
+        "n_ev_m1_cert"
+       ],
+       "excluded_evidence": [],
+       "support_source_ids": [
+        "N_m1_node_evidence"
+       ],
+       "counter_source_ids": [],
+       "supporting_source_count": 1,
+       "counter_source_count": 0,
+       "independent_source_count": 1,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_perf_gap",
+       "subject_scope": "semi_front_end_equipment/entry_barrier",
+       "claim_role": "entry_barrier",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "产品级测试认证≠客户认证周期/成本壁垒"
+       ],
+       "decisive_gaps": [
+        "customer_cert_cycle_cost",
+        "line_validation",
+        "switching_cost"
+       ],
+       "revision_triggers": [
+        "客户认证周期、失效率或切换成本的披露 → 升级",
+        "多家厂商通过同一客户认证 → 弱化"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "support_source_ids": [],
+       "counter_source_ids": [],
+       "supporting_source_count": 0,
+       "counter_source_count": 0,
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      },
+      {
+       "hypothesis_id": "nc_hype_component",
+       "subject_scope": "semi_front_end_equipment/hype",
+       "claim_role": "hype",
+       "verdict": "unknown",
+       "assessment_state": "unresolved",
+       "supporting_claim_ids": [],
+       "counter_claim_ids": [],
+       "alternative_explanations": [
+        "主题映射与概念热度驱动，非供给/交付证据"
+       ],
+       "decisive_gaps": [],
+       "revision_triggers": [
+        "主题映射之外的订单/交付/收入证据出现 → 重新评估"
+       ],
+       "evidence_refs": [],
+       "excluded_evidence": [],
+       "support_source_ids": [],
+       "counter_source_ids": [],
+       "supporting_source_count": 0,
+       "counter_source_count": 0,
+       "independent_source_count": 0,
+       "as_of": "2026-10-22"
+      }
+     ],
+     "support_claim_count": 1,
+     "uncertainties": [
+      "CAP-04:nc_process_monopoly=needs_evidence",
+      "CAP-04:nc_cert_barrier=needs_evidence",
+      "CAP-04:nc_perf_gap=unknown",
+      "CAP-04:nc_hype_component=unknown"
+     ],
+     "next_verification": [
+      "product_gross_margin:002371",
+      "product_gross_margin:688037",
+      "product_revenue:688037",
+      "verifiable_order:002371",
+      "verifiable_order:688037"
+     ],
+     "research_priority": [
+      "verifiable_order:002371",
+      "product_revenue:688037",
+      "product_gross_margin:688037",
+      "verifiable_order:688037"
+     ]
+    },
+    "evidence_refs": [
+     "n_ev_m1_cert",
+     "n_ev_naura_industry",
+     "n_ev_puda_alternative"
+    ],
+    "uncertainties": [],
+    "data_gaps": [
+     {
+      "kind": "attribution_unknown",
+      "item": "product_gross_margin:002371",
+      "owner": "DATA",
+      "note": "segment margin exists, product line unattributed"
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:002371",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_revenue:688037",
+      "owner": "DATA",
+      "note": "rev_state=missing"
+     },
+     {
+      "kind": "missing_source",
+      "item": "product_gross_margin:688037",
+      "owner": "DATA",
+      "note": ""
+     },
+     {
+      "kind": "missing_source",
+      "item": "verifiable_order:688037",
+      "owner": "DATA",
+      "note": ""
+     }
+    ],
+    "fingerprint": "de7d5920582a07f596a2b2084756e5777a4a9203dc9be74e51c05252ad49ede2",
+    "rule_version": "cap00-r0",
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "upstream_fingerprints": [
+     "9a9ca833ccb5fe966eb73323373f3b52f6d6e7af8a5be315f118120043e43ee6",
+     "e4f2f292dddf9276d3f978506ba548481b2735eafee09cfc3c0686cffa29a8a7",
+     "fdb70e47dcd29ad85293ae4577507dc0356cf5697e9680cbaea89ee84d6bce94",
+     "ac4767903c8a54c7a2373404d93c5abe8fe5aa9bb0dece509de294d2ffac3a68"
+    ]
+   }
+  }
+ },
+ "errors": [],
+ "gap_backlog": [
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "attribution_unknown",
+   "item": "product_gross_margin:002371",
+   "owner": "DATA",
+   "note": "segment margin exists, product line unattributed",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "verifiable_order:002371",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "product_revenue:688037",
+   "owner": "DATA",
+   "note": "rev_state=missing",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "product_gross_margin:688037",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  },
+  {
+   "node_id": "semi_front_end_equipment",
+   "kind": "missing_source",
+   "item": "verifiable_order:688037",
+   "owner": "DATA",
+   "note": "",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-08"
+   ]
+  }
+ ],
+ "research_only": true,
+ "used_for_signal": false,
+ "used_for_admission": false,
+ "theme_synthesis": {
+  "key_findings": [
+   "semi_front_end_equipment: bottleneck_unverified（正向 1 · 风险 0 · 未决 4）"
+  ],
+  "competing_hypotheses": [
+   {
+    "node_id": "semi_front_end_equipment",
+    "hypothesis_id": "nc_import_substitution_demand",
+    "state": "supported",
+    "independent_source_count": 1,
+    "new_evidence_refs": [
+     "n_ev_naura_industry"
+    ]
+   }
+  ],
+  "core_unresolved": [
+   {
+    "node_id": "semi_front_end_equipment",
+    "claim_id": "nc_process_monopoly",
+    "verdict": "needs_evidence"
+   },
+   {
+    "node_id": "semi_front_end_equipment",
+    "claim_id": "nc_cert_barrier",
+    "verdict": "needs_evidence"
+   },
+   {
+    "node_id": "semi_front_end_equipment",
+    "claim_id": "nc_perf_gap",
+    "verdict": "unknown"
+   },
+   {
+    "node_id": "semi_front_end_equipment",
+    "claim_id": "nc_hype_component",
+    "verdict": "unknown"
+   }
+  ],
+  "next_verification": [
+   "product_gross_margin:688037",
+   "product_revenue:688037",
+   "verifiable_order:002371",
+   "verifiable_order:688037"
+  ],
+  "coverage": {
+   "theme_nodes": 1,
+   "nodes_with_cases": null,
+   "coverage_gap_nodes": [],
+   "read_source": null
+  },
+  "note": "结构化研究摘要——非主题评级、非买卖建议"
+ },
+ "research_gaps": [
+  {
+   "gap_id": "rg-cf7aa30c77",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": null,
+   "dimension": "hypothesis:nc_process_monopoly",
+   "category": "searched_not_found",
+   "basis": [
+    "alternative_function_check",
+    "performance_parity",
+    "switching_cost"
+   ],
+   "required_evidence": [
+    "evidence:hypothesis:nc_process_monopoly"
+   ],
+   "suggested_sources": [
+    "tbd"
+   ],
+   "is_head_node": false,
+   "note": "假设未决且有决定性缺口",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(hypothesis:nc_process_monopoly·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-dc475eb4d0",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": null,
+   "dimension": "hypothesis:nc_cert_barrier",
+   "category": "searched_not_found",
+   "basis": [
+    "customer_cert_cycle_cost",
+    "line_validation",
+    "switching_cost"
+   ],
+   "required_evidence": [
+    "evidence:hypothesis:nc_cert_barrier"
+   ],
+   "suggested_sources": [
+    "tbd"
+   ],
+   "is_head_node": false,
+   "note": "假设未决且有决定性缺口",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(hypothesis:nc_cert_barrier·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-69bf452a6f",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": null,
+   "dimension": "hypothesis:nc_perf_gap",
+   "category": "searched_not_found",
+   "basis": [
+    "customer_cert_cycle_cost",
+    "line_validation",
+    "switching_cost"
+   ],
+   "required_evidence": [
+    "evidence:hypothesis:nc_perf_gap"
+   ],
+   "suggested_sources": [
+    "tbd"
+   ],
+   "is_head_node": false,
+   "note": "假设未决且有决定性缺口",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(hypothesis:nc_perf_gap·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-da249add89",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "product_certification",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.product_certification=unknown"
+   ],
+   "required_evidence": [
+    "product_level_certification_disclosure"
+   ],
+   "suggested_sources": [
+    "annual_report_product_section",
+    "certification_body_notice"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.product_certification=unknown",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(product_certification·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-eee5df3a20",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "ecosystem_participation",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.ecosystem_participation=none_seen"
+   ],
+   "required_evidence": [
+    "ecosystem_partner_list_or_certificate"
+   ],
+   "suggested_sources": [
+    "partner_official_ecosystem_list",
+    "announcement"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.ecosystem_participation=none_seen",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(ecosystem_participation·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-94f797dd79",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "customer_validation",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.customer_validation=unknown"
+   ],
+   "required_evidence": [
+    "named_customer_validated_record_product_line_scope"
+   ],
+   "suggested_sources": [
+    "annual_report_customer_section",
+    "design_win_announcement"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.customer_validation=unknown",
+   "priority": {
+    "band": "medium",
+    "subscores": {
+     "conclusion_impact": 2,
+     "bottleneck_impact": 1,
+     "evidence_availability": 1,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-26a6039244",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "commercial_delivery",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.commercial_delivery=production_claimed"
+   ],
+   "required_evidence": [
+    "product_line_scoped_delivery_or_acceptance_record"
+   ],
+   "suggested_sources": [
+    "annual_report",
+    "delivery_or_contract_announcement"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.commercial_delivery=production_claimed",
+   "priority": {
+    "band": "medium",
+    "subscores": {
+     "conclusion_impact": 2,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-736c91b0da",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "revenue_attribution",
+   "category": "insufficient_granularity",
+   "basis": [
+    "economics.revenue=disclosed_broader_scope"
+   ],
+   "required_evidence": [
+    "product_line_attributed_revenue"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note",
+    "operating_data_announcement"
+   ],
+   "is_head_node": false,
+   "note": "economics.revenue=disclosed_broader_scope",
+   "priority": {
+    "band": "medium",
+    "subscores": {
+     "conclusion_impact": 2,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 1
+    },
+    "reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本1(insufficient_granularity)"
+   }
+  },
+  {
+   "gap_id": "rg-c91f9a65f5",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "profitability",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.margin=segment_level"
+   ],
+   "required_evidence": [
+    "product_line_gross_margin"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note"
+   ],
+   "is_head_node": false,
+   "note": "economics.margin=segment_level",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(profitability·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-f889044f96",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "order_evidence",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.order=none_seen"
+   ],
+   "required_evidence": [
+    "order_or_bid_award_record"
+   ],
+   "suggested_sources": [
+    "contract_announcement",
+    "bid_award_notice"
+   ],
+   "is_head_node": false,
+   "note": "economics.order=none_seen",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(order_evidence·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-e1704ba0c4",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "cash_realization",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.cash=unknown"
+   ],
+   "required_evidence": [
+    "receivable_or_cash_attribution_disclosure"
+   ],
+   "suggested_sources": [
+    "annual_report_notes",
+    "exchange_inquiry_reply"
+   ],
+   "is_head_node": false,
+   "note": "economics.cash=unknown",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 1,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(cash_realization·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-6a3ad05eaa",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "002371",
+   "dimension": "theme_application_attribution",
+   "category": "searched_not_found",
+   "basis": [
+    "assessment.theme_application_attribution=unknown"
+   ],
+   "required_evidence": [
+    "theme_scenario_level_revenue_or_customer_disclosure"
+   ],
+   "suggested_sources": [
+    "annual_report_scenario_breakdown",
+    "investor_relations_minutes"
+   ],
+   "is_head_node": false,
+   "note": "assessment.theme_application_attribution=unknown",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(theme_application_attribution·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-fd7132ee01",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "product_certification",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.product_certification=unknown"
+   ],
+   "required_evidence": [
+    "product_level_certification_disclosure"
+   ],
+   "suggested_sources": [
+    "annual_report_product_section",
+    "certification_body_notice"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.product_certification=unknown",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(product_certification·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-bc9d3a7a5e",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "ecosystem_participation",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.ecosystem_participation=none_seen"
+   ],
+   "required_evidence": [
+    "ecosystem_partner_list_or_certificate"
+   ],
+   "suggested_sources": [
+    "partner_official_ecosystem_list",
+    "announcement"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.ecosystem_participation=none_seen",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(ecosystem_participation·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-6744588ecc",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "customer_validation",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.customer_validation=unknown"
+   ],
+   "required_evidence": [
+    "named_customer_validated_record_product_line_scope"
+   ],
+   "suggested_sources": [
+    "annual_report_customer_section",
+    "design_win_announcement"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.customer_validation=unknown",
+   "priority": {
+    "band": "medium",
+    "subscores": {
+     "conclusion_impact": 2,
+     "bottleneck_impact": 1,
+     "evidence_availability": 1,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-e39e3a2cea",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "commercial_delivery",
+   "category": "searched_not_found",
+   "basis": [
+    "cert_facts.commercial_delivery=unknown"
+   ],
+   "required_evidence": [
+    "product_line_scoped_delivery_or_acceptance_record"
+   ],
+   "suggested_sources": [
+    "annual_report",
+    "delivery_or_contract_announcement"
+   ],
+   "is_head_node": false,
+   "note": "cert_facts.commercial_delivery=unknown",
+   "priority": {
+    "band": "medium",
+    "subscores": {
+     "conclusion_impact": 2,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-b2d957f590",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "revenue_attribution",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.revenue=missing"
+   ],
+   "required_evidence": [
+    "product_line_attributed_revenue"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note",
+    "operating_data_announcement"
+   ],
+   "is_head_node": false,
+   "note": "economics.revenue=missing",
+   "priority": {
+    "band": "medium",
+    "subscores": {
+     "conclusion_impact": 2,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-8cac4a3be5",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "profitability",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.margin=unknown"
+   ],
+   "required_evidence": [
+    "product_line_gross_margin"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note"
+   ],
+   "is_head_node": false,
+   "note": "economics.margin=unknown",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(profitability·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-3eb2c62c3b",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "order_evidence",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.order=none_seen"
+   ],
+   "required_evidence": [
+    "order_or_bid_award_record"
+   ],
+   "suggested_sources": [
+    "contract_announcement",
+    "bid_award_notice"
+   ],
+   "is_head_node": false,
+   "note": "economics.order=none_seen",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 3,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(order_evidence·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-dafd6e048a",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "cash_realization",
+   "category": "searched_not_found",
+   "basis": [
+    "economics.cash=unknown"
+   ],
+   "required_evidence": [
+    "receivable_or_cash_attribution_disclosure"
+   ],
+   "suggested_sources": [
+    "annual_report_notes",
+    "exchange_inquiry_reply"
+   ],
+   "is_head_node": false,
+   "note": "economics.cash=unknown",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 1,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(cash_realization·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)"
+   }
+  },
+  {
+   "gap_id": "rg-4c3a6ff99f",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "company_code": "688037",
+   "dimension": "theme_application_attribution",
+   "category": "searched_not_found",
+   "basis": [
+    "assessment.theme_application_attribution=not_evaluated"
+   ],
+   "required_evidence": [
+    "theme_scenario_level_revenue_or_customer_disclosure"
+   ],
+   "suggested_sources": [
+    "annual_report_scenario_breakdown",
+    "investor_relations_minutes"
+   ],
+   "is_head_node": false,
+   "note": "assessment.theme_application_attribution=not_evaluated",
+   "priority": {
+    "band": "low",
+    "subscores": {
+     "conclusion_impact": 1,
+     "bottleneck_impact": 1,
+     "evidence_availability": 2,
+     "timeliness_need": 1,
+     "dedup_cost": 2
+    },
+    "reason": "结论影响1(theme_application_attribution·非头部)；瓶颈1；可得性2；时效1；重复成本2(searched_not_found)"
+   }
+  }
+ ],
+ "verification_tasks": [
+  {
+   "task_id": "vt-0cb3d04da3",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": null,
+   "question": "核实假设：nc_perf_gap",
+   "hypothesis_id": "nc_perf_gap",
+   "required_evidence": [
+    "customer_cert_cycle_cost",
+    "line_validation",
+    "switching_cost"
+   ],
+   "owner": "DATA",
+   "priority": "high",
+   "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+   "source_capabilities": [
+    "CAP-04",
+    "CAP-08"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-69bf452a6f",
+   "research_gap_ids": [
+    "rg-69bf452a6f"
+   ],
+   "suggested_sources": [
+    "tbd"
+   ],
+   "completion_criteria": [
+    "evidence:hypothesis:nc_perf_gap"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-8deae31946",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": null,
+   "question": "核实假设：nc_process_monopoly",
+   "hypothesis_id": "nc_process_monopoly",
+   "required_evidence": [
+    "alternative_function_check",
+    "performance_parity",
+    "switching_cost"
+   ],
+   "owner": "DATA",
+   "priority": "high",
+   "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+   "source_capabilities": [
+    "CAP-04",
+    "CAP-08"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-cf7aa30c77",
+   "research_gap_ids": [
+    "rg-cf7aa30c77"
+   ],
+   "suggested_sources": [
+    "tbd"
+   ],
+   "completion_criteria": [
+    "evidence:hypothesis:nc_process_monopoly"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-fbe6a916e6",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": null,
+   "question": "核实假设：nc_cert_barrier",
+   "hypothesis_id": "nc_cert_barrier",
+   "required_evidence": [
+    "customer_cert_cycle_cost",
+    "line_validation",
+    "switching_cost"
+   ],
+   "owner": "DATA",
+   "priority": "high",
+   "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+   "source_capabilities": [
+    "CAP-04",
+    "CAP-08"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-dc475eb4d0",
+   "research_gap_ids": [
+    "rg-dc475eb4d0"
+   ],
+   "suggested_sources": [
+    "tbd"
+   ],
+   "completion_criteria": [
+    "evidence:hypothesis:nc_cert_barrier"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-49f5bcfce6",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "002371",
+   "question": "关闭研究缺口：customer_validation（searched_not_found）",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "named_customer_validated_record_product_line_scope"
+   ],
+   "owner": "DATA",
+   "priority": "medium",
+   "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-06",
+    "CAP-09"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-94f797dd79",
+   "research_gap_ids": [
+    "rg-94f797dd79"
+   ],
+   "suggested_sources": [
+    "annual_report_customer_section",
+    "design_win_announcement"
+   ],
+   "completion_criteria": [
+    "named_customer_validated_record_product_line_scope"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-6b643809c7",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "002371",
+   "question": "关闭研究缺口：revenue_attribution（insufficient_granularity）",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_line_attributed_revenue"
+   ],
+   "owner": "DATA",
+   "priority": "medium",
+   "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本1(insufficient_granularity)",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-06",
+    "CAP-09"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-736c91b0da",
+   "research_gap_ids": [
+    "rg-736c91b0da"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note",
+    "operating_data_announcement"
+   ],
+   "completion_criteria": [
+    "product_line_attributed_revenue"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-78e56d4c54",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "688037",
+   "question": "关闭研究缺口：customer_validation（searched_not_found）",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "named_customer_validated_record_product_line_scope"
+   ],
+   "owner": "DATA",
+   "priority": "medium",
+   "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-06",
+    "CAP-09"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-6744588ecc",
+   "research_gap_ids": [
+    "rg-6744588ecc"
+   ],
+   "suggested_sources": [
+    "annual_report_customer_section",
+    "design_win_announcement"
+   ],
+   "completion_criteria": [
+    "named_customer_validated_record_product_line_scope"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-b753e94e0d",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "002371",
+   "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_line_scoped_delivery_or_acceptance_record"
+   ],
+   "owner": "DATA",
+   "priority": "medium",
+   "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-06",
+    "CAP-09"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-26a6039244",
+   "research_gap_ids": [
+    "rg-26a6039244"
+   ],
+   "suggested_sources": [
+    "annual_report",
+    "delivery_or_contract_announcement"
+   ],
+   "completion_criteria": [
+    "product_line_scoped_delivery_or_acceptance_record"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-cc725b3be9",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "688037",
+   "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_line_attributed_revenue"
+   ],
+   "owner": "DATA",
+   "priority": "medium",
+   "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-06",
+    "CAP-09"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-b2d957f590",
+   "research_gap_ids": [
+    "rg-b2d957f590"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note",
+    "operating_data_announcement"
+   ],
+   "completion_criteria": [
+    "product_line_attributed_revenue"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-cdf5f1e727",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "688037",
+   "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_line_scoped_delivery_or_acceptance_record"
+   ],
+   "owner": "DATA",
+   "priority": "medium",
+   "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+   "source_capabilities": [
+    "CAP-05",
+    "CAP-06",
+    "CAP-09"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-e39e3a2cea",
+   "research_gap_ids": [
+    "rg-e39e3a2cea"
+   ],
+   "suggested_sources": [
+    "annual_report",
+    "delivery_or_contract_announcement"
+   ],
+   "completion_criteria": [
+    "product_line_scoped_delivery_or_acceptance_record"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-29760b3d4d",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "688037",
+   "question": "补齐数据缺口：product_gross_margin:688037",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_gross_margin:688037"
+   ],
+   "owner": "DATA",
+   "priority": "low",
+   "priority_reason": "外部数据缺口（missing_source）",
+   "source_capabilities": [
+    "CAP-05"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-8cac4a3be5",
+   "research_gap_ids": [
+    "rg-8cac4a3be5"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note"
+   ],
+   "completion_criteria": [
+    "product_line_gross_margin"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-2ea225273e",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "688037",
+   "question": "补齐数据缺口：verifiable_order:688037",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "verifiable_order:688037"
+   ],
+   "owner": "DATA",
+   "priority": "low",
+   "priority_reason": "外部数据缺口（missing_source）",
+   "source_capabilities": [
+    "CAP-05"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-3eb2c62c3b",
+   "research_gap_ids": [
+    "rg-3eb2c62c3b"
+   ],
+   "suggested_sources": [
+    "contract_announcement",
+    "bid_award_notice"
+   ],
+   "completion_criteria": [
+    "order_or_bid_award_record"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-7af38be48c",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "002371",
+   "question": "补齐数据缺口：product_gross_margin:002371",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_gross_margin:002371"
+   ],
+   "owner": "DATA",
+   "priority": "low",
+   "priority_reason": "外部数据缺口（attribution_unknown）",
+   "source_capabilities": [
+    "CAP-05"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-c91f9a65f5",
+   "research_gap_ids": [
+    "rg-c91f9a65f5"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note"
+   ],
+   "completion_criteria": [
+    "product_line_gross_margin"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-b6080231bf",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "002371",
+   "question": "补齐数据缺口：verifiable_order:002371",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "verifiable_order:002371"
+   ],
+   "owner": "DATA",
+   "priority": "low",
+   "priority_reason": "外部数据缺口（missing_source）",
+   "source_capabilities": [
+    "CAP-05"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-f889044f96",
+   "research_gap_ids": [
+    "rg-f889044f96"
+   ],
+   "suggested_sources": [
+    "contract_announcement",
+    "bid_award_notice"
+   ],
+   "completion_criteria": [
+    "order_or_bid_award_record"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  },
+  {
+   "task_id": "vt-d1b0a05bf8",
+   "theme_id": "semi_equipment",
+   "node_id": "semi_front_end_equipment",
+   "related_node_ids": [
+    "semi_front_end_equipment"
+   ],
+   "company_code": "688037",
+   "question": "补齐数据缺口：product_revenue:688037",
+   "hypothesis_id": null,
+   "required_evidence": [
+    "product_revenue:688037"
+   ],
+   "owner": "DATA",
+   "priority": "low",
+   "priority_reason": "外部数据缺口（missing_source）",
+   "source_capabilities": [
+    "CAP-05"
+   ],
+   "status": "proposed",
+   "research_gap_id": "rg-b2d957f590",
+   "research_gap_ids": [
+    "rg-b2d957f590"
+   ],
+   "suggested_sources": [
+    "annual_report_segment_note",
+    "operating_data_announcement"
+   ],
+   "completion_criteria": [
+    "product_line_attributed_revenue"
+   ],
+   "verification_status": "proposed",
+   "last_material_change": null
+  }
+ ],
+ "competing_hypotheses": [],
+ "workbench_index": "outputs/research/cap_workbench/semi_equipment/index.json"
+}

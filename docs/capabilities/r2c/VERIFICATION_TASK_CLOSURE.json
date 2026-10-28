@@ -1,0 +1,2353 @@
+{
+ "semantics": {
+  "statuses": [
+   "proposed",
+   "resolved",
+   "reopened"
+  ],
+  "rules": [
+   "duplicate re-ingestion of same task_id is a no-op",
+   "task absent from a run whose status was proposed -> resolved (gap closed)",
+   "material same_source_new_fact / counter change on task node -> reopened",
+   "history is append-only; a refresh never silently overwrites a verdict"
+  ]
+ },
+ "themes": {
+  "ai_power_value_capture_v1": {
+   "tasks": [
+    {
+     "task_id": "vt-239acff8be",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": null,
+     "question": "核实假设：nc_cert_barrier",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-e5748a18aa",
+     "research_gap_ids": [
+      "rg-e5748a18aa",
+      "rg-a640b1724e",
+      "rg-ee4131e96a",
+      "rg-701402f5c6"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_cert_barrier"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-5b7dac105d",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": null,
+     "question": "核实假设：nc_perf_gap",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-477e08fac4",
+     "research_gap_ids": [
+      "rg-477e08fac4"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_perf_gap"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-6b1e2f87b7",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": null,
+     "question": "核实假设：nc_supply_scarce",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-aaccb9b77d",
+     "research_gap_ids": [
+      "rg-aaccb9b77d",
+      "rg-7226d64a13",
+      "rg-0130850672"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_supply_scarce"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-e30692fb6b",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": null,
+     "question": "核实假设：nc_process_scarce",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-7d39997874",
+     "research_gap_ids": [
+      "rg-7d39997874"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_process_scarce"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-ea8876945c",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": null,
+     "question": "核实假设：nc_capacity_gap",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-434e8c0568",
+     "research_gap_ids": [
+      "rg-434e8c0568"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_capacity_gap"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-086d761e7d",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002837",
+     "question": "关闭研究缺口：revenue_attribution（insufficient_granularity）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本1(insufficient_granularity)",
+     "research_gap_id": "rg-87aef46021",
+     "research_gap_ids": [
+      "rg-87aef46021"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-2dbc528754",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "603757",
+     "question": "603757 已有交付证据但产品线收入未归属——核实收入确认",
+     "priority": "medium",
+     "priority_reason": "影响商业兑现判断：交付≠收入",
+     "research_gap_id": "rg-36ce712826",
+     "research_gap_ids": [
+      "rg-36ce712826",
+      "rg-ad6e4cf2dc"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-3df4699ce1",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": null,
+     "question": "核实炒作风险边界：nc_hype_component",
+     "priority": "medium",
+     "priority_reason": "主题映射之外的独立证据方可解除风险标记",
+     "research_gap_id": "rg-af3bfd0742",
+     "research_gap_ids": [
+      "rg-af3bfd0742"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_hype_component"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-4eb60bed1c",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "603757",
+     "question": "关闭研究缺口：customer_validation（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-f5ce8b8e3e",
+     "research_gap_ids": [
+      "rg-f5ce8b8e3e",
+      "rg-9704f841d1"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-4f52ac170c",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "301018",
+     "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-50e3eec801",
+     "research_gap_ids": [
+      "rg-50e3eec801",
+      "rg-6ea84e7c1f"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-5fdaf87e82",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002050",
+     "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-e3e71b5391",
+     "research_gap_ids": [
+      "rg-e3e71b5391"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-6aa4cc446b",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "002837",
+     "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-273a628d3f",
+     "research_gap_ids": [
+      "rg-273a628d3f",
+      "rg-52bb6455d5",
+      "rg-69227da175"
+     ],
+     "suggested_sources": [
+      "annual_report",
+      "delivery_or_contract_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_scoped_delivery_or_acceptance_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-6f9fa89161",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002050",
+     "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-2d02b5055a",
+     "research_gap_ids": [
+      "rg-2d02b5055a"
+     ],
+     "suggested_sources": [
+      "annual_report",
+      "delivery_or_contract_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_scoped_delivery_or_acceptance_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-7312f52846",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "301018",
+     "question": "关闭研究缺口：revenue_attribution（insufficient_granularity）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本1(insufficient_granularity)",
+     "research_gap_id": "rg-895d96906e",
+     "research_gap_ids": [
+      "rg-895d96906e"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-86d6a53a4b",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "301018",
+     "question": "关闭研究缺口：customer_validation（insufficient_granularity）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本1(insufficient_granularity)",
+     "research_gap_id": "rg-a487c0a227",
+     "research_gap_ids": [
+      "rg-a487c0a227"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-89756b986e",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "002837",
+     "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-99d49756e5",
+     "research_gap_ids": [
+      "rg-99d49756e5",
+      "rg-ad3a1237ce"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-b743467965",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "301018",
+     "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-ffb44a44b3",
+     "research_gap_ids": [
+      "rg-ffb44a44b3",
+      "rg-559bcf7528",
+      "rg-e989d1f9a2"
+     ],
+     "suggested_sources": [
+      "annual_report",
+      "delivery_or_contract_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_scoped_delivery_or_acceptance_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-ca1329f449",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002050",
+     "question": "关闭研究缺口：customer_validation（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-541052fab4",
+     "research_gap_ids": [
+      "rg-541052fab4"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-eaf30a152a",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "603757",
+     "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-36ce712826",
+     "research_gap_ids": [
+      "rg-36ce712826",
+      "rg-ad6e4cf2dc"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-fccbdb972a",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "301018",
+     "question": "关闭研究缺口：customer_validation（out_of_node_scope）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(out_of_node_scope)",
+     "research_gap_id": "rg-c0d574b26d",
+     "research_gap_ids": [
+      "rg-c0d574b26d",
+      "rg-fcee09a365"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-1b0af16280",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002050",
+     "question": "补齐数据缺口：verifiable_order:002050",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-2c3ac8195e",
+     "research_gap_ids": [
+      "rg-2c3ac8195e"
+     ],
+     "suggested_sources": [
+      "contract_announcement",
+      "bid_award_notice"
+     ],
+     "completion_criteria": [
+      "order_or_bid_award_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-3b7eca8916",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "603757",
+     "question": "补齐数据缺口：product_revenue:603757",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-36ce712826",
+     "research_gap_ids": [
+      "rg-36ce712826",
+      "rg-ad6e4cf2dc"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-4a35b57097",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002050",
+     "question": "补齐数据缺口：product_gross_margin:002050",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-2b37336bf9",
+     "research_gap_ids": [
+      "rg-2b37336bf9"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-650c76cf7a",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "603757",
+     "question": "补齐数据缺口：product_gross_margin:603757",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-92bc64cc3f",
+     "research_gap_ids": [
+      "rg-92bc64cc3f",
+      "rg-f21f214c26"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_pump_components"
+     ]
+    },
+    {
+     "task_id": "vt-67c7535dde",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "002837",
+     "question": "补齐数据缺口：verifiable_order:002837",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-37dd35d769",
+     "research_gap_ids": [
+      "rg-37dd35d769",
+      "rg-da96f7ac39"
+     ],
+     "suggested_sources": [
+      "contract_announcement",
+      "bid_award_notice"
+     ],
+     "completion_criteria": [
+      "order_or_bid_award_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-b31adeda72",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "002837",
+     "question": "补齐数据缺口：product_revenue:002837",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-99d49756e5",
+     "research_gap_ids": [
+      "rg-99d49756e5",
+      "rg-ad3a1237ce"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-c164ad0115",
+     "node_id": "ai_power_liquid_cooling",
+     "company_code": "002050",
+     "question": "补齐数据缺口：product_revenue:002050",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-e3e71b5391",
+     "research_gap_ids": [
+      "rg-e3e71b5391"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling"
+     ]
+    },
+    {
+     "task_id": "vt-d4f159ca7d",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "301018",
+     "question": "补齐数据缺口：verifiable_order:301018",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-63a271528e",
+     "research_gap_ids": [
+      "rg-63a271528e",
+      "rg-8998bf9146"
+     ],
+     "suggested_sources": [
+      "contract_announcement",
+      "bid_award_notice"
+     ],
+     "completion_criteria": [
+      "order_or_bid_award_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-e9fbc675a3",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "301018",
+     "question": "补齐数据缺口：product_revenue:301018",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-50e3eec801",
+     "research_gap_ids": [
+      "rg-50e3eec801",
+      "rg-6ea84e7c1f"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-f63a9fd5ec",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "002837",
+     "question": "补齐数据缺口：product_gross_margin:002837",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-deff513e52",
+     "research_gap_ids": [
+      "rg-deff513e52",
+      "rg-3b2718a860",
+      "rg-47b740c06f"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    },
+    {
+     "task_id": "vt-f69580e8b9",
+     "node_id": "liquid_cooling_cdu_system",
+     "company_code": "301018",
+     "question": "补齐数据缺口：product_gross_margin:301018",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-1721f93e3d",
+     "research_gap_ids": [
+      "rg-1721f93e3d",
+      "rg-0d31ec3fd0",
+      "rg-ab55ebfceb"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "ai_power_liquid_cooling",
+      "liquid_cooling_cdu_system",
+      "liquid_cooling_coldplate_manifold"
+     ]
+    }
+   ],
+   "ledger": {
+    "theme_id": "ai_power_value_capture_v1",
+    "tasks": {
+     "vt-239acff8be": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-e5748a18aa",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": null,
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-5b7dac105d": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-477e08fac4",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": null,
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-6b1e2f87b7": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-aaccb9b77d",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": null,
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-e30692fb6b": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-7d39997874",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": null,
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-ea8876945c": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-434e8c0568",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": null,
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-086d761e7d": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-87aef46021",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002837",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-2dbc528754": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-36ce712826",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "603757",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-3df4699ce1": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-af3bfd0742",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": null,
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-4eb60bed1c": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-f5ce8b8e3e",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "603757",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-4f52ac170c": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-50e3eec801",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "301018",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-5fdaf87e82": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-e3e71b5391",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002050",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-6aa4cc446b": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-273a628d3f",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "002837",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-6f9fa89161": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-2d02b5055a",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002050",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-7312f52846": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-895d96906e",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "301018",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-86d6a53a4b": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-a487c0a227",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "301018",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-89756b986e": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-99d49756e5",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "002837",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-b743467965": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-ffb44a44b3",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "301018",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-ca1329f449": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-541052fab4",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002050",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-eaf30a152a": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-36ce712826",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "603757",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-fccbdb972a": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-c0d574b26d",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "301018",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-1b0af16280": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-2c3ac8195e",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002050",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-3b7eca8916": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-36ce712826",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "603757",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-4a35b57097": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-2b37336bf9",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002050",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-650c76cf7a": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-92bc64cc3f",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "603757",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_pump_components"
+      ],
+      "last_material_change": null
+     },
+     "vt-67c7535dde": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-37dd35d769",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "002837",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-b31adeda72": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-99d49756e5",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "002837",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-c164ad0115": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-e3e71b5391",
+      "node_id": "ai_power_liquid_cooling",
+      "company_code": "002050",
+      "related_node_ids": [
+       "ai_power_liquid_cooling"
+      ],
+      "last_material_change": null
+     },
+     "vt-d4f159ca7d": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-63a271528e",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "301018",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-e9fbc675a3": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-50e3eec801",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "301018",
+      "related_node_ids": [
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-f63a9fd5ec": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-deff513e52",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "002837",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     },
+     "vt-f69580e8b9": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:17+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-1721f93e3d",
+      "node_id": "liquid_cooling_cdu_system",
+      "company_code": "301018",
+      "related_node_ids": [
+       "ai_power_liquid_cooling",
+       "liquid_cooling_cdu_system",
+       "liquid_cooling_coldplate_manifold"
+      ],
+      "last_material_change": null
+     }
+    }
+   }
+  },
+  "humanoid_robotics_head_to_toe_v1": {
+   "tasks": [
+    {
+     "task_id": "vt-24e19acf83",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": null,
+     "question": "核实假设：nc_vision_capacity",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-cca59a853f",
+     "research_gap_ids": [
+      "rg-cca59a853f"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_vision_capacity"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-cd12f6b56d",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": null,
+     "question": "核实假设：nc_vision_perf",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-d1a6a507a9",
+     "research_gap_ids": [
+      "rg-d1a6a507a9"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_vision_perf"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-d729b0963f",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": null,
+     "question": "核实假设：nc_vision_process",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-f170a2cd98",
+     "research_gap_ids": [
+      "rg-f170a2cd98"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_vision_process"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-e75d60d4e7",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": null,
+     "question": "核实假设：nc_vision_cert",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-db5e08f9e7",
+     "research_gap_ids": [
+      "rg-db5e08f9e7"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_vision_cert"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-2821db5738",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": "688686",
+     "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-d21ffaee83",
+     "research_gap_ids": [
+      "rg-d21ffaee83"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-4ad59f94f4",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": null,
+     "question": "核实炒作风险边界：nc_vision_hype",
+     "priority": "medium",
+     "priority_reason": "主题映射之外的独立证据方可解除风险标记",
+     "research_gap_id": "rg-1543d2fa28",
+     "research_gap_ids": [
+      "rg-1543d2fa28"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_vision_hype"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-62ae7f9387",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": "688686",
+     "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-72472b4529",
+     "research_gap_ids": [
+      "rg-72472b4529"
+     ],
+     "suggested_sources": [
+      "annual_report",
+      "delivery_or_contract_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_scoped_delivery_or_acceptance_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-a6a4c88cd8",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": "688686",
+     "question": "关闭研究缺口：customer_validation（pending_review）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本1(pending_review)",
+     "research_gap_id": "rg-cc116177ac",
+     "research_gap_ids": [
+      "rg-cc116177ac"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-0f689fa96e",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": "688686",
+     "question": "补齐数据缺口：product_gross_margin:688686",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-c4799f67b4",
+     "research_gap_ids": [
+      "rg-c4799f67b4"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    },
+    {
+     "task_id": "vt-138ef1bbb3",
+     "node_id": "humanoid_vision_sensing",
+     "company_code": "688686",
+     "question": "补齐数据缺口：product_revenue:688686",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-d21ffaee83",
+     "research_gap_ids": [
+      "rg-d21ffaee83"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "humanoid_vision_sensing"
+     ]
+    }
+   ],
+   "ledger": {
+    "theme_id": "humanoid_robotics_head_to_toe_v1",
+    "tasks": {
+     "vt-24e19acf83": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-cca59a853f",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": null,
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-cd12f6b56d": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-d1a6a507a9",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": null,
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-d729b0963f": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-f170a2cd98",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": null,
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-e75d60d4e7": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-db5e08f9e7",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": null,
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-2821db5738": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-d21ffaee83",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": "688686",
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-4ad59f94f4": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-1543d2fa28",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": null,
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-62ae7f9387": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-72472b4529",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": "688686",
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-a6a4c88cd8": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-cc116177ac",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": "688686",
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-0f689fa96e": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-c4799f67b4",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": "688686",
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     },
+     "vt-138ef1bbb3": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:18+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-d21ffaee83",
+      "node_id": "humanoid_vision_sensing",
+      "company_code": "688686",
+      "related_node_ids": [
+       "humanoid_vision_sensing"
+      ],
+      "last_material_change": null
+     }
+    }
+   }
+  },
+  "semi_equipment": {
+   "tasks": [
+    {
+     "task_id": "vt-0cb3d04da3",
+     "node_id": "semi_front_end_equipment",
+     "company_code": null,
+     "question": "核实假设：nc_perf_gap",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-69bf452a6f",
+     "research_gap_ids": [
+      "rg-69bf452a6f"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_perf_gap"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-8deae31946",
+     "node_id": "semi_front_end_equipment",
+     "company_code": null,
+     "question": "核实假设：nc_process_monopoly",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-cf7aa30c77",
+     "research_gap_ids": [
+      "rg-cf7aa30c77"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_process_monopoly"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-fbe6a916e6",
+     "node_id": "semi_front_end_equipment",
+     "company_code": null,
+     "question": "核实假设：nc_cert_barrier",
+     "priority": "high",
+     "priority_reason": "阻断核心研究假设（未决且有决定性缺口）",
+     "research_gap_id": "rg-dc475eb4d0",
+     "research_gap_ids": [
+      "rg-dc475eb4d0"
+     ],
+     "suggested_sources": [
+      "tbd"
+     ],
+     "completion_criteria": [
+      "evidence:hypothesis:nc_cert_barrier"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-49f5bcfce6",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "002371",
+     "question": "关闭研究缺口：customer_validation（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-94f797dd79",
+     "research_gap_ids": [
+      "rg-94f797dd79"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-6b643809c7",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "002371",
+     "question": "关闭研究缺口：revenue_attribution（insufficient_granularity）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本1(insufficient_granularity)",
+     "research_gap_id": "rg-736c91b0da",
+     "research_gap_ids": [
+      "rg-736c91b0da"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-78e56d4c54",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "688037",
+     "question": "关闭研究缺口：customer_validation（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(customer_validation·非头部)；瓶颈1；可得性1；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-6744588ecc",
+     "research_gap_ids": [
+      "rg-6744588ecc"
+     ],
+     "suggested_sources": [
+      "annual_report_customer_section",
+      "design_win_announcement"
+     ],
+     "completion_criteria": [
+      "named_customer_validated_record_product_line_scope"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-b753e94e0d",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "002371",
+     "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-26a6039244",
+     "research_gap_ids": [
+      "rg-26a6039244"
+     ],
+     "suggested_sources": [
+      "annual_report",
+      "delivery_or_contract_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_scoped_delivery_or_acceptance_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-cc725b3be9",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "688037",
+     "question": "关闭研究缺口：revenue_attribution（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(revenue_attribution·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-b2d957f590",
+     "research_gap_ids": [
+      "rg-b2d957f590"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-cdf5f1e727",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "688037",
+     "question": "关闭研究缺口：commercial_delivery（searched_not_found）",
+     "priority": "medium",
+     "priority_reason": "结论影响2(commercial_delivery·非头部)；瓶颈1；可得性3；时效1；重复成本2(searched_not_found)",
+     "research_gap_id": "rg-e39e3a2cea",
+     "research_gap_ids": [
+      "rg-e39e3a2cea"
+     ],
+     "suggested_sources": [
+      "annual_report",
+      "delivery_or_contract_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_scoped_delivery_or_acceptance_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-29760b3d4d",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "688037",
+     "question": "补齐数据缺口：product_gross_margin:688037",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-8cac4a3be5",
+     "research_gap_ids": [
+      "rg-8cac4a3be5"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-2ea225273e",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "688037",
+     "question": "补齐数据缺口：verifiable_order:688037",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-3eb2c62c3b",
+     "research_gap_ids": [
+      "rg-3eb2c62c3b"
+     ],
+     "suggested_sources": [
+      "contract_announcement",
+      "bid_award_notice"
+     ],
+     "completion_criteria": [
+      "order_or_bid_award_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-7af38be48c",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "002371",
+     "question": "补齐数据缺口：product_gross_margin:002371",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（attribution_unknown）",
+     "research_gap_id": "rg-c91f9a65f5",
+     "research_gap_ids": [
+      "rg-c91f9a65f5"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note"
+     ],
+     "completion_criteria": [
+      "product_line_gross_margin"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-b6080231bf",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "002371",
+     "question": "补齐数据缺口：verifiable_order:002371",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-f889044f96",
+     "research_gap_ids": [
+      "rg-f889044f96"
+     ],
+     "suggested_sources": [
+      "contract_announcement",
+      "bid_award_notice"
+     ],
+     "completion_criteria": [
+      "order_or_bid_award_record"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    },
+    {
+     "task_id": "vt-d1b0a05bf8",
+     "node_id": "semi_front_end_equipment",
+     "company_code": "688037",
+     "question": "补齐数据缺口：product_revenue:688037",
+     "priority": "low",
+     "priority_reason": "外部数据缺口（missing_source）",
+     "research_gap_id": "rg-b2d957f590",
+     "research_gap_ids": [
+      "rg-b2d957f590"
+     ],
+     "suggested_sources": [
+      "annual_report_segment_note",
+      "operating_data_announcement"
+     ],
+     "completion_criteria": [
+      "product_line_attributed_revenue"
+     ],
+     "verification_status": "proposed",
+     "last_material_change": null,
+     "related_node_ids": [
+      "semi_front_end_equipment"
+     ]
+    }
+   ],
+   "ledger": {
+    "theme_id": "semi_equipment",
+    "tasks": {
+     "vt-0cb3d04da3": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-69bf452a6f",
+      "node_id": "semi_front_end_equipment",
+      "company_code": null,
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-8deae31946": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-cf7aa30c77",
+      "node_id": "semi_front_end_equipment",
+      "company_code": null,
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-fbe6a916e6": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-dc475eb4d0",
+      "node_id": "semi_front_end_equipment",
+      "company_code": null,
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-49f5bcfce6": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-94f797dd79",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "002371",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-6b643809c7": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-736c91b0da",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "002371",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-78e56d4c54": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-6744588ecc",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "688037",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-b753e94e0d": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-26a6039244",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "002371",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-cc725b3be9": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-b2d957f590",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "688037",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-cdf5f1e727": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-e39e3a2cea",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "688037",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-29760b3d4d": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-8cac4a3be5",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "688037",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-2ea225273e": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-3eb2c62c3b",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "688037",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-7af38be48c": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-c91f9a65f5",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "002371",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-b6080231bf": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-f889044f96",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "002371",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     },
+     "vt-d1b0a05bf8": {
+      "verification_status": "proposed",
+      "history": [
+       {
+        "at": "2026-10-28T02:44:25+00:00",
+        "status": "proposed",
+        "reason": "generated_by_gap_engine"
+       }
+      ],
+      "research_gap_id": "rg-b2d957f590",
+      "node_id": "semi_front_end_equipment",
+      "company_code": "688037",
+      "related_node_ids": [
+       "semi_front_end_equipment"
+      ],
+      "last_material_change": null
+     }
+    }
+   }
+  }
+ }
+}

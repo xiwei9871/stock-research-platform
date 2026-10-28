@@ -32,6 +32,21 @@ STEP_STATUS_SUMMARY=""
 FAILED_STEP=""
 FAILED_RC=0
 
+step_process_alive() {
+  # Liveness check that cannot livelock on zombie or recycled PIDs.
+  # `kill -0` alone returns true for a zombie child (exists until reaped)
+  # and for an unrelated process that recycled the PID — both observed
+  # as 14+ min heartbeat hangs.  A real step must be alive, not a
+  # zombie, and still parented to this shell.
+  local pid="$1" stat ppid
+  kill -0 "$pid" 2>/dev/null || return 1
+  stat="$(ps -o stat= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+  [ -n "$stat" ] || return 1
+  case "$stat" in Z*|z*) return 1 ;; esac
+  ppid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+  [ "$ppid" = "$$" ]
+}
+
 run_step() {
   local step_name="$1"
   shift
@@ -43,10 +58,10 @@ run_step() {
   local heartbeat_seconds="${PLATFORM_READY_STEP_HEARTBEAT_SECONDS:-60}"
   local stdout_heartbeat="${PLATFORM_READY_STDOUT_HEARTBEAT_SECONDS:-600}"
   local last_stdout_emitted=${LAST_STDOUT_HEARTBEAT_ELAPSED:-0}
-  while kill -0 "$step_pid" 2>/dev/null; do
+  while step_process_alive "$step_pid"; do
     sleep "$heartbeat_seconds"
     elapsed=$((elapsed + heartbeat_seconds))
-    kill -0 "$step_pid" 2>/dev/null || break
+    step_process_alive "$step_pid" || break
     local line="platform_ready_build|heartbeat|step=${step_name}|elapsed=${elapsed}s"
     echo "$line" >>"$RUN_LOG"
     # stdout heartbeat on script-global elapsed so watchdog liveness does not
@@ -104,6 +119,11 @@ print_summary() {
   fi
   echo "日志: logs/${RUN_LOG##*/}"
 }
+
+if [ "${PLATFORM_READY_LIB_ONLY:-0}" = "1" ]; then
+  # Test harness mode: functions are loaded, no step executes.
+  return 0 2>/dev/null || exit 0
+fi
 
 if [ "$SMOKE_ONLY" = "1" ]; then
   {

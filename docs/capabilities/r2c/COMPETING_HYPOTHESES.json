@@ -1,0 +1,278 @@
+[
+ {
+  "case_id": "dayuan-603757-cdu",
+  "node_id": "liquid_cooling_pump_components",
+  "company_code": "603757",
+  "question": "组件交付能否说明 CDU 整系统完成客户认证",
+  "hypotheses": [
+   {
+    "id": "dayuan-603757-cdu:H_broad",
+    "statement": "公司既有事实足以支撑主题级研究结论（宽口径解读）",
+    "state": "risk_flagged",
+    "supporting_evidence": [
+     "commercial_delivery",
+     "order",
+     "product_certification"
+    ],
+    "counter_evidence": [
+     "cash=unknown",
+     "customer_validation=contact",
+     "delivery=mass_delivery",
+     "ecosystem_participation=none_seen",
+     "margin=unknown",
+     "revenue=missing"
+    ],
+    "pending_evidence": [
+     "ecosystem_partner_list_or_certificate",
+     "named_customer_validated_record_product_line_scope",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "receivable_or_cash_attribution_disclosure"
+    ],
+    "decisive_verification": [
+     "ecosystem_partner_list_or_certificate",
+     "named_customer_validated_record_product_line_scope",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "receivable_or_cash_attribution_disclosure"
+    ]
+   },
+   {
+    "id": "dayuan-603757-cdu:H_narrow",
+    "statement": "事实仅在公司既有口径成立，主题级结论未证实（窄口径解读）",
+    "state": "supported",
+    "supporting_evidence": [
+     "cash=unknown",
+     "customer_validation=contact",
+     "delivery=mass_delivery",
+     "ecosystem_participation=none_seen",
+     "margin=unknown",
+     "revenue=missing",
+     "commercial_delivery",
+     "order",
+     "product_certification"
+    ],
+    "counter_evidence": [
+     "无可反驳的事实级证据——但口径归属未闭合"
+    ],
+    "pending_evidence": [
+     "ecosystem_partner_list_or_certificate",
+     "named_customer_validated_record_product_line_scope",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "receivable_or_cash_attribution_disclosure"
+    ],
+    "decisive_verification": [
+     "ecosystem_partner_list_or_certificate",
+     "named_customer_validated_record_product_line_scope",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "receivable_or_cash_attribution_disclosure"
+    ]
+   }
+  ],
+  "current_reading": "narrow_supported",
+  "research_gap_ids": [
+   "rg-2f6e5e145c",
+   "rg-9704f841d1",
+   "rg-ad6e4cf2dc",
+   "rg-da61c48c93",
+   "rg-f21f214c26"
+  ],
+  "research_only": true
+ },
+ {
+  "case_id": "envicool-002837-delivery",
+  "node_id": "liquid_cooling_cdu_system",
+  "company_code": "002837",
+  "question": "生态参与、客户验证与实际商业交付之间的关系是否已被证明",
+  "hypotheses": [
+   {
+    "id": "envicool-002837-delivery:H_broad",
+    "statement": "公司既有事实足以支撑主题级研究结论（宽口径解读）",
+    "state": "risk_flagged",
+    "supporting_evidence": [
+     "customer_validation",
+     "delivery"
+    ],
+    "counter_evidence": [
+     "cash=unknown",
+     "commercial_delivery=none_seen",
+     "ecosystem_participation=out_of_node_scope",
+     "margin=unknown",
+     "order=none_seen",
+     "product_certification=unknown",
+     "revenue=missing"
+    ],
+    "pending_evidence": [
+     "ecosystem_partner_list_or_certificate",
+     "order_or_bid_award_record",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure"
+    ],
+    "decisive_verification": [
+     "ecosystem_partner_list_or_certificate",
+     "order_or_bid_award_record",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure"
+    ]
+   },
+   {
+    "id": "envicool-002837-delivery:H_narrow",
+    "statement": "事实仅在公司既有口径成立，主题级结论未证实（窄口径解读）",
+    "state": "supported",
+    "supporting_evidence": [
+     "cash=unknown",
+     "commercial_delivery=none_seen",
+     "ecosystem_participation=out_of_node_scope",
+     "margin=unknown",
+     "order=none_seen",
+     "product_certification=unknown",
+     "revenue=missing",
+     "customer_validation",
+     "delivery"
+    ],
+    "counter_evidence": [
+     "无可反驳的事实级证据——但口径归属未闭合"
+    ],
+    "pending_evidence": [
+     "ecosystem_partner_list_or_certificate",
+     "order_or_bid_award_record",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure"
+    ],
+    "decisive_verification": [
+     "ecosystem_partner_list_or_certificate",
+     "order_or_bid_award_record",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure"
+    ]
+   }
+  ],
+  "current_reading": "narrow_supported",
+  "research_gap_ids": [
+   "rg-273a628d3f",
+   "rg-37dd35d769",
+   "rg-5545c35efa",
+   "rg-99d49756e5",
+   "rg-99e65c2eec",
+   "rg-deff513e52",
+   "rg-ecf53e2f14"
+  ],
+  "research_only": true
+ },
+ {
+  "case_id": "opt-688686-humanoid",
+  "node_id": "humanoid_vision_sensing",
+  "company_code": "688686",
+  "question": "机器视觉收入是否能证明人形机器人相关业务的商业兑现",
+  "hypotheses": [
+   {
+    "id": "opt-688686-humanoid:H_broad",
+    "statement": "公司既有事实足以支撑主题级研究结论（宽口径解读）",
+    "state": "risk_flagged",
+    "supporting_evidence": [
+     "seg_688686_mv_2025FY"
+    ],
+    "counter_evidence": [
+     "cash=unknown",
+     "commercial_delivery=none_seen",
+     "customer_validation=pending_review",
+     "delivery=pending_review",
+     "ecosystem_participation=none_seen",
+     "margin=unknown",
+     "order=pending_review",
+     "product_certification=unknown",
+     "revenue=missing",
+     "theme_application_attribution=unknown"
+    ],
+    "pending_evidence": [
+     "ecosystem_partner_list_or_certificate",
+     "named_customer_validated_record_product_line_scope",
+     "order_or_bid_award_record",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure",
+     "theme_scenario_level_revenue_or_customer_disclosure"
+    ],
+    "decisive_verification": [
+     "ecosystem_partner_list_or_certificate",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure",
+     "theme_scenario_level_revenue_or_customer_disclosure"
+    ]
+   },
+   {
+    "id": "opt-688686-humanoid:H_narrow",
+    "statement": "事实仅在公司既有口径成立，主题级结论未证实（窄口径解读）",
+    "state": "supported",
+    "supporting_evidence": [
+     "cash=unknown",
+     "commercial_delivery=none_seen",
+     "customer_validation=pending_review",
+     "delivery=pending_review",
+     "ecosystem_participation=none_seen",
+     "margin=unknown",
+     "order=pending_review",
+     "product_certification=unknown",
+     "revenue=missing",
+     "theme_application_attribution=unknown",
+     "seg_688686_mv_2025FY"
+    ],
+    "counter_evidence": [
+     "无可反驳的事实级证据——但口径归属未闭合"
+    ],
+    "pending_evidence": [
+     "ecosystem_partner_list_or_certificate",
+     "named_customer_validated_record_product_line_scope",
+     "order_or_bid_award_record",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure",
+     "theme_scenario_level_revenue_or_customer_disclosure"
+    ],
+    "decisive_verification": [
+     "ecosystem_partner_list_or_certificate",
+     "product_level_certification_disclosure",
+     "product_line_attributed_revenue",
+     "product_line_gross_margin",
+     "product_line_scoped_delivery_or_acceptance_record",
+     "receivable_or_cash_attribution_disclosure",
+     "theme_scenario_level_revenue_or_customer_disclosure"
+    ]
+   }
+  ],
+  "current_reading": "narrow_supported",
+  "research_gap_ids": [
+   "rg-19b3af1104",
+   "rg-5b25ced6a8",
+   "rg-61d59f3ca0",
+   "rg-72472b4529",
+   "rg-c4799f67b4",
+   "rg-cc116177ac",
+   "rg-d21ffaee83",
+   "rg-de46c5e4f6",
+   "rg-f0ad62221d"
+  ],
+  "research_only": true
+ }
+]

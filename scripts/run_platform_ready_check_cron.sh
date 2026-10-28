@@ -119,6 +119,19 @@ cd "$ROOT"
   --mode repair >>"$RUN_LOG" 2>&1 &
 PIPELINE_PID=$!
 
+pipeline_process_alive() {
+  # Same zombie/recycled-PID guard as run_platform_ready_build_cron.sh —
+  # `kill -0` alone stays true for zombie children and foreign processes
+  # that recycled the PID, which can livelock this heartbeat loop.
+  local pid="$1" stat ppid
+  kill -0 "$pid" 2>/dev/null || return 1
+  stat="$(ps -o stat= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+  [ -n "$stat" ] || return 1
+  case "$stat" in Z*|z*) return 1 ;; esac
+  ppid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+  [ "$ppid" = "$$" ]
+}
+
 (
   HEARTBEAT_SLEEP_PID=""
   stop_heartbeat_loop() {
@@ -129,12 +142,12 @@ PIPELINE_PID=$!
   }
   trap stop_heartbeat_loop TERM INT
   started_epoch="$(date +%s)"
-  while kill -0 "$PIPELINE_PID" 2>/dev/null; do
+  while pipeline_process_alive "$PIPELINE_PID"; do
     sleep "$HEARTBEAT_SECONDS" &
     HEARTBEAT_SLEEP_PID=$!
     wait "$HEARTBEAT_SLEEP_PID" || exit 0
     HEARTBEAT_SLEEP_PID=""
-    kill -0 "$PIPELINE_PID" 2>/dev/null || break
+    pipeline_process_alive "$PIPELINE_PID" || break
     now_epoch="$(date +%s)"
     last_progress="$(tail -n +"$RUN_LOG_START_LINE" "$RUN_LOG" | grep -E '^(eod_auto_repair\||progress\||free_enrichment_batch\|)' | tail -n 1 || true)"
     hb_line="platform_ready_check|heartbeat|stage=eod_auto_repair|trade_date=${TRADE_DATE}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}"

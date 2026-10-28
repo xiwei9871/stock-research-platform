@@ -161,6 +161,27 @@ def run_research_chain(
          for n, envs in per_node.items()},
         env3.findings,
     )
+    # R2C: evidence-traceable research gap inventory + explainable
+    # priorities + gap-linked verification tasks + competing hypotheses.
+    from stock_research.capabilities.research_gaps import (
+        build_gap_inventory, build_competing_hypotheses,
+        score_gap_priority)
+    from stock_research.capabilities.reasoning import verification_tasks
+    per_node_dicts = {n: {c: e.to_dict() for c, e in envs.items()}
+                      for n, envs in per_node.items()}
+    gaps = build_gap_inventory(per_node_dicts, env3.findings,
+                               theme_id, as_of)
+    for g in gaps:
+        g["priority"] = score_gap_priority(g, per_node_dicts)
+    out["research_gaps"] = gaps
+    out["verification_tasks"] = verification_tasks(
+        per_node_dicts, env3.findings, theme_id, research_gaps=gaps)
+    # R2C P3: named-case competing hypotheses — only emitted for the
+    # case's own node so the analysis stays evidence-scoped.
+    cases = [c for c in _R2C_HYPOTHESIS_CASES
+             if c["node_id"] in per_node_dicts]
+    out["competing_hypotheses"] = build_competing_hypotheses(
+        per_node_dicts, gaps, cases)
     if workbench_dir:
         out["workbench_index"] = write_workbench_index(out, workbench_dir)
     return out
@@ -213,3 +234,18 @@ def run_theme_chain(
     if workbench_dir:
         out["workbench_index"] = write_workbench_index(out, workbench_dir)
     return out
+
+
+# R2C P3: the three named real cases — company × node × the open
+# interpretive question the evidence must discriminate.
+_R2C_HYPOTHESIS_CASES = [
+    {"case_id": "opt-688686-humanoid",
+     "company_code": "688686", "node_id": "humanoid_vision_sensing",
+     "question": "机器视觉收入是否能证明人形机器人相关业务的商业兑现"},
+    {"case_id": "dayuan-603757-cdu",
+     "company_code": "603757", "node_id": "liquid_cooling_pump_components",
+     "question": "组件交付能否说明 CDU 整系统完成客户认证"},
+    {"case_id": "envicool-002837-delivery",
+     "company_code": "002837", "node_id": "liquid_cooling_cdu_system",
+     "question": "生态参与、客户验证与实际商业交付之间的关系是否已被证明"},
+]

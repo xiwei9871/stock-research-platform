@@ -1428,6 +1428,7 @@ def verification_tasks(
     per_node: dict[str, dict[str, Any]],
     cap03_findings: dict[str, Any],
     theme_id: str,
+    research_gaps: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Derive proposed verification tasks from CAP-04/05/07/08 outputs.
 
@@ -1444,15 +1445,30 @@ def verification_tasks(
     # carrying every related node, never duplicate undifferentiated rows.
     tasks: dict[tuple[str, str, tuple[str, ...]], dict[str, Any]] = {}
 
+    # R2C P4: gap linkage — every task carries the research_gap_id(s) it
+    # derives from, suggested sources, and completion criteria.
+    gap_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for g in research_gaps or []:
+        gap_by_key[(g["node_id"], g.get("company_code") or "",
+                    g["dimension"])] = g
+
+    def _gap_for(node_id: str, company: str,
+                 dimension: str) -> dict[str, Any] | None:
+        return gap_by_key.get((node_id, company or "", dimension))
+
     def _add(node_id: str, company: str, question: str, hypothesis: str,
              required: list[str], owner: str, priority: str,
-             reason: str, caps: list[str]) -> None:
+             reason: str, caps: list[str],
+             gap: dict[str, Any] | None = None) -> None:
         qkey = hypothesis or question
         key = (company or "", qkey, tuple(sorted(required)))
         if key in tasks:
             t = tasks[key]
             if node_id and node_id not in t["related_node_ids"]:
                 t["related_node_ids"].append(node_id)
+            if gap and gap["gap_id"] not in (t.get("research_gap_ids") or []):
+                t.setdefault("research_gap_ids", []).append(gap["gap_id"])
+                t["research_gap_id"] = t["research_gap_ids"][0]
             return
         tid_raw = json.dumps(
             [theme_id or "", company or "", qkey, sorted(required)],
@@ -1472,6 +1488,14 @@ def verification_tasks(
             "priority_reason": reason,
             "source_capabilities": caps,
             "status": "proposed",
+            "research_gap_id": (gap or {}).get("gap_id"),
+            "research_gap_ids": [gap["gap_id"]] if gap else [],
+            "suggested_sources": list(
+                (gap or {}).get("suggested_sources") or []),
+            "completion_criteria": list(
+                (gap or {}).get("required_evidence") or required),
+            "verification_status": "proposed",
+            "last_material_change": None,
         }
 
     for node_id, envs in per_node.items():
@@ -1490,20 +1514,23 @@ def verification_tasks(
                 _add(node_id, "", f"核实假设：{text or h['hypothesis_id']}",
                      h["hypothesis_id"], gaps, "DATA", "high",
                      "阻断核心研究假设（未决且有决定性缺口）",
-                     ["CAP-04", "CAP-08"])
+                     ["CAP-04", "CAP-08"],
+                     gap=_gap_for(node_id, "", f"hypothesis:{h['hypothesis_id']}"))
             elif state == "contested":
                 _add(node_id, "", f"区分竞争解释：{text or h['hypothesis_id']}",
                      h["hypothesis_id"], gaps or ["adjudicating_evidence"],
                      "DATA", "high",
                      "存在合格反证——需能区分相互竞争解释的证据",
-                     ["CAP-08"])
+                     ["CAP-08"],
+                     gap=_gap_for(node_id, "", f"hypothesis:{h['hypothesis_id']}"))
             elif state == "risk_flagged":
                 _add(node_id, "", f"核实炒作风险边界：{text or h['hypothesis_id']}",
                      h["hypothesis_id"],
                      ["theme_mapping_independent_evidence"],
                      "DATA", "medium",
                      "主题映射之外的独立证据方可解除风险标记",
-                     ["CAP-08"])
+                     ["CAP-08"],
+                     gap=_gap_for(node_id, "", f"hypothesis:{h['hypothesis_id']}"))
         # CAP-05: delivery confirmed but revenue missing → value gate
         for code, eco in (f5.get("economics") or {}).items():
             ca = eco.get("commercialization_assessment") or {}
@@ -1514,14 +1541,16 @@ def verification_tasks(
                      f"{code} 已有交付证据但产品线收入未归属——核实收入确认",
                      "", ["product_line_attributed_revenue"], "DATA",
                      "medium", "影响商业兑现判断：交付≠收入",
-                     ["CAP-05"])
+                     ["CAP-05"],
+                     gap=_gap_for(node_id, code, "revenue_attribution"))
             if "revenue_attributed" in confirmed \
                     and "profitability_visible" not in confirmed:
                 _add(node_id, code,
                      f"{code} 产品线收入已归属但毛利不可见——核实毛利披露",
                      "", ["product_line_gross_margin"], "DATA",
                      "medium", "影响商业兑现判断：收入≠盈利",
-                     ["CAP-05"])
+                     ["CAP-05"],
+                     gap=_gap_for(node_id, code, "profitability"))
         # CAP-07 material changes → re-review task
         for ch in f7.get("changes") or []:
             if ch.get("materiality") == "material":
@@ -1532,18 +1561,44 @@ def verification_tasks(
                      "新证据实质改变研究判断——需人工复核",
                      ["CAP-07"])
         # external data gaps → DATA tasks (deduped by backlog owner)
+        _backlog_dim = {
+            "product_revenue": "revenue_attribution",
+            "product_gross_margin": "profitability",
+            "verifiable_order": "order_evidence",
+            "verifiable_delivery": "commercial_delivery",
+            "collections": "cash_realization",
+        }
         for g in (envs.get("CAP-05") or {}).get("data_gaps") or []:
             item = g.get("item") or ""
-            _add(node_id, item.split(":")[-1] if ":" in item else "",
+            code_ = item.split(":")[-1] if ":" in item else ""
+            dim_ = _backlog_dim.get(item.split(":")[0], "")
+            _add(node_id, code_,
                  f"补齐数据缺口：{item}", "", [item],
                  _GAP_OWNER.get(g.get("kind"), "DATA"), "low",
-                 f"外部数据缺口（{g.get('kind')}）", ["CAP-05"])
+                 f"外部数据缺口（{g.get('kind')}）", ["CAP-05"],
+                 gap=_gap_for(node_id, code_, dim_) if dim_ else None)
 
     # coverage gaps → CAP-02 capability tasks
     for nid in cap03_findings.get("coverage_gap_nodes") or []:
         _add(nid, "", f"节点 {nid} 无研究案例——需补能力覆盖", "",
              ["node_case"], "CAP-02", "low",
-             "能力覆盖缺口（非外部数据缺失）", ["CAP-03"])
+             "能力覆盖缺口（非外部数据缺失）", ["CAP-03"],
+             gap=_gap_for(nid, "", "node_case"))
+
+    # R2C P4: gap-driven tasks — every actionable research gap becomes a
+    # task carrying its gap id, suggested sources, completion criteria,
+    # and the explainable priority sub-scores.  Dedup is by task key;
+    # re-ingesting the same material never creates a second task.
+    from stock_research.capabilities.research_gaps import score_gap_priority
+    for g in research_gaps or []:
+        score = score_gap_priority(g, per_node)
+        if score["band"] == "low":
+            continue
+        _add(g["node_id"], g.get("company_code") or "",
+             f"关闭研究缺口：{g['dimension']}（{g['category']}）",
+             "", list(g.get("required_evidence") or []),
+             "DATA", score["band"], score["reason"],
+             ["CAP-05", "CAP-06", "CAP-09"], gap=g)
 
     rank = {"high": 0, "medium": 1, "low": 2}
     out = sorted(tasks.values(),

@@ -174,10 +174,16 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
         "theme_node_count": len(theme_nodes),
         "covered_node_count": len(covered_theme_nodes),
         "theme_synthesis": chain_out.get("theme_synthesis"),
-        # R2B: proposed verification tasks — read-only, never auto-trigger
-        "verification_tasks": verification_tasks(
+        # R2B/R2C: proposed verification tasks — read-only, never
+        # auto-trigger.  Prefer the gap-linked list computed by the
+        # chain; recompute only for direct (non-chain) callers.
+        "verification_tasks": chain_out.get("verification_tasks")
+        or verification_tasks(
             chain_out.get("per_node", {}), cap03_findings,
             chain_out.get("theme_id") or ""),
+        # R2C: research gap inventory summary (categories × bands)
+        "research_gap_summary": _gap_category_summary(
+            chain_out.get("research_gaps")),
         "nodes": nodes,
         "gap_summary": gap_summary,
         "gap_backlog": chain_out.get("gap_backlog", []),
@@ -186,13 +192,51 @@ def build_workbench_index(chain_out: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _gap_category_summary(
+    gaps: list[dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    if gaps is None:
+        return None
+    by_cat: dict[str, int] = {}
+    by_band: dict[str, int] = {}
+    for g in gaps:
+        by_cat[g["category"]] = by_cat.get(g["category"], 0) + 1
+        band = (g.get("priority") or {}).get("band")
+        if band:
+            by_band[band] = by_band.get(band, 0) + 1
+    return {"total": len(gaps), "by_category": by_cat,
+            "by_priority_band": by_band}
+
+
 def write_workbench_index(
     chain_out: dict[str, Any], workbench_dir: str | Path,
 ) -> str:
     theme = chain_out.get("theme_id") or "unknown_theme"
+    index = build_workbench_index(chain_out)
+
+    # R2C P4: fold this run's task list + material changes into the
+    # append-only per-theme ledger, then stamp each task's current
+    # verification_status / last_material_change.  History is never
+    # silently overwritten — every transition is recorded.
+    from stock_research.capabilities.task_ledger import update_task_ledger
+    material_changes: list[dict[str, Any]] = []
+    for nid, envs in (chain_out.get("per_node") or {}).items():
+        changes = ((envs.get("CAP-07") or {}).get("findings") or {}) \
+            .get("changes") or []
+        for ch in changes:
+            material_changes.append({**ch, "node_id": nid})
+    ledger = update_task_ledger(
+        str(workbench_dir), theme,
+        index.get("verification_tasks") or [], material_changes)
+    ltasks = ledger.get("tasks") or {}
+    for t in index.get("verification_tasks") or []:
+        e = ltasks.get(t["task_id"])
+        if e:
+            t["verification_status"] = e["verification_status"]
+            t["last_material_change"] = e.get("last_material_change")
+
     path = Path(workbench_dir) / theme / "index.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(
-        build_workbench_index(chain_out), ensure_ascii=False, indent=1,
-    ), encoding="utf-8")
+    path.write_text(json.dumps(index, ensure_ascii=False, indent=1),
+                    encoding="utf-8")
     return str(path)

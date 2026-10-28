@@ -118,7 +118,7 @@ exit 0
     assert calls.index("-m stock_research.cli run-strategy-daily-eod") < calls.index("-m stock_research.platform_ready")
     assert "平台就绪构建完成" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志:" in result.stdout
     assert "platform_ready_build|step|" not in result.stdout
     assert "free_enrichment_batch|" not in result.stdout
 
@@ -229,7 +229,7 @@ exit 3
     assert "EOD自动修复失败" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout
     assert "退出码: 3" in result.stdout
-    assert "详细日志:" in result.stdout
+    assert "日志:" in result.stdout
 
 
 def test_platform_ready_check_script_emits_heartbeat_while_repair_runs(tmp_path: Path) -> None:
@@ -284,10 +284,12 @@ exit 0
     )
 
     assert result.returncode == 0
-    assert "platform_ready_check|started|stage=eod_auto_repair|trade_date=2026-06-18" in result.stdout
-    assert "platform_ready_check|heartbeat|stage=eod_auto_repair|trade_date=2026-06-18" in result.stdout
-    assert "elapsed_seconds=" in result.stdout
-    assert "last_progress=waiting" in result.stdout
+    detail_log = (log_dir / "platform_ready_check.host.log").read_text(
+        encoding="utf-8")
+    assert "platform_ready_check|started|stage=eod_auto_repair|trade_date=2026-06-18" in detail_log
+    assert "platform_ready_check|heartbeat|stage=eod_auto_repair|trade_date=2026-06-18" in detail_log
+    assert "elapsed_seconds=" in detail_log
+    assert "last_progress=waiting" in detail_log
     assert "stale-run-report.md" not in result.stdout
     assert "EOD自动修复完成" in result.stdout
     calls = calls_file.read_text(encoding="utf-8")
@@ -418,7 +420,9 @@ exit 0
     calls = calls_file.read_text(encoding="utf-8")
     assert "date-resolver-via-c" in calls
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-29" in calls
-    assert "eod_auto_repair/2026-06-29" in result.stdout
+    detail_log = (tmp_path / "logs" / "platform_ready_check.host.log").read_text(
+        encoding="utf-8")
+    assert "eod_auto_repair/2026-06-29" in detail_log
     assert "EOD自动修复完成" in result.stdout
     assert "--finalize-publication" in calls
 
