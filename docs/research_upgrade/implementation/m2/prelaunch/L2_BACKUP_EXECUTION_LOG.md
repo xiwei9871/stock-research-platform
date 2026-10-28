@@ -44,7 +44,33 @@
 
 **根因分析：** 22:30 与夜间 EOD 管线重叠（21:00 finalize、22:00 repair、22:15 deploy sync 均写生产库）。窗口起点需后移到夜间任务收敛之后（建议 ≥00:30），下一轮执行前先在 22:00–00:30 采样 `pg_stat_activity` 确认长事务来源与消散时间，再定窗口。
 
-## 状态定义
+## 结果（2026-10-28 08:12 即时执行 — L2_BACKUP_VERIFIED）
+
+用户确认无管线运行并批准立即执行（窗口约束由审批人覆盖）。`m2_l2_backup_now.sh`（同预检/监控/转正逻辑，去掉窗口等待与 09:00 killer）于 08:12:26 启动：
+
+| 项 | 实测 |
+|---|---|
+| 执行窗口 | 08:12:27 → **10:19:53**（rc=0，2h7m26s） |
+| 产物 | `full_stock_research_20261028_081226.dump` |
+| 大小 | **44,327,786,055 B（41.3 GiB）**——678GB 库 → 6.5% 压缩比，落在预估 30–130GB 区间 |
+| SHA256 | `023068df97f194aa67f0e9da6d168307c0ad06a7f0fbddab51edf490072555ff` |
+| `pg_restore -l` | 通过；归档含 **22 个业务 schema**（backtest/backup/core/event/factor/finance/fundamental/identity/ingest/m1_shadow/market/ops/p1d1_shadow/p1d3_shadow/p1d3_test/raw_akshare/raw_baostock/report/research/simulation/staging/watchlist），grep SCHEMA 计数 26 |
+| 转正链 | `.tmp_` → sha256 → `-l` → 改名 → `.sha256` + `.list` + `MANIFEST_L2_20261028_081226.json`（verdict `L2_BACKUP_VERIFIED`） |
+| 监控 | 每 120s 记录产物大小+生产连接；全程 prod_active/total ≈ **2/7**，无锁等待尖峰 |
+| 速率 | ~20GB/h 平均（CIFS 限速），峰值 ~430MB/min |
+| 残留 | `.tmp_` 零残留、容器已 `--rm`、runner 已退出 |
+| 快照一致性 | pg_dump -Fc 单事务快照，覆盖启动时刻（08:12:27）全部数据；开始后写入不在归档内 |
+
+**状态：`L2_BACKUP_VERIFIED`**（文件级校验通过）。**`FULL_RESTORE_VERIFIED` 未获得**——待独立恢复演练。
+
+**生产影响：0。** 备份为单连接只读快照；dump 结束后复核长事务=0。
+
+## 恢复演练资源重估（2026-10-28）
+
+- `/mnt/data1`：1.8T 总量，**1.1T 可用**（36% 已用）；`restore_drill{,2}` 残留仅 8KB（容器卷已回收，剩空目录）。
+- 恢复需 ~686GB 数据目录（`wal_level=minimal` 下 WAL 可忽略）→ 余量 **~400GB（37%）**，容量判定 **可行**。
+- dump 保留在 NAS 由容器挂载读入，不占 data1。
+- 演练方案见 `L2_FULL_RESTORE_DRILL_PLAN.md`（待审批，未执行）。
 
 ## 状态定义
 
