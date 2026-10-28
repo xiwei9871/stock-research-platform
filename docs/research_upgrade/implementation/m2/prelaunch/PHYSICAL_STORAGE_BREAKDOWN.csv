@@ -1,0 +1,19 @@
+layer,component,bytes,gib,share_of_disk,evidence,classification
+host_fs,nvme0n1p2 ext4 total,1005867986944,937.0,,df -hT via COPY FROM PROGRAM (read-only),measured
+host_fs,used,932687998976,868.6,,df,measured
+host_fs,avail,22009217024,20.5,,df,measured
+host_fs,reserved_blocks_est,~47000000000,~44,"~5% ext4 default (avail vs free delta 20.5 vs ~67)","df avail < true free; unverified exact",UNVERIFIED_est
+pgdata,total,738697834496,688.0,73.5%,du -sh /var/lib/postgresql/data (server-side),measured
+pgdata,base_all_dbs,737731928064,687.0,,du,measured
+pgdata,pg_wal,923000000,0.88,,du,measured
+pgdata,other(global/xact/stat),~4000000,0.004,,du,measured
+cluster,db stock_research,729144573952,679.0,,pg_database_size,measured
+cluster,db cn_a_stock_daily_hfq,3928485888,3.66,,pg_database_size,measured-legacy_candidate
+cluster,db cn_a_stock_daily_qfq,3935301632,3.67,,pg_database_size,measured-legacy_candidate
+cluster,test_dbs,~43000000,0.04,,pg_database_size,measured
+stock_research,business_heap_valid,~300000000000,~280,,sum pg_relation_size over user tables minus dead-space est,estimated
+stock_research,index_total,~250000000000,~233,,sum pg_indexes_size,estimated
+stock_research,index_factor_daily,169274179584,157.6,,pg_indexes_size,measured
+stock_research,dead_tuple_space_est,~30000000000,~28,,dead_pct weighted over analyzed tables,estimated
+stock_research,fsm_vm_meta,~2000000000,~2,,residual,estimated
+non_pgdata_gap,unattributed_on_same_fs,~193000000000,~180,,df_used - du_root_visible(688G+0.4G usr),"UNVERIFIED — likely /var/lib/docker overlay2+volumes+container json logs + host dirs; needs host-side du"

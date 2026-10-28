@@ -1,0 +1,6 @@
+schema,table,index,definition_cols,constraint,lifetime_scans,role,prod_bytes,fresh_build_bytes,bloat_pct,bloat_gb_recoverable,verdict
+factor,factor_daily,factor_daily_pkey,"trade_date,asset_id,factor_name,calc_version",PRIMARY KEY,3977870,"uniqueness+point lookups",46948335616,35074277376,25.3,11.9,DO_NOT_TOUCH_definition__REINDEX_recovers_11.9GB
+factor,factor_daily,idx_factor_daily_lookup,"trade_date,factor_name,calc_version",none,836,"date scans; key dedup (3 cols = few distinct triples)",5035687936,4460068864,11.4,0.6,KEEP_ACTIVE
+factor,factor_daily,idx_factor_daily_eval_lookup,"factor_name,calc_version,trade_date,asset_id",none,25,"factor_eval_store batch shape (W3 measured 376.7s/1.01M rows = payload-bound)",59108597760,37669240832,36.3,21.4,KEEP_UNTIL_PROVEN_REDUNDANT__REINDEX_recovers_21.4GB
+factor,factor_daily,idx_factor_daily_asset_history,"asset_id,factor_name,calc_version,trade_date DESC",none,202,"per-asset series shape (W2 measured 186.8s/7K rows = payload-bound)",58170433536,35142139904,39.6,23.0,KEEP_UNTIL_PROVEN_REDUNDANT__REINDEX_recovers_23GB
+note,factor_daily,"""4 indexes share same 4 cols in different order; prod total 169.3GB vs fresh-build 112GB => ~57GB bloat recoverable via REINDEX INDEX CONCURRENTLY (identical definition, zero query impact); each rebuild needs ~=fresh-size temp space, blocked until ~40GB freed"""

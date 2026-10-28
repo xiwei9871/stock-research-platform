@@ -1,0 +1,83 @@
+{
+  "purpose": "P4 lossless performance baseline — measured on isolated restored instance (185:/mnt/data1/l2_restore, PG16.4, wal_level=minimal)",
+  "status": "MEASURED (restored instance, cold-ish cache post-restore; prod warm cache typically faster)",
+  "workloads": {
+    "W1_single_day_market_factors": "SELECT trade_date,asset_id,factor_name,factor_value FROM factor.factor_daily WHERE trade_date='2026-10-27'",
+    "W2_single_asset_factor_series": "SELECT trade_date,factor_name,factor_value FROM factor.factor_daily WHERE asset_id='CN:SH:600111' AND factor_name=$chosen ORDER BY trade_date DESC LIMIT 2000",
+    "W3_backtest_batch": "SELECT trade_date,asset_id,factor_value FROM factor.factor_daily WHERE factor_name=$chosen AND calc_version='v1' AND trade_date BETWEEN '2026-01-01' AND '2026-10-27' ORDER BY trade_date,asset_id",
+    "W4_minute_bar_range": "SELECT * FROM market.stock_minute_bar WHERE trade_date BETWEEN '2026-10-20' AND '2026-10-27' AND asset_id=$chosen",
+    "W5_multi_factor_screen": "SELECT asset_id, factor_name, factor_value FROM factor.factor_daily WHERE trade_date='2026-10-27' AND factor_name IN ($top5)",
+    "W6_eod_incremental": "SELECT max(trade_date), count(*) FROM factor.factor_daily WHERE trade_date >= current_date - 7"
+  },
+  "measurement": "EXPLAIN (ANALYZE, BUFFERS) x3 runs; record plan+exec_ms+buffers; identical results verified by rowcount+md5",
+  "acceptance_gate": [
+    "identical_query_results",
+    "no_unacceptable_regression_core_queries",
+    "quantified_net_savings",
+    "rollback_possible",
+    "bounded_resource"
+  ],
+  "results": {
+    "W1_single_day_market_factors": {
+      "plan": "Index Scan idx_factor_daily_lookup",
+      "rows": 214855,
+      "exec_ms": 107.4,
+      "note": "hot path healthy"
+    },
+    "W2_single_asset_factor_series": {
+      "plan": "Index Scan idx_factor_daily_asset_history + top-N sort",
+      "rows": 7036,
+      "exec_ms": 186775,
+      "note": "index serves shape; cost dominated by 75GB heap+TOAST random fetches, NOT index traversal"
+    },
+    "W3_backtest_batch": {
+      "plan": "Index Scan idx_factor_daily_eval_lookup",
+      "rows": 1011768,
+      "exec_ms": 376738,
+      "note": "1M fat-row heap fetches dominate; index choice already optimal"
+    },
+    "W4_minute_bar_range": {
+      "plan": "partition pruning + Bitmap asset_id index",
+      "rows": 576,
+      "exec_ms": 1.79,
+      "note": "freq value is '5min'; partition pruning works"
+    },
+    "W5_multi_factor_screen": {
+      "plan": "Index Scan idx_factor_daily_lookup",
+      "rows": 25945,
+      "exec_ms": 70.6
+    },
+    "W6_eod_incremental": {
+      "plan": "Index Only Scan idx_factor_daily_lookup",
+      "rows": 1278915,
+      "exec_ms": 9874,
+      "note": "index-only, no heap touch"
+    },
+    "insight": "slow queries are payload-bound (610M rows x ~120B fat rows), not index-bound; storage efficiency fix = row width/density, not index deletion",
+    "index_bloat_evidence": {
+      "method": "pg_relation_size prod vs freshly-restored build (identical definition)",
+      "pkey": {
+        "prod": 46948335616,
+        "fresh": 35074277376,
+        "bloat_pct": 25.3
+      },
+      "lookup": {
+        "prod": 5035687936,
+        "fresh": 4460068864,
+        "bloat_pct": 11.4
+      },
+      "asset_history": {
+        "prod": 58170433536,
+        "fresh": 35142139904,
+        "bloat_pct": 39.6
+      },
+      "eval_lookup": {
+        "prod": 59108597760,
+        "fresh": 37669240832,
+        "bloat_pct": 36.3
+      },
+      "total_recoverable_via_REINDEX_bytes": -57000000001,
+      "pkey_avg_leaf_density_fresh": 90.19
+    }
+  }
+}

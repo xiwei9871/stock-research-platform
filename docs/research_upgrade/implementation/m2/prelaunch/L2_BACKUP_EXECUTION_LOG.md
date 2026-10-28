@@ -72,6 +72,22 @@
 - dump 保留在 NAS 由容器挂载读入，不占 data1。
 - 演练方案见 `L2_FULL_RESTORE_DRILL_PLAN.md`（待审批，未执行）。
 
+## 全库恢复演练（2026-10-28 12:31 → 20:51 — FULL_RESTORE_VERIFIED）
+
+按 STORAGE-R1 授权的隔离环境实验执行（`m2_l2_restore.sh`，方案同 `L2_FULL_RESTORE_DRILL_PLAN.md`）：
+
+| 项 | 实测 |
+|---|---|
+| 实例 | 185 `m2_l2_restore`（PG16.4-alpine，datadir `/mnt/data1/l2_restore/pgdata`，仅绑 127.0.0.1:55432，`wal_level=minimal`，autovacuum off） |
+| 前置 | NAS sha256 复验 OK；data1 余 1.1T ≥800GB 门 |
+| 时长 | 12:31:57 → 20:51:15，**8h19m**（pg_restore -j6；factor_daily 巨索引构建为瓶颈） |
+| 恢复后 pgdata | **~518GB**（vs 生产 688GB——差额 ~170GB 即生产死空间/膨胀的独立实测证据） |
+| 行数对账 | `asset_status_daily` 17,304,380（=生产快照点；生产现为 17,309,569 = 快照后新批次 +5,189）；`finance_payload` 16,586 ✓；`market_daily_bar` 51,527,569（生产现 51,543,136 = +15,567 当日增量，速率吻合）；schema 23 全齐 |
+| 校验和 | `asset_status_daily@2026-10-23` md5 与生产**一致**（`88089a98…`）；`market_daily_bar@2026-10-20` 字节排序比对 **IDENTICAL**（15,574 行逐行相同） |
+| 已知假象 | md5 直接比对出现差异 → 定位为 **collation 实现差异**（生产 Debian glibc vs alpine musl，text ORDER BY 序不同；两侧 `datcollate` 同为 `en_US.utf8` 但实现不同）。字节级排序后数据一致。方法学记入 runbook |
+
+**状态：`FULL_RESTORE_VERIFIED` ✅** —— 全库逻辑备份在独立实例完整恢复，行数/校验和/分区结构/快照边界全部对账通过。
+
 ## 状态定义
 
 - `L2_BACKUP_VERIFIED` = 备份完成+文件级校验通过（**不**等于可恢复）；
