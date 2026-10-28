@@ -22,9 +22,29 @@
 - 任何失败仅删本次 `.tmp_` 限定路径，记录 FAIL 日志；
 - 全程日志：`185:/mnt/data1/stock_research_backup/l2_run_<date>.log`。
 
-## 结果
+## 结果（2026-10-27 22:30 窗口 — FAIL-CLOSED ABORT）
 
-_（执行完成后填）_
+**备份未执行。** 窗口内二次预检在 22:30:37 发现生产存在 **1 个长事务**，Gate 按设计 fail-closed 中止：
+
+```text
+[2026-10-27 19:05:35] runner started; waiting for 22:30-09:00 window
+[2026-10-27 22:30:36] in window; running preflight
+192.168.3.187:5432 - accepting connections
+[2026-10-27 22:30:37] FAIL: long transactions present: 1
+```
+
+核实（2026-10-28 08:03）：
+- NAS `L2/` 目录为空——**零字节产出**，无 `.tmp_` 残留；
+- `m2_l2_dump` 容器不存在；runner 进程已退出；
+- `pg_dump` 从未启动（此前 `pgrep` 计数为 ssh 命令行自匹配，非真实进程）；
+- L1 产物（asset_status_daily ×2 + finance_payload + .sha256）完好无损；
+- 生产侧无任何影响——dump 未开始即终止。
+
+**状态：`L2_NOT_RUN_PREFLIGHT_BLOCKED`**（长事务门）。`L2_BACKUP_VERIFIED` / `FULL_RESTORE_VERIFIED` 均未获得。
+
+**根因分析：** 22:30 与夜间 EOD 管线重叠（21:00 finalize、22:00 repair、22:15 deploy sync 均写生产库）。窗口起点需后移到夜间任务收敛之后（建议 ≥00:30），下一轮执行前先在 22:00–00:30 采样 `pg_stat_activity` 确认长事务来源与消散时间，再定窗口。
+
+## 状态定义
 
 ## 状态定义
 
