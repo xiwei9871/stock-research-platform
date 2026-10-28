@@ -19,7 +19,7 @@ fund,name,checkpoint,obs_date,official_shares_yi,pipeline_shares_yi,share_diff,n
 159919,沪深300ETF,2024-12-31,2024-12-31,379.03716676,379.04,0.0,4.126,1081.4,,institution,institution,
 159919,沪深300ETF,2025-12-31,2025-12-31,408.18816676,408.19,0.0,4.8292,1183.6,,institution,institution,
 159919,沪深300ETF嘉实,2026-10-23,2026-10-23,99.87516676,99.88,0.0,4.3652,-384.4,-1568.0,institution,institution,
-510300,300ETF,2026_max_redemption,2026-01-28,,515.05,,4.7616,,-287.0,institution,institution,单日最大赎回 -10.5%
-510310,HS300ETF,2026_max_redemption,2026-01-28,,349.66,,4.6046,,-288.6,institution,institution,单日最大赎回 -15.2%
-510330,华夏300,2026_max_redemption,2026-01-28,,209.89,,4.9551,,-251.3,institution,institution,单日最大赎回 -19.5%
-159919,沪深300ETF嘉实,2026_max_redemption,2026-01-28,,220.71,,4.9634,,-156.1,institution,institution,单日最大赎回 -12.5%
+510300,300ETF,2026_max_redemption,2026-01-28,,515.05,,4.7616,,-287.0,institution,institution,单日最大净赎回 -10.5%
+510310,HS300ETF,2026_max_redemption,2026-01-28,,349.66,,4.6046,,-288.6,institution,institution,单日最大净赎回 -15.2%
+510330,华夏300,2026_max_redemption,2026-01-28,,209.89,,4.9551,,-251.3,institution,institution,单日最大净赎回 -19.5%
+159919,沪深300ETF嘉实,2026_max_redemption,2026-01-28,,220.71,,4.9634,,-156.1,institution,institution,单日最大净赎回 -12.5%

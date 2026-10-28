@@ -157,28 +157,38 @@ def pit_class_series(flows: pd.DataFrame, pit: pd.DataFrame) -> pd.Series:
 
 
 def review_corp_actions(flows: pd.DataFrame) -> pd.DataFrame:
-    """For each flagged row decide: corporate_action (NAV jumps
-    inversely), real_redemption (NAV continuous), or data_issue
-    (no NAV to check / inconsistent)."""
+    """Verdicts per flagged row:
+    - corporate_action: NAV jumps inversely with shares (拆分/合并/折算)
+    - data_anomaly: share move reverts next day (exchange data glitch)
+    - redemption_verified: NAV continuous AND new share level persists
+    - redemption_probable: NAV continuous, no next-day evidence
+    - pending_review: insufficient NAV/share evidence either way
+    """
     sus = flows[flows["corp_suspect"]].copy()
     verdicts = []
     for _, r in sus.iterrows():
         nb, na = r.get("nav_before"), r.get("valuation")
-        sr = r["d_shares"] / r["prev_shares"]           # e.g. -0.5
-        if pd.isna(nb) or pd.isna(na) or nb <= 0 or r["shares"] <= 0 \
-                or r["prev_shares"] <= 0:
-            verdicts.append("data_issue")
+        prev, cur, nxt = r["prev_shares"], r["shares"], r["next_shares"]
+        if pd.isna(nb) or pd.isna(na) or nb <= 0 or cur <= 0 or prev <= 0:
+            verdicts.append("pending_review")
             continue
         nav_ratio = na / nb
-        inv_share = r["prev_shares"] / r["shares"]       # e.g. 2.0
+        inv_share = prev / cur
         if abs(nav_ratio - inv_share) / inv_share <= NAV_RATIO_TOL:
             verdicts.append("corporate_action")
-        elif abs(nav_ratio - 1.0) <= 0.15:
-            verdicts.append("real_redemption")
+            continue
+        reverted = (pd.notna(nxt) and nxt > 0
+                    and abs(nxt - prev) / prev <= 0.12)
+        if reverted:
+            verdicts.append("data_anomaly")
+            continue
+        if abs(nav_ratio - 1.0) <= 0.15:
+            persists = pd.isna(nxt) or abs(nxt - cur) / cur <= 0.5
+            verdicts.append("redemption_verified" if persists
+                            else "redemption_probable")
         else:
-            verdicts.append("data_issue")
+            verdicts.append("pending_review")
     sus["verdict"] = verdicts
-    sus["nav_before"] = sus["nav_before"]
     sus["nav_ratio"] = sus["valuation"] / sus["nav_before"]
     sus["share_ratio"] = sus["prev_shares"] / sus["shares"]
     return sus
@@ -212,8 +222,11 @@ def compute() -> None:
                             s["d_shares"] / s["prev_shares"], np.nan)
     s = s.merge(nav, on=["fund_code", "date"], how="left")
     s = s.sort_values(["fund_code", "date"])
-    s["nav_before"] = s.groupby("fund_code")["valuation"].shift(1)
     s["valuation"] = s.groupby("fund_code")["valuation"].ffill()
+    # nav_before = last available valuation BEFORE the event day
+    # (ffill first so NAV gaps don't blind the split detector)
+    s["nav_before"] = s.groupby("fund_code")["valuation"].shift(1)
+    s["next_shares"] = s.groupby("fund_code")["shares"].shift(-1)
     s["corp_suspect"] = (
         (s["pct_chg"] < -DROP_FLAG) | (s["pct_chg"] > JUMP_FLAG)) \
         & ~s["is_ipo_creation"]
@@ -222,13 +235,19 @@ def compute() -> None:
 
     corp = review_corp_actions(s)
     corp.to_csv(DATA / "corp_review_raw.csv", index=False)
-    ca_ids = set(
-        corp.loc[corp["verdict"] == "corporate_action",
-                 ["fund_code", "date"]].itertuples(index=False))
-    s["is_corp_action"] = [
-        (r.fund_code, r.date) in ca_ids for r in s.itertuples()]
+    excl = {v: set(corp.loc[corp["verdict"] == v,
+                           ["fund_code", "date"]].itertuples(index=False))
+            for v in ("corporate_action", "data_anomaly", "pending_review")}
+    s["excluded_reason"] = ""
+    keys = list(zip(s["fund_code"], s["date"]))
+    for reason, ids in excl.items():
+        m = [k in ids for k in keys]
+        s.loc[m, "excluded_reason"] = reason
+    s["is_corp_action"] = s["excluded_reason"] != ""
     s["ipo_creation_yi"] = np.where(
         s["is_ipo_creation"], s["flow_yi"], np.nan)
+    s["excluded_flow_yi"] = np.where(s["is_corp_action"], s["flow_yi"],
+                                   np.nan)
     s.loc[s["is_corp_action"], "flow_yi"] = np.nan
     s.loc[s["is_missing_first"], "flow_yi"] = np.nan  # not a creation
     s.loc[s["is_ipo_creation"], "flow_yi"] = np.nan  # 募集认购≠申购
@@ -249,7 +268,8 @@ def compute() -> None:
         "missing_valuation": grp.apply(
             lambda g: (g["d_shares"].notna()
                        & g["valuation"].isna()).sum()),
-        "excluded_corp": grp["is_corp_action"].sum(),
+        "excluded_suspect_rows": grp["is_corp_action"].sum(),
+        "excluded_suspect_yi": grp["excluded_flow_yi"].sum(),
         "excluded_missing_first": grp["is_missing_first"].sum(),
         "excluded_ipo_yi": grp["ipo_creation_yi"].sum(),
     })

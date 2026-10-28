@@ -1,0 +1,10 @@
+variant,lane,max,max_date,min,min_date,end
+latest-fixed,personal,5294.0,2026-10-27,0.0,2020-01-02,5294.0
+latest-fixed,institution,10483.0,2025-12-31,-3269.0,2026-07-03,1789.0
+latest-fixed,personal_all,8344.0,2026-10-27,-10.0,2020-01-07,8344.0
+PIT-rolling,personal,7485.0,2026-10-27,0.0,2020-01-02,7485.0
+PIT-rolling,institution,10751.0,2024-10-09,-6594.0,2026-07-01,-1382.0
+PIT-rolling,personal_all,11515.0,2026-10-27,-17.0,2020-01-10,11515.0
+POC-01(buggy),personal,18591.0,2026-10-27,-3.0,2020-01-03,18591.0
+POC-01(buggy),institution,10993.0,2025-04-21,-2525.0,2026-07-06,1253.0
+国金图54(截图),axis,15000.0,纵轴上界,-9000.0,纵轴下界,

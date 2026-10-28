@@ -1,40 +1,41 @@
-# ETF-FLOW-POC-02 — 历史资金流口径校准与图表复验
+# ETF-FLOW-POC-02.1 — 原图口径纠偏与最终曲线校准
 
-独立研究实验（基线 POC-01 `f0e1532`）。不修改平台代码、不写生产库。
+独立研究实验（基线 POC-02 `17fa470d`）。不修改平台代码、不写生产库。
+
+POC-02.1 修正：图54 实际为 **2020–2026 长期累计、纵轴 +15000/−9000亿**
+（POC-02 误识为 ±1500 亿）；异常处理改为四级鉴别（拆分/毛刺/待核验剔除）；
+四只沪深300ETF 披露改用实际公告日期核验。
 
 ## 复现步骤
 
 ```bash
-# 依赖 POC-01 原始数据：docs/research/etf_flow_poc01/data/（gitignored，
-# 本地保留；如需重建先跑 poc01 的 fetch_* 脚本）
 cd docs/research/etf_flow_poc02
-.venv/bin/python compute_v2.py   # 重算流量面板 + 双分类 + 覆盖率 → data/
-.venv/bin/python plot_v2.py      # 两张 PNG
-# 交付 CSV 由 README 内联脚本或 compute 产物生成：
-#   HOLDER_PIT_COMPARISON.csv / CORPORATE_ACTION_REVIEW.csv /
-#   HISTORICAL_RECONCILIATION.csv
+.venv/bin/python compute_v2.py   # 重算流量面板 + 双分类 + 四级异常鉴别
+.venv/bin/python plot_v2.py      # 两张 PNG（红虚线已改为+15000/−9000）
 ```
 
 ## 交付物
 
 | 文件 | 内容 |
 |---|---|
-| `ETF_FLOW_POC02_AUDIT.md` | P0 四项口径修正、覆盖率、复核结论、P4 判断 |
-| `METHODOLOGY_SENSITIVITY.md` | 国金图54 口径网格与最可能组合（推断标注） |
-| `HOLDER_PIT_COMPARISON.csv` | 每基金 POC-01分类 / v2-fixed / v2-PIT 三列对照 |
-| `CORPORATE_ACTION_REVIEW.csv` | 1003 条大额份额变动逐条 NAV 连续性判定 |
-| `HISTORICAL_RECONCILIATION.csv` | 4 只沪深300ETF × 5 时点官方份额/净值/累计流量对账 |
-| `etf_flow_poc02.png` | 主图：2020 起累计 × PIT 滚动分类双曲线 |
-| `etf_flow_method_comparison.png` | 六宫格：窗口×分类口径对照（含 POC-01 原线） |
+| `ETF_FLOW_POC02_AUDIT.md` | POC-02.1 纠偏审计：原图识别、四级异常鉴别、披露实际日期、未决清单、最终判断 |
+| `METHODOLOGY_SENSITIVITY.md` | 按正确轴重估的口径敏感性（原 ±1500 推断作废） |
+| `etf_flow_poc02.png` | 主图：2020起累计 × PIT滚动 × 二元口径 |
+| `etf_flow_method_comparison.png` | 六宫格：fixed/PIT × 细分/二元 × POC-01 |
+| `PEAK_VALLEY_COMPARISON.csv` | 各口径峰谷 vs 原图轴量级对照 |
+| `CORPORATE_ACTION_REVIEW.csv` | 1003 条大额变动四级判定（10公司行为/105毛刺/85待核验/803申赎） |
+| `REDEMPTION_2026_REVIEW.csv` | 四只沪深300ETF 2026 净赎回专项核验 |
+| `HISTORICAL_RECONCILIATION.csv` | 5 时点份额/净值/累计流量对账（diff=0） |
+| `HOLDER_PIT_COMPARISON.csv` | POC-01/fixed/PIT 三分类对照 |
+| `ACTUAL_DISCLOSURE_DATES.csv` | 4 只基金历期报告实际公告日（天天基金公告 API） |
 | `compute_v2.py` / `plot_v2.py` | 可重复脚本 |
-| `data/` | 中间产物（gitignored）：流量面板、覆盖率、日度/累计分车道 |
+| `data/` | 中间产物（gitignored） |
 
-## 相对 POC-01 的修正
+## 关键结论
 
-1. 持有人分类取**真实最新**披露（修复 iloc[-1] 取到最早一期的缺陷），
-   新增 PIT-rolling（披露截止日+90天生效）。
-2. IPO 首日按上市核查判定，存量 5547 亿单列不入曲线；227 只
-   数据缺失首现单独标记。
-3. 1003 条大额变动经 NAV 连续性鉴别：746 真实申赎（POC-01 误删）、
-   257 数据问题、0 公司行为。
-4. 零流量与缺失值分列，缺失金额上界 ±15 亿。
+- 机构持有为主 ETF：PIT 口径 2024-10 峰 +10,751 亿 → 2026-07 谷 −6,594 亿
+  （摆动 17,345 亿），最接近原图 −9,000 轴量级；latest-fixed 谷 −3,269 偏浅。
+- 个人/未分类车道 PIT 二元终点 +11,515 亿；与原图 +15,000 轴的剩余缺口
+  归因于样本池/阈值（标注为未决差异）。
+- 2026 年机构类大额净赎回为数据事实；**不得表述为特定机构主体减持**
+  （主体无官方披露）。
