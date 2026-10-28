@@ -42,3 +42,16 @@ df free: 25 GiB → **26 GiB**. Cumulative P1 reclaim ≈ **11.5 GiB**.
 Still held: claudevm.bundle 12 GiB (VM pid 56459 live, rootfs.img written
 09:22 today); devin sessions.db (cli running); ~40-45 GiB
 permission-blocked system space pending owner `sudo du`.
+
+## Round 3 — 2026-10-28 (owner approvals)
+
+- Killed hung playwright screenshot job (pids 42142/42144, ~20h stuck
+  pre-launch). The AGENTS-required 8766 file server had died with it —
+  restarted, verified HTTP 200.
+- claudevm.bundle confirmed as Claude **cowork/computer-use** sandbox
+  (`.cowork-adopted` marker). Owner: "不需要". SIGTERM to Virtualization
+  VM pid 56459 → clean exit, lsof empty → `vm_bundles/` deleted.
+
+df free: 26 GiB → **39 GiB**. Cumulative session reclaim ≈ **24.5 GiB**.
+Remaining: devin sessions.db (cli running), codex sessions (kept),
+~40-45 GiB permission-blocked system space awaiting owner `sudo du`.
