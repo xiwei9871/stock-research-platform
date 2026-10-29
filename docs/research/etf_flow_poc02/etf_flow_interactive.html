@@ -12,10 +12,14 @@
  .note{font-size:12px;color:#555;line-height:1.7;margin-top:4px;
   border-top:1px solid #ddd;padding-top:8px}
  .note b{color:#a04030}
- #chartCum{width:100%;height:44vh}
- #chartDay{width:100%;height:30vh}
+ #chart{width:100%;height:74vh}
  .chk{display:flex;align-items:center;gap:4px;font-size:12px;color:#444}
  h4{margin:8px 0 2px;font-size:13px;color:#333}
+ #chart .hoverlayer{display:none!important}
+ #tip{display:none;position:fixed;z-index:99;pointer-events:none;
+  background:#fff;border:1px solid #999;border-radius:4px;
+  padding:6px 10px;font-size:12px;line-height:1.7;color:#111;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);max-width:320px}
 </style></head><body>
 <h3 style="margin:4px 0">ETF 资金流监测 · 双图联动
 <small style="font-weight:normal;color:#666">（POC-03 ·
@@ -38,15 +42,14 @@
   <option value="all" selected>全部ETF</option>
   <option value="institution">机构主导</option>
   <option value="personal">个人主导</option></select></label>
+ <span class="chk"><span style="color:#c0392b">■ 申购</span>
+  <span style="color:#1e8449">■ 赎回</span></span>
  <span style="flex:1"></span>
  <button onclick="exportPNG()">导出PNG</button>
  <button onclick="exportCSV()">导出所选区间CSV</button>
 </div>
-<h4>上图：累计净申购（亿元）</h4>
-<div id="chartCum"></div>
-<h4>下图：每日净申购（亿元）　<span style="color:#c0392b">■ 申购</span>
- <span style="color:#1e8449">■ 赎回</span></h4>
-<div id="chartDay"></div>
+<div id="chart"></div>
+<div id="tip"></div>
 <div class="note">
  <b>口径说明</b>：数据源=上交所/深交所每日 ETF 份额 × 天天基金单位净值；
  资金流=当日份额变化×当日单位净值（一级市场申赎估算，
@@ -3696,21 +3699,19 @@ function sliceIdx(){
  let i0=DATES.findIndex(d=>d>=state.range[0]);if(i0<0)i0=0;
  let i1=DATES.findIndex(d=>d>state.range[1]);if(i1<0)i1=DATES.length;
  return [i0,i1];}
-function cumTraces(){
- const [i0,i1]=sliceIdx();const xs=DATES.slice(i0,i1);
- return LANES.map(([key,lab,col],i)=>{
+function traces(){
+ const [i0]=sliceIdx();
+ const src=D.flows[state.cls];
+ const t=LANES.map(([key,lab,col],i)=>{
   const full=CUM[state.cls][key];
   const off=state.recum?(i0>0?full[i0-1]:0):0;
-  const base=full.slice(i0,i1).map(v=>v-off);
-  return {x:xs,y:base,type:"scatter",mode:"lines",name:lab,
+  const vals=full.map(v=>v-off);
+  return {x:DATES,y:vals,type:"scatter",mode:"lines",name:lab,
    line:{color:col,width:2.2},
    visible:i<2?true:"legendonly",
-   customdata:xs,
-   xhoverformat:"%Y-%m-%d",
-   hovertemplate:"%{customdata} "+lab+": %{y:.1f} 亿<extra></extra>"};});}
-function dayTrace(){
- const src=D.flows[state.cls];
- const vals=DATES.map((_,i)=>{
+   customdata:DATES,xaxis:"x",yaxis:"y",
+   hovertemplate:"%{customdata} "+lab+": %{y:.1f} 亿<extra></extra>"};});
+ const dvals=DATES.map((_,i)=>{
   if(state.barlane==="all")
    return LANES.reduce((s,[k])=>s+(src[k]?src[k][i]:0),0);
   return src[state.barlane]?src[state.barlane][i]:0;});
@@ -3718,39 +3719,39 @@ function dayTrace(){
   const m=COV.missing[i]+COV.excluded[i];
   return "覆盖 "+COV.priced[i]+"/"+COV.reported[i]+
    (m?("；剔除/缺失 "+m+" 行"):"；无异常");});
- const name={all:"全部ETF",institution:"机构主导",personal:"个人主导"}
+ const bname={all:"全部ETF",institution:"机构主导",personal:"个人主导"}
   [state.barlane];
- return {x:DATES,y:vals,type:"bar",name:"每日净申购·"+name,
-  marker:{color:vals.map(v=>v>=0?"#c0392b":"#1e8449")},
+ t.push({x:DATES,y:dvals,type:"bar",name:"每日净申购·"+bname,
+  marker:{color:dvals.map(v=>v>=0?"#c0392b":"#1e8449")},
   customdata:DATES.map((d,i)=>[d,qual[i]]),
-  xhoverformat:"%Y-%m-%d",
-  hovertemplate:"%{customdata[0]}<br>"+name+": %{y:.1f} 亿<br>"+
-   "%{customdata[1]}<extra></extra>"};}
-function layoutCum(){
+  xaxis:"x",yaxis:"y2",showlegend:false,
+  hovertemplate:"%{customdata[0]} 每日净申购·"+bname+": %{y:.1f} 亿<br>"+
+   "%{customdata[1]}<extra></extra>"});
+ return t;}
+const TICKSTOPS=[
+ {dtickrange:[null,86400000*45],value:"%Y-%m-%d"},
+ {dtickrange:[86400000*45,86400000*600],value:"%Y-%m"},
+ {dtickrange:[86400000*600,null],value:"%Y"}];
+function layout(){
  return {hovermode:"x unified",dragmode:"pan",
-  margin:{l:60,r:20,t:10,b:30},
+  margin:{l:70,r:20,t:20,b:30},
   hoverlabel:{bgcolor:"#fff",bordercolor:"#999",
    font:{size:12,color:"#111"}},
-  yaxis:{title:"亿元",zeroline:true},
-  xaxis:{type:"date",range:state.range,hoverformat:"%Y-%m-%d",
-   tickmode:"auto",nticks:12,
-   tickformatstops:[
-    {dtickrange:[null,86400000*45],value:"%Y-%m-%d"},
-    {dtickrange:[86400000*45,86400000*600],value:"%Y-%m"},
-    {dtickrange:[86400000*600,null],value:"%Y"}]},
-  legend:{orientation:"h",y:-0.22},showlegend:true};}
-function layoutDay(){
- const l=layoutCum();
- l.yaxis={title:"亿元",zeroline:true,zerolinecolor:"#888"};
- l.showlegend=false;l.margin.t=10;
- l.hovermode="closest";
- return l;}
+  yaxis:{title:"累计净申购（亿元）",domain:[0.34,1],zeroline:true,
+   fixedrange:true},
+  yaxis2:{title:"每日净申购（亿元）",domain:[0,0.28],
+   zeroline:true,zerolinecolor:"#888",fixedrange:true},
+  xaxis:{type:"date",anchor:"y2",side:"bottom",range:state.range,
+   hoverformat:"%Y-%m-%d",tickmode:"auto",nticks:12,
+   tickformatstops:TICKSTOPS},
+  bargap:0.15,
+  legend:{orientation:"h",x:0,y:1.05,xanchor:"left"},
+  showlegend:true};}
 function draw(){
  const cfg={responsive:true,scrollZoom:true,displaylogo:false,
   modeBarButtonsToRemove:["select2d","lasso2d"],
   toImageButtonOptions:{format:"png",filename:"etf_flow",scale:2}};
- Plotly.react("chartCum",cumTraces(),layoutCum(),cfg);
- Plotly.react("chartDay",[dayTrace()],layoutDay(),cfg);
+ Plotly.react("chart",traces(),layout(),cfg);
 }
 function setRange(y){
  const end=DATES[DATES.length-1];
@@ -3771,30 +3772,67 @@ document.getElementById("barlane").onchange=e=>{state.barlane=e.target.value;
  draw();};
 document.getElementById("recum").onchange=e=>{state.recum=e.target.checked;
  draw();};
+function normDate(v){
+ return (typeof v==="string"?v:v.toISOString()).slice(0,10);}
 let syncing=false;
-function sync(gd){
- return ev=>{
+function tipHTML(d){
+ const i=DATES.indexOf(d);if(i<0)return null;
+ const src=D.flows[state.cls];
+ const [i0]=sliceIdx();
+ const gd=document.getElementById("chart");
+ let html="<b>"+d+"</b>";
+ LANES.forEach(([key,lab,col],j)=>{
+  const vis=j<2||gd.data[j].visible===true;
+  if(!vis)return;
+  const cv=CUM[state.cls][key][i]-
+   (state.recum&&i0>0?CUM[state.cls][key][i0-1]:0);
+  html+="<br><span style='color:"+col+"'>■</span> "+lab+
+   " 累计: <b>"+cv.toFixed(1)+"</b> 亿";});
+ const dv=(state.barlane==="all")?
+  LANES.reduce((s,[k])=>s+(src[k]?src[k][i]:0),0):
+  (src[state.barlane]?src[state.barlane][i]:0);
+ const bname={all:"全部ETF",institution:"机构主导",
+  personal:"个人主导"}[state.barlane];
+ const m=COV.missing[i]+COV.excluded[i];
+ html+="<br><span style='color:"+(dv>=0?"#c0392b":"#1e8449")+
+  "'>■</span> 每日净申购·"+bname+": <b>"+dv.toFixed(1)+"</b> 亿";
+ html+="<br><span style='color:#888'>覆盖 "+COV.priced[i]+"/"+
+  COV.reported[i]+(m?("；剔除/缺失 "+m+" 行"):"；无异常")+"</span>";
+ return html;}
+function bindEvents(){
+ const gd=document.getElementById("chart"),
+       tip=document.getElementById("tip");
+ gd.on("plotly_hover",ev=>{
+  if(!ev.points||!ev.points.length)return;
+  const d=normDate(ev.points[0].x);
+  const html=tipHTML(d);if(!html)return;
+  Plotly.relayout(gd,{shapes:[{type:"line",xref:"x",x0:d,x1:d,
+   yref:"paper",y0:0,y1:1,
+   line:{color:"#666",width:1,dash:"dot"}}]});
+  tip.innerHTML=html;tip.style.display="block";
+  const r=tip.getBoundingClientRect();
+  tip.style.left=Math.min(ev.event.clientX+15,innerWidth-r.width-8)+"px";
+  tip.style.top=Math.min(ev.event.clientY-20,innerHeight-r.height-8)+"px";});
+ gd.on("plotly_unhover",()=>{tip.style.display="none";
+  Plotly.relayout(gd,{shapes:[]});});
+ gd.on("plotly_relayout",ev=>{
   if(syncing)return;
   let r=null;
-  if(ev["xaxis.range[0]"])r=[ev["xaxis.range[0]"].slice(0,10),
-   ev["xaxis.range[1]"].slice(0,10)];
-  else if(ev["xaxis.range"])r=[ev["xaxis.range"][0].slice(0,10),
-   ev["xaxis.range"][1].slice(0,10)];
-  else if(ev["xaxis.autorange"])r=[DATES[0],DATES[DATES.length-1]];
+  for(const pre of["xaxis"]){
+   if(ev[pre+".range[0]"])
+    r=[normDate(ev[pre+".range[0]"]),normDate(ev[pre+".range[1]"])];
+   else if(ev[pre+".range"])
+    r=[normDate(ev[pre+".range"][0]),normDate(ev[pre+".range"][1])];
+   else if(ev[pre+".autorange"])r=[DATES[0],DATES[DATES.length-1]];
+   if(r)break;}
   if(!r)return;
-  state.range=r;syncing=true;draw();syncing=false;};}
-function bindEvents(){
- ["chartCum","chartDay"].forEach(id=>{
-  const gd=document.getElementById(id);
-  if(gd&&gd.on)gd.on("plotly_relayout",sync(gd));});}
+  state.range=r;
+  if(state.recum){syncing=true;draw();syncing=false;}});}
 function exportPNG(){
- Plotly.toImage("chartCum",{format:"png",width:1600,height:700,scale:2})
+ Plotly.toImage("chart",{format:"png",width:1600,height:900,scale:2})
  .then(u=>{const a=document.createElement("a");a.href=u;
-  a.download="etf_flow_cum.png";a.click();
-  return Plotly.toImage("chartDay",{format:"png",width:1600,height:400,
-   scale:2});})
- .then(u=>{const a=document.createElement("a");a.href=u;
-  a.download="etf_flow_daily.png";a.click();});}
+  a.download="etf_flow_"+state.range[0]+"_"+state.range[1]+".png";
+  a.click();});}
 function exportCSV(){
  const src=D.flows[state.cls];
  const [i0,i1]=sliceIdx();
