@@ -1,0 +1,6 @@
+group,idx_source,corr_ownWP_ownMDD,corr_G2WP_ownMDD,n
+G4k_star,real:star50,-0.0976,-0.2532,1189
+G5_semiconductor,proxy:mv_weighted,-0.0976,-0.3081,1398
+G6_ai_compute,proxy:mv_weighted,0.0854,-0.2261,1398
+G7_robot,proxy:mv_weighted,-0.1451,-0.2429,968
+G8_softinfo,proxy:mv_weighted,0.0304,-0.1245,1398

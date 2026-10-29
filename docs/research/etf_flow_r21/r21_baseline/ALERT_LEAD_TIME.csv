@@ -1,0 +1,15 @@
+onset,warn_start,lead_days,mkt_fell_before_warn,covered,event
+2020-01-02,,,,False,dd10
+2020-12-04,,,,False,dd10
+2021-04-28,2021-01-29,57.0,-0.0487,True,dd10
+2021-11-04,,,,False,dd10
+2022-06-09,,,,False,dd10
+2023-07-18,,,,False,dd10
+2024-05-21,,,,False,dd10
+2024-06-20,,,,False,dd10
+2025-01-02,,,,False,dd10
+2026-04-20,,,,False,dd10
+2020-01-02,,,,False,dd15
+2020-12-22,,,,False,dd15
+2021-12-06,,,,False,dd15
+2022-07-28,,,,False,dd15
