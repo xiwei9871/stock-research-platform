@@ -1,0 +1,7 @@
+cycle_id,reference_peak_date,reference_peak_price,first_dd10_date,first_dd15_date,trough_date,trough_price,maximum_drawdown,cycle_status,recovery_date,right_censored,merge_reason,n_cycles_S2,n_cycles_S3,source_index
+C01,2020-03-05,4206.73,2020-03-16,2020-03-23,2020-03-23,3530.31,-0.1608,COMPLETED,2020-07-01,False,dd recovery,5,2,CSI300
+C02,2021-02-10,5807.72,2021-03-08,2021-03-24,2022-04-26,3784.12,-0.2557,COMPLETED,2023-02-02,False,dd recovery,5,2,CSI300
+C03,2023-04-18,4162.03,2023-08-21,2023-12-05,2024-02-02,3179.63,-0.2002,COMPLETED,2024-04-12,False,dd recovery,5,2,CSI300
+C04,2024-05-20,3690.96,2024-08-14,,2024-09-13,3159.25,-0.1441,COMPLETED,2024-09-27,False,dd recovery,5,2,CSI300
+C05,2024-10-08,4256.1,2024-10-17,,2025-04-07,3589.44,-0.1342,COMPLETED,2025-05-27,False,dd recovery,5,2,CSI300
+C06,2026-06-22,5059.66,2026-07-17,2026-10-12,2026-10-22,4036.3,-0.2023,ONGOING,,True,still in drawdown at data end,5,2,CSI300

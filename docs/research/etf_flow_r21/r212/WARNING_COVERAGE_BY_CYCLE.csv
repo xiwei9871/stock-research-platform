@@ -1,0 +1,7 @@
+cycle_id,onset,dd15,status,active_at_onset,warn_in_5d,warn_in_20d,warn_in_60d,warn_days_prior60,persisting_ep,ep_status,lead_watch_days,watch_date,lead_elevated_days,elevated_date,lead_high_days,high_date,active_at_dd15,dd15_warn_in_20d,dd15_warn_in_60d,lead_watch_to_dd15,dd15_ep_status
+C01,2020-03-16,2020-03-23,COMPLETED,False,False,False,False,0,,none,,,,,,,False,False,False,,none
+C02,2021-03-08,2021-03-24,COMPLETED,False,True,True,True,19,,released_before_onset,21.0,2021-01-29,12.0,2021-02-18,,,False,True,True,33.0,released_before_onset
+C03,2023-08-21,2023-12-05,COMPLETED,False,False,False,False,0,,released_before_onset,120.0,2023-02-24,119.0,2023-02-27,118.0,2023-02-28,False,False,False,190.0,released_before_onset
+C04,2024-08-14,,COMPLETED,False,False,False,True,18,,released_before_onset,55.0,2024-05-28,,,,,,,,,no_dd15
+C05,2024-10-17,,COMPLETED,False,False,False,False,0,,released_before_onset,94.0,2024-05-28,,,,,,,,,no_dd15
+C06,2026-07-17,2026-10-12,ONGOING,True,True,True,True,56,E11,active_at_onset,56.0,2026-04-24,55.0,2026-04-27,54.0,2026-04-28,False,True,True,23.0,released_before_onset

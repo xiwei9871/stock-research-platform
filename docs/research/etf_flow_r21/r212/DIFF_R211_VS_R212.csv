@@ -1,0 +1,8 @@
+metric,r211,r212,reason
+risk units,8 Level-A dd10 events,"6 Level-B cycles (S1; S2=5, S3=2)",同一连续下跌多次穿越合并；2021-03+2022-01并为一周期，2024-10+2025-01+2025-04并为C05
+dd10 coverage(60d),62.5% (5/8),50% (3/6); onset当日仍预警仅 1/6,分母去重且区分'解除后落入窗内'与'当日仍预警'
+dd15 coverage,57.1% (4/7),50% (2/4 @60d); dd15穿越当日预警 0/4,dd15按自身穿越日评估；2026-10-12在NORMAL态
+lead time,21–56d,"WATCH中位56d(21,55,56,94,120); ELEVATED 55d; HIGH 86d",改为持续/最近预警期首警日起算，如实保留>60d
+false alert rate,36% (gap-merged clusters),严格60d 6/9=66.7%(排除in_drawdown/CENSORED); 宽松120d 6/11=54.5%,连续区间episode替代gap拼接；分母排除2个in_drawdown和1个CENSORED
+2026 narrative,'1月预警—7月回补'连续叙事,"两段独立episode(1/21–4/1,4/24–7/30)+9月短WATCH；10/12 dd15无预警",episode连续区间化，无gap拼接
+right censoring,CENSORED标注,C06周期ONGOING+E12误报判定CENSORED+dd15穿越后样本不足,周期级与episode级双重截断
