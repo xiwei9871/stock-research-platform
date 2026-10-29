@@ -1,0 +1,11 @@
+repo,status,indicators,persistence,oos_validation,license,reuse
+tradermonty/market-breadth-analysis,reachable,S&P500 %above50/200MA+峰值反转,rolling means,简易回测,MIT,口径参考
+jamesdellinger/market_breadth,reachable,SPX 20d-SMA广度(Breadth.app复现),cum breadth,无,无声明,A股广度口径出处(hk-lei)
+finskills/market-breadth-analyzer,reachable,6分量健康分+背离+窄涨检测,percentile,无,API条款,分量缺失再分配思路
+bankrollhunter/market-breadth,reachable,A股/美股广度(tushare+mysql),MA交叉/拐头,无,MIT,广度指标清单
+orloworks/market-regimes,reachable,规则制5态regime,持久态,22y日数据sense-check,MIT,regime命名
+noivuduc/market-intelligence-dashboard,reachable,宏观+广度+流动性+options语境层,-,无,MIT,架构参考(语境层)
+microsoft/qlib,reachable,ML全栈,-,有,OOS过重未引入,未引入
+gkoss6701/Market-Breadth-Detector,not_found,-,-,-,-,-
+jwbradley/MarketBreadth,not_found,-,-,-,-,-
+alphapapi-ctrl/market-intelligence-platform,not_found,-,-,-,-,-

@@ -1,0 +1,7 @@
+{"frozen_before_replay": true, "train_end": "2023-12-31", "embargo_days": 90,
+ "valid": "2024-01-01..2025-12-31", "replay": "2026-07-01..2026-10-28",
+ "label": "fwd60d strict peak-to-trough mdd <= -10%",
+ "state_cuts": {"NORMAL": 0.6, "WATCH": 0.8, "ELEVATED": 0.9, "HIGH": 1.0},
+ "score_hist_end": "2026-06-30",
+ "models": {"A": "price6", "B": "A+internals16", "C": "B+etf8", "D": "C+5x"},
+ "note": "no post-hoc tuning on Jul-Oct outputs"}

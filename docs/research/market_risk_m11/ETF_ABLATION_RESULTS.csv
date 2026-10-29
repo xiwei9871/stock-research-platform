@@ -1,0 +1,15 @@
+model,seg,n,ap,brier
+B0_no_etf,valid,485,0.498,0.314
+B0_no_etf,replay,133,0.814,0.3541
+B1_g1_all,valid,485,0.448,0.4353
+B1_g1_all,replay,133,0.88,0.6375
+B2_broad,valid,485,0.412,0.3856
+B2_broad,replay,133,0.721,0.5445
+B3_depth,valid,485,0.513,0.3133
+B3_depth,replay,133,0.845,0.3539
+B4_dur_vel,valid,485,0.447,0.4442
+B4_dur_vel,replay,133,0.804,0.7041
+B5_inflow,valid,485,0.486,0.338
+B5_inflow,replay,133,0.914,0.3378
+B6_interact,valid,485,0.491,0.3323
+B6_interact,replay,133,0.715,0.3507

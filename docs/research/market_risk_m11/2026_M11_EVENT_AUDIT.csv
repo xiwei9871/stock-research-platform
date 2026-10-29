@@ -1,0 +1,17 @@
+obj,cycle,onset,mech,onset_active,prior60,first_alert
+sse,C08,2026-07-17,raw,0,1,2026-05-19
+sse,C08,2026-07-17,hysteresis,0,1,2026-06-15
+sse,C08,2026-07-17,confirm2_rel5,0,1,2026-06-16
+sse,C08,2026-07-17,memory10,0,0,
+szse,C12,2026-07-13,raw,0,1,2026-06-01
+szse,C12,2026-07-13,hysteresis,0,1,2026-06-15
+szse,C12,2026-07-13,confirm2_rel5,0,1,2026-06-16
+szse,C12,2026-07-13,memory10,0,1,2026-06-17
+cyb,C12,2026-07-07,raw,0,1,2026-05-08
+cyb,C12,2026-07-07,hysteresis,0,1,2026-05-08
+cyb,C12,2026-07-07,confirm2_rel5,1,1,2026-05-08
+cyb,C12,2026-07-07,memory10,1,1,2026-05-08
+alla,C10,2026-07-13,raw,0,1,2026-05-25
+alla,C10,2026-07-13,hysteresis,0,0,
+alla,C10,2026-07-13,confirm2_rel5,0,0,
+alla,C10,2026-07-13,memory10,0,0,
