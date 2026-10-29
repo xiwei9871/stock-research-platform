@@ -1,0 +1,9 @@
+vs,corr_all,corr_G2_outflow_days,G2_out_others_in_share
+G1_all_equity,0.825,0.846,0.252
+G3_other_broad,0.591,0.571,0.246
+G9_sse50_head,0.726,0.792,0.305
+G4k_star,0.31,0.273,0.474
+G5_semiconductor,-0.12,-0.22,0.556
+G6_ai_compute,-0.023,-0.082,0.466
+G7_robot,0.081,0.047,0.515
+G8_softinfo,-0.064,-0.086,0.495
