@@ -132,11 +132,11 @@ TEMPLATE = """<!DOCTYPE html>
 <script>/*__PLOTLY__*/</script>
 <script>
 const D=/*__DATA__*/;
-const LANES=[["personal","个人持有为主 ETF","#1a1a2e"],
- ["institution","机构持有为主 ETF","#7ea6d8"],
- ["mixed","混合(两侧均≤50%)","#c9a227"],
- ["pre_disclosure","尚无生效披露","#7fc8a9"],
- ["unknown","分类未知","#999999"]];
+const LANES=[["personal","个人主导ETF","#1a1a2e"],
+ ["institution","机构主导ETF","#7ea6d8"],
+ ["mixed","混合型","#c9a227"],
+ ["pre_disclosure","未披露生效","#7fc8a9"],
+ ["unknown","未知","#999999"]];
 const IDX=[["sse","上证指数","#e6550d","solid"],
  ["szse","深证成指","#756bb1","dot"],
  ["all_a","中证全指(全A)","#8c8c8c","dash"]];
@@ -160,6 +160,7 @@ function traces(){
   return {x:DATES,y:vals,type:"scatter",mode:"lines",name:lab,
    line:{color:col,width:2.2},
    visible:i<2?true:"legendonly",
+   legendgroup:"flows",legendgrouptitle:i===0?{text:"ETF车道"}:undefined,
    customdata:DATES,xaxis:"x",yaxis:"y",
    hovertemplate:"%{customdata} "+lab+": %{y:.1f} 亿<extra></extra>"};});
  const dvals=DATES.map((_,i)=>{
@@ -176,12 +177,20 @@ function traces(){
   marker:{color:dvals.map(v=>v>=0?"#c0392b":"#1e8449")},
   customdata:DATES.map((d,i)=>[d,qual[i]]),
   xaxis:"x",yaxis:"y2",showlegend:false,
+  legendgroup:"daily",
   hovertemplate:"%{customdata[0]} 每日净申购·"+bname+": %{y:.1f} 亿<br>"+
    "%{customdata[1]}<extra></extra>"});
- IDX.forEach(([key,lab,col,dash])=>{
+ [["申购","#c0392b"],["赎回","#1e8449"]].forEach(([lab,col],i)=>{
+  t.push({x:[DATES[0]],y:[null],type:"scatter",mode:"markers",
+   name:lab,marker:{symbol:"square",size:10,color:col},
+   xaxis:"x",yaxis:"y2",legendgroup:"daily",
+   legendgrouptitle:i===0?{text:"每日柱"}:undefined,
+   hoverinfo:"skip",showlegend:true});});
+ IDX.forEach(([key,lab,col,dash],i)=>{
   t.push({x:DATES,y:IX[key],type:"scatter",mode:"lines",name:lab,
    line:{color:col,width:1.4,dash:dash},
    xaxis:"x",yaxis:"y3",
+   legendgroup:"index",legendgrouptitle:i===0?{text:"指数(右轴)"}:undefined,
    hovertemplate:"%{x|%Y-%m-%d} "+lab+": %{y:.1f}<extra></extra>"});});
  return t;}
 const TICKSTOPS=[
@@ -190,7 +199,7 @@ const TICKSTOPS=[
  {dtickrange:[86400000*600,null],value:"%Y"}];
 function layout(){
  return {hovermode:"x unified",dragmode:"pan",
-  margin:{l:70,r:70,t:20,b:30},
+  margin:{l:70,r:70,t:56,b:30},
   hoverlabel:{bgcolor:"#fff",bordercolor:"#999",
    font:{size:12,color:"#111"}},
   yaxis:{title:"累计净申购（亿元）",domain:[0.20,1],zeroline:true,
@@ -203,7 +212,9 @@ function layout(){
    hoverformat:"%Y-%m-%d",tickmode:"auto",nticks:12,
    tickformatstops:TICKSTOPS},
   bargap:0.15,
-  legend:{orientation:"h",x:0,y:1.05,xanchor:"left"},
+  legend:{orientation:"h",x:0,y:1.0,yref:"container",
+   xanchor:"left",yanchor:"top",font:{size:11},
+   groupclick:"toggleitem"},
   showlegend:true};}
 function draw(){
  const cfg={responsive:true,scrollZoom:true,displaylogo:false,
