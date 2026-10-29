@@ -39,15 +39,21 @@ def load():
                       ("missing", "missing_valuation"),
                       ("excluded", "excluded_suspect_rows")):
         coverage[lane] = [int(v) for v in cov[col].fillna(0)]
-    return dates, out, coverage
+    idx = pd.read_csv(DATA / "index_daily.csv", index_col="date")
+    idx = idx.reindex(dates)
+    if int(idx.isna().sum().sum()):
+        raise SystemExit("index_daily.csv has dates outside ETF calendar")
+    index = {c: [round(float(v), 2) for v in idx[c]] for c in idx.columns}
+    return dates, out, coverage, index
 
 
 def build():
-    dates, flows, coverage = load()
+    dates, flows, coverage, index = load()
     from plotly.offline import get_plotlyjs
     plotly_js = get_plotlyjs()
     payload = json.dumps(
-        {"dates": dates, "flows": flows, "coverage": coverage},
+        {"dates": dates, "flows": flows, "coverage": coverage,
+         "index": index},
         separators=(",", ":"))
     html = TEMPLATE.replace("/*__PLOTLY__*/", plotly_js) \
                    .replace("/*__DATA__*/", payload)
@@ -118,7 +124,10 @@ TEMPLATE = """<!DOCTYPE html>
  IPO 首日、缺失段、已鉴别拆分合并(10)、数据毛刺(105)、待核验(85)行
  已剔除并单列；510310 2024-09-19/20 跨日份额合并为已知待核验点
  （机构车道约低估1906亿）。<b>机构主导 ETF 的净赎回为数据事实，
- 不等于任何特定机构主体的实际减持。</b>
+ 不等于任何特定机构主体的实际减持。</b><br>
+ <b>指数曲线</b>：上证(000001)/深成(399001)来自新浪日线，
+ 中证全指(000985，全A口径)来自中证指数官网，右轴点位，仅作走势对照；
+ 与资金流的相关性检验见 POC03_TEST_REPORT.md（未证实简单正相关）。
 </div>
 <script>/*__PLOTLY__*/</script>
 <script>
@@ -128,7 +137,10 @@ const LANES=[["personal","个人持有为主 ETF","#1a1a2e"],
  ["mixed","混合(两侧均≤50%)","#c9a227"],
  ["pre_disclosure","尚无生效披露","#7fc8a9"],
  ["unknown","分类未知","#999999"]];
-const DATES=D.dates, COV=D.coverage;
+const IDX=[["sse","上证指数","#e6550d","solid"],
+ ["szse","深证成指","#756bb1","dot"],
+ ["all_a","中证全指(全A)","#8c8c8c","dash"]];
+const DATES=D.dates, COV=D.coverage, IX=D.index;
 let state={cls:"pit",recum:false,barlane:"all",
  range:[DATES[0],DATES[DATES.length-1]]};
 function cumsum(a){let s=0;return a.map(v=>s+=v);}
@@ -166,6 +178,11 @@ function traces(){
   xaxis:"x",yaxis:"y2",showlegend:false,
   hovertemplate:"%{customdata[0]} 每日净申购·"+bname+": %{y:.1f} 亿<br>"+
    "%{customdata[1]}<extra></extra>"});
+ IDX.forEach(([key,lab,col,dash])=>{
+  t.push({x:DATES,y:IX[key],type:"scatter",mode:"lines",name:lab,
+   line:{color:col,width:1.4,dash:dash},
+   xaxis:"x",yaxis:"y3",
+   hovertemplate:"%{x|%Y-%m-%d} "+lab+": %{y:.1f}<extra></extra>"});});
  return t;}
 const TICKSTOPS=[
  {dtickrange:[null,86400000*45],value:"%Y-%m-%d"},
@@ -173,13 +190,15 @@ const TICKSTOPS=[
  {dtickrange:[86400000*600,null],value:"%Y"}];
 function layout(){
  return {hovermode:"x unified",dragmode:"pan",
-  margin:{l:70,r:20,t:20,b:30},
+  margin:{l:70,r:70,t:20,b:30},
   hoverlabel:{bgcolor:"#fff",bordercolor:"#999",
    font:{size:12,color:"#111"}},
-  yaxis:{title:"累计净申购（亿元）",domain:[0.34,1],zeroline:true,
+  yaxis:{title:"累计净申购（亿元）",domain:[0.20,1],zeroline:true,
    fixedrange:true},
-  yaxis2:{title:"每日净申购（亿元）",domain:[0,0.28],
+  yaxis2:{title:"每日净申购（亿元）",domain:[0,0.14],
    zeroline:true,zerolinecolor:"#888",fixedrange:true},
+  yaxis3:{title:"指数点位",overlaying:"y",side:"right",
+   showgrid:false,fixedrange:true},
   xaxis:{type:"date",anchor:"y2",side:"bottom",range:state.range,
    hoverformat:"%Y-%m-%d",tickmode:"auto",nticks:12,
    tickformatstops:TICKSTOPS},
@@ -237,6 +256,9 @@ function tipHTML(d){
   "'>■</span> 每日净申购·"+bname+": <b>"+dv.toFixed(1)+"</b> 亿";
  html+="<br><span style='color:#888'>覆盖 "+COV.priced[i]+"/"+
   COV.reported[i]+(m?("；剔除/缺失 "+m+" 行"):"；无异常")+"</span>";
+ html+="<br><span style='color:#555'>上证 "+IX.sse[i].toFixed(1)+
+  " · 深成 "+IX.szse[i].toFixed(1)+
+  " · 全A "+IX.all_a[i].toFixed(1)+"</span>";
  return html;}
 function bindEvents(){
  const gd=document.getElementById("chart"),
@@ -276,10 +298,11 @@ function exportCSV(){
  const src=D.flows[state.cls];
  const [i0,i1]=sliceIdx();
  let csv="date,"+LANES.map(l=>l[0]+"_daily").join(",")+","+
-  LANES.map(l=>l[0]+"_cum").join(",")+"\\n";
+  LANES.map(l=>l[0]+"_cum").join(",")+",sse,szse,all_a\\n";
  for(let i=i0;i<i1;i++){
   csv+=DATES[i]+","+LANES.map(([k])=>src[k][i]).join(",")+","+
-   LANES.map(([k])=>CUM[state.cls][k][i].toFixed(2)).join(",")+"\\n";}
+   LANES.map(([k])=>CUM[state.cls][k][i].toFixed(2)).join(",")+","+
+   IX.sse[i]+","+IX.szse[i]+","+IX.all_a[i]+"\\n";}
  const a=document.createElement("a");
  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
  a.download="etf_flow_"+state.range[0]+"_"+state.range[1]+"_"+state.cls+
