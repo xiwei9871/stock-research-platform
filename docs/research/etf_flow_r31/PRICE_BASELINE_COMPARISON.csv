@@ -1,0 +1,7 @@
+model,seg,n,ap,brier
+A_price,valid_24_25,485,0.294,0.2389
+A_price,touched_26,136,0.317,0.3037
+B_flow4,valid_24_25,485,0.22,0.234
+B_flow4,touched_26,136,0.393,0.3684
+C_both,valid_24_25,485,0.229,0.2808
+C_both,touched_26,136,0.336,0.4048
