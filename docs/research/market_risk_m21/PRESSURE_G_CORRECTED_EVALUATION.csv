@@ -1,0 +1,4 @@
+seg,n,pos,ap,alert_share,eval
+train,217,67,0.711,0.217,OK
+valid,104,24,0.233,0.048,OK
+replay,48,20,0.958,0.125,OK

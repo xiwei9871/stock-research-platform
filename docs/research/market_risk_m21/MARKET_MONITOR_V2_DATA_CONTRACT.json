@@ -1,0 +1,6 @@
+{"endpoint":"/api/market_regime_state","method":"GET","freshness":"T+1 daily","sections":{
+"emotion":{"fields":["emotion_score","breadth_score","limit_score","relay_score","feedback_score","liquidity_score"],"source":"research.market_emotion_state_daily | recompute"},
+"persistence":{"fields":["lowvol_streak","lowvol20","pct_ma60","pct_ma60_d20","breadth_bad_streak","mcc_osc","mcc_sum","amt_ratio_5_20","amt_ratio_20_60"],"source":"market_daily_bar+asset_status_daily aggregate"},
+"etf":{"fields":["g1_daily_flow","g1_depth","g1_ddur","g1_vel20","g1_reacc","g2_depth","g3_depth"],"missing":["etf_outflow_diffusion","etf_inflow_diffusion"]},
+"regime":{"fields":["dd120","cycle_start","cycle_status","dd120_slope20","repair_stage"],"note":"descriptive only"}},
+"prohibited":["future_return_probability","composite_risk_score","trade_signal"]}

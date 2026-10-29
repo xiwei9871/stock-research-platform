@@ -1,0 +1,51 @@
+{
+ "as_of": "2026-10-28",
+ "data_cutoff": "2026-10-28",
+ "indices": {
+  "sse": {
+   "close": 3681.47,
+   "ret20": -0.0685,
+   "ret60": -0.0346,
+   "dd120": -0.1323,
+   "in_major_decline": true
+  },
+  "szse": {
+   "close": 11473.18,
+   "ret20": -0.164,
+   "ret60": -0.1507,
+   "dd120": -0.298,
+   "in_major_decline": true
+  },
+  "cyb": {
+   "close": 2634.76,
+   "ret20": -0.2251,
+   "ret60": -0.2081,
+   "dd120": -0.3974,
+   "in_major_decline": true
+  },
+  "alla": {
+   "close": 5098.42,
+   "ret20": -0.1393,
+   "ret60": -0.0974,
+   "dd120": -0.2375,
+   "in_major_decline": true
+  }
+ },
+ "market": {
+  "emotion_score": 72.5133133901184,
+  "up_share": 0.743,
+  "pct_above_ma60": 0.182,
+  "pct_ma60_d20": -0.444,
+  "lowvol_streak": 11,
+  "amt_ratio_5_20": 0.003,
+  "amt_ratio_20_60": 0.62,
+  "g1_depth": null,
+  "g1_vel20": NaN,
+  "mcc_osc": -81.9
+ },
+ "risk_labels": {
+  "advance_warning": "NOT_EVALUATED",
+  "probability_calibration": "NOT_CALIBRATED",
+  "regime": "DECLINE (dd120<=-10% all objs)"
+ }
+}

@@ -1,0 +1,10 @@
+feature,source,impl,lag,pit_safe,status
+emotion_score,existing API,reuse,T+1,yes,READY
+lowvol_streak,market_daily_bar,new readonly query,T+1,yes,READY
+pct_ma60_d20,market_daily_bar,new readonly query,T+1,yes,READY
+mcc_osc/sum,market_daily_bar,offline daily job,T+1,yes,READY
+amt ratios,market_daily_bar,new readonly query,T+1,yes,READY
+etf depth/dur/vel,etf flow engine,offline daily job,T+1,yes,READY
+etf diffusion,-,-,-,-,DATA_MISSING
+dd120/cycle,index_daily_bar,new readonly query,T+1,yes,READY
+fwd prob,-,-,-,-,NOT_CALIBRATED(prohibited)

@@ -1,0 +1,4 @@
+type,detail,verdict
+joint_condition_false_positive,9/11 pre-onset windows triggered BUT 11/11 matched normal windows also triggered -> condition fires in ordinary periods at same rate,no discriminative power
+H_premature_repair_2026,M2 praised H for no false repair; corrected labels show model has no discrimination (AP .082) -> conservatism not skill,conclusion revoked
+2026_premature_release,no model issued warning in 2026; nothing released prematurely; E/F/G zero coverage,coverage=0

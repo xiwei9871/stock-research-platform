@@ -1,0 +1,10 @@
+item,m1,m11,m2,m21
+systemic_episodes,-,-,23(greedy),19(union-find)
+index_episodes,-,-,60,60(preserved)
+joint_condition,-,-,55% vs 3.5% (mixed denominators),event 82% vs ctrl 82%; daily .22 vs .188 -> NOT_SUPPORTED
+fragility E/F,A/B,B best,E~B;F degraded .344,unchanged; E/F remain unvalidated
+G pressure,-,-,"weak, global-ref pct",conditional-ref AP valid .233 -> NOT_SUPPORTED
+H repair,-,-,label flaw; valid all-positive; 'compliant module',CONF=40 labels; valid AP .082 -> NOT_SUPPORTED (prev conclusion revoked)
+etf_increment,not isolated,only B3 weak+,F-E -.116; AP .344 vs .556,FROZEN; observation-only
+2026 warnings,C misses,NOT_EVALUATED pre-onset,E/F/G zero warnings,consistent; no shadow-warning
+advance_warning,INCONCLUSIVE,INCONCLUSIVE,NOT proven,NOT_SUPPORTED

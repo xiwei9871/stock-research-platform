@@ -1,0 +1,10 @@
+feature,status,note
+etf_daily_net_flow_g1,READY,全股票ETF日净申赎
+etf_daily_net_flow_g2g3,READY,宽基分组净申赎
+cum_withdrawal_amount,READY,周期累计净赎回亿元
+cum_withdrawal_depth,READY,相对周期起点AUM比例
+withdrawal_duration,READY,确认后持续交易日
+withdrawal_velocity,READY,%AUM/日
+reaccum_status,READY,回补状态(R3.1)
+etf_outflow_diffusion,DATA_MISSING,G1聚合无成员广度;分组级breadth_out可用但头部组SMALL_UNIVERSE
+etf_inflow_diffusion,DATA_MISSING,同上

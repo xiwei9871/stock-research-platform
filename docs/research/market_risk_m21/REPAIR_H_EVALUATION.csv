@@ -1,0 +1,4 @@
+seg,n,pos,ap,eval
+train,217,57,0.779,OK
+valid,104,10,0.082,OK
+replay,1,1,,NOT_EVALUABLE
