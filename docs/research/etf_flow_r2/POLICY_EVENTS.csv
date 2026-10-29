@@ -1,0 +1,12 @@
+event_date,publication_date,source_url,issuing_authority,category,policy_type,effective_date,confidence,description
+2022-03-16,2022-03-16,https://www.gov.cn,国务院金融稳定发展委员会,official_statement,market_stability,2022-03-16,high,金融委专题会议研究经济形势和资本市场问题 提出保持资本市场平稳运行
+2023-08-27,2023-08-27,https://www.mof.gov.cn,财政部/税务总局/证监会,official_action,market_support,2023-08-28,high,证券交易印花税减半征收+证监会阶段性收紧IPO及再融资节奏/规范减持
+2023-10-11,2023-10-11,https://www.huijin-inv.cn,中央汇金投资有限责任公司,official_action,etf_support,2023-10-11,high,中央汇金公告增持工农中建四大行A股股份并未来六个月继续增持
+2023-10-23,2023-10-23,http://www.news.cn/fortune/2023-10/23/c_1129933214.htm,中央汇金投资有限责任公司,official_action,etf_support,2023-10-23,high,中央汇金公告当日买入交易型开放式指数基金(ETF)并将在未来继续增持
+2024-02-06,2024-02-06,https://www.csrc.gov.cn,中央汇金/证监会,official_action,etf_support,2024-02-06,high,汇金公告扩大ETF增持范围规模 证监会表态支持其持续加大增持力度
+2024-04-12,2024-04-12,https://www.gov.cn,国务院,official_document,market_framework,2024-04-12,high,新国九条《关于加强监管防范风险推动资本市场高质量发展的若干意见》
+2024-09-24,2024-09-24,https://www.szse.cn,国新办金融发布会(央行/金监总局/证监会),official_action,policy_package,2024-09-24,high,央行创设互换便利SFISF与股票回购增持再贷款 证监会主席提汇金持续增持ETF
+2025-01-22,2025-01-22,https://www.csrc.gov.cn/csrc/c100028/c7535174/content.shtml,中央金融办等六部门,official_document,long_term_capital,2025-01-22,high,关于推动中长期资金入市工作的实施方案 六部门联合印发
+2025-04-07,2025-04-07,https://www.huijin-inv.cn,中央汇金/中国诚通/中国国新,official_action,etf_support,2025-04-07,medium,国家队宣布增持ETF及央国企股票 (公告日期见各公司官网/新华社 4-7至4-8报道)
+2026-01-15,2026-01-15,,市场解释(券商研报),broker_interpretation,na,,low,部分券商将2026-01 ETF大额净赎回解读为监管关注过热/慢牛倾向——非政策证据 不得用作信号
+2026-07-20,2026-07-20,,研究假设,hypothesis,na,,low,2026-07宽基ETF回补被部分观点归因政策托底——待检验命题 无官方文件
