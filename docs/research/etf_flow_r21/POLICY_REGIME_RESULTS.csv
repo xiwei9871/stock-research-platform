@@ -1,0 +1,3 @@
+segment,n,warn_days,corr_WP_fwdmdd60,corr_WP_fwdret60
+policy_on,360,331,-0.0467,0.0424
+policy_off,1290,736,0.1288,-0.1349

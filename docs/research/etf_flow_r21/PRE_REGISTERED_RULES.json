@@ -1,0 +1,38 @@
+{
+  "version": "R2.1-pre-registered-2026-10-29",
+  "note": "All thresholds fixed BEFORE looking at outcome statistics. Percentile ranks are expanding-window PIT (min 252 obs). No parameter tuning on results.",
+  "flow_windows": [5, 10, 20, 40, 60],
+  "forward_windows": [20, 40, 60, 120],
+  "scores": {
+    "weights": {"F20": 0.4, "share": 0.3, "F40": 0.2, "accel": 0.1},
+    "wp_def": "0.4*pctl(-F20)+0.3*pctl(outshare20)+0.2*pctl(-F40)+0.1*pctl(-accel)",
+    "as_def": "0.4*pctl(F20)+0.3*pctl(inshare20)+0.2*pctl(F40)+0.1*pctl(accel)",
+    "pctl": "expanding rank of own history, min_periods=252, range 0-100"
+  },
+  "state_machine": {
+    "hysteresis": {"upgrade_hold_days": 5, "downgrade_hold_days": 10, "downgrade_margin": 15},
+    "rules": [
+      {"to": "WATCH", "cond": "WP>=70 held 5d", "from": ["NORMAL", "RECOVERING"]},
+      {"to": "ELEVATED", "cond": "WP>=80 held 5d", "from": ["WATCH"]},
+      {"to": "HIGH_PRESSURE", "cond": "WP>=85 held 10d OR (WP>=75 AND outshare40>=0.6 held 10d)", "from": ["ELEVATED"]},
+      {"to": "RECOVERING", "cond": "(WP<60 held 5d AND had WP>=70 in last 40d) OR (AS>=65 held 10d)", "from": ["WATCH", "ELEVATED", "HIGH_PRESSURE", "NORMAL"]},
+      {"to": "NORMAL", "cond": "WP<60 held 10d after RECOVERING", "from": ["RECOVERING"]},
+      {"to": "WATCH", "cond": "WP>=70 held 5d", "from": ["RECOVERING"], "note": "re-entry"}
+    ]
+  },
+  "risk_events": {
+    "dd10": "fwd_mdd60 <= -10% (strict peak-to-trough, own index)",
+    "dd15": "fwd_mdd60 <= -15%",
+    "hivol": "fwd_vol60 >= expanding p80 of vol60"
+  },
+  "baselines": {
+    "A_price_only": "warn = (idx_ret20 <= -3%) OR (vol60 >= expanding p80)",
+    "B_flow_only": "warn = WP >= 70",
+    "C_combined": "warn = A OR B"
+  },
+  "calibration": {"method": "logistic on 2020-2023 train only", "target": "dd10 within 60d"},
+  "policy": {"active_window_td": 60, "categories": ["official_action", "official_document"]},
+  "groups": {"broad": ["G2_hs300_head", "G9_sse50_head", "G3_other_broad", "G1_all_equity"],
+             "tech": ["G4k_star", "G5_semiconductor", "G6_ai_compute", "G7_robot", "G8_softinfo"]},
+  "oos_segments": {"train": "2020-01-01..2023-12-31", "valid": "2024-01-01..2025-12-31", "touched": "2026-01-01..2026-10-27"}
+}
