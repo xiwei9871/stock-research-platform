@@ -1,0 +1,4 @@
+strategy,ann_ret,vol,max_dd,down_dev,calmar,turnover,n_trades,pct_days_flat,final_eq
+A_hold_index,-0.0038,0.186,-0.456,0.1142,-0.008,1.0,1,0.0,0.975
+B_price_risk,-0.003,0.0984,-0.2441,0.064,-0.012,90.0,90,0.716,0.98
+C_price_plus_flow,0.0188,0.0928,-0.2228,0.0589,0.084,90.0,90,0.746,1.134
