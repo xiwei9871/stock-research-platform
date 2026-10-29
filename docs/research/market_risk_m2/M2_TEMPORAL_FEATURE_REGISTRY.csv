@@ -1,0 +1,24 @@
+feature,layer,definition,pit_ok,coverage
+pct_ma60_20,breadth,均线上方占比20日均,ok,2020+
+pct_ma60_d20,breadth,60日线上方占比20日变化,ok,2020+
+pct_hi20,breadth,20日新高占比20日均,ok,2020+
+lowvol20,volume,低于0.8x60日中位量占比20日,ok,2020+
+lowvol_streak,volume,连续低量日数,ok,2020+
+amt_ratio_20_60,volume,成交额20/60日均比,ok,2020+
+amt_ratio_5_20,volume,成交额5/20比,ok,2020+
+emotion20,emotion,情绪分20日均,ok,2020+
+emotion_down_streak,emotion,情绪连降日数,ok,2020+
+breadth_bad_streak,breadth,广度连降日数,ok,2020+
+dn_share20/up_share20,breadth,涨跌家数占比20日均,ok,2020+
+strong_dn20,breadth,大跌占比20日,ok,2020+
+limit_up20/limit_dn20/broken20,limit,涨跌停炸板20日均,ok,2020+
+mcc_osc,breadth,McClellan Oscillator(19-39EMA净涨跌),ok,2020+
+mcc_sum/mcc_sum_d20,breadth,McClellan累计线及20日变化,ok,2020+
+dd_slope20,price,dd120斜率20日,ok,全史
+ret20/60,price,区间收益,ok,全史
+dd120,price,距120日高点回撤,ok,全史
+trend,price,价/60MA-1,ok,全史
+vol60/dvol60,price,波动/下行波动,ok,全史
+g1_depth/g1_ddur/g1_vel20,etf,R3.1 PIT引擎,ok,2020+
+g1_breadth,etf,ETF赎回广度,MISSING(G1聚合口径),不可用→剔除输入
+g1_reacc,etf,回补状态,ok,2020+

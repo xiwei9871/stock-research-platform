@@ -1,0 +1,16 @@
+model,seg,n,pos,ap,brier
+E_fragility,train,406,124,0.755,0.1503
+E_fragility,valid,220,76,0.556,0.2065
+E_fragility,replay26,95,83,0.834,0.297
+F_etf,train,406,124,0.907,0.1053
+F_etf,valid,220,76,0.344,0.2896
+F_etf,replay26,95,83,0.88,0.6796
+G_pressure,train,217,67,0.344,0.232
+G_pressure,valid,104,24,0.266,0.1776
+G_pressure,replay26,48,20,0.275,0.3474
+H_repair,train,217,69,0.309,0.3645
+H_repair,valid,104,104,1.0,0.149
+H_repair,replay26,11,1,,
+M1_B,train,406,124,0.735,0.1504
+M1_B,valid,220,76,0.559,0.2148
+M1_B,replay26,95,83,0.827,0.3116
