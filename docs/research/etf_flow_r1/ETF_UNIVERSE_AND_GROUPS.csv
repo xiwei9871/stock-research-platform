@@ -655,7 +655,7 @@ fund_code,name,etf_type,is_first,first_seen,group
 510020,超大ETF,单市,True,2009-12-28,G1_sector_other
 510030,价值ETF,单市,True,2010-04-22,G3_other_broad
 510040,N上证180,单市,True,2024-12-24,G3_other_broad
-510050,50ETF,单市,True,2004-12-29,G2_hs300_head
+510050,50ETF,单市,True,2004-12-29,G9_sse50_head
 510060,央企ETF,单市,True,2009-08-25,G3_other_broad
 510070,民企ETF,单市,True,2010-08-04,G1_sector_other
 510090,责任ETF,单市,True,2010-05-27,G1_sector_other

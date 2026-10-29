@@ -24,6 +24,14 @@
 - 指数：`../etf_flow_poc02/fetch_index.py`（新浪 + 中证指数官网接口）。
 - R1 全链路：`build_dataset.py` → `analyze_r1.py` → `plot_r1.py`，在 `.venv` 下按序执行可重建全部 CSV/PNG。
 
+## R1.1 新增
+
+| 文件 | 说明 |
+|---|---|
+| `data/sector_index_real.csv` | 真实板块指数：sse50(000016新浪)、star50(000688新浪)、semi(H30184)/ai(930713)/robot(H30590)/soft(930601) 中证指数——科技主题序列止于2024-06-04，仅作参考层，主分析中G5–G8仍为市值加权代理 |
+| `detect_corp_actions.py` | 公司行为候选检测器（可复现生成 `data/corp_action_audit.csv`，192条，分层 official/algorithm/unverified） |
+| `r1_baseline/` | R1 结果快照（DIFF 对比基线，不入结论） |
+
 ## 外部核实来源（非数据文件）
 
 - 510310 份额合并公告：易方达公告（2024-09-18 前后）+ 上交所披露 `510310_20240923_G18B.pdf`（合并结果：比例 0.49977589，场内 62,347,244,017 份，净值 3.2021 元）。

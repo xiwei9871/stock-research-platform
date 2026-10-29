@@ -24,7 +24,8 @@ NON_EQUITY = ("债", "国开", "短融", "城投", "利率", "货币", "添益",
               "法国", "沙特", "东南亚", "纳斯达克", "道琼斯", "QDII",
               "美元", "亚太", "全球", "美国", "海外", "中韩", "日本",
               "期货", "国货", "湾区")
-G2_CODES = {"510300", "510310", "510330", "159919", "510050"}
+G2_CODES = {"510300", "510310", "510330", "159919"}
+SSE50_CODES = {"510050"}
 KW = {
     "G5_semiconductor": "半导体|芯片|集成电路|晶圆|封测",
     "G6_ai_compute": "人工智能|AI|算力|云计算|大数据|通信|5G|信创|数字|云50|软件服务",
@@ -44,6 +45,8 @@ def classify(code, name):
         return "non_equity"
     if code in G2_CODES:
         return "G2_hs300_head"
+    if code in SSE50_CODES:
+        return "G9_sse50_head"
     for g, kw in KW.items():
         if re.search(kw, n, re.I):
             return g
@@ -53,12 +56,17 @@ def classify(code, name):
 
 
 def main():
-    hits = pd.read_csv("data_crossday_corp_actions.csv",
+    hits = pd.read_csv("data/corp_action_audit.csv",
                        dtype={"fund_code": str})
     hits["fund_code"] = hits["fund_code"].str.zfill(6)
-    hit_days = set(zip(hits.fund_code, hits.date))
+    # only confirmed + algorithm-split events are masked from flow_use;
+    # unverified stays in series but is removed in flow_use_strict
+    conf = hits[hits.status.isin(["official_confirmed", "algorithm_split"])]
+    unv = hits[hits.status == "unverified"]
+    hit_days = set(zip(conf.fund_code, conf.date))
+    unv_days = set(zip(unv.fund_code, unv.date))
     # NAV-jump day = share-jump day - 1 trading day (per fund calendar)
-    nav_jump = hits[hits.kind == "cross_prev"].copy()
+    nav_jump = conf[conf.kind == "cross_prev"].copy()
 
     d = pd.read_csv(f"{DATA}/etf_daily_flows_v2.csv", low_memory=False)
     d["fund_code"] = d["fund_code"].astype(str).str.zfill(6)
@@ -70,6 +78,17 @@ def main():
     uni["group"] = [classify(c, n) for c, n in
                     zip(uni.fund_code, uni.name)]
     uni.to_csv("ETF_UNIVERSE_AND_GROUPS.csv", index=False)
+    # tech-group audit sample: 25 per group with name-based flag heuristic
+    aud = []
+    for g in ("G4k_star", "G5_semiconductor", "G6_ai_compute",
+              "G7_robot", "G8_softinfo"):
+        sub = uni[uni.group == g]
+        for _, r in sub.iterrows():
+            n = str(r["name"])
+            flag = ("ok" if re.search(KW[g], n, re.I) else "name_miss")
+            aud.append({"group": g, "fund_code": r.fund_code,
+                        "name": n, "audit_flag": flag})
+    pd.DataFrame(aud).to_csv("TECH_GROUP_AUDIT.csv", index=False)
     print(uni.group.value_counts())
     uni.loc[uni.group != "non_equity", "group"].to_frame()  # noop
 
@@ -86,8 +105,12 @@ def main():
     d["mask_day"] = d.hit_share | d.index.isin(nav_jump_idx)
 
     inc = d.excluded_reason.isna() | (d.excluded_reason == "")
-    # flow_use: real flow, zero on share-jump day (corp artifact)
+    # flow_use: real flow, zero on confirmed/algo-split share-jump day
     d["flow_use"] = np.where(d.hit_share | ~inc, 0.0, d.flow_yi.fillna(0.0))
+    # strict variant: also zero unverified candidates (sensitivity)
+    d["unv_day"] = list(zip(d.fund_code, d.date))
+    d["unv_day"] = d["unv_day"].isin(unv_days)
+    d["flow_use_strict"] = np.where(d.unv_day, 0.0, d.flow_use)
     d["mv"] = d.shares * d.valuation.ffill() / 1e8
     # nav return; masked on both corp days
     g = d.groupby("fund_code")
