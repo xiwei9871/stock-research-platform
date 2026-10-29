@@ -1180,3 +1180,83 @@ function notifyAuthExpired(url: string, status: number, options: RequestOptions)
   }
   window.dispatchEvent(new CustomEvent(DASHBOARD_AUTH_EXPIRED_EVENT));
 }
+
+export type RegimeGroupState = {
+  status: string;
+  daily_flow?: number | null;
+  flow20?: number | null;
+  cycle_id?: string;
+  state?: string;
+  cum_flow?: number | null;
+  cum_depth_pct?: number | null;
+  cum_withdrawal_pct_aum0?: number | null;
+  ddur_days?: number | null;
+  vel20?: number | null;
+  outshare20?: number | null;
+  cycle_aum?: number | null;
+  max_depth_pct?: number | null;
+  inflow_diffusion?: string;
+  outflow_diffusion?: string;
+};
+
+export type RegimeStatePayload = {
+  market: string;
+  trade_date: string;
+  status?: string;
+  data_range?: { market: string[]; etf_latest: string | null };
+  modules: {
+    regime: {
+      status: string;
+      dd120?: number | null;
+      ret20?: number | null;
+      ret60?: number | null;
+      regime?: string;
+      regime_days?: number | null;
+      all_markets?: Record<string, {
+        status: string; dd120?: number | null; regime?: string;
+        regime_days?: number | null; ret20?: number | null;
+      }>;
+      note?: string;
+    };
+    continuity: {
+      status: string;
+      lowvol_streak?: number | null;
+      lowvol20_share?: number | null;
+      amount_ratio_5_20?: number | null;
+      amount_ratio_20_60?: number | null;
+      pct_above_ma60?: number | null;
+      pct_ma60_d20?: number | null;
+      breadth_bad_streak?: number | null;
+      up_share?: number | null;
+      mcc_osc?: number | null;
+      mcc_sum?: number | null;
+      explanation?: string;
+      missing_fields?: string[];
+    };
+    etf_flow: {
+      status: string;
+      latest_etf_date?: string;
+      groups: Record<string, RegimeGroupState>;
+      history: Record<string, Array<{
+        date: string; flow: number | null; cum_flow: number | null;
+        cum_depth_pct: number | null;
+        cum_withdrawal_pct_aum0?: number | null; state: string;
+      }>>;
+      note?: string;
+    };
+    emotion: { status: string; emotion_score?: number | null;
+      emotion20?: number | null };
+    history: { status: string; rows: Array<Record<string, unknown>> };
+  };
+  boundaries: { advance_warning: string; probability_calibration: string };
+};
+
+export async function fetchMarketRegimeState(params: {
+  tradeDate?: string; market?: string; historyDays?: number;
+} = {}): Promise<RegimeStatePayload> {
+  const sp = new URLSearchParams();
+  if (params.tradeDate) sp.set('trade_date', params.tradeDate);
+  sp.set('market', params.market ?? 'alla');
+  sp.set('history_days', String(params.historyDays ?? 250));
+  return getJson(`/api/market-monitor/regime-state?${sp.toString()}`);
+}

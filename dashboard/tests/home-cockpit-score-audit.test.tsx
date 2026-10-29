@@ -7,6 +7,7 @@ import { HomeCockpit } from '../src/components/HomeCockpit';
 const apiMocks = vi.hoisted(() => ({
   fetchBacktestStrategies: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketRegimeState: vi.fn(),
   fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchPublicNews: vi.fn(),

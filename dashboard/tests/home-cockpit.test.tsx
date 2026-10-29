@@ -40,6 +40,7 @@ vi.mock('../src/api/client', () => ({
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketRegimeState: vi.fn(),
   fetchPublicNews: vi.fn(),
   fetchEvidenceDigest: vi.fn(),
   fetchResearchCases: vi.fn(),

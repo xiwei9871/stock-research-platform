@@ -70,6 +70,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketRegimeState: vi.fn(),
   fetchMarketAnomalyContext: vi.fn(),
   fetchMarketOverview: vi.fn(),
   fetchSectorHeatmap: vi.fn(),
@@ -1149,6 +1150,16 @@ describe('dashboard app shell', () => {
     apiMocks.fetchFactorLibrary.mockResolvedValue([]);
     apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchMarketRegimeState.mockResolvedValue({
+      trade_date: '2026-10-28', market: 'alla',
+      modules: {
+        regime: { status: 'READY' }, continuity: { status: 'READY' },
+        etf_flow: { status: 'READY', groups: {}, history: {} },
+        emotion: { status: 'READY' }, history: { status: 'READY', rows: [] }
+      },
+      boundaries: { advance_warning: 'NOT_EVALUATED',
+        probability_calibration: 'NOT_CALIBRATED' }
+    });
     apiMocks.fetchMarketAnomalyContext.mockImplementation((tradeDate: string) =>
       Promise.resolve(makeMarketAnomalyContextPayload({ trade_date: tradeDate }))
     );

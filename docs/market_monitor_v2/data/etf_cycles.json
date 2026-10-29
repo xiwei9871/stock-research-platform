@@ -1,0 +1,32 @@
+{
+ "g1": {
+  "group": "G1_all_equity",
+  "latest_date": "2026-10-27",
+  "current_cycle": "C05",
+  "current_state": "REACCUMULATING",
+  "current_depth_pct": 22.83,
+  "cum_flow_latest": -842.8,
+  "cycle_aum": 27003.8,
+  "max_depth_pct": 41.19
+ },
+ "g2": {
+  "group": "G2_hs300_head",
+  "latest_date": "2026-10-27",
+  "current_cycle": "C06",
+  "current_state": "REACCUMULATING",
+  "current_depth_pct": 87.38,
+  "cum_flow_latest": -8533.7,
+  "cycle_aum": 3431.8,
+  "max_depth_pct": 106.25
+ },
+ "g3": {
+  "group": "G3_other_broad",
+  "latest_date": "2026-10-27",
+  "current_cycle": "C02",
+  "current_state": "REACCUMULATING",
+  "current_depth_pct": 36.54,
+  "cum_flow_latest": -3030.2,
+  "cycle_aum": 8822.5,
+  "max_depth_pct": 65.91
+ }
+}

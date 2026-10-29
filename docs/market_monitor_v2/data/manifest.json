@@ -1,0 +1,23 @@
+{
+ "source_parquets": {
+  "m1_features": "docs/research/market_risk_m1/data/MACRO_RISK_PIT_FEATURES.parquet",
+  "m2_features": "docs/research/market_risk_m2/M2_TEMPORAL_FEATURES.parquet",
+  "r31_cycle_daily": "docs/research/etf_flow_r31/PIT_CYCLE_DAILY.csv"
+ },
+ "rows": {
+  "market_snapshot": 1892,
+  "etf_history": 4950
+ },
+ "date_range": {
+  "market": [
+   "2019-01-02",
+   "2026-10-28"
+  ],
+  "etf": [
+   "2020-01-02",
+   "2026-10-27"
+  ]
+ },
+ "research_baseline": "2a03051df2cde2f333d797711b76f3544f25752f",
+ "note": "cum_depth_pct = cumulative net redemption / cycle-start AUM; values >100% mean net redemptions exceeded the AUM measured at the cycle start, not that holdings were sold more than once."
+}

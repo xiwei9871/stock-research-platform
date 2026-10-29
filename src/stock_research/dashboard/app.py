@@ -55,6 +55,7 @@ from stock_research.dashboard.factors import (
     list_factor_library,
     parse_factor_selection,
 )
+from stock_research.dashboard import market_regime_service
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
 from stock_research.dashboard.market_overview_service import build_market_overview_payload
 from stock_research.dashboard.market_anomaly_context import (
@@ -1360,6 +1361,20 @@ def create_app() -> FastAPI:
         return app.state.eod_response_cache.get_or_set(
             ("market_monitor_anomaly_context", trade_date),
             lambda: market_anomaly_context_read_model(build_market_anomaly_context(trade_date)),
+        )
+
+    @app.get("/api/market-monitor/regime-state")
+    def market_monitor_regime_state(
+        trade_date: str | None = None,
+        market: str = "alla",
+        history_days: int = 120,
+    ):
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_regime_state", trade_date or "", market,
+             int(history_days)),
+            lambda: market_regime_service.regime_state(
+                trade_date=trade_date, market=market,
+                history_days=history_days),
         )
 
     @app.get("/api/market-monitor/sectors/fund-flow")

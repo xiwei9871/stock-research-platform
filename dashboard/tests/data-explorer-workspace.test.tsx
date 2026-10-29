@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchStrategyCatalog: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketRegimeState: vi.fn(),
   fetchPublicNews: vi.fn()
 }));
 

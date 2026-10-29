@@ -7,6 +7,7 @@ import type { ComponentProps } from 'react';
 
 const apiMocks = vi.hoisted(() => ({
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketRegimeState: vi.fn(),
   fetchMarketAnomalyContext: vi.fn(),
   fetchMarketOverview: vi.fn(),
   fetchSectorHeatmap: vi.fn(),
@@ -566,6 +567,19 @@ describe('MarketMonitorWorkspace', () => {
       Promise.resolve(makeStockHeatmapResponse({ trade_date: tradeDate }))
     );
     apiMocks.fetchSectorDetail.mockResolvedValue(makeSectorDetailResponse());
+    apiMocks.fetchMarketRegimeState.mockResolvedValue({
+      trade_date: '2026-10-28',
+      market: 'alla',
+      modules: {
+        regime: { status: 'READY', regime: 'DECLINE', dd120: -0.24 },
+        continuity: { status: 'READY' },
+        etf_flow: { status: 'READY', groups: {}, history: {} },
+        emotion: { status: 'READY' },
+        history: { status: 'READY', rows: [] }
+      },
+      boundaries: { advance_warning: 'NOT_EVALUATED',
+        probability_calibration: 'NOT_CALIBRATED' }
+    });
     HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
       clearRect: vi.fn(),
       fillRect: vi.fn(),

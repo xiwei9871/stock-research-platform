@@ -1,0 +1,7 @@
+date,alla_dd120_api,lowvol_streak,pct_ma60_d20,g2_depth_api,g2_cum_wd_pct_aum0,source
+2025-04-15,-0.094,1.0,-0.5176,,,MACRO_RISK_PIT_FEATURES+PIT_CYCLE_DAILY(same pipeline -> identical)
+2026-05-15,-0.0307,0.0,0.1662,0.807,79.0,MACRO_RISK_PIT_FEATURES+PIT_CYCLE_DAILY(same pipeline -> identical)
+2026-06-15,-0.0459,0.0,-0.1973,0.878,86.0,MACRO_RISK_PIT_FEATURES+PIT_CYCLE_DAILY(same pipeline -> identical)
+2026-07-06,-0.0502,10.0,-0.0628,1.063,104.4,MACRO_RISK_PIT_FEATURES+PIT_CYCLE_DAILY(same pipeline -> identical)
+2026-08-14,-0.1041,39.0,0.3182,1.011,99.3,MACRO_RISK_PIT_FEATURES+PIT_CYCLE_DAILY(same pipeline -> identical)
+2026-10-28,-0.2375,11.0,-0.4435,,85.6,MACRO_RISK_PIT_FEATURES+PIT_CYCLE_DAILY(same pipeline -> identical)

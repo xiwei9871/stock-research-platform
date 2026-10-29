@@ -1,0 +1,6 @@
+{"endpoint":"GET /api/market-monitor/regime-state",
+ "params":{"trade_date":"YYYY-MM-DD optional, resolves to prior trading day","market":"alla|sse|szse|cyb","history_days":"int <=1500"},
+ "modules":["identity","emotion","continuity","etf_flow","regime","history"],
+ "module_status_enum":["READY","STALE","PARTIAL","DATA_MISSING","NOT_APPLICABLE","ERROR"],
+ "boundaries":{"advance_warning":"NOT_EVALUATED","probability_calibration":"NOT_CALIBRATED","predictive_models":"FROZEN"},
+ "snapshot_source":"docs/market_monitor_v2/data via build_snapshot.py; env MARKET_REGIME_SNAPSHOT_DIR overrides"}

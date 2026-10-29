@@ -1,0 +1,14 @@
+ui_element,api_field,source,status
+regime_card,modules.regime.all_markets.*,M1 features dd120/ret20,READY
+dd120/ret20/60,modules.regime.*,M1 features,READY
+lowvol_streak,modules.continuity.lowvol_streak,M1 features,READY
+lowvol20_share,modules.continuity.lowvol20_share,M1 features,READY
+amt ratios,modules.continuity.amount_ratio_*,M1 features,READY
+pct_above_ma60/d20,modules.continuity.pct_*,M1 features,READY
+breadth_bad_streak,modules.continuity.breadth_bad_streak,M1 features,READY
+mcc_osc,modules.continuity.mcc_osc,M2 features,READY
+emotion,modules.emotion.emotion_score,emotion_v1 replay,READY
+etf cum withdrawal,modules.etf_flow.groups.*.cum_withdrawal_pct_aum0,R3.1 PIT_CYCLE_DAILY,READY
+etf state/ddur/vel,modules.etf_flow.groups.*.*,R3.1,READY
+etf diffusion,modules.etf_flow.groups.*.*diffusion,-,DATA_MISSING
+history rows,modules.history.rows,snapshot,READY

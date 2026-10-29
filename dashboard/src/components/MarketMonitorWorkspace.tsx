@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { MarketRegimeSection } from './market-monitor/MarketRegimeSection';
 import {
   fetchMarketAnomalyContext,
   fetchMarketMonitorEod,
@@ -453,6 +454,8 @@ export function MarketMonitorWorkspace({
           />
         </div>
       </section>
+
+      <MarketRegimeSection tradeDate={activeTradeDate} />
     </section>
   );
 }
