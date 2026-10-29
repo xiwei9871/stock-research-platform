@@ -44,16 +44,24 @@ def load():
     if int(idx.isna().sum().sum()):
         raise SystemExit("index_daily.csv has dates outside ETF calendar")
     index = {c: [round(float(v), 2) for v in idx[c]] for c in idx.columns}
-    return dates, out, coverage, index
+    aum = {}
+    for mode in ("pit", "fixed"):
+        a = pd.read_csv(DATA / f"lane_aum_{mode}.csv", index_col="date")
+        a = a.reindex(dates).fillna(0.0)
+        aum[mode] = {lane: [round(float(a[lane].iloc[i]), 2)
+                           if lane in a.columns else 0.0
+                           for i in range(len(dates))]
+                     for lane in LANES}
+    return dates, out, coverage, index, aum
 
 
 def build():
-    dates, flows, coverage, index = load()
+    dates, flows, coverage, index, aum = load()
     from plotly.offline import get_plotlyjs
     plotly_js = get_plotlyjs()
     payload = json.dumps(
         {"dates": dates, "flows": flows, "coverage": coverage,
-         "index": index},
+         "index": index, "aum": aum},
         separators=(",", ":"))
     html = TEMPLATE.replace("/*__PLOTLY__*/", plotly_js) \
                    .replace("/*__DATA__*/", payload)
@@ -102,12 +110,13 @@ TEMPLATE = """<!DOCTYPE html>
  <input type="date" id="dto">
  <button onclick="applyDates()">应用</button>
  <span class="chk"><input type="checkbox" id="recum">区间重新累计</span>
+ <label>展示口径 <select id="unit">
+  <option value="amt" selected>金额(亿元)</option>
+  <option value="pct">占当日规模%</option></select></label>
  <label>柱状图分类 <select id="barlane">
   <option value="all" selected>全部ETF</option>
   <option value="institution">机构主导</option>
   <option value="personal">个人主导</option></select></label>
- <span class="chk"><span style="color:#c0392b">■ 申购</span>
-  <span style="color:#1e8449">■ 赎回</span></span>
  <span style="flex:1"></span>
  <button onclick="exportPNG()">导出PNG</button>
  <button onclick="exportCSV()">导出所选区间CSV</button>
@@ -126,8 +135,10 @@ TEMPLATE = """<!DOCTYPE html>
  （机构车道约低估1906亿）。<b>机构主导 ETF 的净赎回为数据事实，
  不等于任何特定机构主体的实际减持。</b><br>
  <b>指数曲线</b>：上证(000001)/深成(399001)来自新浪日线，
- 中证全指(000985，全A口径)来自中证指数官网，右轴点位，仅作走势对照；
- 与资金流的相关性检验见 POC03_TEST_REPORT.md（未证实简单正相关）。
+ 中证全指(000985，全A口径)来自中证指数官网；金额口径下在右轴点位，
+ 占比口径下换算为区间起点涨跌幅%与强度同轴对照。<br>
+ <b>占当日规模%</b>：每日=当日净申购/当日车道规模(份额×净值)，
+ 累计=逐日占比累加（强度口径，消除规模膨胀），指数同口径转 % 后可比。
 </div>
 <script>/*__PLOTLY__*/</script>
 <script>
@@ -140,12 +151,28 @@ const LANES=[["personal","个人主导ETF","#1a1a2e"],
 const IDX=[["sse","上证指数","#e6550d","solid"],
  ["szse","深证成指","#756bb1","dot"],
  ["all_a","中证全指(全A)","#8c8c8c","dash"]];
-const DATES=D.dates, COV=D.coverage, IX=D.index;
-let state={cls:"pit",recum:false,barlane:"all",
+const DATES=D.dates, COV=D.coverage, IX=D.index, AUM=D.aum;
+let state={cls:"pit",recum:false,barlane:"all",unit:"amt",
  range:[DATES[0],DATES[DATES.length-1]]};
 function cumsum(a){let s=0;return a.map(v=>s+=v);}
 const CUM={};["pit","fixed"].forEach(m=>{CUM[m]={};
  LANES.forEach(([k])=>{CUM[m][k]=cumsum(D.flows[m][k]);});});
+// 累计净申购强度 = Σ(当日净申购/当日车道规模)，消除规模膨胀
+const PCTCUM={};["pit","fixed"].forEach(m=>{PCTCUM[m]={};
+ LANES.forEach(([k])=>{let s=0;
+  PCTCUM[m][k]=D.flows[m][k].map((f,i)=>{
+   const a=AUM[m][k][i];s+=(a>0?f/a*100:0);return s;});});});
+const IDXPCT={};IDX.forEach(([k])=>{const v0=IX[k][0];
+ IDXPCT[k]=IX[k].map(v=>(v/v0-1)*100);});
+function dailyPct(src,i){
+ const laneSum=k=>src[k]?src[k][i]:0;
+ const aumSum=k=>AUM[state.cls][k]?AUM[state.cls][k][i]:0;
+ if(state.barlane==="all"){
+  const f=LANES.reduce((s,[k])=>s+laneSum(k),0),
+        a=LANES.reduce((s,[k])=>s+aumSum(k),0);
+  return a>0?f/a*100:0;}
+ const a=aumSum(state.barlane);
+ return a>0?laneSum(state.barlane)/a*100:0;}
 function sliceIdx(){
  let i0=DATES.findIndex(d=>d>=state.range[0]);if(i0<0)i0=0;
  let i1=DATES.findIndex(d=>d>state.range[1]);if(i1<0)i1=DATES.length;
@@ -153,8 +180,9 @@ function sliceIdx(){
 function traces(){
  const [i0]=sliceIdx();
  const src=D.flows[state.cls];
+ const isP=state.unit==="pct";
  const t=LANES.map(([key,lab,col],i)=>{
-  const full=CUM[state.cls][key];
+  const full=isP?PCTCUM[state.cls][key]:CUM[state.cls][key];
   const off=state.recum?(i0>0?full[i0-1]:0):0;
   const vals=full.map(v=>v-off);
   return {x:DATES,y:vals,type:"scatter",mode:"lines",name:lab,
@@ -162,8 +190,14 @@ function traces(){
    visible:i<2?true:"legendonly",
    legendgroup:"flows",legendgrouptitle:i===0?{text:"ETF车道"}:undefined,
    customdata:DATES,xaxis:"x",yaxis:"y",
-   hovertemplate:"%{customdata} "+lab+": %{y:.1f} 亿<extra></extra>"};});
+   hovertemplate:"%{customdata} "+lab+": %{y:.2f}"+
+    (isP?"%":" 亿")+"<extra></extra>"};});
  const dvals=DATES.map((_,i)=>{
+  if(isP)return dailyPct(src,i);
+  if(state.barlane==="all")
+   return LANES.reduce((s,[k])=>s+(src[k]?src[k][i]:0),0);
+  return src[state.barlane]?src[state.barlane][i]:0;});
+ const yvals=DATES.map((_,i)=>{
   if(state.barlane==="all")
    return LANES.reduce((s,[k])=>s+(src[k]?src[k][i]:0),0);
   return src[state.barlane]?src[state.barlane][i]:0;});
@@ -175,11 +209,12 @@ function traces(){
   [state.barlane];
  t.push({x:DATES,y:dvals,type:"bar",name:"每日净申购·"+bname,
   marker:{color:dvals.map(v=>v>=0?"#c0392b":"#1e8449")},
-  customdata:DATES.map((d,i)=>[d,qual[i]]),
+  customdata:DATES.map((d,i)=>[d,qual[i],yvals[i]]),
   xaxis:"x",yaxis:"y2",showlegend:false,
   legendgroup:"daily",
-  hovertemplate:"%{customdata[0]} 每日净申购·"+bname+": %{y:.1f} 亿<br>"+
-   "%{customdata[1]}<extra></extra>"});
+  hovertemplate:"%{customdata[0]} 每日净申购·"+bname+
+   (isP?": %{y:.2f}% (%{customdata[2]:.1f} 亿)":": %{y:.1f} 亿")+
+   "<br>%{customdata[1]}<extra></extra>"});
  [["申购","#c0392b"],["赎回","#1e8449"]].forEach(([lab,col],i)=>{
   t.push({x:[DATES[0]],y:[null],type:"scatter",mode:"markers",
    name:lab,marker:{symbol:"square",size:10,color:col},
@@ -187,27 +222,31 @@ function traces(){
    legendgrouptitle:i===0?{text:"每日柱"}:undefined,
    hoverinfo:"skip",showlegend:true});});
  IDX.forEach(([key,lab,col,dash],i)=>{
-  t.push({x:DATES,y:IX[key],type:"scatter",mode:"lines",name:lab,
-   line:{color:col,width:1.4,dash:dash},
-   xaxis:"x",yaxis:"y3",
-   legendgroup:"index",legendgrouptitle:i===0?{text:"指数(右轴)"}:undefined,
-   hovertemplate:"%{x|%Y-%m-%d} "+lab+": %{y:.1f}<extra></extra>"});});
+  t.push({x:DATES,y:isP?IDXPCT[key]:IX[key],type:"scatter",
+   mode:"lines",name:lab,line:{color:col,width:1.4,dash:dash},
+   xaxis:"x",yaxis:isP?"y":"y3",
+   legendgroup:"index",
+   legendgrouptitle:i===0?{text:isP?"指数(同轴%)":"指数(右轴)"}:undefined,
+   hovertemplate:"%{x|%Y-%m-%d} "+lab+": %{y:.2f}"+
+    (isP?"%":"")+"<extra></extra>"});});
  return t;}
 const TICKSTOPS=[
  {dtickrange:[null,86400000*45],value:"%Y-%m-%d"},
  {dtickrange:[86400000*45,86400000*600],value:"%Y-%m"},
  {dtickrange:[86400000*600,null],value:"%Y"}];
 function layout(){
+ const isP=state.unit==="pct";
  return {hovermode:"x unified",dragmode:"pan",
   margin:{l:70,r:70,t:56,b:30},
   hoverlabel:{bgcolor:"#fff",bordercolor:"#999",
    font:{size:12,color:"#111"}},
-  yaxis:{title:"累计净申购（亿元）",domain:[0.20,1],zeroline:true,
+  yaxis:{title:isP?"累计净申购强度 %":"累计净申购（亿元）",
+   domain:[0.20,1],zeroline:true,fixedrange:true},
+  yaxis2:{title:isP?"当日净申购/规模 %":"每日净申购（亿元）",
+   domain:[0,0.14],zeroline:true,zerolinecolor:"#888",
    fixedrange:true},
-  yaxis2:{title:"每日净申购（亿元）",domain:[0,0.14],
-   zeroline:true,zerolinecolor:"#888",fixedrange:true},
   yaxis3:{title:"指数点位",overlaying:"y",side:"right",
-   showgrid:false,fixedrange:true},
+   showgrid:false,fixedrange:true,visible:!isP},
   xaxis:{type:"date",anchor:"y2",side:"bottom",range:state.range,
    hoverformat:"%Y-%m-%d",tickmode:"auto",nticks:12,
    tickformatstops:TICKSTOPS},
@@ -239,6 +278,8 @@ function applyDates(){
 document.getElementById("cls").onchange=e=>{state.cls=e.target.value;draw();};
 document.getElementById("barlane").onchange=e=>{state.barlane=e.target.value;
  draw();};
+document.getElementById("unit").onchange=e=>{state.unit=e.target.value;
+ draw();};
 document.getElementById("recum").onchange=e=>{state.recum=e.target.checked;
  draw();};
 function normDate(v){
@@ -255,21 +296,31 @@ function tipHTML(d){
   if(!vis)return;
   const cv=CUM[state.cls][key][i]-
    (state.recum&&i0>0?CUM[state.cls][key][i0-1]:0);
+  const pv=PCTCUM[state.cls][key][i]-
+   (state.recum&&i0>0?PCTCUM[state.cls][key][i0-1]:0);
   html+="<br><span style='color:"+col+"'>■</span> "+lab+
-   " 累计: <b>"+cv.toFixed(1)+"</b> 亿";});
+   (state.unit==="pct"?
+    " 累计强度: <b>"+pv.toFixed(2)+"%</b> ("+cv.toFixed(1)+" 亿)":
+    " 累计: <b>"+cv.toFixed(1)+"</b> 亿");});
  const dv=(state.barlane==="all")?
   LANES.reduce((s,[k])=>s+(src[k]?src[k][i]:0),0):
   (src[state.barlane]?src[state.barlane][i]:0);
+ const dp=dailyPct(src,i);
  const bname={all:"全部ETF",institution:"机构主导",
   personal:"个人主导"}[state.barlane];
  const m=COV.missing[i]+COV.excluded[i];
  html+="<br><span style='color:"+(dv>=0?"#c0392b":"#1e8449")+
-  "'>■</span> 每日净申购·"+bname+": <b>"+dv.toFixed(1)+"</b> 亿";
+  "'>■</span> 每日净申购·"+bname+
+  (state.unit==="pct"?
+   ": <b>"+dp.toFixed(2)+"%</b> ("+dv.toFixed(1)+" 亿)":
+   ": <b>"+dv.toFixed(1)+"</b> 亿");
  html+="<br><span style='color:#888'>覆盖 "+COV.priced[i]+"/"+
   COV.reported[i]+(m?("；剔除/缺失 "+m+" 行"):"；无异常")+"</span>";
  html+="<br><span style='color:#555'>上证 "+IX.sse[i].toFixed(1)+
-  " · 深成 "+IX.szse[i].toFixed(1)+
-  " · 全A "+IX.all_a[i].toFixed(1)+"</span>";
+  "("+(IDXPCT.sse[i]>=0?"+":"")+IDXPCT.sse[i].toFixed(1)+"%) · 深成 "+
+  IX.szse[i].toFixed(1)+"("+(IDXPCT.szse[i]>=0?"+":"")+
+  IDXPCT.szse[i].toFixed(1)+"%) · 全A "+IX.all_a[i].toFixed(1)+
+  "("+(IDXPCT.all_a[i]>=0?"+":"")+IDXPCT.all_a[i].toFixed(1)+"%)</span>";
  return html;}
 function bindEvents(){
  const gd=document.getElementById("chart"),
