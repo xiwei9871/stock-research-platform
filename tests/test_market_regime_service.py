@@ -160,3 +160,99 @@ def test_pit_etf_depth_replay():
     assert depth_a > depth_b
     assert 95 < depth_a < 115
     assert 75 < depth_b < 95
+
+
+def _versioned_mini(tmp_path: Path) -> str:
+    """Build a versioned snapshot layout (<base>/<ver>/ + current pointer)."""
+    base = tmp_path / "snaps"
+    (base / "vA").mkdir(parents=True)
+    (base / "vB").mkdir(parents=True)
+    (base / "current").write_text("vA")
+    _mini_snapshot(base / "vA")
+    _mini_snapshot(base / "vB")
+    # vB differs: alla dd120 deeper -> DEEP_DECLINE
+    f = base / "vB" / "market_regime_snapshot.parquet"
+    df = pd.read_parquet(f)
+    df["alla_dd120"] = -0.25
+    df["alla_regime"] = "DEEP_DECLINE"
+    df.to_parquet(f)
+    return str(base)
+
+
+def test_pit_max_depth_never_future(tmp_path):
+    """2026-06 query must not see the July/Aug cycle maximum."""
+    if not REAL_DIR.exists():
+        pytest.skip("snapshot not built")
+    svc.clear_snapshot_caches()
+    jun = svc.regime_state("2026-06-15", "alla", 0,
+                           snapshot_dir=str(REAL_DIR))
+    oct_ = svc.regime_state("2026-10-28", "alla", 0,
+                            snapshot_dir=str(REAL_DIR))
+    svc.clear_snapshot_caches()
+    gj = jun["modules"]["etf_flow"]["groups"]["g2"]
+    go = oct_["modules"]["etf_flow"]["groups"]["g2"]
+    assert gj["cycle_max_withdrawal_pct_to_date"] < 95
+    assert go["cycle_max_withdrawal_pct_to_date"] >= 100
+    assert gj["cum_withdrawal_pct_aum0"] <= \
+        gj["cycle_max_withdrawal_pct_to_date"] + 1e-6
+
+
+def test_aum_semantics(tmp_path):
+    """cycle_start_aum is the fixed denominator; cum_withdrawal_pct = -cum_flow/aum0."""
+    d = _mini_snapshot(tmp_path)
+    svc.clear_snapshot_caches()
+    p = svc.regime_state("2026-10-08", "alla", 0, snapshot_dir=d)
+    svc.clear_snapshot_caches()
+    g = p["modules"]["etf_flow"]["groups"]["g1"]
+    assert g["cycle_start_aum"] == 80.0
+    assert g["current_aum"] == 80.0
+    # -(-100)/80*100 = 125%
+    assert abs(g["cum_withdrawal_pct_aum0"]
+               - (-g["cum_flow"]) / g["cycle_start_aum"] * 100) < 1e-6
+
+
+def test_snapshot_version_and_atomic_switch(tmp_path):
+    base = _versioned_mini(tmp_path)
+    svc.clear_snapshot_caches()
+    p1 = svc.regime_state("2026-10-08", "alla", 0, snapshot_dir=base)
+    assert p1["modules"]["regime"]["regime"] == "DECLINE"
+    # flip pointer -> caches keyed on resolved path pick up vB
+    (Path(base) / "current").write_text("vB")
+    p2 = svc.regime_state("2026-10-08", "alla", 0, snapshot_dir=base)
+    svc.clear_snapshot_caches()
+    assert p2["modules"]["regime"]["regime"] == "DEEP_DECLINE"
+
+
+def test_cycle_reset_changes_denominator(tmp_path):
+    """When pcyc changes, cum_flow and cycle_start_aum reset."""
+    dates = pd.date_range("2026-10-01", periods=4, freq="B")
+    snap = pd.DataFrame(index=dates)
+    for o in ("alla",):
+        snap["alla_dd120"] = -0.05
+        snap["alla_regime"] = "MILD_DRAWDOWN"
+    snap["amt"] = 1.0
+    snap.index.name = "trade_date"
+    snap.to_parquet(tmp_path / "market_regime_snapshot.parquet")
+    etf = pd.DataFrame({
+        "trade_date": list(dates) * 1,
+        "gkey": "g1", "group": "G1_all_equity",
+        "pcyc": ["C1", "C1", "C2", "C2"],
+        "pstate": ["WITHDRAWING"] * 4,
+        "flow": -10.0, "cum_flow": [-50.0, -60.0, -10.0, -20.0],
+        "aum": 100.0, "pdepth": 0.5,
+        "cum_depth_pct": 50.0, "ddur": 1.0, "eelap": 1.0,
+        "vel5": -1.0, "vel20": -1.0, "outshare20": 0.5,
+        "breadth_out": np.nan, "idx_level": 1.0,
+        "cum_withdrawal_pct_aum0": [50.0, 60.0, 10.0, 20.0],
+        "cycle_start_aum": [100.0, 100.0, 200.0, 200.0],
+        "current_aum": 100.0,
+    })
+    etf.to_parquet(tmp_path / "etf_flow_history.parquet")
+    svc.clear_snapshot_caches()
+    p = svc.regime_state("2026-10-06", "alla", 0, snapshot_dir=str(tmp_path))
+    svc.clear_snapshot_caches()
+    g = p["modules"]["etf_flow"]["groups"]["g1"]
+    assert g["cycle_id"] == "C2"
+    assert g["cum_flow"] == -20.0
+    assert g["cycle_start_aum"] == 200.0
+    assert g["cycle_max_withdrawal_pct_to_date"] == 20.0

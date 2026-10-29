@@ -6,8 +6,8 @@
   "current_state": "REACCUMULATING",
   "current_depth_pct": 22.83,
   "cum_flow_latest": -842.8,
-  "cycle_aum": 27003.8,
-  "max_depth_pct": 41.19
+  "cycle_start_aum": 31222.4,
+  "current_aum": 27003.8
  },
  "g2": {
   "group": "G2_hs300_head",
@@ -16,8 +16,8 @@
   "current_state": "REACCUMULATING",
   "current_depth_pct": 87.38,
   "cum_flow_latest": -8533.7,
-  "cycle_aum": 3431.8,
-  "max_depth_pct": 106.25
+  "cycle_start_aum": 9968.8,
+  "current_aum": 3431.8
  },
  "g3": {
   "group": "G3_other_broad",
@@ -26,7 +26,7 @@
   "current_state": "REACCUMULATING",
   "current_depth_pct": 36.54,
   "cum_flow_latest": -3030.2,
-  "cycle_aum": 8822.5,
-  "max_depth_pct": 65.91
+  "cycle_start_aum": 9609.5,
+  "current_aum": 8822.5
  }
 }

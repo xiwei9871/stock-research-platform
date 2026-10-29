@@ -1193,8 +1193,10 @@ export type RegimeGroupState = {
   ddur_days?: number | null;
   vel20?: number | null;
   outshare20?: number | null;
-  cycle_aum?: number | null;
-  max_depth_pct?: number | null;
+  cycle_start_aum?: number | null;
+  current_aum?: number | null;
+  cycle_max_depth_pct_to_date?: number | null;
+  cycle_max_withdrawal_pct_to_date?: number | null;
   inflow_diffusion?: string;
   outflow_diffusion?: string;
 };
@@ -1203,7 +1205,8 @@ export type RegimeStatePayload = {
   market: string;
   trade_date: string;
   status?: string;
-  data_range?: { market: string[]; etf_latest: string | null };
+  data_range?: { market: string[]; etf_latest: string | null;
+    snapshot_version?: string };
   modules: {
     regime: {
       status: string;
@@ -1241,6 +1244,7 @@ export type RegimeStatePayload = {
         date: string; flow: number | null; cum_flow: number | null;
         cum_depth_pct: number | null;
         cum_withdrawal_pct_aum0?: number | null; state: string;
+        cycle_start_aum?: number | null; current_aum?: number | null;
       }>>;
       note?: string;
     };

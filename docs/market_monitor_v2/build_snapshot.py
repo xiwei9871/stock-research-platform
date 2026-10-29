@@ -87,13 +87,15 @@ def build_etf_history() -> tuple[pd.DataFrame, dict]:
     daily = daily.sort_values(["gkey", "date"])
     daily["cum_flow"] = daily.groupby(["gkey", "pcyc"]).flow.cumsum()
     daily["cum_depth_pct"] = daily["pdepth"] * 100.0
-    cyc_aum0 = daily.groupby(["gkey", "pcyc"]).aum.transform("first")
+    daily["cycle_start_aum"] = daily.groupby(
+        ["gkey", "pcyc"]).aum.transform("first")
     daily["cum_withdrawal_pct_aum0"] = (
-        -daily["cum_flow"] / cyc_aum0 * 100.0)
+        -daily["cum_flow"] / daily["cycle_start_aum"] * 100.0)
+    daily["current_aum"] = daily["aum"]
     keep = ["date", "gkey", "group", "pcyc", "pstate", "flow", "cum_flow",
             "aum", "pdepth", "cum_depth_pct", "ddur", "eelap", "vel5",
             "vel20", "outshare20", "breadth_out", "idx_level",
-            "cum_withdrawal_pct_aum0"]
+            "cum_withdrawal_pct_aum0", "cycle_start_aum", "current_aum"]
     hist = daily[keep].rename(columns={"date": "trade_date"})
 
     cycles = {}
@@ -111,24 +113,44 @@ def build_etf_history() -> tuple[pd.DataFrame, dict]:
             if last is not None and not pd.isna(last.cum_depth_pct) else None,
             "cum_flow_latest": round(float(last.cum_flow), 1)
             if last is not None and not pd.isna(last.cum_flow) else None,
-            "cycle_aum": round(float(last.aum), 1)
-            if last is not None and not pd.isna(last.aum) else None,
-            "max_depth_pct": round(float(d.cum_depth_pct.max()), 2)
-            if len(d) else None,
+            "cycle_start_aum": round(float(last.cycle_start_aum), 1)
+            if last is not None and not pd.isna(last.cycle_start_aum)
+            else None,
+            "current_aum": round(float(last.current_aum), 1)
+            if last is not None and not pd.isna(last.current_aum) else None,
+            # NOTE: no global max_depth here — a full-history maximum would
+            # leak future cycle information into historical queries.  The
+            # service computes running maxima per request date instead.
         }
         cycles[gkey] = entry
     return hist, cycles
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+def _git_sha() -> str:
+    try:
+        import subprocess
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+            capture_output=True, text=True).stdout.strip()
+    except Exception:
+        return "nogit"
+
+
+def main(version: str | None = None) -> None:
+    ver = version or f"v{_git_sha()}"
+    stage = OUT / f".stage-{ver}"
+    if stage.exists():
+        import shutil
+        shutil.rmtree(stage)
+    stage.mkdir(parents=True)
     snap = build_market_snapshot()
-    snap.to_parquet(OUT / "market_regime_snapshot.parquet")
+    snap.to_parquet(stage / "market_regime_snapshot.parquet")
     hist, cycles = build_etf_history()
-    hist.to_parquet(OUT / "etf_flow_history.parquet")
-    (OUT / "etf_cycles.json").write_text(
+    hist.to_parquet(stage / "etf_flow_history.parquet")
+    (stage / "etf_cycles.json").write_text(
         json.dumps(cycles, ensure_ascii=False, indent=1))
     manifest = {
+        "snapshot_version": ver,
         "source_parquets": {
             "m1_features": "docs/research/market_risk_m1/data/MACRO_RISK_PIT_FEATURES.parquet",
             "m2_features": "docs/research/market_risk_m2/M2_TEMPORAL_FEATURES.parquet",
@@ -148,11 +170,23 @@ def main() -> None:
                  "at the cycle start, not that holdings were sold more than "
                  "once."),
     }
-    (OUT / "manifest.json").write_text(
+    (stage / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=1))
+    # atomic publish: rename staged dir to the version dir, then update the
+    # `current` pointer last so readers never see a half-written snapshot
+    target = OUT / ver
+    if target.exists():
+        import shutil
+        shutil.rmtree(target)
+    stage.rename(target)
+    tmp_ptr = OUT / ".current.tmp"
+    tmp_ptr.write_text(ver)
+    tmp_ptr.replace(OUT / "current")
+    print("snapshot version:", ver)
     print("snapshot rows:", len(snap), "etf rows:", len(hist))
     print("range:", manifest["date_range"])
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

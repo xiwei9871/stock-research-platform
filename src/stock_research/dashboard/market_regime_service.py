@@ -28,6 +28,35 @@ def _snapshot_dir() -> Path:
     return Path(os.environ.get(SNAPSHOT_DIR_ENV, str(DEFAULT_SNAPSHOT_DIR)))
 
 
+def _resolve_snapshot_dir(base: str | Path) -> str:
+    """Resolve the active snapshot directory.
+
+    The snapshot layout is versioned: ``<base>/<version>/`` with a ``current``
+    pointer file naming the active version.  Resolving per request means a
+    pointer flip automatically invalidates the cached frames (they are keyed
+    on the resolved path).  Legacy flat directories still work.
+    """
+    base = Path(base)
+    ptr = base / "current"
+    if ptr.is_file():
+        ver = ptr.read_text().strip()
+        vdir = base / ver
+        if vdir.is_dir():
+            return str(vdir)
+    return str(base)
+
+
+def _snapshot_version(snapshot_dir: str) -> str:
+    p = Path(snapshot_dir) / "manifest.json"
+    if p.exists():
+        try:
+            return str(json.loads(p.read_text()).get("snapshot_version")
+                       or "unversioned")
+        except (json.JSONDecodeError, OSError):
+            pass
+    return "unversioned"
+
+
 def _num(v: Any) -> Any:
     if v is None:
         return None
@@ -116,7 +145,6 @@ def _emotion_block(row: pd.Series) -> dict[str, Any]:
 def _etf_block(trade_date: pd.Timestamp, snapshot_dir: str,
                history_days: int) -> dict[str, Any]:
     hist = _load_etf_history(snapshot_dir)
-    cycles = _load_cycles(snapshot_dir)
     day = hist[hist.trade_date <= trade_date]
     if not len(day):
         return {"status": "DATA_MISSING", "groups": {}, "history": {}}
@@ -130,6 +158,9 @@ def _etf_block(trade_date: pd.Timestamp, snapshot_dir: str,
             continue
         last = gday.iloc[-1]
         flow20 = gday.tail(20).flow
+        # PIT: running maxima only over rows already visible on trade_date —
+        # never a full-cycle/global maximum that would leak the future.
+        cur_cyc = gday[gday.pcyc == last.pcyc]
         groups[g] = {
             "status": "READY",
             "daily_flow": _num(last.flow),
@@ -144,8 +175,14 @@ def _etf_block(trade_date: pd.Timestamp, snapshot_dir: str,
             "vel20": _num(last.vel20),
             "vel5": _num(last.vel5),
             "outshare20": _num(last.outshare20),
-            "cycle_aum": _num(last.aum),
-            "max_depth_pct": (cycles.get(g) or {}).get("max_depth_pct"),
+            "cycle_start_aum": _num(last.cycle_start_aum)
+            if "cycle_start_aum" in gday.columns else _num(last.aum),
+            "current_aum": _num(last.current_aum)
+            if "current_aum" in gday.columns else _num(last.aum),
+            "cycle_max_depth_pct_to_date": _num(
+                cur_cyc.cum_depth_pct.max()),
+            "cycle_max_withdrawal_pct_to_date": _num(
+                cur_cyc.cum_withdrawal_pct_aum0.max()),
             "inflow_diffusion": "DATA_MISSING",
             "outflow_diffusion": "DATA_MISSING",
         }
@@ -161,6 +198,10 @@ def _etf_block(trade_date: pd.Timestamp, snapshot_dir: str,
                     "cum_depth_pct": _num(r.cum_depth_pct),
                     "cum_withdrawal_pct_aum0": _num(
                         r.cum_withdrawal_pct_aum0),
+                    "cycle_start_aum": _num(
+                        getattr(r, "cycle_start_aum", None)),
+                    "current_aum": _num(
+                        getattr(r, "current_aum", None)),
                     "state": str(r.pstate),
                 }
                 for r in gday.itertuples()
@@ -219,6 +260,16 @@ def _history_rows(df: pd.DataFrame, end: pd.Timestamp, market: str,
     return rows
 
 
+def active_snapshot_version(snapshot_dir: str | None = None) -> str:
+    """Version of the snapshot a request would currently resolve to.
+
+    Used by the route to key the response cache so a pointer flip to a new
+    snapshot version cannot serve stale cached payloads.
+    """
+    return _snapshot_version(_resolve_snapshot_dir(
+        snapshot_dir or _snapshot_dir()))
+
+
 def regime_state(
     trade_date: str | None = None,
     market: str = "alla",
@@ -226,10 +277,20 @@ def regime_state(
     *,
     snapshot_dir: str | None = None,
 ) -> dict[str, Any]:
-    snap_dir = snapshot_dir or str(_snapshot_dir())
+    snap_dir = _resolve_snapshot_dir(snapshot_dir or _snapshot_dir())
     if market not in MARKETS:
         market = "alla"
-    df = _load_market_snapshot(snap_dir)
+    try:
+        df = _load_market_snapshot(snap_dir)
+    except (OSError, FileNotFoundError):
+        return {
+            "market": market,
+            "requested_date": trade_date,
+            "status": "ERROR",
+            "error": "market_regime_snapshot unavailable",
+            "snapshot_version": _snapshot_version(snap_dir),
+            "modules": {},
+        }
     resolved = _resolve_trade_date(df, trade_date)
     if resolved is None:
         return {
@@ -240,7 +301,11 @@ def regime_state(
         }
     row = df.loc[resolved]
     history_days = max(0, min(int(history_days or 0), 1500))
-    etf = _etf_block(resolved, snap_dir, history_days)
+    try:
+        etf = _etf_block(resolved, snap_dir, history_days)
+    except (OSError, FileNotFoundError):
+        etf = {"status": "DATA_MISSING", "groups": {}, "history": {},
+               "latest_etf_date": None}
     return {
         "market": market,
         "requested_date": trade_date,
@@ -248,6 +313,7 @@ def regime_state(
         "data_range": {
             "market": [str(df.index.min())[:10], str(df.index.max())[:10]],
             "etf_latest": etf.get("latest_etf_date"),
+            "snapshot_version": _snapshot_version(snap_dir),
         },
         "modules": {
             "identity": {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import { fetchMarketRegimeState, type RegimeStatePayload } from '../../api/client';
 
@@ -13,22 +13,36 @@ const GROUP_LABELS: Record<string, string> = {
   g1: '全股票ETF', g2: '沪深300头部ETF', g3: '其他宽基ETF',
 };
 
-function useEChart(deps: unknown[]) {
+function useEChart() {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.EChartsType | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const [option, setOption] = useState<echarts.EChartsOption | null>(null);
+  // chart lifecycle: create/update/dispose only inside effects, never during
+  // render. The ResizeObserver is attached lazily — only once a chart
+  // actually exists — so a mounted-but-empty panel creates no observer.
   useEffect(() => {
     const node = ref.current;
     if (!node || !option) return;
     const chart = chartRef.current ?? echarts.init(node);
     chartRef.current = chart;
     chart.setOption(option, { notMerge: true });
-    const onResize = () => chart.resize();
+    if (!roRef.current && typeof ResizeObserver !== 'undefined') {
+      roRef.current = new ResizeObserver(() => chart.resize());
+      roRef.current.observe(node);
+    }
+  }, [option]);
+  useEffect(() => {
+    const onResize = () => chartRef.current?.resize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [option, ...deps]);
-  useEffect(() => () => chartRef.current?.dispose(), []);
+  }, []);
+  useEffect(() => () => {
+    roRef.current?.disconnect();
+    roRef.current = null;
+    chartRef.current?.dispose();
+    chartRef.current = null;
+  }, []);
   return { ref, setOption };
 }
 
@@ -47,23 +61,33 @@ export function MarketRegimeSection({ tradeDate }: { tradeDate: string }) {
   const [loading, setLoading] = useState(false);
   const [market, setMarket] = useState('alla');
   const [group, setGroup] = useState('g1');
-  const cont = useEChart([]);
-  const etf = useEChart([]);
+  const [refresh, setRefresh] = useState(0);
+  const cont = useEChart();
+  const etf = useEChart();
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // Clear previous payload immediately: stale metrics must never be shown
+    // under a newly selected date/market while the request is in flight.
+    setPayload(null);
+    cont.setOption(null);
+    etf.setOption(null);
     void fetchMarketRegimeState({ tradeDate, market, historyDays: 250 })
       .then((p) => { if (!cancelled) setPayload(p); })
       .catch((e: Error) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tradeDate, market]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tradeDate, market, refresh]);
 
   const rows = payload?.modules.history.rows ?? [];
-  useMemo(() => {
-    if (!rows.length) return;
+  useEffect(() => {
+    if (!rows.length) {
+      cont.setOption(null);
+      return;
+    }
     const dates = rows.map((r) => String(r.date));
     cont.setOption({
       grid: [{ left: 50, right: 50, top: 30, height: '32%' },
@@ -94,11 +118,14 @@ export function MarketRegimeSection({ tradeDate }: { tradeDate: string }) {
       ],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payload, market]);
+  }, [rows, market]);
 
   const hist = payload?.modules.etf_flow.history[group] ?? [];
-  useMemo(() => {
-    if (!hist.length) return;
+  useEffect(() => {
+    if (!hist.length) {
+      etf.setOption(null);
+      return;
+    }
     etf.setOption({
       grid: { left: 60, right: 60, top: 30, bottom: 30 },
       xAxis: { type: 'category', data: hist.map((r) => r.date) },
@@ -113,13 +140,16 @@ export function MarketRegimeSection({ tradeDate }: { tradeDate: string }) {
       ],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payload, group]);
+  }, [hist, group]);
 
   if (error) {
     return (
       <section className="market-regime-section">
         <h2>市场宏观状态</h2>
         <p className="muted">宏观状态数据暂不可用：{error}</p>
+        <button type="button" onClick={() => setRefresh((v) => v + 1)}>
+          重试
+        </button>
       </section>
     );
   }
@@ -135,7 +165,9 @@ export function MarketRegimeSection({ tradeDate }: { tradeDate: string }) {
       <p className="muted">
         数据截至 {payload?.trade_date ?? '—'} · ETF数据截至 {mods?.etf_flow.latest_etf_date ?? '—'}
         {mods?.etf_flow.status === 'STALE' ? '（ETF数据滞后于行情）' : ''}
+        · 快照 {payload?.data_range?.snapshot_version ?? '—'}
         · 描述性状态，非预测。事前预警：{payload?.boundaries.advance_warning ?? '—'}
+        {loading ? ' · 加载中…' : ''}
       </p>
 
       <div className="regime-cards">
@@ -184,9 +216,11 @@ export function MarketRegimeSection({ tradeDate }: { tradeDate: string }) {
           <div className="regime-kpis">
             <span>状态 {g.state} · 周期 {g.cycle_id}</span>
             <span>累计净申赎 {num(g.cum_flow)} 亿（负值=净赎回）</span>
-            <span>占周期初AUM {num(g.cum_withdrawal_pct_aum0)}%</span>
+            <span>占周期初AUM {num(g.cum_withdrawal_pct_aum0)}%
+              （周期初 {num(g.cycle_start_aum, 0)} 亿 / 当前 {num(g.current_aum, 0)} 亿）</span>
             <span>确认撤持续 {num(g.ddur_days, 0)} 交易日</span>
             <span>20日速度 {num(g.vel20, 2)}%/日 · 近20日净申赎 {num(g.flow20)} 亿</span>
+            <span>周期内最大撤离(至当日) {num(g.cycle_max_withdrawal_pct_to_date)}%</span>
           </div>
           <div className="regime-chart" ref={etf.ref} />
           <p className="muted small">

@@ -1,0 +1,6 @@
+field,definition,source,example_2026_07_06_g2
+cycle_start_aum,周期首日AUM固定分母,PIT_CYCLE_DAILY aum(first per gkey+pcyc),9969亿
+current_aum,当日AUM,PIT_CYCLE_DAILY aum(current row),1889亿
+cum_flow,周期内累计净申赎(负=净赎回),flow cumsum per cycle,-10406.7亿
+cum_withdrawal_pct_aum0,-cum_flow/cycle_start_aum*100,derived,104.4%
+cum_depth_pct,R3.1 pdepth口径*100,derived,106.3%

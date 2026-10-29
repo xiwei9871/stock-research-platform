@@ -1369,9 +1369,10 @@ def create_app() -> FastAPI:
         market: str = "alla",
         history_days: int = 120,
     ):
+        snap_ver = market_regime_service.active_snapshot_version()
         return app.state.eod_response_cache.get_or_set(
             ("market_monitor_regime_state", trade_date or "", market,
-             int(history_days)),
+             int(history_days), snap_ver),
             lambda: market_regime_service.regime_state(
                 trade_date=trade_date, market=market,
                 history_days=history_days),
