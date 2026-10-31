@@ -14,6 +14,9 @@ DETAIL_LOG="$LOG_DIR/strategy_daily_eod_${TRADE_DATE:-auto}_${RUN_TS}.log"
 mkdir -p "$LOG_DIR"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
+source "$ROOT/scripts/ops_job_guard.sh"
+ops_preflight strategy-eod-publish "$PYTHON_BIN" || exit 1
+trap 'ops_record strategy-eod-publish "$?" "$OUTPUT_ROOT/${TRADE_DATE:-}"' EXIT
 clear_stock_proxy_env
 stock_cron_guard_or_exit "$PYTHON_BIN" "$TRADE_DATE" "${RESEARCH_SERVICE:-}" >>"$DETAIL_LOG" 2>&1
 

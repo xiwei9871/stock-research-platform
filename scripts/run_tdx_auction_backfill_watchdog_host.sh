@@ -10,6 +10,10 @@ LOCK_PATH="${TDX_AUCTION_WATCHDOG_LOCK_DIR:-$LOG_DIR/tdx_auction_backfill_watchd
 MODE="${TDX_AUCTION_WATCHDOG_MODE:-range}"
 START_DATE="${TDX_AUCTION_WATCHDOG_START_DATE:-2018-02-14}"
 END_DATE="${TDX_AUCTION_WATCHDOG_END_DATE:-2024-12-31}"
+
+source "$ROOT/scripts/ops_job_guard.sh"
+ops_preflight tdx-auction-backfill-watchdog "$PYTHON" || exit 1
+trap 'ops_record tdx-auction-backfill-watchdog "$?" ""' EXIT
 RUN_ID="${TDX_AUCTION_WATCHDOG_RUN_ID:-}"
 MAX_JOBS="${TDX_AUCTION_WATCHDOG_MAX_JOBS:-4}"
 WORKERS="${TDX_AUCTION_WATCHDOG_WORKERS:-8}"
