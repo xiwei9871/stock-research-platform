@@ -108,3 +108,35 @@ Prefer targeted reads over full-file reads.
   stdout heartbeats (~600s) on **script-global elapsed time**, never per-step
   counters — back-to-back short steps once caused >20min of silence and a
   kill. Detail logs keep the frequent (60s) heartbeat.
+
+## Memory Safety for Heavy Batch Jobs (16 GB host)
+
+Context: on 2026-10-26 three concurrent ad-hoc Python forensics jobs grew to
+~28/20/14 GB RSS, exhausted swap (42 swapfiles, compressor at 100% of
+segments), froze WindowServer >120 s, and triggered a watchdog kernel panic.
+Design heavy scripts to stay bounded:
+
+- Load large tables in chunks or with `dtype` narrowing; do not pull a
+  10M+-row fact table into a single DataFrame when SQL-side aggregation or
+  incremental processing answers the same question.
+- Run heavy ad-hoc jobs sequentially — never two jobs expected to exceed
+  ~4 GB RSS concurrently on this 16 GB box. Check `memory_pressure` /
+  `sysctl kern.memorystatus_level` before starting a second one.
+- Log peak RSS (or `resource.getrusage`/`/usr/bin/time -l`) for any new
+  heavy script so growth is visible instead of discovered at panic time.
+- A persistent LaunchAgent `com.stockresearch.mem-watchdog`
+  (`scripts/mem_watchdog.sh`) SIGTERMs any user Python process over 10 GB
+  RSS (warn at 6 GB), SIGKILLs ~15 s later. It is protective backstop only —
+  write jobs that never approach it. Tune via `MEM_WATCHDOG_*` env vars;
+  exclude a process with `MEM_WATCHDOG_EXCLUDE_RE`.
+- If a job legitimately needs >10 GB (should not happen on this host), run it
+  on a bigger machine or restructure it — do not bypass the watchdog to let
+  it grow.
+
+## Project Continuity (Devin V1.0.1)
+- At session start read `docs/agent_governance/PROJECT_STATE.yaml`,
+  `DECISIONS.md`, `HANDOFF.md` — repo files override chat memory.
+- Run `python3 tools/gov/sr_gates.py all` before status claims.
+- Report Build/Tests/Deploy separately; unverified ⇒ NOT_VERIFIED.
+- Forbidden without explicit approval: prod deploy, parallel baostock,
+  deleting protected `outputs/research/*`, moving cron off `main`.
