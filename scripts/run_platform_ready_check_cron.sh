@@ -11,6 +11,10 @@ OUTPUT_DIR="${PLATFORM_READY_OUTPUT_DIR:-$ROOT/outputs/research}"
 REPAIR_OUTPUT_DIR="${PLATFORM_READY_REPAIR_OUTPUT_DIR:-$OUTPUT_DIR/eod_auto_repair/$TRADE_DATE}"
 HEARTBEAT_SECONDS="${PLATFORM_READY_CHECK_HEARTBEAT_SECONDS:-60}"
 
+source "$ROOT/scripts/ops_job_guard.sh"
+ops_preflight platform-ready-check "$PYTHON" || exit 1
+trap 'ops_record platform-ready-check "$?" "$REPAIR_OUTPUT_DIR"' EXIT
+
 if [ -z "$TRADE_DATE" ]; then
   latest_market_date="$("$PYTHON" -c 'from stock_research.dashboard.platform import load_platform_summary; summary = load_platform_summary(); print(summary.get("latest_market_date") or summary.get("latest_trade_date") or "")' 2>/dev/null || true)"
   if [ -n "$latest_market_date" ]; then

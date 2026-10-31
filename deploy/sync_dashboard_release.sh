@@ -95,6 +95,11 @@ if [[ ! -d "$ROOT" ]]; then
   exit 2
 fi
 ROOT="$(cd "$ROOT" && pwd -P)"
+source "$ROOT/scripts/ops_job_guard.sh" 2>/dev/null || true
+if declare -F ops_preflight >/dev/null; then
+  ops_preflight dashboard-release-sync "${STOCK_RESEARCH_PYTHON:-$ROOT/.venv/bin/python}" || exit 1
+  trap 'ops_record dashboard-release-sync "$?" ""' EXIT
+fi
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
     echo "Refusing disposable worktree release root: $ROOT" >&2

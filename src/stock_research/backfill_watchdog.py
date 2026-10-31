@@ -25,8 +25,14 @@ from watchdog_runner.backfill import (  # noqa: E402
     build_watchdog_status,
     format_watchdog_message,
     run_watchdog_once,
-    should_send_watchdog_message,
 )
+
+try:  # noqa: E402
+    from watchdog_runner.backfill import should_send_watchdog_message
+except ImportError:  # watchdog_runner builds lacking the helper: notify on non-healthy
+    def should_send_watchdog_message(status: BackfillWatchdogStatus) -> bool:
+        return status.watchdog_action != "healthy"
+
 
 __all__ = [
     "BackfillSummary",
