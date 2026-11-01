@@ -35,3 +35,19 @@
 - 需管理员执行：daemon.json 日志轮转、mongo 修复或暂停。
 - NAS 挂载可用性依赖 185 `/mnt/Public`（CIFS）——建议加 NAS 断连监控告警。
 - L2 现为每周级全量；如需更短 RPO 需另议 WAL 归档（当前 archive_mode=off）。
+
+## P0-D 修订：与 `scripts/m2_l2_backup.sh` 的差距对照（已落实到 `scripts/l2_weekly_nas_backup.sh`）
+
+| 要求 | 原脚本 | 新设计 |
+|---|---|---|
+| NAS 挂载有效性 | 仅 `df`（未挂载时返回本地盘统计，可能误写本地） | `mountpoint -q` + `/proc/mounts` 必须是 cifs/nfs/smb3，**无本地回退分支** |
+| 容量不足 fail-closed | ≥500GB 阈值 | 保留 + 上述挂载门 |
+| 告警 | 仅日志行 | `alert()` 钩子（FAIL/SUCCESS/留存清理），可接 OpenClaw 心跳/webhook |
+| 保留与校验 | sha256+`pg_restore -l`+manifest | + schema 数 ≥20 断言 + **keep-4 保留轮转（仅 L2 命名空间）** |
+| 凭证 | `PGPASSWORD=mqkj1234` 明文内嵌 | `PGPASSFILE`（chmod 600，容器只读挂载） |
+| 全局对象 | 无 | `pg_dumpall --globals-only` sidecar（角色/表空间） |
+| 与旧备份互斥 | 无 | Gate1：docker API 校验 `postgres-backup` 必须 `exited`，否则中止 |
+| 不用 187 磁盘做临时落点 | 直写 NAS | 同 + mount 验证兜底 |
+| 窗口/长事务/监控/可杀 | 已有 | 保留（去掉夜间窗口硬编码，由调度器决定时刻） |
+
+未实施项：调度注册、PGPASS_FILE 创建、daemon.json 日志轮转、mongo 容器修复。
