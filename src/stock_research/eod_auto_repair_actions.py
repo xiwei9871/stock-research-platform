@@ -362,13 +362,29 @@ def repair_review_evidence_snapshots(
     *,
     runner: Callable[..., dict[str, Any]],
 ) -> RepairActionResult:
-    result = runner(trade_date=trade_date)
+    result = dict(runner(trade_date=trade_date) or {})
     output_dir = str(result.get("output_dir") or "")
+    # Gate A: the outcome comes from what was actually written and
+    # reconciled, never assumed. Runners without a status (legacy callers)
+    # keep the previous behaviour.
+    raw = str(result.get("status") or "success")
+    manifest_ok = result.get("manifest_written", True) is not False
+    if raw == "success" and manifest_ok:
+        status, message = RepairStatus.SUCCESS, "review evidence snapshots rebuilt"
+    elif raw == "skipped":
+        status, message = RepairStatus.SKIPPED, "review evidence snapshots skipped"
+    elif raw == "partial" or (raw == "success" and not manifest_ok):
+        status, message = RepairStatus.DEGRADED, "review evidence snapshots incomplete or not reconciled"
+    else:
+        status, message = RepairStatus.FAILED, "review evidence snapshots failed"
+    errors = [str(e) for e in result.get("errors") or []]
+    if errors:
+        message = f"{message}: {'; '.join(errors)}"
     return RepairActionResult(
         name="repair_review_evidence_snapshots",
-        status=RepairStatus.SUCCESS,
-        message="review evidence snapshots rebuilt",
-        metrics=dict(result or {}),
+        status=status,
+        message=message,
+        metrics=result,
         artifact_paths=[output_dir] if output_dir else [],
     )
 

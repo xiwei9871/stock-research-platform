@@ -378,14 +378,11 @@ def publish_strategy_eod(
 
     for entry in entries:
         manifest_upsert(entry)
-    snapshot_entry = _write_review_evidence_snapshot_entry(
-        run_id=run_id,
-        trade_date=selected_trade_date,
-        output_dir=output_dir,
-        started_at=started_at,
-    )
-    manifest_upsert(snapshot_entry)
-    entries.append(snapshot_entry)
+    # Gate A: review/evidence snapshots are NOT taken here. This runs in
+    # staging before the publication commit, so the review queue cannot see
+    # this run's official manifest (always skipped) or sees an older one on a
+    # same-day rerun. strategy_daily_eod snapshots the published version
+    # after commit (review_evidence_snapshots.run_post_publish_snapshots).
 
     summary_path = output_dir / "strategy_eod_publish_summary.json"
     summary = {

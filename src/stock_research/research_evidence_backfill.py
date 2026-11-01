@@ -104,7 +104,7 @@ def _load_digest_rows(*, trade_date: str | None, limit: int, service: str) -> li
         digest_key,
         payload_hash,
         digest_payload
-    FROM ops.evidence_digest_snapshot
+    FROM ops.evidence_digest_snapshot_current
     WHERE {" AND ".join(clauses)}
     ORDER BY trade_date DESC, updated_at DESC
     LIMIT %s
@@ -125,7 +125,7 @@ def _load_review_rows(*, trade_date: str | None, limit: int, service: str) -> li
         digest_key,
         payload_hash,
         review_item_payload
-    FROM ops.review_item_snapshot
+    FROM ops.review_item_snapshot_current
     WHERE {" AND ".join(clauses)}
     ORDER BY trade_date DESC, updated_at DESC
     LIMIT %s
