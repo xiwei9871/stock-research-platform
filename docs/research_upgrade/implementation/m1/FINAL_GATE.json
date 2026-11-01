@@ -1,0 +1,55 @@
+{
+  "task": "DATA-R3-IMPLEMENTATION M1 — stop new errors and evidence loss",
+  "branch": "data/r3-implementation-m1",
+  "base": "b7809cd6d6bdfad5fa28623127e5ce09b8ed7761",
+  "worktree": ".worktrees/r3-m1",
+  "gates": {
+    "GATE1_engineering_isolation": {
+      "state": "PASS",
+      "evidence": "new worktree; canonical/P1d.3/hotfix untouched; prod DDL/writes: none; only m1_shadow objects created"
+    },
+    "GATE2_tradeability_incremental_safety": {
+      "state": "PASS",
+      "evidence": "M1_V2_WRITE_DRILLS.json all_pass: idempotent, base-missing/version-conflict/switch-off blocked, timeout->rollback->0 residual, unknown fail-closed, metrics reported; caught+fixed a real precedence bug in _check_target"
+    },
+    "GATE3_financial_version_preservation": {
+      "state": "PASS",
+      "evidence": "FINANCIAL_VERSION_TESTS.json all_pass: 4 real multi-version chains replayed from raw payloads (228 events/223 keys), idempotent refetch, metric change appends, metadata no version, as_of reads correct, unknown ann not invented"
+    },
+    "GATE4_consumer_compatibility": {
+      "state": "PASS",
+      "evidence": "no existing consumer path changed; normalized tables untouched; new modules have zero production callers; 38/38 tests"
+    },
+    "GATE5_resources_and_recovery": {
+      "state": "PASS",
+      "evidence": "FAILURE_RECOVERY_REPORT + STORAGE_AND_RUNTIME_ESTIMATE; incremental writes ~5.2k rows/day; finver backfill bounded and documented"
+    }
+  },
+  "integrity_gate_eval": "GATE_EVAL.json — prod tradeability READY, financial_pit DEGRADED (sentinel rows + no prod version layer), combined DEGRADED",
+  "verdict": "IMPLEMENTATION_READY_FOR_DEPLOYMENT_REVIEW",
+  "explicitly_not_claimed": "PRODUCTION_DATA_READY — M2 prod DDL/wiring/backfill awaits separate approval",
+  "m2_approval_items": [
+    "ALTER core.asset_status_daily ADD 5 v2 columns",
+    "wire emit_eod_v2_flags into EOD after build_asset_status_daily (same txn)",
+    "batched historical v2 backfill (P1d.3 runbook)",
+    "deploy finver schema + ingest_payload into finance ingestion txn",
+    "raw payload historical replay (batched)"
+  ],
+  "tests": {"passed": 38, "failed": 0, "skipped": 0,
+            "new_failures_vs_baseline": 0},
+  "deliverables": [
+    "BASELINE_AND_INTEGRATION_MAP.md", "M1_IMPLEMENTATION_DESIGN.md",
+    "V2_EOD_WRITE_GATE.md", "FINANCIAL_VERSION_STORE_DESIGN.md",
+    "FINANCIAL_VERSION_TESTS.json", "DATA_INTEGRITY_GATE.md",
+    "FAILURE_RECOVERY_REPORT.md", "STORAGE_AND_RUNTIME_ESTIMATE.md",
+    "M2_M4_DEPENDENCY_PLAN.md", "REGRESSION_DIFF.md", "FINAL_GATE.json",
+    "M1_V2_WRITE_DRILLS.json", "GATE_EVAL.json"
+  ],
+  "code": ["src/stock_research/eod_v2_writer.py",
+           "src/stock_research/financial_version_store.py",
+           "src/stock_research/data_integrity_gate.py",
+           "scripts/m1_v2_write_drills.py",
+           "scripts/m1_finver_drills.py",
+           "tests/test_r3_m1.py",
+           "src/stock_research/financial_pit.py (evidence tiers)"]
+}

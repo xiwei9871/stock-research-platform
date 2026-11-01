@@ -1,0 +1,75 @@
+{
+ "latest_period_default": {
+  "asset_id": "CN:SH:600000",
+  "as_of": "2024-06-01",
+  "statement_type": "income",
+  "report_period": "2024-03-31",
+  "source": "akshare_em_profit_sheet",
+  "publication_evidence": "2024-04-30",
+  "publicly_available_at_asof": true,
+  "operationally_available_at_asof": false,
+  "selected_statement_version": "akshare_em_profit_sheet@ann=2024-04-30",
+  "restatement_of": "baostock@ann=2024-04-30",
+  "pit_status": "verified_public",
+  "restriction_reasons": [
+   "public by as_of but ingested later (operational gap)",
+   "2 sources on key; preference=alpha"
+  ],
+  "evidence_trace": {
+   "table": "finance.income_statement",
+   "rows_seen": 184,
+   "version_policy": "latest_public",
+   "source_preference": []
+  }
+ },
+ "initial_on_restated": {
+  "asset_id": "CN:SH:600032",
+  "as_of": "2027-01-01",
+  "statement_type": "balance",
+  "report_period": "2025-12-31",
+  "source": "akshare_sina",
+  "publication_evidence": "2026-04-28",
+  "publicly_available_at_asof": true,
+  "operationally_available_at_asof": true,
+  "selected_statement_version": "akshare_sina@ann=2026-04-28",
+  "restatement_of": "akshare_em@ann=2026-04-28,akshare_sina@ann=2026-08-28",
+  "pit_status": "restated_selected",
+  "restriction_reasons": [
+   "same-source re-announcement on key; initial_public selected",
+   "2 sources on key; preference=('akshare_sina',)"
+  ],
+  "evidence_trace": {
+   "table": "finance.balance_sheet",
+   "rows_seen": 3,
+   "version_policy": "initial_public",
+   "source_preference": [
+    "akshare_sina"
+   ]
+  }
+ },
+ "latest_on_restated": {
+  "asset_id": "CN:SH:600032",
+  "as_of": "2027-01-01",
+  "statement_type": "balance",
+  "report_period": "2025-12-31",
+  "source": "akshare_sina",
+  "publication_evidence": "2026-08-28",
+  "publicly_available_at_asof": true,
+  "operationally_available_at_asof": true,
+  "selected_statement_version": "akshare_sina@ann=2026-08-28",
+  "restatement_of": "akshare_em@ann=2026-04-28,akshare_sina@ann=2026-04-28",
+  "pit_status": "restated_selected",
+  "restriction_reasons": [
+   "same-source re-announcement on key; latest_public selected",
+   "2 sources on key; preference=('akshare_sina',)"
+  ],
+  "evidence_trace": {
+   "table": "finance.balance_sheet",
+   "rows_seen": 3,
+   "version_policy": "latest_public",
+   "source_preference": [
+    "akshare_sina"
+   ]
+  }
+ }
+}

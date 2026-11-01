@@ -1,0 +1,93 @@
+{
+ "instance": "stock_m2_test (local PG16, independent)",
+ "scenarios": {
+  "S0_build_own_txn": {
+   "per_date": [
+    {
+     "d": "2026-10-20",
+     "n": 8
+    },
+    {
+     "d": "2026-10-21",
+     "n": 8
+    },
+    {
+     "d": "2026-10-22",
+     "n": 8
+    }
+   ]
+  },
+  "S1_v2_stage_written": {
+   "trade_date": "2026-10-20",
+   "committed": true,
+   "status": "written",
+   "target": "core.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 8,
+   "matched_rows": 8,
+   "invalid_rows": 0,
+   "state_dist": {
+    "1": 8
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 8
+  },
+  "S1b_day2": {
+   "status": "written",
+   "committed": true
+  },
+  "S2_idempotent_repeat": {
+   "status": "idempotent",
+   "committed": true,
+   "checksum_stable": true
+  },
+  "S3_switch_off": {
+   "status": "blocked",
+   "committed": false,
+   "rows_flagged": 0
+  },
+  "S4_abort_rollback_retry": {
+   "abort": "QueryCanceled",
+   "rollback_clean": true,
+   "retry_status": "written",
+   "retry_committed": true
+  },
+  "S5_incomplete": {
+   "status": "incomplete",
+   "matched": 0,
+   "base": 1,
+   "missing": 1,
+   "pass": true
+  },
+  "S5b_stage_rolls_back": {
+   "status": "incomplete",
+   "committed": false,
+   "pass": true
+  },
+  "S6_state_dist": [
+   {
+    "st": 1,
+    "flagged_limit": 12,
+    "n": 24
+   }
+  ],
+  "S7_foreign_version": {
+   "status": "blocked",
+   "committed": false,
+   "pass": true
+  }
+ },
+ "gate": {
+  "build_then_stage": true,
+  "stage_written": true,
+  "idempotent": true,
+  "switch_off_blocked": true,
+  "abort_rolled_back": true,
+  "retry_committed": true,
+  "incomplete_detected": true,
+  "stage_rollback_on_incomplete": true,
+  "foreign_version_blocked": true,
+  "all_pass": true
+ }
+}

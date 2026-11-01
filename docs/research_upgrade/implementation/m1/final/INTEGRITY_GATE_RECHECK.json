@@ -1,0 +1,110 @@
+{
+ "production_default": {
+  "tradeability": {
+   "domain": "tradeability",
+   "table": "core.asset_status_daily",
+   "checks": {
+    "rows": 17299191,
+    "v2_columns_present": []
+   },
+   "state": "LEGACY_READY",
+   "reasons": [
+    "v2 contract absent — legacy v1 healthy; NOT v2-ready"
+   ]
+  },
+  "financial_pit": {
+   "domain": "financial_pit",
+   "checks": {
+    "sentinel_rows": {
+     "b": 71,
+     "c": 22
+    },
+    "raw_payload_rows": 16586,
+    "finver_tables": 1
+   },
+   "state": "DEGRADED",
+   "reasons": [
+    "sentinel announcement rows b=71 c=22"
+   ]
+  },
+  "combined": "DEGRADED"
+ },
+ "production_require_v2": {
+  "tradeability": {
+   "domain": "tradeability",
+   "table": "core.asset_status_daily",
+   "checks": {
+    "rows": 17299191,
+    "v2_columns_present": []
+   },
+   "state": "BLOCKED",
+   "reasons": [
+    "v2 contract absent — legacy v1 healthy; NOT v2-ready",
+    "require_v2=True"
+   ]
+  },
+  "financial_pit": {
+   "domain": "financial_pit",
+   "checks": {
+    "sentinel_rows": {
+     "b": 71,
+     "c": 22
+    },
+    "raw_payload_rows": 16586,
+    "finver_tables": 1
+   },
+   "state": "DEGRADED",
+   "reasons": [
+    "sentinel announcement rows b=71 c=22"
+   ]
+  },
+  "combined": "BLOCKED"
+ },
+ "shadow_require_v2": {
+  "tradeability": {
+   "domain": "tradeability",
+   "table": "m1_shadow.asset_status_daily",
+   "checks": {
+    "rows": 20760,
+    "v2_columns_present": [
+     "is_limit_down_v2",
+     "is_limit_up_v2",
+     "limit_flags_version",
+     "limit_rule_id_v2",
+     "limit_state_v2"
+    ],
+    "v2": {
+     "nv": 1,
+     "nullv": 0,
+     "badst": 0,
+     "badflag": 0,
+     "badrule": 0,
+     "flagged": 20760
+    }
+   },
+   "state": "V2_READY",
+   "reasons": []
+  },
+  "financial_pit": {
+   "domain": "financial_pit",
+   "checks": {
+    "sentinel_rows": {
+     "b": 71,
+     "c": 22
+    },
+    "raw_payload_rows": 16586,
+    "finver_tables": 1
+   },
+   "state": "DEGRADED",
+   "reasons": [
+    "sentinel announcement rows b=71 c=22"
+   ]
+  },
+  "combined": "DEGRADED"
+ },
+ "semantics": {
+  "LEGACY_READY": "v1 healthy, v2 contract absent",
+  "V2_READY": "v2 cols + full single-version valid coverage",
+  "note": "empty/invalid/mixed-version -> DEGRADED or BLOCKED, never READY"
+ }
+}

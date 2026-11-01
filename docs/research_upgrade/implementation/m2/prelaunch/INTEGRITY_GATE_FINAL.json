@@ -1,0 +1,23 @@
+{
+ "instance": "stock_m2_test (independent PG16)",
+ "cases": {
+  "W1_stale_writer_rejected": true,
+  "W2_heartbeat_accepted": true,
+  "W3_fresh_obs": true,
+  "W4_undeclared_scope_not_ready": true,
+  "W4b_scoped_data_ready": true,
+  "W5_raw_unreconciled": true,
+  "W6_chain_mismatch": true,
+  "C1_pre_emit_not_publishable": true,
+  "C2_canary_publishable": true,
+  "C3_foreign_version": true,
+  "C4_invalid_row_blocks": true,
+  "Q1_legacy_cant_satisfy_v2": true,
+  "Q2_v2_consumer_satisfied": true,
+  "Q3_stale_writer_blocks": true,
+  "Q4_declared_degraded_ok": true
+ },
+ "passed": 15,
+ "total": 15,
+ "all_pass": true
+}

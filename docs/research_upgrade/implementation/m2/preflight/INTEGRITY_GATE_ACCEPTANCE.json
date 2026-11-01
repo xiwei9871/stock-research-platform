@@ -1,0 +1,149 @@
+{
+ "instance": "stock_m2_test (local PG16)",
+ "cases": [
+  {
+   "case": "combine_empty",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "combine_unknown",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "combine_blocked_wins",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "combine_degraded",
+   "expect": "DEGRADED",
+   "got": "DEGRADED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "legacy_cannot_satisfy_v2",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "v1-only table + require_v2",
+   "pass": true
+  },
+  {
+   "case": "legacy_v1_healthy",
+   "expect": "LEGACY_READY",
+   "got": "LEGACY_READY",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "zero_coverage_blocked",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "require_v2 + zero flags → blocked",
+   "pass": true
+  },
+  {
+   "case": "partial_coverage",
+   "expect": "DEGRADED",
+   "got": "DEGRADED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "partial_require_v2",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "missing_rule_id",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "rule_id '' must fail-closed",
+   "pass": true
+  },
+  {
+   "case": "foreign_version",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "full_valid_coverage",
+   "expect": "V2_READY",
+   "got": "V2_READY",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "window_partial",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "10-21 has zero flags in window",
+   "pass": true
+  },
+  {
+   "case": "unverifiable_counted",
+   "expect": "V2_READY",
+   "got": "V2_READY",
+   "detail": "unverifiable_rows=2",
+   "pass": true,
+   "unverifiable_rows": 2
+  },
+  {
+   "case": "finver_prod_absent",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "no finver schema yet",
+   "pass": true
+  },
+  {
+   "case": "finver_schema_only",
+   "expect": "DEGRADED",
+   "got": "DEGRADED",
+   "detail": "tables exist, zero write evidence",
+   "pass": true
+  },
+  {
+   "case": "shadow_not_prod",
+   "expect": "DEGRADED",
+   "got": "DEGRADED",
+   "detail": "shadow finver data must not promote 'finver' verdict",
+   "pass": true
+  },
+  {
+   "case": "finver_with_data",
+   "expect": "READY",
+   "got": "READY",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "requirements_empty",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  },
+  {
+   "case": "requirements_no_domains",
+   "expect": "BLOCKED",
+   "got": "BLOCKED",
+   "detail": "",
+   "pass": true
+  }
+ ],
+ "total": 20,
+ "passed": 20,
+ "all_pass": true
+}

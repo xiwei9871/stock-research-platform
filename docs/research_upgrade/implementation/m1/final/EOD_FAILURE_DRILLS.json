@@ -1,0 +1,167 @@
+{
+ "table": "m1_shadow.asset_status_daily",
+ "dates": [
+  "2026-10-20",
+  "2026-10-21",
+  "2026-10-22",
+  "2026-10-23"
+ ],
+ "scenarios": {
+  "write_2026-10-20": {
+   "status": "written",
+   "trade_date": "2026-10-20",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 5190,
+   "matched_rows": 5190,
+   "invalid_rows": 0,
+   "state_dist": {
+    "1": 5190
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 5190,
+   "checksum": "cc3e67a1023c366e"
+  },
+  "write_2026-10-21": {
+   "status": "written",
+   "trade_date": "2026-10-21",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 5189,
+   "matched_rows": 5189,
+   "invalid_rows": 0,
+   "state_dist": {
+    "1": 5189
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 5189,
+   "checksum": "32e619807580381e"
+  },
+  "write_2026-10-22": {
+   "status": "written",
+   "trade_date": "2026-10-22",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 5190,
+   "matched_rows": 5190,
+   "invalid_rows": 0,
+   "state_dist": {
+    "1": 5190
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 5190,
+   "checksum": "0c487bc4f4ba0b72"
+  },
+  "repeat_day2": {
+   "status": "idempotent",
+   "trade_date": "2026-10-21",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 0,
+   "matched_rows": 5189,
+   "invalid_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "all rows carry valid flags under this version"
+   ],
+   "base_rows": 5189,
+   "idempotent": true
+  },
+  "missing_base": {
+   "status": "blocked",
+   "trade_date": "2026-10-25",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 0,
+   "matched_rows": 0,
+   "invalid_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "base status rows absent for date — build_asset_status_daily must commit first"
+   ]
+  },
+  "switch_off": {
+   "status": "blocked",
+   "trade_date": "2026-10-20",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 0,
+   "matched_rows": 0,
+   "invalid_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "v2 eod switch is OFF (default)"
+   ]
+  },
+  "version_mismatch": {
+   "status": "blocked",
+   "trade_date": "2026-10-20",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_vX",
+   "computed_keys": 0,
+   "matched_rows": 0,
+   "invalid_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "version conflict: existing rows carry [{'v': 'pit_rules_v1', 'n': 5190}]"
+   ],
+   "base_rows": 5190
+  },
+  "fault_injection_1023": {
+   "inject": {
+    "status": "aborted",
+    "error": "QueryCanceled"
+   },
+   "pre_checksum": "b2fc9c3f1a50f61f",
+   "post_abort_checksum": "b2fc9c3f1a50f61f",
+   "rollback_clean": true,
+   "retry": {
+    "status": "written",
+    "trade_date": "2026-10-23",
+    "target": "m1_shadow.asset_status_daily",
+    "flags_version": "pit_rules_v1",
+    "computed_keys": 5191,
+    "matched_rows": 5191,
+    "invalid_rows": 0,
+    "state_dist": {
+     "1": 5191
+    },
+    "missing_keys": 0,
+    "reasons": [],
+    "base_rows": 5191,
+    "checksum": "f7890e12518e5d13"
+   }
+  },
+  "partial_then_rewrite": {
+   "rewrite_status": "written",
+   "missing": 0,
+   "invalid": 0,
+   "valid_after": 5190,
+   "base": 5190,
+   "pass": true
+  },
+  "unknown_not_false": {
+   "flagged_rows_in_unknown_states": 0
+  }
+ },
+ "replica_rows": 20760,
+ "gate": {
+  "idempotent": true,
+  "missing_base_blocked": true,
+  "switch_off_blocked": true,
+  "version_conflict_blocked": true,
+  "fault_abort_rolled_back": true,
+  "retry_completed": true,
+  "partial_rewrite_heals": true,
+  "unknown_fail_closed": true,
+  "metrics_reported": true,
+  "all_pass": true
+ }
+}

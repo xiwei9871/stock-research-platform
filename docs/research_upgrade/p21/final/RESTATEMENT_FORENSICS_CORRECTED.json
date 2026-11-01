@@ -1,0 +1,1701 @@
+{
+ "raw_akshare_rows": 16586,
+ "raw_baostock_rows": 0,
+ "expanded_snapshot_rows": 959839,
+ "extraction": {
+  "payload_rows": 959839,
+  "extracted_nonempty": 955490,
+  "no_period_key": 4349
+ },
+ "version_keys": 930620,
+ "classification": {
+  "single_fetch": 905750,
+  "equal": 12524,
+  "payload_changed_same_metrics": 12274,
+  "null_asymmetry_delta": 36,
+  "metrics_changed": 34,
+  "precision_only": 2
+ },
+ "metrics_changed_keys": 72,
+ "initial_recoverable": 72,
+ "changed_events": [
+  {
+   "asset_id": "CN:SH:601156",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:43:58.993804+08",
+   "first_raw_id": 16258,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 10:23:40.958987+08",
+     "raw_id": 20590,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:601279",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:44:02.400596+08",
+   "first_raw_id": 16260,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 10:26:24.559355+08",
+     "raw_id": 20648,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed",
+      "OPERATE_PAYABLE_ADD": "changed",
+      "FA_SCRAP_LOSS": "precision"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:601399",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-09-30",
+   "first_fetch": "2026-08-28 01:44:09.521594+08",
+   "first_raw_id": 16266,
+   "first_ann": "2025-10-25 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 10:28:27.828975+08",
+     "raw_id": 20690,
+     "field_diffs": {
+      "DISPOSAL_SUBSIDIARY_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:603048",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:44:21.712997+08",
+   "first_raw_id": 16282,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 10:42:01.246459+08",
+     "raw_id": 20988,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:605133",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:47:58.785171+08",
+   "first_raw_id": 16566,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:16:35.061936+08",
+     "raw_id": 21960,
+     "field_diffs": {
+      "INVEST_NETCASH_BALANCE": "changed",
+      "CCE_ADD_BALANCE": "changed",
+      "NETCASH_INVEST": "precision",
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:605368",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:49:11.662319+08",
+   "first_raw_id": 16644,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:17:42.562313+08",
+     "raw_id": 22000,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688032",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:49:46.538981+08",
+   "first_raw_id": 16686,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:19:52.490759+08",
+     "raw_id": 22068,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688071",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:50:17.937589+08",
+   "first_raw_id": 16722,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:21:07.196357+08",
+     "raw_id": 22106,
+     "field_diffs": {
+      "OPERATE_RECE_REDUCE": "precision"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688121",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:51:02.246324+08",
+   "first_raw_id": 16776,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:22:48.196889+08",
+     "raw_id": 22152,
+     "field_diffs": {
+      "OPERATE_RECE_REDUCE": "precision",
+      "OPERATE_NETCASH_BALANCENOTE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688244",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:52:40.759641+08",
+   "first_raw_id": 16900,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:26:37.519421+08",
+     "raw_id": 22270,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed",
+      "OPERATE_PAYABLE_ADD": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688265",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:53:01.064763+08",
+   "first_raw_id": 16926,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:26:56.432558+08",
+     "raw_id": 22280,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688275",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:53:10.64032+08",
+   "first_raw_id": 16940,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:27:11.313107+08",
+     "raw_id": 22288,
+     "field_diffs": {
+      "FINLEASE_OBTAIN_FA": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688348",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 01:54:06.900028+08",
+   "first_raw_id": 17021,
+   "first_ann": "2026-04-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:28:52.124207+08",
+     "raw_id": 22343,
+     "field_diffs": {
+      "CONTRACT_LIAB": "changed",
+      "OTHER_CURRENT_LIAB": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688376",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:54:27.544213+08",
+   "first_raw_id": 17052,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:29:19.575254+08",
+     "raw_id": 22370,
+     "field_diffs": {
+      "OPERATE_RECE_REDUCE": "changed",
+      "OPERATE_NETCASH_OTHERNOTE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688535",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:55:59.809115+08",
+   "first_raw_id": 17188,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:31:48.950858+08",
+     "raw_id": 22454,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688651",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:57:26.735249+08",
+   "first_raw_id": 17304,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:34:38.066317+08",
+     "raw_id": 22542,
+     "field_diffs": {
+      "OPERATE_RECE_REDUCE": "precision",
+      "OPERATE_NETCASH_BALANCENOTE": "changed",
+      "OPERATE_OUTFLOW_BALANCE": "changed",
+      "TOTAL_OPERATE_OUTFLOW": "precision",
+      "OPERATE_NETCASH_BALANCE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688701",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:58:18.668343+08",
+   "first_raw_id": 17372,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:11.665899+08",
+     "raw_id": 22560,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed",
+      "FA_IR_DEPR": "changed",
+      "USERIGHT_ASSET_AMORTIZE": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688709",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:58:23.64391+08",
+   "first_raw_id": 17380,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:14.507362+08",
+     "raw_id": 22562,
+     "field_diffs": {
+      "OPERATE_RECE_REDUCE": "changed",
+      "OTHER": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688722",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:58:36.084765+08",
+   "first_raw_id": 17400,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:26.729048+08",
+     "raw_id": 22568,
+     "field_diffs": {
+      "DEFER_TAX": "changed",
+      "OPERATE_NETCASH_BALANCENOTE": "changed",
+      "DT_ASSET_REDUCE": "changed",
+      "OPERATE_PAYABLE_ADD": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688750",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 01:58:44.024433+08",
+   "first_raw_id": 17411,
+   "first_ann": "2026-04-18 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:35.491882+08",
+     "raw_id": 22573,
+     "field_diffs": {
+      "LONG_EQUITY_INVEST": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688750",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:58:44.024433+08",
+   "first_raw_id": 17412,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:35.491882+08",
+     "raw_id": 22574,
+     "field_diffs": {
+      "INVEST_INFLOW_BALANCE": "null_asymmetry",
+      "TOTAL_INVEST_INFLOW": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688785",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:59:02.943711+08",
+   "first_raw_id": 17446,
+   "first_ann": "2025-10-17 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:43.577359+08",
+     "raw_id": 22580,
+     "field_diffs": {
+      "FA_IR_DEPR": "changed",
+      "USERIGHT_ASSET_AMORTIZE": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688802",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:59:15.912018+08",
+   "first_raw_id": 17466,
+   "first_ann": "2025-10-17 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:52.157275+08",
+     "raw_id": 22586,
+     "field_diffs": {
+      "TOTAL_INVEST_OUTFLOW": "null_asymmetry",
+      "INVEST_INFLOW_BALANCE": "null_asymmetry",
+      "TOTAL_INVEST_INFLOW": "null_asymmetry",
+      "DISPOSAL_LONGASSET_LOSS": "null_asymmetry",
+      "RATE_CHANGE_EFFECT": "null_asymmetry",
+      "DEFER_TAX": "null_asymmetry",
+      "WITHDRAW_INVEST": "null_asymmetry",
+      "INVEST_NETCASH_BALANCE": "null_asymmetry",
+      "NETPROFIT": "null_asymmetry",
+      "NETCASH_OPERATENOTE": "null_asymmetry",
+      "BEGIN_CASH": "null_asymmetry",
+      "OPERATE_RECE_REDUCE": "null_asymmetry",
+      "ASSET_IMPAIRMENT": "null_asymmetry",
+      "OPERATE_NETCASH_BALANCENOTE": "null_asymmetry",
+      "PAY_ALL_TAX": "null_asymmetry",
+      "END_CCE_BALANCE": "null_asymmetry",
+      "OPERATE_OUTFLOW_BALANCE": "null_asymmetry",
+      "CCE_ADD": "null_asymmetry",
+      "CCE_ADD_BALANCE": "null_asymmetry",
+      "INVENTORY_REDUCE": "null_asymmetry",
+      "BEGIN_CCE": "null_asymmetry",
+      "PAY_DEBT_CASH": "null_asymmetry",
+      "PAY_STAFF_CASH": "null_asymmetry",
+      "END_CASH": "null_asymmetry",
+      "SALES_SERVICES": "null_asymmetry",
+      "CCE_ADDNOTE": "null_asymmetry",
+      "FAIRVALUE_CHANGE_LOSS": "null_asymmetry",
+      "TOTAL_OPERATE_INFLOW": "null_asymmetry",
+      "FINANCE_OUTFLOW_BALANCE": "null_asymmetry",
+      "DT_LIAB_ADD": "null_asymmetry",
+      "RECEIVE_INVEST_INCOME": "null_asymmetry",
+      "ACCEPT_INVEST_CASH": "null_asymmetry",
+      "DT_ASSET_REDUCE": "null_asymmetry",
+      "INVEST_OUTFLOW_BALANCE": "null_asymmetry",
+      "TOTAL_FINANCE_OUTFLOW": "null_asymmetry",
+      "FINANCE_EXPENSE": "null_asymmetry",
+      "LPE_AMORTIZE": "null_asymmetry",
+      "FA_IR_DEPR": "null_asymmetry",
+      "TOTAL_OPERATE_OUTFLOW": "null_asymmetry",
+      "NETCASH_INVEST": "null_asymmetry",
+      "NETCASH_FINANCE": "null_asymmetry",
+      "RECEIVE_TAX_REFUND": "null_asymmetry",
+      "TOTAL_FINANCE_INFLOW": "null_asymmetry",
+      "OPERATE_NETCASH_BALANCE": "null_asymmetry",
+      "OTHER": "null_asymmetry",
+      "ASSIGN_DIVIDEND_PORFIT": "null_asymmetry",
+      "RECEIVE_OTHER_OPERATE": "null_asymmetry",
+      "INVEST_PAY_CASH": "null_asymmetry",
+      "PAY_OTHER_OPERATE": "null_asymmetry",
+      "PAY_OTHER_FINANCE": "null_asymmetry",
+      "BUY_SERVICES": "null_asymmetry",
+      "END_CCE": "null_asymmetry",
+      "OPERATE_INFLOW_BALANCE": "null_asymmetry",
+      "FINANCE_NETCASH_BALANCE": "null_asymmetry",
+      "INVEST_LOSS": "null_asymmetry",
+      "USERIGHT_ASSET_AMORTIZE": "null_asymmetry",
+      "CONSTRUCT_LONG_ASSET": "null_asymmetry",
+      "NETCASH_OPERATE": "precision",
+      "IA_AMORTIZE": "null_asymmetry",
+      "OPERATE_PAYABLE_ADD": "null_asymmetry",
+      "FINANCE_INFLOW_BALANCE": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SH:688816",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:59:20.784471+08",
+   "first_raw_id": 17482,
+   "first_ann": "2025-11-04 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 11:35:56.377628+08",
+     "raw_id": 22592,
+     "field_diffs": {
+      "PAY_DEBT_CASH": "null_asymmetry",
+      "FA_IR_DEPR": "changed",
+      "USERIGHT_ASSET_AMORTIZE": "null_asymmetry",
+      "SUBSIDIARY_ACCEPT_INVEST": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001201",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:59:25.018661+08",
+   "first_raw_id": 17488,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:52:28.300928+08",
+     "raw_id": 23422,
+     "field_diffs": {
+      "END_CASH": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001215",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 01:59:43.049963+08",
+   "first_raw_id": 17511,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:52:32.08035+08",
+     "raw_id": 23424,
+     "field_diffs": {
+      "DEFER_INCOME_AMORTIZE": "null_asymmetry",
+      "WITHDRAW_INVEST": "null_asymmetry",
+      "ASSET_IMPAIRMENT": "null_asymmetry",
+      "ACCEPT_INVEST_CASH": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001266",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:00:20.086561+08",
+   "first_raw_id": 17569,
+   "first_ann": "2026-04-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:52:45.793686+08",
+     "raw_id": 23431,
+     "field_diffs": {
+      "TRADE_FINASSET_NOTFVTPL": "null_asymmetry",
+      "OTHER_NONCURRENT_LIAB": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001280",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:00:26.899281+08",
+   "first_raw_id": 17582,
+   "first_ann": "2025-11-13 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:53:05.776301+08",
+     "raw_id": 23442,
+     "field_diffs": {
+      "TOTAL_INVEST_INFLOW": "changed",
+      "PAY_INTEREST_COMMISSION": "null_asymmetry",
+      "OBTAIN_SUBSIDIARY_OTHER": "null_asymmetry",
+      "FINLEASE_OBTAIN_FA": "null_asymmetry",
+      "NETCASH_OPERATENOTE": "changed",
+      "PLEDGE_LOAN_ADD": "null_asymmetry",
+      "ASSET_IMPAIRMENT": "changed",
+      "BEGIN_CASH_EQUIVALENTS": "null_asymmetry",
+      "RECEIVE_REINSURE_NET": "null_asymmetry",
+      "LOAN_PBC_ADD": "null_asymmetry",
+      "RECEIVE_INTEREST_COMMISSION": "null_asymmetry",
+      "END_CASH_EQUIVALENTS": "null_asymmetry",
+      "PBC_INTERBANK_ADD": "null_asymmetry",
+      "CONVERT_BOND_1YEAR": "null_asymmetry",
+      "RECEIVE_OTHER_INVEST": "null_asymmetry",
+      "FAIRVALUE_CHANGE_LOSS": "null_asymmetry",
+      "DEPOSIT_INTERBANK_ADD": "null_asymmetry",
+      "RECEIVE_INVEST_INCOME": "changed",
+      "ACCEPT_INVEST_CASH": "null_asymmetry",
+      "DEBT_TRANSFER_CAPITAL": "null_asymmetry",
+      "OFI_BF_ADD": "null_asymmetry",
+      "REPO_BUSINESS_ADD": "null_asymmetry",
+      "TOTAL_OPERATE_OUTFLOW": "changed",
+      "NETCASH_INVEST": "changed",
+      "PAY_OTHER_INVEST": "null_asymmetry",
+      "OTHER": "null_asymmetry",
+      "DISPOSAL_LONG_ASSET": "null_asymmetry",
+      "OPERATE_INFLOW_OTHER": "null_asymmetry",
+      "OPERATE_OUTFLOW_OTHER": "null_asymmetry",
+      "INVEST_PAY_CASH": "null_asymmetry",
+      "PAY_ORIGIC_COMPENSATE": "null_asymmetry",
+      "BUY_SERVICES": "changed",
+      "INSURED_INVEST_ADD": "null_asymmetry",
+      "BORROW_FUND_ADD": "null_asymmetry",
+      "NETCASH_OPERATE": "changed",
+      "LOAN_ADVANCE_ADD": "null_asymmetry",
+      "SUBSIDIARY_ACCEPT_INVEST": "null_asymmetry",
+      "DISPOSAL_SUBSIDIARY_OTHER": "null_asymmetry",
+      "OPERATE_PAYABLE_ADD": "changed",
+      "RECEIVE_ORIGIC_PREMIUM": "null_asymmetry",
+      "PAY_POLICY_BONUS": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001356",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:01:14.218284+08",
+   "first_raw_id": 17660,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:53:18.597396+08",
+     "raw_id": 23448,
+     "field_diffs": {
+      "OTHER": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001396",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:01:38.247448+08",
+   "first_raw_id": 17705,
+   "first_ann": "2026-04-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:53:20.472233+08",
+     "raw_id": 23449,
+     "field_diffs": {
+      "TRADE_FINASSET_NOTFVTPL": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:001396",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:01:38.247448+08",
+   "first_raw_id": 17706,
+   "first_ann": "2025-09-22 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 12:53:20.472233+08",
+     "raw_id": 23450,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003003",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:01:59.529442+08",
+   "first_raw_id": 17727,
+   "first_ann": "2026-04-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:03.258933+08",
+     "raw_id": 25293,
+     "field_diffs": {
+      "GENERAL_RISK_RESERVE": "null_asymmetry",
+      "SETTLE_EXCESS_RESERVE": "null_asymmetry",
+      "DEVELOP_EXPENSE": "null_asymmetry",
+      "ADVANCE_RECEIVABLES": "null_asymmetry",
+      "DERIVE_FINLIAB": "null_asymmetry",
+      "LONG_STAFFSALARY_PAYABLE": "null_asymmetry",
+      "PERPETUAL_BOND_PAYBALE": "null_asymmetry",
+      "HOLDSALE_ASSET": "null_asymmetry",
+      "LEND_FUND": "null_asymmetry",
+      "AGENT_UNDERWRITE_SECURITY": "null_asymmetry",
+      "PRODUCTIVE_BIOLOGY_ASSET": "null_asymmetry",
+      "ACCEPT_DEPOSIT_INTERBANK": "null_asymmetry",
+      "LONG_RECE": "null_asymmetry",
+      "TRADE_FINLIAB_NOTFVTPL": "null_asymmetry",
+      "PREFERRED_SHARES_PAYBALE": "null_asymmetry",
+      "BOND_PAYABLE": "null_asymmetry",
+      "OTHER_EQUITY_TOOL": "null_asymmetry",
+      "OIL_GAS_ASSET": "null_asymmetry",
+      "FEE_COMMISSION_PAYABLE": "null_asymmetry",
+      "OTHER_NONCURRENT_LIAB": "null_asymmetry",
+      "INSURANCE_CONTRACT_RESERVE": "null_asymmetry",
+      "REINSURE_RECE": "null_asymmetry",
+      "LONG_EQUITY_INVEST": "null_asymmetry",
+      "OTHER_NONCURRENT_FINASSET": "null_asymmetry",
+      "AGENT_TRADE_SECURITY": "null_asymmetry",
+      "SELL_REPO_FINASSET": "null_asymmetry",
+      "HOLDSALE_LIAB": "null_asymmetry",
+      "REINSURE_PAYABLE": "null_asymmetry",
+      "OTHER_EQUITY_INVEST": "null_asymmetry",
+      "LOAN_PBC": "null_asymmetry",
+      "BORROW_FUND": "null_asymmetry",
+      "PREFERRED_SHARES": "null_asymmetry",
+      "DERIVE_FINASSET": "null_asymmetry",
+      "PREMIUM_RECE": "null_asymmetry",
+      "BUY_RESALE_FINASSET": "null_asymmetry",
+      "PREDICT_LIAB": "null_asymmetry",
+      "RC_RESERVE_RECE": "null_asymmetry",
+      "PERPETUAL_BOND": "null_asymmetry",
+      "GOODWILL": "null_asymmetry",
+      "SPECIAL_RESERVE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003003",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:01:59.529442+08",
+   "first_raw_id": 17728,
+   "first_ann": "2025-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:03.258933+08",
+     "raw_id": 25294,
+     "field_diffs": {
+      "PAY_INTEREST_COMMISSION": "null_asymmetry",
+      "OBTAIN_SUBSIDIARY_OTHER": "null_asymmetry",
+      "FINLEASE_OBTAIN_FA": "null_asymmetry",
+      "RECEIVE_LOAN_CASH": "null_asymmetry",
+      "PLEDGE_LOAN_ADD": "null_asymmetry",
+      "BEGIN_CASH_EQUIVALENTS": "null_asymmetry",
+      "RECEIVE_REINSURE_NET": "null_asymmetry",
+      "LOAN_PBC_ADD": "null_asymmetry",
+      "RECEIVE_INTEREST_COMMISSION": "null_asymmetry",
+      "END_CASH_EQUIVALENTS": "null_asymmetry",
+      "PBC_INTERBANK_ADD": "null_asymmetry",
+      "CONVERT_BOND_1YEAR": "null_asymmetry",
+      "DEPOSIT_INTERBANK_ADD": "null_asymmetry",
+      "ACCEPT_INVEST_CASH": "null_asymmetry",
+      "DEBT_TRANSFER_CAPITAL": "null_asymmetry",
+      "OFI_BF_ADD": "null_asymmetry",
+      "REPO_BUSINESS_ADD": "null_asymmetry",
+      "OPERATE_INFLOW_OTHER": "null_asymmetry",
+      "OPERATE_OUTFLOW_OTHER": "null_asymmetry",
+      "PAY_ORIGIC_COMPENSATE": "null_asymmetry",
+      "INSURED_INVEST_ADD": "null_asymmetry",
+      "BORROW_FUND_ADD": "null_asymmetry",
+      "SUBSIDIARY_PAY_DIVIDEND": "null_asymmetry",
+      "LOAN_ADVANCE_ADD": "null_asymmetry",
+      "SUBSIDIARY_ACCEPT_INVEST": "null_asymmetry",
+      "RECEIVE_ORIGIC_PREMIUM": "null_asymmetry",
+      "PAY_POLICY_BONUS": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003005",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:02:03.745984+08",
+   "first_raw_id": 17732,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:06.980097+08",
+     "raw_id": 25296,
+     "field_diffs": {
+      "WITHDRAW_INVEST": "null_asymmetry",
+      "RECEIVE_INVEST_INCOME": "null_asymmetry",
+      "USERIGHT_ASSET_AMORTIZE": "changed",
+      "IA_AMORTIZE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003010",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:02:13.432974+08",
+   "first_raw_id": 17742,
+   "first_ann": "2025-08-20 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:11.869862+08",
+     "raw_id": 25298,
+     "field_diffs": {
+      "FA_IR_DEPR": "changed",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003011",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:02:14.848967+08",
+   "first_raw_id": 17743,
+   "first_ann": "2026-04-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:16.41869+08",
+     "raw_id": 25299,
+     "field_diffs": {
+      "CONTRACT_ASSET": "null_asymmetry",
+      "NOTE_RECE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003012",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:02:17.286209+08",
+   "first_raw_id": 17746,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:20.320373+08",
+     "raw_id": 25302,
+     "field_diffs": {
+      "RECEIVE_OTHER_INVEST": "null_asymmetry",
+      "PAY_OTHER_INVEST": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003016",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:02:23.189572+08",
+   "first_raw_id": 17752,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:24.703421+08",
+     "raw_id": 25304,
+     "field_diffs": {
+      "RECEIVE_OTHER_INVEST": "null_asymmetry",
+      "DISPOSAL_SUBSIDIARY_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003032",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:02:49.34136+08",
+   "first_raw_id": 17782,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:49.353429+08",
+     "raw_id": 25316,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:003038",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:02:58.421303+08",
+   "first_raw_id": 17792,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-21 14:39:53.265687+08",
+     "raw_id": 25318,
+     "field_diffs": {
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:300614",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:03:09.807296+08",
+   "first_raw_id": 17803,
+   "first_ann": "2026-04-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-22 18:22:37.361941+08",
+     "raw_id": 26405,
+     "field_diffs": {
+      "SETTLE_EXCESS_RESERVE": "null_asymmetry",
+      "LONG_RECE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:300614",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:03:09.807296+08",
+   "first_raw_id": 17804,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-22 18:22:37.361941+08",
+     "raw_id": 26406,
+     "field_diffs": {
+      "BEGIN_CASH_EQUIVALENTS": "null_asymmetry",
+      "END_CASH_EQUIVALENTS": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:300860",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:03:24.918224+08",
+   "first_raw_id": 17820,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-22 23:35:31.493571+08",
+     "raw_id": 26918,
+     "field_diffs": {
+      "RATE_CHANGE_EFFECT": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:300863",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:03:28.150787+08",
+   "first_raw_id": 17824,
+   "first_ann": "2025-08-26 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-22 23:37:19.702959+08",
+     "raw_id": 26924,
+     "field_diffs": {
+      "INVEST_INFLOW_BALANCE": "null_asymmetry",
+      "TOTAL_INVEST_INFLOW": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:300864",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:03:30.258991+08",
+   "first_raw_id": 17826,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-22 23:37:49.691742+08",
+     "raw_id": 26926,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:300894",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:04:04.132112+08",
+   "first_raw_id": 17864,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-22 23:46:15.740438+08",
+     "raw_id": 26952,
+     "field_diffs": {
+      "FA_IR_DEPR": "changed",
+      "USERIGHT_ASSET_AMORTIZE": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301008",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:06:41.21113+08",
+   "first_raw_id": 18047,
+   "first_ann": "2026-04-07 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:03:30.810214+08",
+     "raw_id": 27005,
+     "field_diffs": {
+      "DEVELOP_EXPENSE": "null_asymmetry",
+      "HOLDSALE_ASSET": "null_asymmetry",
+      "PRODUCTIVE_BIOLOGY_ASSET": "null_asymmetry",
+      "LONG_RECE": "null_asymmetry",
+      "TRADE_FINLIAB_NOTFVTPL": "null_asymmetry",
+      "CREDITOR_INVEST": "null_asymmetry",
+      "LONG_PAYABLE": "null_asymmetry",
+      "OTHER_EQUITY_TOOL": "null_asymmetry",
+      "OIL_GAS_ASSET": "null_asymmetry",
+      "CONTRACT_ASSET": "null_asymmetry",
+      "OTHER_CREDITOR_INVEST": "null_asymmetry",
+      "OTHER_NONCURRENT_FINASSET": "null_asymmetry",
+      "OTHER_EQUITY_INVEST": "null_asymmetry",
+      "NONCURRENT_ASSET_1YEAR": "null_asymmetry",
+      "PREFERRED_SHARES": "null_asymmetry",
+      "DERIVE_FINASSET": "null_asymmetry",
+      "PREDICT_LIAB": "null_asymmetry",
+      "PERPETUAL_BOND": "null_asymmetry",
+      "GOODWILL": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301008",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:06:41.21113+08",
+   "first_raw_id": 18048,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:03:30.810214+08",
+     "raw_id": 27006,
+     "field_diffs": {
+      "ACCEPT_INVEST_CASH": "null_asymmetry",
+      "SUBSIDIARY_ACCEPT_INVEST": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301095",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:08:32.706198+08",
+   "first_raw_id": 18187,
+   "first_ann": "2026-04-23 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:15:31.664355+08",
+     "raw_id": 27051,
+     "field_diffs": {
+      "DERIVE_FINLIAB": "null_asymmetry",
+      "TRADE_FINLIAB_NOTFVTPL": "null_asymmetry",
+      "NOTE_PAYABLE": "null_asymmetry",
+      "LOAN_PBC": "null_asymmetry",
+      "BORROW_FUND": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301123",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-09-30",
+   "first_fetch": "2026-08-28 02:09:13.560104+08",
+   "first_raw_id": 18239,
+   "first_ann": "2025-10-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:17:57.2462+08",
+     "raw_id": 27059,
+     "field_diffs": {
+      "TOTAL_OTHER_RECE": "changed",
+      "TOTAL_ASSETS": "changed",
+      "TOTAL_OTHER_PAYABLE": "changed",
+      "TOTAL_PARENT_EQUITY": "changed",
+      "TOTAL_NONCURRENT_ASSETS": "changed",
+      "TOTAL_LIAB_EQUITY": "changed",
+      "UNASSIGN_RPOFIT": "changed",
+      "ACCOUNTS_RECE": "precision",
+      "SURPLUS_RESERVE": "changed",
+      "NOTE_ACCOUNTS_RECE": "precision",
+      "FIXED_ASSET": "changed",
+      "CIP": "changed",
+      "TOTAL_CURRENT_ASSETS": "changed",
+      "TOTAL_LIABILITIES": "changed",
+      "TOTAL_CURRENT_LIAB": "changed",
+      "DEFER_TAX_ASSET": "changed",
+      "TOTAL_EQUITY": "changed",
+      "LONG_PREPAID_EXPENSE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301123",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:09:13.560104+08",
+   "first_raw_id": 18239,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:17:57.2462+08",
+     "raw_id": 27059,
+     "field_diffs": {
+      "TOTAL_OTHER_RECE": "changed",
+      "TOTAL_ASSETS": "changed",
+      "TOTAL_OTHER_PAYABLE": "changed",
+      "TOTAL_PARENT_EQUITY": "changed",
+      "TOTAL_NONCURRENT_ASSETS": "changed",
+      "TOTAL_LIAB_EQUITY": "changed",
+      "UNASSIGN_RPOFIT": "changed",
+      "ACCOUNTS_RECE": "precision",
+      "SURPLUS_RESERVE": "changed",
+      "NOTE_ACCOUNTS_RECE": "precision",
+      "FIXED_ASSET": "changed",
+      "CIP": "changed",
+      "TOTAL_CURRENT_ASSETS": "changed",
+      "TOTAL_LIABILITIES": "changed",
+      "TOTAL_CURRENT_LIAB": "changed",
+      "DEFER_TAX_ASSET": "changed",
+      "TOTAL_EQUITY": "changed",
+      "LONG_PREPAID_EXPENSE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301123",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-03-31",
+   "first_fetch": "2026-08-28 02:09:13.560104+08",
+   "first_raw_id": 18239,
+   "first_ann": "2025-04-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:17:57.2462+08",
+     "raw_id": 27059,
+     "field_diffs": {
+      "TOTAL_OTHER_RECE": "changed",
+      "TOTAL_ASSETS": "changed",
+      "TOTAL_OTHER_PAYABLE": "changed",
+      "TOTAL_PARENT_EQUITY": "changed",
+      "TOTAL_NONCURRENT_ASSETS": "changed",
+      "TOTAL_LIAB_EQUITY": "changed",
+      "UNASSIGN_RPOFIT": "changed",
+      "ACCOUNTS_RECE": "precision",
+      "SURPLUS_RESERVE": "changed",
+      "NOTE_ACCOUNTS_RECE": "precision",
+      "FIXED_ASSET": "changed",
+      "CIP": "changed",
+      "TOTAL_CURRENT_ASSETS": "changed",
+      "TOTAL_LIABILITIES": "changed",
+      "TOTAL_CURRENT_LIAB": "changed",
+      "DEFER_TAX_ASSET": "changed",
+      "TOTAL_EQUITY": "changed",
+      "LONG_PREPAID_EXPENSE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301123",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2024-12-31",
+   "first_fetch": "2026-08-28 02:09:13.560104+08",
+   "first_raw_id": 18239,
+   "first_ann": "2025-04-24 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:17:57.2462+08",
+     "raw_id": 27059,
+     "field_diffs": {
+      "GENERAL_RISK_RESERVE": "null_asymmetry",
+      "INVEST_REALESTATE": "null_asymmetry",
+      "SETTLE_EXCESS_RESERVE": "null_asymmetry",
+      "ADVANCE_RECEIVABLES": "null_asymmetry",
+      "DERIVE_FINLIAB": "null_asymmetry",
+      "LONG_STAFFSALARY_PAYABLE": "null_asymmetry",
+      "PERPETUAL_BOND_PAYBALE": "null_asymmetry",
+      "HOLDSALE_ASSET": "null_asymmetry",
+      "LEND_FUND": "null_asymmetry",
+      "AGENT_UNDERWRITE_SECURITY": "null_asymmetry",
+      "PRODUCTIVE_BIOLOGY_ASSET": "null_asymmetry",
+      "ACCEPT_DEPOSIT_INTERBANK": "null_asymmetry",
+      "TRADE_FINLIAB_NOTFVTPL": "null_asymmetry",
+      "CREDITOR_INVEST": "null_asymmetry",
+      "PREFERRED_SHARES_PAYBALE": "null_asymmetry",
+      "LONG_PAYABLE": "null_asymmetry",
+      "BOND_PAYABLE": "null_asymmetry",
+      "OTHER_EQUITY_TOOL": "null_asymmetry",
+      "LONG_LOAN": "null_asymmetry",
+      "OIL_GAS_ASSET": "null_asymmetry",
+      "FEE_COMMISSION_PAYABLE": "null_asymmetry",
+      "OTHER_NONCURRENT_LIAB": "null_asymmetry",
+      "CONTRACT_ASSET": "null_asymmetry",
+      "INSURANCE_CONTRACT_RESERVE": "null_asymmetry",
+      "REINSURE_RECE": "null_asymmetry",
+      "OTHER_CREDITOR_INVEST": "null_asymmetry",
+      "LOAN_ADVANCE": "null_asymmetry",
+      "OTHER_NONCURRENT_FINASSET": "null_asymmetry",
+      "AGENT_TRADE_SECURITY": "null_asymmetry",
+      "SELL_REPO_FINASSET": "null_asymmetry",
+      "HOLDSALE_LIAB": "null_asymmetry",
+      "REINSURE_PAYABLE": "null_asymmetry",
+      "OTHER_EQUITY_INVEST": "null_asymmetry",
+      "LOAN_PBC": "null_asymmetry",
+      "BORROW_FUND": "null_asymmetry",
+      "PREFERRED_SHARES": "null_asymmetry",
+      "DERIVE_FINASSET": "null_asymmetry",
+      "PREMIUM_RECE": "null_asymmetry",
+      "BUY_RESALE_FINASSET": "null_asymmetry",
+      "PREDICT_LIAB": "null_asymmetry",
+      "RC_RESERVE_RECE": "null_asymmetry",
+      "PERPETUAL_BOND": "null_asymmetry",
+      "SPECIAL_RESERVE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301123",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:09:13.560104+08",
+   "first_raw_id": 18240,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:17:57.2462+08",
+     "raw_id": 27060,
+     "field_diffs": {
+      "NETPROFIT": "changed",
+      "ASSET_IMPAIRMENT": "changed",
+      "DT_LIAB_ADD": "null_asymmetry",
+      "ACCEPT_INVEST_CASH": "null_asymmetry",
+      "LPE_AMORTIZE": "changed",
+      "FA_IR_DEPR": "changed",
+      "OTHER": "changed",
+      "SUBSIDIARY_ACCEPT_INVEST": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301123",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2024-06-30",
+   "first_fetch": "2026-08-28 02:09:13.560104+08",
+   "first_raw_id": 18240,
+   "first_ann": "2024-08-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:17:57.2462+08",
+     "raw_id": 27060,
+     "field_diffs": {
+      "NETPROFIT": "changed",
+      "ASSET_IMPAIRMENT": "changed",
+      "FA_IR_DEPR": "changed",
+      "OTHER": "changed",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301127",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:09:18.63718+08",
+   "first_raw_id": 18246,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:19:44.441401+08",
+     "raw_id": 27066,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301139",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:09:35.443524+08",
+   "first_raw_id": 18267,
+   "first_ann": "2026-04-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:20:23.320218+08",
+     "raw_id": 27067,
+     "field_diffs": {
+      "GOODWILL": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301139",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:09:35.443524+08",
+   "first_raw_id": 18268,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:20:23.320218+08",
+     "raw_id": 27068,
+     "field_diffs": {
+      "BEGIN_CASH": "changed",
+      "END_CASH": "changed",
+      "RECEIVE_OTHER_INVEST": "null_asymmetry",
+      "DISPOSAL_SUBSIDIARY_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301151",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:09:44.967077+08",
+   "first_raw_id": 18278,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:21:10.042502+08",
+     "raw_id": 27070,
+     "field_diffs": {
+      "FA_SCRAP_LOSS": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301152",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:09:47.513347+08",
+   "first_raw_id": 18281,
+   "first_ann": "2026-04-30 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:22:09.844379+08",
+     "raw_id": 27071,
+     "field_diffs": {
+      "CAPITAL_RESERVE": "changed",
+      "UNASSIGN_RPOFIT": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301159",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:09:55.466611+08",
+   "first_raw_id": 18291,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:23:59.054513+08",
+     "raw_id": 27076,
+     "field_diffs": {
+      "WITHDRAW_INVEST": "null_asymmetry",
+      "RECEIVE_OTHER_FINANCE": "null_asymmetry",
+      "RECEIVE_INVEST_INCOME": "null_asymmetry",
+      "TOTAL_FINANCE_INFLOW": "null_asymmetry",
+      "FINANCE_INFLOW_BALANCE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301168",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:10:06.986309+08",
+   "first_raw_id": 18305,
+   "first_ann": "2026-04-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:25:49.020348+08",
+     "raw_id": 27079,
+     "field_diffs": {
+      "DIVIDEND_PAYABLE": "changed",
+      "DIVIDEND_RECE": "null_asymmetry",
+      "INTEREST_PAYABLE": "null_asymmetry",
+      "INTEREST_RECE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301182",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:10:25.656641+08",
+   "first_raw_id": 18330,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:27:44.021733+08",
+     "raw_id": 27086,
+     "field_diffs": {
+      "FA_IR_DEPR": "changed",
+      "USERIGHT_ASSET_AMORTIZE": "null_asymmetry",
+      "OILGAS_BIOLOGY_DEPR": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301189",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:10:33.322137+08",
+   "first_raw_id": 18339,
+   "first_ann": "2026-04-25 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:29:26.504685+08",
+     "raw_id": 27089,
+     "field_diffs": {
+      "DEVELOP_EXPENSE": "null_asymmetry",
+      "DERIVE_FINLIAB": "null_asymmetry",
+      "HOLDSALE_ASSET": "null_asymmetry",
+      "PRODUCTIVE_BIOLOGY_ASSET": "null_asymmetry",
+      "LONG_RECE": "null_asymmetry",
+      "TRADE_FINLIAB_NOTFVTPL": "null_asymmetry",
+      "CREDITOR_INVEST": "null_asymmetry",
+      "PREFERRED_SHARES_PAYBALE": "null_asymmetry",
+      "LONG_PAYABLE": "null_asymmetry",
+      "OTHER_EQUITY_TOOL": "null_asymmetry",
+      "OIL_GAS_ASSET": "null_asymmetry",
+      "OTHER_NONCURRENT_LIAB": "null_asymmetry",
+      "CONTRACT_ASSET": "null_asymmetry",
+      "NOTE_RECE": "null_asymmetry",
+      "OTHER_CREDITOR_INVEST": "null_asymmetry",
+      "OTHER_NONCURRENT_FINASSET": "null_asymmetry",
+      "HOLDSALE_LIAB": "null_asymmetry",
+      "NONCURRENT_ASSET_1YEAR": "null_asymmetry",
+      "PREFERRED_SHARES": "null_asymmetry",
+      "DERIVE_FINASSET": "null_asymmetry",
+      "GOODWILL": "null_asymmetry",
+      "SPECIAL_RESERVE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301189",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:10:33.322137+08",
+   "first_raw_id": 18340,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:29:26.504685+08",
+     "raw_id": 27090,
+     "field_diffs": {
+      "OBTAIN_SUBSIDIARY_OTHER": "null_asymmetry",
+      "RECEIVE_OTHER_INVEST": "null_asymmetry",
+      "DISPOSAL_SUBSIDIARY_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301207",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:10:58.477767+08",
+   "first_raw_id": 18371,
+   "first_ann": "2026-03-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:30:04.129675+08",
+     "raw_id": 27091,
+     "field_diffs": {
+      "DEFER_TAX_LIAB": "null_asymmetry",
+      "DIVIDEND_PAYABLE": "null_asymmetry",
+      "STAFF_SALARY_PAYABLE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301235",
+   "endpoint": "stock_balance_sheet_by_report_em",
+   "report_period": "2025-12-31",
+   "first_fetch": "2026-08-28 02:11:38.802551+08",
+   "first_raw_id": 18419,
+   "first_ann": "2026-04-25 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:32:24.40322+08",
+     "raw_id": 27097,
+     "field_diffs": {
+      "ADVANCE_RECEIVABLES": "null_asymmetry",
+      "NOTE_PAYABLE": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301257",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:11:57.892325+08",
+   "first_raw_id": 18442,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:33:59.67069+08",
+     "raw_id": 27102,
+     "field_diffs": {
+      "FINLEASE_OBTAIN_FA": "null_asymmetry",
+      "BEGIN_CASH_EQUIVALENTS": "null_asymmetry",
+      "END_CASH_EQUIVALENTS": "null_asymmetry",
+      "CONVERT_BOND_1YEAR": "null_asymmetry",
+      "DEBT_TRANSFER_CAPITAL": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301296",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:12:48.715033+08",
+   "first_raw_id": 18510,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:35:52.101219+08",
+     "raw_id": 27108,
+     "field_diffs": {
+      "UNINVOLVE_INVESTFIN_OTHER": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301379",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:14:27.097128+08",
+   "first_raw_id": 18638,
+   "first_ann": "2025-08-28 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:40:53.632077+08",
+     "raw_id": 27128,
+     "field_diffs": {
+      "ASSET_IMPAIRMENT": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301459",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:15:11.807797+08",
+   "first_raw_id": 18696,
+   "first_ann": "2025-08-27 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:43:57.812823+08",
+     "raw_id": 27140,
+     "field_diffs": {
+      "PAY_DEBT_CASH": "null_asymmetry"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  },
+  {
+   "asset_id": "CN:SZ:301510",
+   "endpoint": "stock_cash_flow_sheet_by_report_em",
+   "report_period": "2025-06-30",
+   "first_fetch": "2026-08-28 02:15:37.680015+08",
+   "first_raw_id": 18736,
+   "first_ann": "2025-08-29 00:00:00",
+   "diffs": [
+    {
+     "later_fetch": "2026-10-23 00:45:35.013685+08",
+     "raw_id": 27148,
+     "field_diffs": {
+      "OTHER": "changed",
+      "IA_AMORTIZE": "changed"
+     }
+    }
+   ],
+   "initial_recoverable": true
+  }
+ ],
+ "correction_note": "v1 grouped by params/top-level dict key -> most list payloads collapsed into 'unknown'; empty metric extraction counted as unchanged. v2 expands every list row by REPORT_DATE."
+}

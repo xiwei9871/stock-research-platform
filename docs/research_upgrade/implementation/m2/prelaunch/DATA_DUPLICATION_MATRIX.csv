@@ -1,0 +1,11 @@
+pair,object_a,object_b,overlap_test,result,verdict
+minute_partition,market.stock_minute_bar_default (2020-01-02..2023-12-29,404.2M rows),market.stock_minute_bar_YYYY_MM x36 (2024-01..2026-12),"partition bounds disjoint; default covers <2024 only",NO_OVERLAP,KEEP_both
+minute_artifact,market.stock_minute_bar_unpartitioned_backup,market.stock_minute_bar_2024_01,"backup=96 rows @2024-01-02 vs partition ~4M","residual test artifact, 136KB",NEGLIGIBLE_cleanup_candidate
+daily_bar,public.market_daily_bar (51.3M rows,OHLCV+turnover+pct_chg+adjust_type),market.* daily bars,"market schema has index/industry/concept dailies but NO stock daily",NO_DUPLICATE_canonical_daily,KEEP
+factor_versions,factor.factor_daily calc_version=v1 (610.67M rows),calc_version=rolling_oversold_valuation_v1 (5.5K rows),"two coexisting versions; v1=99.999%",NO_REDUNDANT_VERSION,KEEP
+label_snapshot,public.label_snapshot (67.58M rows; asset_id,trade_date,label_set,label_version,horizon,label_name),research.label tables,"research.* holds report-level features not labels; labels.py/selection.py/backtest.py consume",CANONICAL_not_duplicate,KEEP_stats_stale
+feature_snapshot,public.feature_snapshot (63.33M rows),research.stock_report_feature_daily,"different grain (feature vs report)",CANONICAL_not_duplicate,KEEP_stats_stale
+staging_tdx,staging.tdx_stock_auction_bar (6.3GB),market.stock_auction_bar (4.8GB),"same business domain; join-match on (asset_id,trade_date) — pending restore-instance test",UNTESTED_overlap_suspected,NEEDS_EVIDENCE
+staging_baostock,staging.baostock_stock_minute_bar (4.1GB),market.stock_minute_bar,"staging may hold already-landed minutes",UNTESTED,NEEDS_EVIDENCE
+backup_schema,backup.* (151 tables, 15.7GB),core/market originals,"R2 revision workspace ACTIVE (mtime<=10-25)",ACTIVE_not_redundant,DO_NOT_TOUCH
+legacy_dbs,cn_a_stock_daily_hfq/qfq (7.5GB),market daily bars,"legacy ingestion dbs; superseded?",UNTESTED_cross_db,NEEDS_EVIDENCE

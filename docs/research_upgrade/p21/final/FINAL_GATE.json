@@ -1,0 +1,47 @@
+{
+  "task": "DATA-R3-P2.1-Final — raw payload forensics + PIT shadow closeout",
+  "branch": "fix/r3-p21-financial-pit-shadow",
+  "base": "06b5abd690a0ccf9ef694462f7a3df61cf127c39",
+  "scope": "four targeted fixes; read-only; zero production writes",
+  "P0A_forensics_corrected": {
+    "v1_defects": ["extract_metrics dict-only — real payloads are list[dict], parsed empty -> counted as 'unchanged'", "period_key missed REPORT_DATE inside list rows -> groups collapsed into 'unknown' (15,720 wrong keys)"],
+    "v2": {"expanded_rows": 959839, "version_keys": 930620,
+           "extraction": {"nonempty": 955490, "no_period_key": 4349},
+           "classification": {"single_fetch": 905750, "equal": 12524,
+             "payload_changed_same_metrics": 12274,
+             "null_asymmetry_delta": 36, "precision_only": 2,
+             "metrics_changed": 34},
+           "changed_events": 72, "initial_recoverable": 72},
+    "observed_restatements": "34 keys — cash_flow endpoint, period 2025-06-30, EM-side metric edits (ASSET_IMPAIRMENT etc.) between 2026-08-28 and 2026-10-21 fetches; first snapshots preserved",
+    "baostock_payload": "0 rows — evidence permanently absent"
+  },
+  "P0B_shadow_corrected": {
+    "v1_vs_v2": {"v1": 286704, "v2": 285351,
+      "attribution": "v1 bare-tuple mismatches incl. same-rp+ann duplicates; v2 two-level dedup"},
+    "by_kind": {"period_change": 282179, "lost_availability": 3166,
+                "version_change": 6, "source_change": 0},
+    "evidence_insufficient_assets": {"balance": 9, "cash_flow": 11},
+    "real_path_spot_checks": "9/9 period_match on actual consumer SQL (point_in_time_finance-style); also confirmed real path picks arbitrary source on ann+period ties (baostock observed)",
+    "verdict": "same-day leak surface stands: ~28.5万 asset×date selection diffs concentrated on filing deadlines"
+  },
+  "P0C_operational_pit": {
+    "updated_at": "last-refresh only — operational availability now constant UNKNOWN absent first_seen evidence",
+    "historical_version_missing": "only when initial_public requested AND unverifiable; surviving-version publicity reported separately; long lag = suspicion flag, never initial-date inference",
+    "initial_version_provable": "in evidence_trace"
+  },
+  "P1D_evidence": {
+    "dual_key_reconciliation": "COUNT(DISTINCT asset_id,report_period,report_type) intersect = 230,363; 0 dup keys per source — exact one-to-one",
+    "q2_002731": {"name": "*ST萃华", "delist_date": "NULL (退市整理期, expected last trade ~2026-11-12)", "evidence": "stored descriptive citations (2026-09-01 non-disclosure announcement; 2026-10-15 深交所 decision)", "independent_verification": "UNKNOWN_with_stored_descriptive_evidence"},
+    "q2_others": "13 assets L2 = db delist + EM source absent"
+  },
+  "tests": {"passed": 23, "failed": 0, "new_failures": 0,
+            "coverage": ["list[dict] multi-period parse", "wrapper shapes", "field classes missing/null/precision/changed", "empty-extraction not unchanged", "operational UNKNOWN", "initial not disguised", "same-day block", "restated policy split", "delisted history", "determinism"]},
+  "deliverables": ["RAW_PAYLOAD_PARSER_AUDIT.md",
+    "RESTATEMENT_FORENSICS_CORRECTED.json",
+    "CONSUMER_SHADOW_CORRECTED.json", "CONSUMER_SHADOW_DIFF.md",
+    "OPERATIONAL_PIT_CONTRACT.md",
+    "EVIDENCE_LEVEL_RECONCILIATION.md", "REGRESSION_DIFF.md",
+    "FINAL_GATE.json", "consumer_shadow_diff_v2.csv"],
+  "verdict": "CLOSEOUT_PASS — interface corrected; leak quantified; 34 live restatements evidenced; versioning repair package ready for approval",
+  "boundaries": "no prod writes, no DDL, no refetch, no factor/backtest switch"
+}

@@ -1,0 +1,135 @@
+{
+ "table": "m1_shadow.asset_status_daily",
+ "dates": [
+  "2026-10-20",
+  "2026-10-21",
+  "2026-10-22"
+ ],
+ "scenarios": {
+  "write_2026-10-20": {
+   "status": "written",
+   "trade_date": "2026-10-20",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 5190,
+   "matched_rows": 5190,
+   "state_dist": {
+    "1": 5190
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 5190,
+   "checksum": "16a6a2caf8f5df18"
+  },
+  "write_2026-10-21": {
+   "status": "written",
+   "trade_date": "2026-10-21",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 5189,
+   "matched_rows": 5189,
+   "state_dist": {
+    "1": 5189
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 5189,
+   "checksum": "2a40c80b92e94bf6"
+  },
+  "write_2026-10-22": {
+   "status": "written",
+   "trade_date": "2026-10-22",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 5190,
+   "matched_rows": 5190,
+   "state_dist": {
+    "1": 5190
+   },
+   "missing_keys": 0,
+   "reasons": [],
+   "base_rows": 5190,
+   "checksum": "9c91b487dabdce8b"
+  },
+  "repeat_day2": {
+   "status": "idempotent",
+   "trade_date": "2026-10-21",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 0,
+   "matched_rows": 5189,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "all rows already carry this version"
+   ],
+   "base_rows": 5189,
+   "checksum_before": "2a40c80b92e94bf6",
+   "checksum_after": "2a40c80b92e94bf6",
+   "idempotent": true
+  },
+  "missing_base": {
+   "status": "blocked",
+   "trade_date": "2026-10-25",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 0,
+   "matched_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "base status rows absent for date — build_asset_status_daily must commit first"
+   ]
+  },
+  "switch_off": {
+   "status": "blocked",
+   "trade_date": "2026-10-20",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_v1",
+   "computed_keys": 0,
+   "matched_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "v2 eod switch is OFF (default)"
+   ]
+  },
+  "version_mismatch": {
+   "status": "blocked",
+   "trade_date": "2026-10-20",
+   "target": "m1_shadow.asset_status_daily",
+   "flags_version": "pit_rules_vX",
+   "computed_keys": 0,
+   "matched_rows": 0,
+   "state_dist": {},
+   "missing_keys": 0,
+   "reasons": [
+    "version conflict: existing rows carry [{'v': 'pit_rules_v1', 'n': 5190}]"
+   ],
+   "base_rows": 5190
+  },
+  "timeout_abort": {
+   "status": "aborted",
+   "error": "QueryCanceled"
+  },
+  "timeout_residual_rows": 0,
+  "unknown_not_false": {
+   "flagged_rows_in_unknown_states": 0
+  },
+  "null_state_rows": 0
+ },
+ "replica_rows": 15569,
+ "state_distribution": {
+  "1": 15569
+ },
+ "gate": {
+  "idempotent": true,
+  "missing_base_blocked": true,
+  "switch_off_blocked": true,
+  "version_conflict_blocked": true,
+  "timeout_rolled_back": true,
+  "unknown_fail_closed": true,
+  "metrics_reported": true,
+  "all_pass": true
+ }
+}

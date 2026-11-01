@@ -1,0 +1,59 @@
+{
+  "task": "DATA-R3-P2.1 financial PIT interface correction + consumer safety shadow",
+  "branch": "fix/r3-p21-financial-pit-shadow",
+  "base": "23ad1d40df2e45375957ba9fe82d8d61a80e43ac",
+  "worktree": ".worktrees/r3-p21 (canonical workspace untouched; p1d3 branch untouched)",
+  "scope": "read-only audit + interface correction + isolated shadow; zero production writes",
+  "A_reconciliation": {
+    "dual_source_keys_total": 230363,
+    "per_key_worst": {"conflict": 227321, "null_conflict": 2343,
+                      "unit_scale": 699, "equal": 0, "precision": 0},
+    "correction_of_prior_188171": "earlier figure counted any revenue difference incl. NULL asymmetry; exact classes: revenue equal 42,192 / precision 2,778 / unit_scale 19 / conflict 66,788 / null_conflict 118,586",
+    "dominant_driver": "eps_basic systematic disagreement 224,449 keys (share-count basis)",
+    "net_profit_agreement": "211,223/230,363 = 91.7%",
+    "revenue_conflict_attribution": ["unit mis-mapping ratio~1e6 (baostock 百万元 vs akshare 元)", "zero/sign asymmetry", "baostock early-period field misalignment 2007-2011"],
+    "q2_evidence_levels": {"L3_external_announcement": 1, "L2_db_delist_plus_source_absent": 13, "unverified_disclosure_claims": "none made"},
+    "ann_lag180_attribution": "akshare_em_profit_sheet exclusive; ann concentrated in following year = re-announcement semantics; classified historical_version_missing, no batch fix"
+  },
+  "B_interface": {
+    "two_level_selection": "period first (explicit or latest publicly known), then version policy + source_preference",
+    "new_guards": ["illegal as_of/report_period -> ValueError", "sentinel ann -> publication_date_missing", "D+1 strict ann<as_of", "source_preference param + stable tiebreak", "historical_version_missing status", "operational availability UNKNOWN when no evidence"],
+    "no_initial_disguise": "initial_public on re-announcement signature returns historical_version_missing"
+  },
+  "C_shadow": {
+    "changed_selections": 286704,
+    "by_statement": {"income": 95620, "balance": 95565, "cash_flow": 95519},
+    "period_shifts": 283392,
+    "affected_dates": 1381,
+    "concentration": "filing-deadline windows (Apr 27-30, Aug 29-31, Oct 29-31 yearly)",
+    "consumers_covered": ["point_in_time_finance", "finance_ttm", "fundamental_pipeline", "midtrend_pit_fundamental_features"],
+    "isolation": "no factor/backtest outputs overwritten; P&L diff deferred to repair phase",
+    "backtests_needing_revalidation": "all financial-factor strategies around filing deadlines"
+  },
+  "D_forensics": {
+    "raw_akshare_rows": 16586, "raw_baostock_rows": 0,
+    "version_keys": 15720,
+    "classification": {"single_fetch": 14874, "duplicate_refetch": 293,
+                       "payload_changed_same_metrics": 553,
+                       "metrics_changed": 0},
+    "initial_recoverable": 0, "initial_unrecoverable": 0,
+    "conclusion": "no value-level restatement observed in fetch window; historical restatements unprovable -> HISTORICAL_VERSION_MISSING stands; baostock payload evidence permanently absent",
+    "proposal": "additive statement_version/superseded_at/is_initial_public + append-only writers + first_disclosed_at vs reannouncement_date split (schema change NOT applied)"
+  },
+  "tests": {"file": "tests/test_financial_pit_p2.py", "passed": 17,
+            "failed": 0, "new_failures_vs_baseline": 0},
+  "deliverables": ["CROSS_SOURCE_RECONCILIATION.md",
+    "PUBLICATION_ANOMALY_SAMPLES.csv", "FINANCIAL_PIT_API_TESTS.json",
+    "CONSUMER_SHADOW_REPORT.md", "RESTATEMENT_FORENSICS.md",
+    "REGRESSION_DIFF.md", "FINAL_GATE.json",
+    "cross_source_census.json", "consumer_shadow_summary.json",
+    "consumer_shadow_diff.csv", "q2_evidence_levels.json",
+    "restatement_forensics.json"],
+  "verdict": "AUDIT_PASS_WITH_CONFIRMED_LEAK",
+  "blocking_findings": [
+    "286,704 selection changes under D+1 shadow — same-day convention materially alters financial data visibility at every filing deadline",
+    "initial published values unprovable; versioning schema required before any PIT-correct backtest claims",
+    "source precedence must be fixed: akshare_em primary, baostock indicator-only"
+  ],
+  "next_phase_approval_package": ["versioning DDL (additive)", "append-only writer change", "consumer availability-lag parameter", "factor+backtest revalidation on corrected convention"]
+}

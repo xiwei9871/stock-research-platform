@@ -1,0 +1,13 @@
+asset_id,rp,rt,source,ann,upd,rev,all_versions
+CN:SH:600653,1988-12-31,FY,akshare_em_profit_sheet,1991-06-10,2026-07-09 15:18:00.476711+08,14126000,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""1991-06-10""}]"
+CN:SH:600252,1999-12-31,FY,akshare_em_profit_sheet,2001-03-15,2026-07-09 12:30:26.116592+08,138332951.03,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2001-03-15""}]"
+CN:SZ:000983,2001-06-30,Q,akshare_em_profit_sheet,2002-08-08,2026-07-09 16:27:22.801899+08,929372251.62,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2002-08-08""}]"
+CN:SH:600495,2002-12-31,FY,akshare_em_profit_sheet,2004-04-29,2026-07-09 15:05:44.81618+08,155372922.24,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2004-04-29""}]"
+CN:SZ:000552,2003-09-30,Q,akshare_em_profit_sheet,2004-10-26,2026-07-09 16:21:27.36597+08,40533779.46,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2004-10-26""}]"
+CN:SZ:000920,2004-06-30,Q,akshare_em_profit_sheet,2005-08-12,2026-07-09 16:26:35.23147+08,764955252.2,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2005-08-12""}]"
+CN:SZ:002021,2005-03-31,Q,akshare_em_profit_sheet,2006-04-18,2026-07-09 16:28:34.053691+08,207690970.16,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2006-04-18""}]"
+CN:SZ:002187,2005-12-31,FY,akshare_em_profit_sheet,2007-10-31,2026-07-09 16:31:59.844523+08,1678896550.98,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2007-10-31""}]"
+CN:SZ:001914,2006-09-30,Q,akshare_em_profit_sheet,2007-10-30,2026-07-09 16:28:15.024961+08,1098093203.94,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2007-10-30""}]"
+CN:SH:600696,2007-06-30,Q,akshare_em_profit_sheet,2008-08-20,2026-07-09 17:26:27.644369+08,155311335.84,"[{""source"": ""baostock"", ""ann"": ""2007-08-18""}, {""source"": ""akshare_em_profit_sheet"", ""ann"": ""2008-08-20""}]"
+CN:SZ:002268,2007-12-31,FY,akshare_em_profit_sheet,2009-03-31,2026-07-09 16:33:42.175249+08,200845845.4,"[{""source"": ""akshare_em_profit_sheet"", ""ann"": ""2009-03-31""}]"
+CN:SH:600550,2008-09-30,Q,akshare_em_profit_sheet,2009-10-28,2026-07-09 15:08:41.449136+08,3333153312.47,"[{""source"": ""baostock"", ""ann"": ""2008-10-23""}, {""source"": ""akshare_em_profit_sheet"", ""ann"": ""2009-10-28""}]"

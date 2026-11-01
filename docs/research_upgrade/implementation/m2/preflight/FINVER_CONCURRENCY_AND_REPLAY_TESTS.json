@@ -1,0 +1,144 @@
+{
+ "instance": "stock_m2_test (local PG16)",
+ "drills": {
+  "F1_schema": {
+   "pass": true
+  },
+  "F2_counters": {
+   "first": {
+    "processed": 1,
+    "new_version": 1,
+    "identical_bump": 0,
+    "changed": 1,
+    "reversion": 0,
+    "late_arrival_repeat": 0,
+    "arrived_out_of_order": 0,
+    "no_period": 0,
+    "missing_period": 0,
+    "empty_metrics": 0,
+    "unknown_source": 0,
+    "failed": 0
+   },
+   "dup": {
+    "processed": 1,
+    "new_version": 0,
+    "identical_bump": 1,
+    "changed": 0,
+    "reversion": 0,
+    "late_arrival_repeat": 0,
+    "arrived_out_of_order": 0,
+    "no_period": 0,
+    "missing_period": 0,
+    "empty_metrics": 0,
+    "unknown_source": 0,
+    "failed": 0
+   },
+   "change": {
+    "processed": 1,
+    "new_version": 1,
+    "identical_bump": 0,
+    "changed": 1,
+    "reversion": 0,
+    "late_arrival_repeat": 0,
+    "arrived_out_of_order": 0,
+    "no_period": 0,
+    "missing_period": 0,
+    "empty_metrics": 0,
+    "unknown_source": 0,
+    "failed": 0
+   },
+   "missing_period": {
+    "processed": 0,
+    "new_version": 0,
+    "identical_bump": 0,
+    "changed": 0,
+    "reversion": 0,
+    "late_arrival_repeat": 0,
+    "arrived_out_of_order": 0,
+    "no_period": 1,
+    "missing_period": 1,
+    "empty_metrics": 0,
+    "unknown_source": 0,
+    "failed": 0
+   },
+   "unknown_ep": {
+    "processed": 1,
+    "new_version": 1,
+    "identical_bump": 0,
+    "changed": 1,
+    "reversion": 0,
+    "late_arrival_repeat": 0,
+    "arrived_out_of_order": 0,
+    "no_period": 0,
+    "missing_period": 0,
+    "empty_metrics": 0,
+    "unknown_source": 1,
+    "failed": 0
+   },
+   "pass": true
+  },
+  "F3_concurrent": {
+   "errors": [],
+   "seqs": [
+    1,
+    2
+   ],
+   "chain_n": 2,
+   "pass": true
+  },
+  "F4_out_of_order": {
+   "head_seq": 2,
+   "head_np": 200.0,
+   "events": 2,
+   "obs": {
+    "initial_observed": 1,
+    "late_arrival_repeat": 1,
+    "metrics_changed": 1
+   },
+   "pass": true
+  },
+  "F5_atomic_rollback": {
+   "error": "UndefinedTable",
+   "raw_delta": 0,
+   "pass": true
+  },
+  "F6_integrated_write": {
+   "raw_id": 2,
+   "events": 1,
+   "fin": {
+    "processed": 1,
+    "new_version": 1,
+    "identical_bump": 0,
+    "changed": 1,
+    "reversion": 0,
+    "late_arrival_repeat": 0,
+    "arrived_out_of_order": 0,
+    "no_period": 0,
+    "missing_period": 0,
+    "empty_metrics": 0,
+    "unknown_source": 0,
+    "failed": 0
+   },
+   "pass": true
+  },
+  "F7_asof": {
+   "early_np": 100.0,
+   "late_np": 200.0,
+   "pass": true
+  },
+  "F8_chain_audit": {
+   "orphans": 0,
+   "pass": true
+  }
+ },
+ "gate": {
+  "counters": true,
+  "concurrent": true,
+  "out_of_order": true,
+  "atomic_rollback": true,
+  "integrated_write": true,
+  "asof": true,
+  "chain_audit": true,
+  "all_pass": true
+ }
+}
