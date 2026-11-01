@@ -8,6 +8,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Any
+from zoneinfo import ZoneInfo
 
 ENGINE_VERSION = "unified_backtest_engine_v0.1"
 
@@ -61,8 +62,11 @@ class RealisticExecutionConfig:
     min_commission: float = 5.0
     slippage_bps: float = 10.0
     stamp_duty: StampDutySchedule = field(default_factory=StampDutySchedule)
-    # Signal cutoff on the signal date, local exchange time (HH:MM).
+    # Signal cutoff on the signal date, exchange local time (HH:MM). 15:00 =
+    # strict close-of-day signal; e.g. 20:30 = post-close EOD signal. Must match
+    # the production decision time being simulated; never mix in one study.
     signal_cutoff: str = "15:00"
+    timezone: str = "Asia/Shanghai"
     # Missing limit price / preclose blocks the order (fail-closed).
     block_missing_limit_state: bool = True
     # Opening at the limit-up price: assume the buy cannot be filled. This is
@@ -89,6 +93,7 @@ class RealisticExecutionConfig:
         if not 0 < self.max_gross_weight <= 1.0:
             raise ValueError("max_gross_weight must be in (0, 1] (no leverage)")
         dt.time.fromisoformat(self.signal_cutoff)
+        ZoneInfo(self.timezone)
 
 
 def config_payload(config: Any) -> dict[str, Any]:

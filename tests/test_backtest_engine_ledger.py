@@ -29,7 +29,7 @@ def series(asset, closes, opens=None, *, start=0, suspended=None, adj=None,
             "is_suspended": suspended[k] if suspended else False,
             "limit_up_price": round(pc * (1 + limit_pct / 100) + 1e-9, 2),
             "limit_down_price": round(pc * (1 - limit_pct / 100) + 1e-9, 2),
-            "adj_factor": adj[k] if adj else 1.0,
+            "adj_factor": adj[k] if adj else 1.0, "adjust_type": "raw",
         })
         prev = close
     return rows
@@ -45,9 +45,16 @@ def targets(rows):
     )
 
 
-def run(tw, px, **cfg):
+def schedule(dates, time="15:00:00"):
+    return pd.DataFrame({"signal_date": list(dates),
+                         "signal_ts": [f"{d}T{time}+08:00" for d in dates]})
+
+
+def run(tw, px, sched=None, **cfg):
     config = RealisticExecutionConfig(**cfg)
-    return execute_target_weights(tw, px, DAYS, config), config
+    if sched is None:
+        sched = schedule(sorted(set(tw["signal_date"])))
+    return execute_target_weights(tw, px, DAYS, config, signal_schedule=sched), config
 
 
 def trades_of(result, side=None):
@@ -145,6 +152,25 @@ def test_t09_missing_tradeability_state_fails_closed():
     assert reasons == {"A": "suspension_state_missing", "B": "limit_state_missing"}
 
 
+def test_t09b_unknown_state_strings_and_bad_preclose_fail_closed():
+    a = series("A", [10] * 3)
+    a[1]["is_suspended"] = "halted?"          # unrecognized -> unknown, not False
+    b = series("B", [10] * 3)
+    b[1]["preclose"] = float("nan")
+    c = series("C", [10] * 3)
+    c[1]["preclose"] = 0.0
+    d = series("D", [10] * 3)                  # no price limit (e.g. IPO window)
+    d[1]["limit_up_price"] = float("inf")
+    d[1]["limit_down_price"] = 0.0
+    tw = targets([(DAYS[0], x, 0.2) for x in "ABCD"])
+    res, _ = run(tw, bars(a, b, c, d), **NO_COST)
+    reasons = dict(zip(trades_of(res, "buy")["asset_id"], trades_of(res, "buy")["rejection_reason"]))
+    assert reasons["A"] == "suspension_state_missing"
+    assert reasons["B"] == "preclose_missing" and reasons["C"] == "preclose_missing"
+    status = dict(zip(trades_of(res, "buy")["asset_id"], trades_of(res, "buy")["execution_status"]))
+    assert status["D"] == "filled"
+
+
 def test_t10_deterministic():
     px = bars(series("A", [10, 10.4, 9.8, 10.1, 10.6]), series("B", [5, 5.2, 5.1, 4.9, 5.3]))
     tw = targets([(DAYS[0], "A", 0.5), (DAYS[0], "B", 0.5), (DAYS[2], "A", 0.8), (DAYS[2], "B", 0.0)])
@@ -172,6 +198,7 @@ def test_t14_ex_dividend_has_no_spurious_jump():
     assert eq.loc[DAYS[2], "nav_close"] == pytest.approx(eq.loc[DAYS[1], "nav_close"], rel=1e-9)
     ca = res["corporate_actions"]
     assert len(ca) == 1 and ca.iloc[0]["factor_ratio"] == pytest.approx(10 / 9.5)
+    assert res["model"]["corporate_action_model"] == "TOTAL_RETURN_APPROX_FACTOR_REINVEST"
 
 
 def test_t14b_fail_closed_policy_rejects_missing_factor():
@@ -181,22 +208,79 @@ def test_t14b_fail_closed_policy_rejects_missing_factor():
         run(targets([(DAYS[0], "A", 1.0)]), px, corporate_action_policy="fail_closed", **NO_COST)
 
 
-def test_t15_adjusted_prices_rejected():
+def test_t15_adjusted_or_undeclared_prices_rejected():
     px = bars(series("A", [10] * 3))
-    px["adjust_type"] = "hfq"
-    with pytest.raises(ContractError, match="raw"):
-        run(targets([(DAYS[0], "A", 1.0)]), px)
+    for bad in ("hfq", None):
+        frame = px.assign(adjust_type=bad)
+        with pytest.raises(ContractError, match="raw"):
+            run(targets([(DAYS[0], "A", 1.0)]), frame)
+    with pytest.raises(ContractError, match="adjust_type"):
+        run(targets([(DAYS[0], "A", 1.0)]), px.drop(columns=["adjust_type"]))
 
 
 def test_t16_signal_after_cutoff_rejected():
     px = bars(series("A", [10] * 3))
     tw = targets([(DAYS[0], "A", 1.0)])
-    tw["signal_ts"] = f"{DAYS[0]} 15:30:00"
     with pytest.raises(ContractError, match="cutoff"):
-        run(tw, px)
-    tw["signal_ts"] = f"{DAYS[0]} 15:00:00"
-    run(tw, px)
-    run(pd.DataFrame(tw.assign(signal_ts=f"{DAYS[0]} 18:00:00")), px, signal_cutoff="20:30")
+        run(tw, px, schedule([DAYS[0]], "15:30:00"))
+    run(tw, px, schedule([DAYS[0]], "15:00:00"))
+    # post-close EOD research definition: explicit 20:30 cutoff
+    run(tw, px, schedule([DAYS[0]], "18:00:00"), signal_cutoff="20:30")
+    with pytest.raises(ContractError, match="cutoff"):
+        run(tw, px, schedule([DAYS[0]], "21:00:00"), signal_cutoff="20:30")
+
+
+@pytest.mark.parametrize("bad_ts, match", [
+    (None, "missing"),
+    ("not-a-time", "valid timestamp"),
+    ("2023-08-21T14:00:00", "timezone"),          # naive -> ambiguous
+    ("2023-08-22T10:00:00+08:00", "not on signal_date"),
+    ("2023-08-21T08:00:00+00:00", "cutoff"),      # = 16:00 Shanghai
+])
+def test_t16b_signal_ts_missing_invalid_or_ambiguous_rejected(bad_ts, match):
+    px = bars(series("A", [10] * 3))
+    sched = pd.DataFrame({"signal_date": [DAYS[0]], "signal_ts": [bad_ts]})
+    with pytest.raises(ContractError, match=match):
+        run(targets([(DAYS[0], "A", 1.0)]), px, sched)
+
+
+def test_t16c_input_availability_is_checked_separately():
+    px = bars(series("A", [10] * 3))
+    tw = targets([(DAYS[0], "A", 1.0)])
+    sched = schedule([DAYS[0]], "15:00:00")
+    res, _ = run(tw, px, sched)
+    assert res["model"]["input_availability_check"] == "NOT_DECLARED"
+    sched["inputs_asof_ts"] = f"{DAYS[0]}T14:59:00+08:00"
+    res, _ = run(tw, px, sched)
+    assert res["model"]["input_availability_check"] == "DECLARED_AND_CHECKED"
+    sched["inputs_asof_ts"] = f"{DAYS[0]}T18:00:00+08:00"   # data published after signal
+    with pytest.raises(ContractError, match="inputs_asof_ts"):
+        run(tw, px, sched)
+
+
+def test_t19_all_cash_target_liquidates_and_no_signal_holds():
+    px = bars(series("A", [10] * 6), series("B", [20] * 6))
+    tw = targets([(DAYS[0], "A", 0.5), (DAYS[0], "B", 0.5)])
+    # DAYS[2] scheduled with zero target rows = ALL_CASH_TARGET
+    res, cfg = run(tw, px, schedule([DAYS[0], DAYS[2]]), **NO_COST)
+    sig = res["signals"].set_index("signal_date")
+    assert sig.loc[DAYS[2], "signal_type"] == "ALL_CASH_TARGET"
+    sells = trades_of(res, "sell")
+    assert set(sells["asset_id"]) == {"A", "B"} and (sells["execution_date"] == DAYS[3]).all()
+    assert (sells["execution_status"] == "filled").all()
+    pos = res["positions"]
+    assert not (pos["date"] >= DAYS[3]).any()
+    assert res["equity"].iloc[-1]["market_value"] == 0.0
+    # same targets without the cash signal: NO_SIGNAL -> keeps holding
+    held, _ = run(tw, px, schedule([DAYS[0]]), **NO_COST)
+    assert (held["positions"]["date"] == DAYS[5]).sum() == 2
+    assert trades_of(held, "sell").empty
+
+
+def test_t19b_target_rows_outside_schedule_rejected():
+    px = bars(series("A", [10] * 3))
+    with pytest.raises(ContractError, match="absent from the signal schedule"):
+        run(targets([(DAYS[0], "A", 1.0), (DAYS[1], "A", 0.5)]), px, schedule([DAYS[0]]))
 
 
 def test_t17_blocked_sell_then_target_change_updates_order():

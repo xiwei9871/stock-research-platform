@@ -3,11 +3,25 @@
 - 任务：BACKTEST-ENGINE-POC-V0.1
 - 基线：`origin/main` = `9bd955621bac032ce89d43a17a2bac04aa38e262`
 - 分支：`research/unified-backtest-execution-poc-v01`
-- **状态：`POC_PARTIAL / NOT_READY_FOR_M3`**
-  - Gate A（执行核心）：通过
-  - Gate B（旧系统兼容）：通过。TopN、TB 逐日一致；MT 有 2 处已记录的口径差异
-  - Gate C（真实历史对照）：**未完成**，原因见 §5
+- **状态（V0.1.1）：`POC_PARTIAL / NOT_READY_FOR_M3`**
+  - Gate A（执行核心）：通过；V0.1.1 修复了评审提出的 P0/P1 问题（§0）
+  - Gate B（旧系统兼容）：通过，仅合成数据。TopN、TB 逐日一致；MT 有 2 处已记录的口径差异。TB/MT 的结果属于 `FROZEN_SIGNAL_REPLAY`
+  - Gate C（真实历史对照）：**未完成**。只读导出脚本已交付（§5），但本轮没有拿到真实数据，没有运行任何真实历史对照
 - 生产 EOD、旧回测实现、数据库都没有改动；新引擎没有接入任何生产路径。
+
+## 0. V0.1.1 整改（针对 PR #16 评审）
+
+| 评审项 | 处理 | 测试 |
+|---|---|---|
+| P0 空仓信号丢失 | 新增必填的 `signal_schedule`：列出每个决策日。日程中有、但没有目标行的日子 = `ALL_CASH_TARGET`（清仓）；不在日程中的日子 = `NO_SIGNAL`（继续持有）。目标行的日期不在日程中会报错。每次决策写入 `signals.csv`（`signal_type`） | `test_t19_*`、`test_t19b_*` |
+| P0 时点检查 | `signal_ts` 必填，必须带时区；缺失、无法解析、不带时区、不在 `signal_date` 当天、晚于截止时点都会拒绝。截止时点和时区（默认 `Asia/Shanghai`）可配置，15:00 收盘信号和 20:30 盘后信号是两种不同的研究定义，同一次研究不能混用。可选的 `inputs_asof_ts` 单独校验"信号所用输入的最晚可用时间不晚于信号时间"；没有声明时，结果标为 `input_availability_check=NOT_DECLARED`，**不能据此证明输入没有前视** | `test_t16_*`、`test_t16b_*` ×5、`test_t16c_*` |
+| P1 行情状态 | `adjust_type` 改为必填，而且必须是 `raw`（缺失也拒绝）；停牌状态改为三态解析，无法识别的字符串视为未知，而不是 False；`preclose` 缺失或 ≤0 时拒单（`preclose_missing`）；涨跌停价 NaN = 状态未知，拒单；`+inf`/`0` = 当天无涨跌幅限制（新股窗口） | `test_t09b_*`、`test_t15_*` |
+| P1 公司行为模型 | 结果和 manifest 中写明 `corporate_action_model=TOTAL_RETURN_APPROX_FACTOR_REINVEST`：这是全收益近似，不是现金分红到账的真实账户 | `test_t14_*` |
+| TB/MT 信号来源 | 适配器输出的每一行都带 `signal_provenance=FROZEN_SIGNAL_REPLAY`；manifest 记录 `signal_provenance` 和 `universe_label`（TB 的 153 只名单必须写 `EX_POST_UNIVERSE`）。V0.1.1 没有实现 `FULL_STRATEGY_REPLAY` | `test_adapters_tag_*` |
+| 基准与超额收益 | `summarize(..., benchmark=)`：统计口径见 `metrics.py` 文件头（日度算术超额，按 √252 年化 TE 和 IR，基准缺失的天数单独计数） | `test_t10_*` |
+| 真实数据准备链 | `backtest_engine/snapshot.py`，见 §5 | `test_backtest_engine_snapshot.py` ×3 |
+
+**FROZEN_SIGNAL_REPLAY 的含义**：TB 和 MT 的决策取自旧模拟器的输出，不会对新引擎中的实际持仓（买入受阻、卖出受阻、权重漂移）作出反应。所以它只能衡量执行规则带来的影响，不能作为完整策略的可信度结论。
 
 ## 1. 交付内容
 
@@ -21,6 +35,8 @@
 | `src/stock_research/backtest_engine/topn_compat.py` | TopN 兼容运行和逐日对账函数 |
 | `src/stock_research/backtest_engine/metrics.py` | 统一绩效指标定义（每年 252 个交易日） |
 | `src/stock_research/backtest_engine/run.py` | 运行入口，写出产物和 `run_manifest.json` |
+| `src/stock_research/backtest_engine/snapshot.py` | V0.1.1：只读导出（`export`）+ 离线准备引擎行情（`build`），涨跌停价复用 `tradeability` |
+| `tests/test_backtest_engine_snapshot.py` | V0.1.1：涨跌停价推导、缺失状态 fail-closed、新股窗口判定 |
 | `tests/test_backtest_engine_ledger.py` | T01–T10、T13–T18、输入契约测试 |
 | `tests/test_backtest_engine_topn_compat.py` | T11：TopN 新旧引擎逐日对账（15 组参数 × 种子，加交易级比对） |
 | `tests/test_backtest_engine_strategy_adapters.py` | T12：TB、MT 适配器回归和已知差异 |
@@ -35,10 +51,10 @@
 .venv/bin/python -m pytest tests/test_backtest_engine_*.py \
   tests/test_vectorized_topn_backtest.py tests/test_market_style_switch_v1.py \
   tests/test_backtest_constraints.py -q
-99 passed
+112 passed            # V0.1.1；V0.1 为 99
 ```
 
-- 新增测试 42 个，全部通过。
+- 引擎测试 55 个（V0.1 为 42 个）：ledger 27、topn_compat 16、strategy_adapters 8、snapshot 3、run_manifest 1，全部通过。全部是合成数据。
 - 原有的 `test_vectorized_topn_backtest.py`、`test_market_style_switch_v1.py`、`test_backtest_constraints.py` 共 57 个测试仍然通过，说明旧代码没有被改动。
 - `tests/test_serenity_tight3b_c2_experiment.py` 在 `main` 上本来就无法收集：它导入 `watchdog_runner.backfill.should_send_watchdog_message` 失败，跟本 PR 无关。本 PR 直接调用了 `serenity_tight3b_c2_experiment._simulate_one_config`，这个调用是能工作的。
 - GitHub Backend CI 预计仍会失败，原因是 `auction_data.py:9` 中遗留的 `import tushare`，由 Devin 处理。本 PR 不修改竞价采集代码。
@@ -125,26 +141,46 @@ D 是信号日之后的下一个交易日。
 - **已知差异 2（行情缺失）**：某只股票在 d 日没有行情时，MT 的 `groupby(asset).shift(-1)` 会跨过缺口，把 d-1 到 d+1 的涨跌记在 d-1 日，并在 d 日把该股票从平均中剔除（其余股票的权重被放大）。新引擎对缺失行情记零收益。从 d-1 起两者净值开始偏离。`test_t12_mid_trend_known_difference_missing_price_bar` 固定了这个行为。`ARCHITECTURAL_JUDGMENT`：MT 的处理会把停牌期间的涨跌提前算进收益，属于轻微的前视，新引擎的处理更合理。
 - 局限：MT 的生产路径另有资金预算（full/reduced/light）和选股逻辑（`current_mid_trend_strategy_v1.py`）。V0.1 只验证了它的执行函数 `_simulate_equal_weight_daily`，没有用真实数据运行生产 MT。
 
-## 5. Gate C 未完成的原因
+## 5. Gate C：数据准备链已交付，真实对照未运行
 
-真实历史对照需要以下数据：未复权的 OHLC、`preclose`、涨跌停价、停牌状态、复权因子（`market.adjustment_factor`）、交易日历，时间范围最好覆盖 2023 年 8 月。
+### 5.1 现状
 
-- 本地 `outputs/research/` 中没有找到带 `preclose`、复权因子或涨跌停价的行情快照（已检索 CSV 和 Parquet）。
-- 185 上的 `m2_l2_restore` 恢复实例：本轮尝试用 SSH 只读查看，被权限策略拦截（理由是会读取生产主机）。我没有绕过这个限制。
-- 生产库 187：按任务要求不连接。
+- 本地 `outputs/research/` 中没有带 `preclose`、复权因子、涨跌停价的行情快照。
+- 185 恢复实例 `m2_l2_restore` 的只读访问在 V0.1 中被权限策略拦截；本轮没有再尝试，也没有绕过。
+- 因此**本轮没有任何真实历史对照结果**。§4 的所有结论都只来自合成数据。
 
-所以本轮**只有合成 fixture 测试，没有真实历史验证**。T01–T18 的结论只说明引擎逻辑正确，不说明任何策略的历史表现。
+### 5.2 只读导出与准备脚本（`backtest_engine/snapshot.py`）
 
-### 完成 Gate C 需要的决定
+由有权限的执行者在能访问恢复实例的机器上运行第一步，其余步骤离线完成：
 
-1. 授权只读访问 185 的 `m2_l2_restore`（例如 `psql` 只读账号，或者在 185 上执行导出脚本并把结果放到 NAS）。
-2. 导出范围：2023-06-01 到 2023-12-29，TB 153 只 + TopN 当期前 50 名 + MT 漏斗股票，导出 `market_daily_bar`（raw）、`market.adjustment_factor`、`core.asset_status_daily`，用 `tradeability` 生成涨跌停价。按估计大约几十万行，内存远低于 4GB。
-3. 把导出文件的 sha256 写入 manifest 的 `data_snapshot_id`，然后对三个策略分别运行：
-   - Legacy Original：旧代码
-   - Legacy Compat：新引擎，旧口径
-   - Realistic A-Share：新引擎，真实口径
+```bash
+# 1. 只读导出（只对恢复实例或副本；事务为 REPEATABLE READ, READ ONLY，
+#    启动时检查 transaction_read_only=on 并记录服务器身份）
+python -m stock_research.backtest_engine.snapshot export \
+  --service <restore_service> --start 2023-06-01 --end 2023-12-29 \
+  --assets-file assets.txt --adj-source-version <v> --calendar-source-version <v> \
+  --out-dir snapshot_raw/
+# 2. 离线：合并行情、状态、主数据、复权因子；用 tradeability 规则生成涨跌停价
+python -m stock_research.backtest_engine.snapshot build --raw-dir snapshot_raw/ --out-dir snapshot/
+```
 
-   输出净值、回撤、交易级差异、成本差异和未成交影响。
+- 导出内容：`public.market_daily_bar`（只取 raw）、`core.asset_status_daily`、`core.asset_master`、`market.adjustment_factor`（指定 `source_version`）、`market.trading_calendar`。不写库，不改恢复实例。
+- `build` 产物：`bars.csv`、`calendar.csv`、`snapshot_manifest.json`（原始文件和输出文件的 sha256、`snapshot_id`、`tradeability` 合约版本、质量统计：缺状态行、缺 preclose 行、规则未知行、无涨跌幅限制行、缺复权因子行、按规则 id 计数）。
+- 涨跌停价：调用 `tradeability.resolve_limit_rule` 和 `legal_limit_price`，与 `compute_pit_limit_flags` 使用同一套板块、ST、新股窗口判定。只有在交易日历覆盖上市日时才计算上市后第几个交易日，避免把老股误判为新股窗口（`test_ipo_window_only_when_calendar_covers_listing`）。
+- 已知局限：`build` 中 ST 状态取自 `asset_status_daily.is_st`；退市整理期等状态没有单独处理，相关行在 `resolve_limit_rule` 中会落入 `rule_unknown` 并按 fail-closed 拒单。
+
+### 5.3 Gate C 实验设计（拿到数据后执行）
+
+| 实验 | 对比 | 目的 |
+|---|---|---|
+| C1 | 旧引擎原始结果 vs 新引擎 LEGACY_COMPAT | 真实数据上的历史兼容性 |
+| C2 | LEGACY_COMPAT vs REALISTIC_A_SHARE（同一组冻结信号） | 量化成交时点、成本、权重漂移、受阻成交的影响 |
+| C3 | 信号与时点校验 | 检查股票池、财务数据、市场状态序列是否有前视 |
+
+- 数据范围：覆盖 2023-08-28 印花税调整，以及发生过涨跌停、停牌、除权除息的证券。TB 和 MT 若在 2023 年没有真实信号，要另外补上它们实际使用的窗口（TB 2025-01～2026-06，MT 2026-01 起），不能用没有信号的行情充数。
+- 输出：逐日 NAV、回撤、持仓、成交、成本、未成交数量和原因、收益差异，以及基准超额收益。
+- 标签：TB 用 153 只名单时必须写 `universe_label=EX_POST_UNIVERSE`；TB 和 MT 都是 `FROZEN_SIGNAL_REPLAY`。如果只完成冻结信号重放，最终状态只能是 `FROZEN_SIGNAL_REPLAY_VALIDATED`，不能宣称完整策略可信。
+- C3 不是执行引擎能单独完成的：需要逐个核对股票池生成时间、财务字段的可用时间、市场状态序列的更新时间。V0.1.1 只提供了 `inputs_asof_ts` 这一检查入口。
 
 ## 6. 可复现性
 
@@ -162,9 +198,8 @@ manifest 分成两部分：
 
 **还不能（`NOT_READY_FOR_M3`）。** 剩余条件：
 
-1. 完成 Gate C（§5），需要先授权数据访问。
-2. 写数据准备脚本：从只读快照生成未复权行情、涨跌停价和复权因子，涨跌停价复用 `tradeability`。
-3. 把 TB 的决策权重导出流程固化为脚本，并加上 `EX_POST_UNIVERSE` 标记。
-4. 实现基准收益和超额收益的计算。
+1. 授权执行 §5.2 的只读导出（185 恢复实例或其他只读副本）。
+2. 用导出的快照跑完 §5.3 的 C1、C2，并写出 C3 的逐项核对结果。
+3. 如果 M3 要回答"策略本身是否可信"，而不只是"执行规则影响多大"，TB 和 MT 还需要 `FULL_STRATEGY_REPLAY`：把它们的选股和保护退出逻辑从旧模拟器中拆出来，按新引擎的实际持仓重新生成决策。V0.1.1 没有做。
 
-这四项都不需要修改生产代码或数据库。
+以上都不需要修改生产代码、EOD 或数据库。

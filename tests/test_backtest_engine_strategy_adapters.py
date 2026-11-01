@@ -107,3 +107,17 @@ def test_t12_mid_trend_known_difference_missing_price_bar():
     assert old.loc[days[3], "priced_holdings"] == 1
     assert abs(old.loc[days[1], "equity"] - new.loc[days[2], "equity"]) <= 1e-10
     assert abs(old.loc[days[2], "equity"] - new.loc[days[3], "equity"]) > 1e-6
+
+
+def test_adapters_tag_frozen_signal_replay_and_schedule_keeps_empty_days():
+    from stock_research.backtest_engine.adapters import FROZEN_SIGNAL_REPLAY, signal_schedule
+
+    days, prices, _, _ = _market(3, n_days=8, n_assets=3)
+    selected = pd.DataFrame([{"trade_date": days[0], "asset_id": "S00", "invested_weight": 1.0},
+                             {"trade_date": days[1], "asset_id": None, "invested_weight": 0.0}])
+    targets = mid_trend_target_weights(selected)
+    assert (targets["signal_provenance"] == FROZEN_SIGNAL_REPLAY).all()
+    assert days[1] not in set(targets["signal_date"])        # cash day has no rows ...
+    sched = signal_schedule(selected["trade_date"])
+    assert days[1] in set(sched["signal_date"])              # ... but stays a decision
+    assert sched["signal_ts"].str.endswith("+08:00").all()

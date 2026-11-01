@@ -24,10 +24,17 @@ from stock_research.backtest_engine.config import RealisticExecutionConfig
 from stock_research.backtest_engine.contracts import (
     ContractError,
     validate_price_bars,
+    validate_signal_schedule,
     validate_target_weights,
 )
 
 TICK = 0.01
+CORPORATE_ACTION_MODEL_LABELS = {
+    # Not a cash-dividend account: dividends/bonus are folded into share
+    # count at the ex price, i.e. a total-return approximation.
+    "factor_reinvest": "TOTAL_RETURN_APPROX_FACTOR_REINVEST",
+    "fail_closed": "FAIL_CLOSED_ON_MISSING_FACTOR",
+}
 
 
 @dataclass
@@ -56,10 +63,17 @@ def _check_tradable(bar: dict[str, Any] | None, side: str,
     price = _fill_reference(bar, config)
     if price is None or not math.isfinite(price) or price <= 0:
         return "no_price"
+    preclose = bar.get("preclose")
+    if preclose is None or not math.isfinite(preclose) or preclose <= 0:
+        if config.block_missing_limit_state:
+            return "preclose_missing"
     limit_col = "limit_up_price" if side == "buy" else "limit_down_price"
     limit = bar.get(limit_col)
-    if limit is None or not math.isfinite(limit):
+    # NaN = unknown state; +inf (up) / 0 (down) = no price limit that day.
+    if limit is None or math.isnan(limit):
         return "limit_state_missing" if config.block_missing_limit_state else None
+    if math.isinf(limit) or (side == "sell" and limit == 0):
+        return None
     if side == "buy" and config.block_buy_at_limit_up_open and price >= limit - TICK / 2:
         return "limit_up_at_fill"
     if side == "sell" and config.block_sell_at_limit_down_open and price <= limit + TICK / 2:
@@ -78,25 +92,32 @@ def execute_target_weights(
     price_bars: pd.DataFrame,
     trading_calendar: list[str],
     config: RealisticExecutionConfig,
+    *,
+    signal_schedule: pd.DataFrame,
 ) -> dict[str, pd.DataFrame]:
+    """signal_schedule lists every decision date. A scheduled date with no
+    target rows is ALL_CASH_TARGET; an unscheduled date is NO_SIGNAL."""
+    schedule, input_status = validate_signal_schedule(
+        signal_schedule, signal_cutoff=config.signal_cutoff, timezone=config.timezone)
+    schedule_dates = set(schedule["signal_date"])
     targets = validate_target_weights(
-        target_weights, max_gross_weight=config.max_gross_weight,
-        signal_cutoff=config.signal_cutoff,
+        target_weights, schedule_dates=schedule_dates,
+        max_gross_weight=config.max_gross_weight,
     )
     bars = validate_price_bars(price_bars)
     calendar = sorted({pd.Timestamp(d).date().isoformat() for d in trading_calendar})
     if len(calendar) < 2:
         raise ContractError("trading calendar needs at least two days")
-    bad_signal = sorted(set(targets["signal_date"]) - set(calendar))
+    bad_signal = sorted(schedule_dates - set(calendar))
     if bad_signal:
         raise ContractError(f"signal_date not a trading day: {bad_signal[0]}")
     bars_by_day: dict[str, dict[str, dict[str, Any]]] = {}
     for rec in bars.to_dict("records"):
         bars_by_day.setdefault(rec["trade_date"], {})[rec["asset_id"]] = rec
-    targets_by_signal = {
-        day: dict(zip(frame["asset_id"], frame["target_weight"].astype(float)))
-        for day, frame in targets.groupby("signal_date")
-    }
+    targets_by_signal: dict[str, dict[str, float]] = {day: {} for day in schedule_dates}
+    for day, frame in targets.groupby("signal_date"):
+        targets_by_signal[day] = {
+            a: w for a, w in zip(frame["asset_id"], frame["target_weight"].astype(float)) if w > 0}
     first_signal = min(targets_by_signal)
     days = [d for d in calendar if d >= first_signal]
 
@@ -108,6 +129,7 @@ def execute_target_weights(
     action_rows: list[dict[str, Any]] = []
     prev_nav = float(config.initial_cash)
     latest_target: dict[str, float] = {}
+    signal_rows: list[dict[str, Any]] = []
 
     for i, day in enumerate(days):
         day_bars = bars_by_day.get(day, {})
@@ -135,6 +157,10 @@ def execute_target_weights(
         new_signal = targets_by_signal.get(signal_day) if signal_day else None
         if new_signal is not None:
             latest_target = new_signal
+            signal_rows.append({"signal_date": signal_day, "execution_date": day,
+                                "signal_type": "ALL_CASH_TARGET" if not new_signal else "TARGET",
+                                "target_assets": len(new_signal),
+                                "target_gross": float(sum(new_signal.values()))})
             orders = {a: {"target_weight": new_signal.get(a, 0.0), "signal_date": signal_day}
                       for a in set(acct.shares) | set(new_signal)}
         else:
@@ -277,4 +303,12 @@ def execute_target_weights(
         "positions": pd.DataFrame(position_rows),
         "trades": pd.DataFrame(trade_rows),
         "corporate_actions": pd.DataFrame(action_rows),
+        "signals": pd.DataFrame(signal_rows, columns=["signal_date", "execution_date", "signal_type",
+                                                      "target_assets", "target_gross"]),
+        "model": {
+            "execution_mode": "REALISTIC_A_SHARE",
+            "corporate_action_model": CORPORATE_ACTION_MODEL_LABELS[config.corporate_action_policy],
+            "input_availability_check": input_status,
+            "limit_open_assumption": "OPEN_AT_LIMIT_NOT_FILLABLE",
+        },
     }
