@@ -28,6 +28,14 @@ def _compat_publication_transaction(monkeypatch):
         eod.upsert_strategy_daily_eod_status(status_payload, service=service)
 
     monkeypatch.setattr(eod, "commit_strategy_publication", commit)
+    # Gate A isolation: no real attempt store / snapshot DB writes in unit tests.
+    from stock_research.run_attempts import MemoryAttemptStore
+
+    monkeypatch.setattr(eod, "_default_attempt_store", lambda *_a, **_k: MemoryAttemptStore())
+    monkeypatch.setattr(
+        eod, "run_post_publish_snapshots",
+        lambda **kwargs: {"status": "success", "attempt_id": "stub", "manifest_written": True},
+    )
 
 
 def _write_complete_mature_release(
@@ -1011,7 +1019,8 @@ def test_official_runner_rejects_legacy_runner_injection(tmp_path: Path):
         )
 
 
-def test_official_runner_rejects_output_root_outside_explicit_release(tmp_path: Path):
+def test_official_runner_rejects_output_root_outside_explicit_release(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     release_root = tmp_path / "release"
     outside = tmp_path / "outside" / "strategy_daily_eod"
     with pytest.raises(ValueError, match="contained within release root"):
@@ -1022,7 +1031,8 @@ def test_official_runner_rejects_output_root_outside_explicit_release(tmp_path: 
         )
 
 
-def test_official_runner_rejects_output_root_symlink_escape(tmp_path: Path):
+def test_official_runner_rejects_output_root_symlink_escape(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     release_root = tmp_path / "release"
     release_root.mkdir()
     outside = tmp_path / "outside"
@@ -1982,3 +1992,104 @@ def test_eod_cron_probe_uses_probe_exit_code():
     script = (repo_root / "scripts" / "run_strategy_daily_eod_cron.sh").read_text()
 
     assert "strategy_daily_eod_dependency_probe_exit_code" in script
+
+
+# ---------------------------------------------------------------- Gate A
+
+def _gate_a_env(monkeypatch):
+    from stock_research.run_attempts import MemoryAttemptStore
+
+    store = MemoryAttemptStore()
+    snapshots = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_a, **_k: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_a, **_k: None)
+    monkeypatch.setattr(eod, "load_strategy_daily_eod_status", lambda *_a, **_k: None)
+
+    def snapshot(**kwargs):
+        canonical = Path(kwargs["strategy_output_root"]) / kwargs["trade_date"] / "review_queue_strategy_manifest.csv"
+        snapshots.append({**kwargs, "canonical_sha": eod.file_sha256(canonical)})
+        return {"status": "success", "attempt_id": f"snap-{len(snapshots)}", "manifest_written": True}
+
+    return store, snapshots, snapshot
+
+
+def _variant_publisher(variant: str):
+    def publisher(**kwargs):
+        summary = _write_complete_mature_release(**kwargs)
+        path = Path(summary["output_dir"]) / "review_queue_strategy_manifest.csv"
+        frame = pd.read_csv(path)
+        frame["variant"] = variant
+        frame.to_csv(path, index=False)
+        return summary
+    return publisher
+
+
+def _run(tmp_path, store, snapshot, publisher, **extra):
+    return eod.run_strategy_daily_eod(
+        trade_date="2026-07-24", output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher, service="test", attempt_store=store,
+        post_publish_snapshot=snapshot, **extra,
+    )
+
+
+def test_gate_a_same_day_two_publications_keep_both_attempts_and_bind_snapshots(tmp_path, monkeypatch):
+    store, snapshots, snapshot = _gate_a_env(monkeypatch)
+    first = _run(tmp_path, store, snapshot, _variant_publisher("A"))
+    second = _run(tmp_path, store, snapshot, _variant_publisher("B"), trigger="manual")
+    assert first["status"] == second["status"] == "success"
+    pubs = [r for r in store.records.values() if r["module"] == eod.PUBLICATION_ATTEMPT_MODULE]
+    assert len(pubs) == 2 and {r["status"] for r in pubs} == {"published"}
+    assert first["publication_attempt_id"] != second["publication_attempt_id"]
+    # each snapshot call is pinned to its own publication and the file it saw
+    assert [s["publication_attempt_id"] for s in snapshots] == [
+        first["publication_attempt_id"], second["publication_attempt_id"]]
+    for call in snapshots:
+        assert call["expected_manifest_sha256"] == call["canonical_sha"]
+    assert snapshots[0]["canonical_sha"] != snapshots[1]["canonical_sha"]
+    canonical = tmp_path / "2026-07-24" / "review_queue_strategy_manifest.csv"
+    assert pd.read_csv(canonical)["variant"].unique().tolist() == ["B"]
+    assert all(s["run_id"] == "strategy-eod-2026-07-24-local" for s in snapshots)
+    assert {r["trigger"] for r in pubs} == {"cron", "manual"}
+
+
+def test_gate_a_failed_publication_records_attempt_and_keeps_previous_release(tmp_path, monkeypatch):
+    store, snapshots, snapshot = _gate_a_env(monkeypatch)
+    _run(tmp_path, store, snapshot, _variant_publisher("A"))
+    canonical = tmp_path / "2026-07-24" / "review_queue_strategy_manifest.csv"
+    sha_a = eod.file_sha256(canonical)
+
+    def broken_transaction(**_kwargs):
+        raise RuntimeError("db down during commit")
+
+    failed = _run(tmp_path, store, snapshot, _variant_publisher("B"),
+                  publication_transaction=broken_transaction)
+    assert failed["status"] == "failed"
+    assert eod.file_sha256(canonical) == sha_a
+    assert len(snapshots) == 1            # no snapshot for the failed attempt
+    pubs = sorted((r for r in store.records.values()
+                   if r["module"] == eod.PUBLICATION_ATTEMPT_MODULE), key=lambda r: r["started_at"])
+    assert [r["status"] for r in pubs] == ["published", "failed"]
+    assert pubs[1]["failure_class"] == "publish"
+    assert ("start", pubs[1]["attempt_id"], "running") in store.events
+
+
+def test_gate_a_dependency_block_finishes_attempt_without_snapshot(tmp_path, monkeypatch):
+    store, snapshots, snapshot = _gate_a_env(monkeypatch)
+    eod.run_strategy_daily_eod(
+        trade_date="2026-07-24", output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "failed", "reason": "pipeline not ready"},
+        publisher=_variant_publisher("A"), service="test", attempt_store=store,
+        post_publish_snapshot=snapshot,
+    )
+    (record,) = store.records.values()
+    assert record["status"] == "failed" and record["failure_class"] == "dependency"
+    assert snapshots == []
+
+
+def test_gate_a_publisher_no_longer_snapshots_before_commit():
+    import inspect
+
+    source = inspect.getsource(mature_publish.publish_strategy_eod)
+    assert "_write_review_evidence_snapshot_entry(" not in source

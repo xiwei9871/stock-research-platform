@@ -290,7 +290,8 @@ def test_load_lhb_base_score_source_prefers_master_name_then_lhb_name(monkeypatc
     assert "pct_chg" in lhb_sql
 
 
-def test_mid_trend_review_uses_latest_signal_score_for_continued_holdings():
+def test_mid_trend_review_uses_latest_signal_score_for_continued_holdings(monkeypatch):
+    monkeypatch.setattr(strategy_eod_publish, "_mid_trend_daily_score_lookup", lambda *_a, **_k: {})
     result = {
         "strategy_id": "mid_trend",
         "strategy_name": "Mid Trend Combo",

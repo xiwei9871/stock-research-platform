@@ -42,6 +42,20 @@ from stock_research.strategy_publication_contracts import (
 from stock_research.tech_bottleneck_evidence_workflow import (
     build_tech_bottleneck_evidence_workflow,
 )
+from stock_research.review_evidence_snapshots import (
+    REVIEW_QUEUE_MANIFEST_FILENAME,
+    file_sha256,
+    run_post_publish_snapshots,
+)
+from stock_research.run_attempts import DbAttemptStore, current_git_sha, new_attempt_id
+
+PUBLICATION_ATTEMPT_MODULE = "strategy_daily_eod_publication"
+
+
+def _default_attempt_store(service: str, root: Path):
+    """Attempts go to ops.data_run_attempt (schema must already exist; it is
+    not auto-created here) with a local run_record_<attempt_id>.json fallback."""
+    return DbAttemptStore(service=service, fallback_dir=root / ".run_records")
 
 
 DependencyChecker = Callable[..., dict[str, Any]]
@@ -142,6 +156,9 @@ def run_strategy_daily_eod(
     midtrend_artifact_builder: StrategyRunner | None = None,
     service: str = SETTINGS.research_service,
     publish_lock_path: str | Path | None = None,
+    attempt_store: Any = None,
+    post_publish_snapshot: Callable[..., dict[str, Any]] | None = None,
+    trigger: str = "cron",
 ) -> dict[str, Any]:
     root = Path(output_root).resolve()
     allowed_release_root = (
@@ -208,6 +225,9 @@ def run_strategy_daily_eod(
             tech_runner=tech_runner,
             midtrend_artifact_builder=midtrend_artifact_builder,
             service=service,
+            attempt_store=attempt_store,
+            post_publish_snapshot=post_publish_snapshot,
+            trigger=trigger,
         )
     finally:
         try:
@@ -230,6 +250,9 @@ def _run_strategy_daily_eod_once(
     tech_runner: StrategyRunner | None = None,
     midtrend_artifact_builder: StrategyRunner | None = None,
     service: str = SETTINGS.research_service,
+    attempt_store: Any = None,
+    post_publish_snapshot: Callable[..., dict[str, Any]] | None = None,
+    trigger: str = "cron",
 ) -> dict[str, Any]:
     if any(
         runner is not None
@@ -253,6 +276,18 @@ def _run_strategy_daily_eod_once(
     staging_name = f"strategy-eod-{trade_date}-{uuid.uuid4().hex}"
     publisher_root = versions_dir / f".{staging_name}-publisher-root"
     output_dir = versions_dir / staging_name
+
+    # Gate A: one attempt row per execution, committed before (and outside)
+    # the publication transaction so failures and rollbacks stay recorded.
+    run_key = f"strategy-eod-{trade_date}-local"
+    store = attempt_store if attempt_store is not None else _default_attempt_store(service, root)
+    git_sha = current_git_sha()
+    publication_attempt_id = new_attempt_id()
+    store.start({
+        "attempt_id": publication_attempt_id, "run_id": run_key, "trade_date": trade_date,
+        "module": PUBLICATION_ATTEMPT_MODULE, "trigger": trigger, "git_sha": git_sha,
+        "input_refs": {"staging_name": staging_name},
+    })
 
     dependency_check = _normalize_dependency_check(
         dependency_checker(trade_date=trade_date, service=service)
@@ -410,6 +445,7 @@ def _run_strategy_daily_eod_once(
         error_summary=summary["error_summary"],
     )
 
+    published_ok = False
     if contract_valid:
         handle: AtomicPublishHandle | None = None
         try:
@@ -422,6 +458,11 @@ def _run_strategy_daily_eod_once(
                 )
                 for entry in manifest_entries
             ]
+            for entry in canonical_entries:
+                entry["metadata"] = {
+                    **(entry.get("metadata") or {}),
+                    "publication_attempt_id": publication_attempt_id,
+                }
             _relocate_review_manifest_paths(
                 output_dir / "review_queue_strategy_manifest.csv",
                 staging=output_dir,
@@ -439,6 +480,7 @@ def _run_strategy_daily_eod_once(
                 service=service,
             )
             handle.commit()
+            published_ok = True
         except Exception as exc:  # noqa: BLE001
             rollback_failed = False
             if handle is not None:
@@ -459,6 +501,8 @@ def _run_strategy_daily_eod_once(
                 trade_date=trade_date,
             )
             _best_effort_failed_status(summary, dependency_check=dependency_check, service=service)
+            store.finish(publication_attempt_id, status="failed", failure_class="publish",
+                         error_message=str(summary.get("error_summary") or exc))
             if rollback_failed:
                 raise RuntimeError(
                     "strategy publication rollback failed; manual recovery required"
@@ -476,6 +520,36 @@ def _run_strategy_daily_eod_once(
         shutil.rmtree(output_dir, ignore_errors=True)
         shutil.rmtree(publisher_root, ignore_errors=True)
         upsert_strategy_daily_eod_status(status_payload, service=service)
+    if not published_ok:
+        store.finish(
+            publication_attempt_id, status="failed",
+            failure_class="dependency" if dependency_blocked else "compute",
+            error_message=str(summary.get("error_summary") or "") or None,
+        )
+        return summary
+    canonical_manifest = canonical_output_dir / REVIEW_QUEUE_MANIFEST_FILENAME
+    manifest_sha = file_sha256(canonical_manifest) if canonical_manifest.is_file() else None
+    store.finish(
+        publication_attempt_id, status="published",
+        output_refs={"output_dir": str(canonical_output_dir),
+                     "review_queue_manifest_sha256": manifest_sha},
+    )
+    summary["publication_attempt_id"] = publication_attempt_id
+    snapshot_fn = post_publish_snapshot or run_post_publish_snapshots
+    try:
+        snapshot = snapshot_fn(
+            run_id=run_key, trade_date=trade_date, strategy_output_root=root,
+            publication_attempt_id=publication_attempt_id, trigger=trigger,
+            attempt_store=store, expected_manifest_sha256=manifest_sha,
+            output_dir=canonical_output_dir, git_sha=git_sha, service=service,
+        )
+    except Exception as exc:  # noqa: BLE001 - snapshots are non-blocking
+        snapshot = {"status": "failed", "errors": [f"{type(exc).__name__}: {exc}"]}
+    summary["review_evidence_snapshots"] = {
+        key: snapshot.get(key)
+        for key in ("status", "attempt_id", "source_manifest_sha256", "expected_review_rows",
+                    "review_item_snapshot_count", "manifest_written", "errors")
+    }
     return summary
 
 

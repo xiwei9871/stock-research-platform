@@ -1831,12 +1831,38 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
 
     def snapshots_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         def runner(**kwargs) -> dict[str, object]:
-            result = run_eod_review_evidence_snapshots(
-                run_id=f"eod-auto-repair-snapshots-{kwargs['trade_date']}",
-                trade_date=kwargs["trade_date"],
+            # Gate A: same post-publish path as EOD, pinned to the published
+            # review queue manifest; links back to the publication attempt and
+            # writes the manifest row (trigger=repair).
+            from stock_research.review_evidence_snapshots import run_post_publish_snapshots
+            from stock_research.run_attempts import DbAttemptStore, current_git_sha, latest_published_attempt
+            from stock_research.db import connect
+
+            day = kwargs["trade_date"]
+            run_key = f"strategy-eod-{day}-local"
+            strategy_root = Path(output_root) / "research" / "strategy_daily_eod"
+            publication = None
+            try:
+                with connect(SETTINGS.research_service) as conn:
+                    publication = latest_published_attempt(
+                        conn, run_id=run_key, module="strategy_daily_eod_publication")
+            except Exception:  # noqa: BLE001 - legacy runs have no attempt rows
+                publication = None
+            expected = ((publication or {}).get("output_refs") or {}).get("review_queue_manifest_sha256")
+            result = run_post_publish_snapshots(
+                run_id=run_key,
+                trade_date=day,
+                strategy_output_root=strategy_root,
+                publication_attempt_id=(publication or {}).get("attempt_id"),
+                trigger="repair",
+                attempt_store=DbAttemptStore(service=SETTINGS.research_service,
+                                             fallback_dir=strategy_root / ".run_records"),
+                expected_manifest_sha256=expected,
                 output_dir=output_dir,
+                git_sha=current_git_sha(),
             )
             metrics = dict(result or {})
+            metrics.pop("manifest_entry", None)
             metrics["output_dir"] = str(output_dir)
             return metrics
 
