@@ -10,6 +10,7 @@
 | `UIUX_WORKFLOW_REVIEW_V02.md` | 导航、页面到数据的映射、一次个股研究的完整路径、可信度表达、目标信息架构 |
 | `ARCHITECTURE_DECISION_PROPOSAL_V02.md` | 六个问题的回答、方案对比、演进路径、待用户决策事项 |
 | `DESIGN_REVIEW_AMENDMENT_V02.md` | 针对 PR #19 评审意见的修正：执行尝试身份、通知投递记录、研究线索的真实数据源、财务 PIT 差异审计、provenance 维度拆分、第一阶段最小闭环 |
+| `GATE_A_SNAPSHOT_CONSISTENCY_V02.md` | 快照与正式发布不一致的根因、official 判定规则、attempt 生命周期、通知幂等、隔离验证用例 |
 | `PRIORITY_MATRIX_V02.csv` | 26 项问题的优先级 |
 
 原始证据（数据库统计、调度记录、主机信息）保存在内部受控目录，不进入仓库。
